@@ -30,15 +30,22 @@ echo "[2/4] Ensuring Python 3.12 is available..."
 uv python install 3.12
 
 # 3. Synchronize workspace dependencies
-echo "[3/4] Synchronizing workspace members and dependencies via root uv.lock..."
-uv sync --python 3.12
+SYNC_ARGS=("--python" "3.12")
+if [[ "${1:-}" == "--all" || "${1:-}" == "--all-packages" ]]; then
+    echo "[3/4] Synchronizing all workspace members (including heavy ML/training stacks)..."
+    SYNC_ARGS+=("--all-packages")
+else
+    echo "[3/4] Synchronizing core control plane (Kybernetes, Hestia, Prosopon, Phylax, Krisis) & dev tools..."
+fi
+uv sync "${SYNC_ARGS[@]}"
 
-# 4. Verify Kybernetes doctor
+# 4. Verify installed entrypoints & health
 echo "[4/4] Verifying stack health with kybernetes doctor..."
 uv run kybernetes doctor || true
 
 echo -e "\n======================================================================"
 echo " Metis workspace bootstrap complete!"
+echo " Control plane entrypoints ready: kybernetes, hestia, prosopon, phylax, krisis"
 echo " To run smoke tests:    uv run pytest tests/test_stack_smoke.py"
 echo " To launch the stack:   ./scripts/run_stack.sh"
 echo "======================================================================"
