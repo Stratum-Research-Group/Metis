@@ -298,3 +298,68 @@ def test_defect6_lthcm_adapter_real_index_and_provenance(tmp_path):
     assert "Sovereign autonomy requires" in cit.text
 
 
+@pytest.mark.asyncio
+async def test_defect10_phylax_approval_lifecycle_and_security():
+    """
+    Verify PhylaxAdapter:
+    - Expiry enforcement (past expiry rejected at resolution & consumption).
+    - Single-use consumption (second wait returns 'deny').
+    - Double-resolution rejection (terminal status).
+    - Action and target binding verification.
+    - Timeout and explicit deny handling.
+    """
+    import asyncio
+    from kybernetes.adapters.phylax import PhylaxAdapter
+
+    phylax = PhylaxAdapter()
+
+    # 1. Valid single execution
+    _, req1 = phylax.is_action_permitted("write_file", "/tmp/valid.txt", {"mode": "w"})
+    assert req1 is not None
+    app1 = req1["approval_id"]
+    assert phylax.resolve_approval(app1, "allow_once") is True
+    dec1 = await phylax.wait_for_approval(app1, timeout_seconds=1.0)
+    assert dec1 == "allow_once"
+
+    # 2. Replay prevention: second wait returns 'deny'
+    dec1_replay = await phylax.wait_for_approval(app1, timeout_seconds=1.0)
+    assert dec1_replay == "deny"
+
+    # 3. Double resolution: cannot resolve already consumed/terminal approval
+    assert phylax.resolve_approval(app1, "allow_once") is False
+
+    # 4. Expiry: past timestamp
+    _, req_exp = phylax.is_action_permitted(
+        "write_file",
+        "/tmp/expired.txt",
+        {"data": "secret"},
+        custom_expiry_utc="2000-01-01T00:00:00Z",
+    )
+    app_exp = req_exp["approval_id"]
+    # Resolution of expired approval fails
+    assert phylax.resolve_approval(app_exp, "allow_once") is False
+    # Consumption of expired approval returns 'deny'
+    dec_exp = await phylax.wait_for_approval(app_exp, timeout_seconds=0.1)
+    assert dec_exp == "deny"
+
+    # 5. Changed target / arguments binding check
+    _, req_bind = phylax.is_action_permitted("write_file", "/tmp/fileA.txt", {"count": 1})
+    app_bind = req_bind["approval_id"]
+    assert phylax.verify_action_execution(app_bind, "write_file", "/tmp/fileA.txt", {"count": 1}) is True
+    assert phylax.verify_action_execution(app_bind, "write_file", "/tmp/fileB.txt", {"count": 1}) is False
+    assert phylax.verify_action_execution(app_bind, "read_file", "/tmp/fileA.txt", {"count": 1}) is False
+    assert phylax.verify_action_execution(app_bind, "write_file", "/tmp/fileA.txt", {"count": 999}) is False
+
+    # 6. Timeout
+    _, req_timeout = phylax.is_action_permitted("write_file", "/tmp/timeout.txt", {})
+    dec_timeout = await phylax.wait_for_approval(req_timeout["approval_id"], timeout_seconds=0.02)
+    assert dec_timeout == "deny"
+
+    # 7. Explicit deny
+    _, req_deny = phylax.is_action_permitted("write_file", "/tmp/deny.txt", {})
+    app_deny = req_deny["approval_id"]
+    assert phylax.resolve_approval(app_deny, "deny") is True
+    assert await phylax.wait_for_approval(app_deny, timeout_seconds=1.0) == "deny"
+
+
+

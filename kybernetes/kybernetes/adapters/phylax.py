@@ -16,15 +16,36 @@ class PhylaxAdapter:
 
     def __init__(self, shim: Any = None):
         self.shim = shim
-        self._pending_approvals: Dict[str, Dict[str, Any]] = {}
+        self._approvals: Dict[str, Dict[str, Any]] = {}
         self._approval_events: Dict[str, asyncio.Event] = {}
-        self._approval_decisions: Dict[str, str] = {}
+
+    @property
+    def _pending_approvals(self) -> Dict[str, Dict[str, Any]]:
+        # Backwards compatibility property
+        return self._approvals
+
+    def _is_expired(self, req: Dict[str, Any]) -> bool:
+        expiry_ts = req.get("expiry_timestamp")
+        if expiry_ts is None:
+            expiry_str = req.get("expiry_utc")
+            if not expiry_str:
+                return True
+            try:
+                expiry_dt = datetime.fromisoformat(expiry_str)
+                if expiry_dt.tzinfo is None:
+                    expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+                expiry_ts = expiry_dt.timestamp()
+                req["expiry_timestamp"] = expiry_ts
+            except Exception:
+                return True
+        return datetime.now(timezone.utc).timestamp() >= expiry_ts
 
     def is_action_permitted(
         self,
         capability: str,
         target: str,
         arguments: Dict[str, Any],
+        custom_expiry_utc: Optional[str] = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
         Check whether an action is pre-authorized or requires an interactive user approval.
@@ -36,7 +57,20 @@ class PhylaxAdapter:
 
         # Actions involving file write, mutation, or outbound send require interactive approval
         approval_id = f"app-{uuid.uuid4().hex[:8]}"
-        expiry_utc = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        now = datetime.now(timezone.utc)
+        if custom_expiry_utc is not None:
+            expiry_utc = custom_expiry_utc
+            try:
+                expiry_dt = datetime.fromisoformat(custom_expiry_utc)
+                if expiry_dt.tzinfo is None:
+                    expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+                expiry_ts = expiry_dt.timestamp()
+            except Exception:
+                expiry_ts = now.timestamp()
+        else:
+            expiry_dt = now + timedelta(minutes=5)
+            expiry_utc = expiry_dt.isoformat()
+            expiry_ts = expiry_dt.timestamp()
 
         req = {
             "approval_id": approval_id,
@@ -45,37 +79,101 @@ class PhylaxAdapter:
             "argument_summary": arguments,
             "policy_rule": f"PhylaxPolicy: Action '{capability}' requires explicit single-use user authorization.",
             "expiry_utc": expiry_utc,
+            "expiry_timestamp": expiry_ts,
             "status": "pending",
+            "decision": None,
+            "consumed": False,
         }
-        self._pending_approvals[approval_id] = req
+        self._approvals[approval_id] = req
         self._approval_events[approval_id] = asyncio.Event()
 
         return False, req
 
     async def wait_for_approval(self, approval_id: str, timeout_seconds: float = 30.0) -> str:
-        """Wait for user approval decision ('allow_once' or 'deny')."""
-        if approval_id not in self._approval_events:
+        """
+        Wait for user approval decision ('allow_once' or 'deny') and atomically consume it.
+        Enforces one-use consumption (replays are denied) and rejects expired approvals.
+        """
+        if approval_id not in self._approvals or approval_id not in self._approval_events:
+            return "deny"
+
+        req = self._approvals[approval_id]
+
+        if self._is_expired(req):
+            req["status"] = "expired"
+            req["decision"] = "deny"
             return "deny"
 
         event = self._approval_events[approval_id]
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout_seconds)
-            decision = self._approval_decisions.get(approval_id, "deny")
         except asyncio.TimeoutError:
-            decision = "deny"
+            req["status"] = "expired"
+            req["decision"] = "deny"
+            return "deny"
 
-        if approval_id in self._pending_approvals:
-            self._pending_approvals[approval_id]["status"] = "approved" if decision == "allow_once" else "denied"
+        # Check expiry after wait
+        if self._is_expired(req):
+            req["status"] = "expired"
+            req["decision"] = "deny"
+            return "deny"
 
+        # Check atomic consumption: strictly single-use
+        if req.get("consumed", False):
+            return "deny"
+
+        # Atomically consume the approval
+        req["consumed"] = True
+        decision = req.get("decision", "deny")
+        req["status"] = "consumed"
         return decision
 
     def resolve_approval(self, approval_id: str, decision: str) -> bool:
-        """Resolve a pending approval from UI / API."""
-        if approval_id not in self._approval_events:
+        """
+        Resolve a pending approval from UI / API.
+        Rejects double resolution, expired approvals, and uninitialized requests.
+        """
+        if approval_id not in self._approvals or approval_id not in self._approval_events:
             return False
 
-        self._approval_decisions[approval_id] = decision
+        req = self._approvals[approval_id]
+
+        # Check expiry at resolution
+        if self._is_expired(req):
+            req["status"] = "expired"
+            req["decision"] = "deny"
+            self._approval_events[approval_id].set()
+            return False
+
+        # Reject double resolution if already terminal
+        if req.get("status") != "pending":
+            return False
+
+        req["status"] = "approved" if decision == "allow_once" else "denied"
+        req["decision"] = decision
         self._approval_events[approval_id].set()
+        return True
+
+    def verify_action_execution(
+        self,
+        approval_id: str,
+        capability: str,
+        target: str,
+        arguments: Dict[str, Any],
+    ) -> bool:
+        """
+        Verify that an approval matches the exact action, target, and arguments being executed.
+        Prevents capability tampering between approval and execution.
+        """
+        if approval_id not in self._approvals:
+            return False
+        req = self._approvals[approval_id]
+        if req.get("action") != capability.upper():
+            return False
+        if req.get("target") != target:
+            return False
+        if req.get("argument_summary") != arguments:
+            return False
         return True
 
     def enforce_budget_guardrail(

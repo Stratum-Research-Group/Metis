@@ -241,13 +241,33 @@ class ExecutionPipeline:
                 tool_name = stage_plan.params.get("tool_name", "calculator")
                 needs_interactive = stage_plan.params.get("needs_interactive_approval", False)
 
-                if needs_interactive:
-                    permitted, app_req = self.phylax.is_action_permitted(
-                        capability="write_file",
-                        target="/tmp/metis_task.txt",
-                        arguments={"operation": "execute", "tool": tool_name},
-                    )
-                    if not permitted and app_req:
+                # Determine actual tool capability, target, and arguments to be executed
+                tool_args = {}
+                if tool_name == "calculator":
+                    import re
+                    m = re.search(r"(?:compute|calculate|evaluate)\s+(.+)", request.query, re.IGNORECASE)
+                    if m:
+                        expr = m.group(1).rstrip(".?!")
+                    else:
+                        match = PlanRouter.MATH_REGEX.search(request.query)
+                        expr = match.group(0) if match else "2 + 2"
+                        expr = expr.replace("calculate", "").replace("compute", "").strip() or "2 + 2"
+                    tool_args = {"expression": expr.strip()}
+                    capability = "compute"
+                    target = "math_engine"
+                else:
+                    tool_args = stage_plan.params.get("tool_args", {"pattern": request.query.split()[-1] if request.query.split() else "metis"})
+                    capability = stage_plan.params.get("capability", "write_file")
+                    target = stage_plan.params.get("target", tool_args.get("path", tool_args.get("target", "/tmp/metis_task.txt")))
+
+                # Check Phylax permission gate with exact capability, target, and arguments
+                permitted, app_req = self.phylax.is_action_permitted(
+                    capability=capability,
+                    target=target,
+                    arguments=tool_args,
+                )
+                if not permitted and (needs_interactive or app_req):
+                    if app_req:
                         e_ask = TurnEvent(
                             turn_id=turn_id,
                             seq_num=seq_num,
@@ -259,7 +279,7 @@ class ExecutionPipeline:
                         yield e_ask
                         seq_num += 1
 
-                        # Await decision
+                        # Await decision and consume approval atomically
                         user_dec = await self.phylax.wait_for_approval(app_req["approval_id"])
                         e_res = TurnEvent(
                             turn_id=turn_id,
@@ -272,7 +292,7 @@ class ExecutionPipeline:
                         yield e_res
                         seq_num += 1
 
-                        if user_dec == "deny":
+                        if user_dec != "allow_once":
                             denied_msg = "Action was denied by user. Operation safely cancelled without side-effects."
                             e_delta = TurnEvent(
                                 turn_id=turn_id,
@@ -303,21 +323,6 @@ class ExecutionPipeline:
                             emitted_events.append(e_comp)
                             yield e_comp
                             return
-
-                # Execute vetted tool
-                tool_args = {}
-                if tool_name == "calculator":
-                    import re
-                    m = re.search(r"(?:compute|calculate|evaluate)\s+(.+)", request.query, re.IGNORECASE)
-                    if m:
-                        expr = m.group(1).rstrip(".?!")
-                    else:
-                        match = PlanRouter.MATH_REGEX.search(request.query)
-                        expr = match.group(0) if match else "2 + 2"
-                        expr = expr.replace("calculate", "").replace("compute", "").strip() or "2 + 2"
-                    tool_args = {"expression": expr.strip()}
-                else:
-                    tool_args = {"pattern": request.query.split()[-1] if request.query.split() else "metis"}
 
                 t_res = self.tool_registry.execute(ToolCallRequest(tool_id=tool_name, arguments=tool_args))
                 tool_output = t_res.data
