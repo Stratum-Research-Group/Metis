@@ -68,7 +68,7 @@ kybernetes demo
 kybernetes chat -q "What is Metis architecture?"
 
 # Start the FastAPI SSE server
-kybernetes serve --host 127.0.0.1 --port 8080 --db-path kybernetes_budget.db
+kybernetes serve --host 127.0.0.1 --port 8081 --db-path kybernetes_budget.db
 ```
 
 ---

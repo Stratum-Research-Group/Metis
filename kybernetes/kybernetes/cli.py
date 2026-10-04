@@ -57,7 +57,7 @@ def doctor():
 
 @cli.command("serve")
 @click.option("--host", default="127.0.0.1", help="Bind host address")
-@click.option("--port", default=8080, help="Bind port number")
+@click.option("--port", default=8081, help="Bind port number")
 @click.option("--db-path", default="kybernetes_budget.db", help="SQLite database path")
 def serve(host: str, port: int, db_path: str):
     """Start Kybernetes FastAPI SSE server for Prosopon UI and client connections."""

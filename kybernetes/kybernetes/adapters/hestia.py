@@ -13,8 +13,8 @@ class HestiaAdapter:
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8000/v1",
-        default_model: str = "qwen2.5-7b-instruct",
+        base_url: str = "http://127.0.0.1:8080/v1",
+        default_model: str = "llama-3.1-8b-instruct",
         timeout_seconds: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
@@ -29,7 +29,14 @@ class HestiaAdapter:
                 if resp.status_code == 200:
                     data = resp.json()
                     models = [m.get("id") for m in data.get("data", []) if "id" in m]
-                    return {"available": True, "models": models, "url": self.base_url}
+                    default_found = self.default_model in models if models else False
+                    return {
+                        "available": True,
+                        "models": models,
+                        "default_model": self.default_model,
+                        "default_model_registered": default_found,
+                        "url": self.base_url,
+                    }
         except Exception as e:
             return {"available": False, "models": [], "error": str(e), "url": self.base_url}
         return {"available": False, "models": [], "url": self.base_url}

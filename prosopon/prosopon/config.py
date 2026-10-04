@@ -15,7 +15,7 @@ class ProsoponConfig(BaseModel):
     
     # Kybernetes upstream connection
     kybernetes_api_url: str = Field(
-        default="http://127.0.0.1:8080/v1",
+        default="http://127.0.0.1:8081/v1",
         description="Base URL for versioned Kybernetes API",
     )
     mock_kybernetes: bool = Field(
