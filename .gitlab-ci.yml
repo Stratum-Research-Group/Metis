@@ -1,0 +1,21 @@
+stages:
+  - test
+
+variables:
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+  PYTHONPATH: "kybernetes:prosopon:hestia/src:stoma/src"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .uv-cache/
+
+stack-test:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  script:
+    - echo "=== Metis Sovereign Local AI Stack Verification ==="
+    - uv sync --python 3.12
+    - uv run kybernetes doctor
+    - uv run pytest tests/test_stack_smoke.py -v
+    - uv run --package kybernetes pytest kybernetes/tests -v

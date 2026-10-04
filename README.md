@@ -75,21 +75,50 @@
 
 ## Getting Started
 
-Each stack contains its own `pyproject.toml` and test suite. You can set up virtual environments individually or manage them via [`uv`](https://github.com/astral-sh/uv).
+Metis is managed as a unified [`uv`](https://github.com/astral-sh/uv) workspace across all 11 component stacks.
 
-### Running Component Tests
+### 1. Workspace Bootstrap
 
-To run tests for a specific stack (e.g., `kybernetes`):
+To bootstrap all dependencies and initialize the workspace under Python 3.12:
 
 ```bash
-cd kybernetes
-uv run --extra dev pytest
-# or using its existing virtualenv:
-.venv/bin/pytest tests
+./scripts/setup_workspace.sh
+# or directly with uv:
+uv sync --python 3.12
 ```
 
-### Stack Contracts & Integration Roadmap
+### 2. Running Stack Integration & Component Tests
 
-For cross-component contracts (identity, provenance, evidence snapshot formats, and selection boundaries), refer to:
-- [`docs/STACK_BUILD_CONTRACT.md`](docs/STACK_BUILD_CONTRACT.md)
-- [`docs/stack-integration.md`](docs/stack-integration.md)
+To run the end-to-end multi-stack smoke test suite:
+
+```bash
+PYTHONPATH="kybernetes:prosopon:hestia/src:stoma/src" uv run pytest tests/test_stack_smoke.py -v
+```
+
+To run individual stack unit tests:
+
+```bash
+# Kybernetes orchestrator
+uv run --package kybernetes pytest kybernetes/tests -v
+
+# Prosopon UI & Session store
+uv run --package prosopon pytest prosopon/tests -v
+```
+
+### 3. Launching the Local Stack
+
+Start the full sovereign local AI stack (Hestia on port `8080`, Kybernetes on port `8081`, and Prosopon on port `8000`):
+
+```bash
+./scripts/run_stack.sh
+```
+
+Then navigate to `http://127.0.0.1:8000` to interact with Prosopon.
+
+---
+
+## Hardware & Architecture Guides
+
+- **Heterogeneous GPU & CUDA Architecture**: [`docs/HARDWARE_AND_CUDA_GUIDE.md`](docs/HARDWARE_AND_CUDA_GUIDE.md) (covers dual NVIDIA Tesla V100 Volta `sm_70` and RTX 5060 Ti Blackwell `sm_120` environment partitioning).
+- **Stack Build Contract**: [`docs/STACK_BUILD_CONTRACT.md`](docs/STACK_BUILD_CONTRACT.md)
+- **Integration Roadmap**: [`docs/stack-integration.md`](docs/stack-integration.md)
