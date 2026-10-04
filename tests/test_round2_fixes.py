@@ -220,3 +220,81 @@ def test_defect5_krisis_adapter_marker_validation_and_grounding():
     assert rep_sim.status == TurnOutcomeStatus.DRAFT
     assert rep_sim.is_simulated is True
 
+
+def test_defect6_lthcm_adapter_real_index_and_provenance(tmp_path):
+    """
+    Verify LTHCMAdapter:
+    - Fails closed on absent path, ordinary file, empty dir, incompatible index.
+    - Preserves is_simulated=True in demo mode.
+    - Successfully loads real snapshot with unique ingested fact and generation identity.
+    """
+    import json
+    from kybernetes.adapters.lthcm import LTHCMAdapter
+
+    # 1. Absent path
+    absent = tmp_path / "does_not_exist"
+    with pytest.raises(FileNotFoundError):
+        LTHCMAdapter(memory_root=str(absent))
+
+    # 2. Ordinary file
+    file_path = tmp_path / "ordinary_file.txt"
+    file_path.write_text("not a dir")
+    with pytest.raises(NotADirectoryError):
+        LTHCMAdapter(memory_root=str(file_path))
+
+    # 3. Empty directory
+    empty_dir = tmp_path / "empty_dir"
+    empty_dir.mkdir()
+    with pytest.raises(ValueError, match="empty"):
+        LTHCMAdapter(memory_root=str(empty_dir))
+
+    # 4. Incompatible index (no manifest.json or index.json)
+    incompat_dir = tmp_path / "incompatible"
+    incompat_dir.mkdir()
+    (incompat_dir / "random.txt").write_text("hello")
+    with pytest.raises(ValueError, match="Incompatible index"):
+        LTHCMAdapter(memory_root=str(incompat_dir))
+
+    # 5. Demo mode
+    demo_adapter = LTHCMAdapter(memory_root=None)
+    assert demo_adapter.is_simulated is True
+    demo_cits = demo_adapter.retrieve("kybernetes orchestrates")
+    assert len(demo_cits) > 0
+    assert all(c.is_simulated is True for c in demo_cits)
+    assert any(c.passage_id == "pass_metis_arch_01" for c in demo_cits)
+
+    # 6. Real snapshot with unique ingested fact
+    real_dir = tmp_path / "real_index"
+    real_dir.mkdir()
+    unique_fact_manifest = {
+        "manifest_version": "2.0",
+        "created_at": 1700000000.0,
+        "passages": {
+            "pass_unique_sovereign_42": {
+                "source_id": "doc_sovereign_spec_001",
+                "source_title": "Sovereign Spec Protocol",
+                "text": "Sovereign autonomy requires zero reliance on external cloud APIs.",
+                "keywords": ["sovereign", "autonomy", "apis", "external", "reliance"],
+                "ingested_at": 1700000000.0,
+            }
+        }
+    }
+    with open(real_dir / "manifest.json", "w", encoding="utf-8") as f:
+        json.dump(unique_fact_manifest, f)
+    with open(real_dir / "current_generation.json", "w", encoding="utf-8") as f:
+        json.dump({"generation": "gen-42"}, f)
+
+    real_adapter = LTHCMAdapter(memory_root=str(real_dir))
+    assert real_adapter.is_simulated is False
+    assert real_adapter.generation_id == "gen-42"
+
+    real_cits = real_adapter.retrieve("sovereign autonomy")
+    assert len(real_cits) == 1
+    cit = real_cits[0]
+    assert cit.passage_id == "pass_unique_sovereign_42"
+    assert cit.source_id == "doc_sovereign_spec_001"
+    assert cit.source_title == "Sovereign Spec Protocol"
+    assert cit.is_simulated is False
+    assert "Sovereign autonomy requires" in cit.text
+
+

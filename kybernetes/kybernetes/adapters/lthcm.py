@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional
@@ -10,14 +11,102 @@ class LTHCMAdapter:
     Always specifies an explicit `as_of` epoch timestamp to avoid temporal leakage.
     When operating without a configured external index, explicitly marks citations
     with is_simulated=True.
+    When operating with a configured memory_root, validates and loads the real index
+    snapshot, failing closed on missing, empty, or incompatible indexes.
     """
 
     def __init__(self, memory_root: Optional[str] = None):
         self.memory_root = memory_root
         self.is_simulated = True
-        if self.memory_root and Path(self.memory_root).exists():
-            self.is_simulated = False
-        self._local_corpus = self._init_local_corpus()
+        self.generation_id: Optional[str] = None
+        self._real_passages: List[Dict[str, Any]] = []
+
+        if self.memory_root is not None:
+            self._load_real_index(self.memory_root)
+        else:
+            self._local_corpus = self._init_local_corpus()
+
+    def _load_real_index(self, root_str: str) -> None:
+        root = Path(root_str)
+        if not root.exists():
+            raise FileNotFoundError(f"Memory root path does not exist: {root_str}")
+        if not root.is_dir():
+            raise NotADirectoryError(f"Memory root is not a directory: {root_str}")
+
+        files = list(root.iterdir())
+        if not files:
+            raise ValueError(f"Memory root directory is empty: {root_str}")
+
+        # Look for manifest or index snapshot: manifest.json, index.json, or passages.json
+        manifest_file = root / "manifest.json"
+        index_file = root / "index.json"
+        passages_file = root / "passages.json"
+
+        target_file = None
+        if manifest_file.is_file():
+            target_file = manifest_file
+        elif index_file.is_file():
+            target_file = index_file
+        elif passages_file.is_file():
+            target_file = passages_file
+        else:
+            raise ValueError(f"Incompatible index in memory root {root_str}: missing manifest.json or index.json")
+
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            raise ValueError(f"Corrupted index in memory root {root_str}: {e}") from e
+
+        # Extract generation identity if available
+        gen_file = root / "current_generation.json"
+        if gen_file.is_file():
+            try:
+                with open(gen_file, "r", encoding="utf-8") as gf:
+                    gen_data = json.load(gf)
+                    self.generation_id = str(gen_data.get("generation", gen_data.get("generation_id", "gen-1")))
+            except Exception:
+                self.generation_id = "gen-1"
+        else:
+            self.generation_id = str(data.get("manifest_version", data.get("generation_id", "gen-1")))
+
+        # Extract passages: can be dict of passages or list of passages
+        passages_data = data.get("passages")
+        if passages_data is None and isinstance(data, list):
+            passages_data = data
+
+        if not passages_data:
+            raise ValueError(f"Memory index has 0 passages: {root_str}")
+
+        loaded: List[Dict[str, Any]] = []
+        if isinstance(passages_data, dict):
+            for pid, pdata in passages_data.items():
+                text_content = pdata.get("text", pdata.get("chunk_text", ""))
+                loaded.append({
+                    "passage_id": pid,
+                    "source_id": pdata.get("source_id", "unknown_source"),
+                    "source_title": pdata.get("source_title", pdata.get("rel_path", "Document")),
+                    "text": text_content,
+                    "keywords": pdata.get("keywords", text_content.lower().split()),
+                    "created_epoch": float(pdata.get("ingested_at", pdata.get("created_epoch", 0.0))),
+                })
+        elif isinstance(passages_data, list):
+            for item in passages_data:
+                text_content = item.get("text", item.get("chunk_text", ""))
+                loaded.append({
+                    "passage_id": item.get("passage_id", f"p_{len(loaded)}"),
+                    "source_id": item.get("source_id", "unknown_source"),
+                    "source_title": item.get("source_title", item.get("rel_path", "Document")),
+                    "text": text_content,
+                    "keywords": item.get("keywords", text_content.lower().split()),
+                    "created_epoch": float(item.get("ingested_at", item.get("created_epoch", 0.0))),
+                })
+
+        if not loaded or any(not p["text"].strip() for p in loaded):
+            raise ValueError(f"Corrupted passage records without text in memory root: {root_str}")
+
+        self._real_passages = loaded
+        self.is_simulated = False
 
     def _init_local_corpus(self) -> List[Dict[str, Any]]:
         return [
@@ -68,8 +157,10 @@ class LTHCMAdapter:
         current_time = as_of if as_of is not None else time.time()
         q_tokens = set(query.lower().split())
 
+        corpus = self._real_passages if not self.is_simulated else self._local_corpus
+
         scored_passages = []
-        for item in self._local_corpus:
+        for item in corpus:
             if item["created_epoch"] > current_time:
                 continue
 
