@@ -15,6 +15,7 @@ class KrisisVerificationReport(BaseModel):
     unsupported_claims: int = 0
     conflict_detected: bool = False
     explanation: str = ""
+    is_simulated: bool = Field(default=True, description="Whether verification was performed via local heuristic adapter")
 
 
 class KrisisAdapter:

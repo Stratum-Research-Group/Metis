@@ -44,3 +44,24 @@ def test_item7_dianoia_adapter_simulation_disclosure():
     res_zero = adapter.deliberate(query="test", seed_citations=citations[:1])
     assert res_zero.is_simulated is True
     assert "simulated adapter" in res_zero.deliberation_summary
+
+
+def test_r1_lthcm_adapter_simulation_flag():
+    """Verify LTHCMAdapter marks citations as simulated when using local demo corpus."""
+    from kybernetes.adapters.lthcm import LTHCMAdapter
+    adapter = LTHCMAdapter()
+    assert adapter.is_simulated is True
+    citations = adapter.retrieve("kybernetes metis")
+    assert len(citations) > 0
+    assert all(c.is_simulated is True for c in citations)
+
+
+def test_r2_krisis_adapter_simulation_flag():
+    """Verify KrisisAdapter marks verification report as simulated."""
+    from kybernetes.adapters.krisis import KrisisAdapter
+    adapter = KrisisAdapter()
+    citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="T1", score=0.9)
+    ]
+    report = adapter.verify_response(query="test", response_text="Answer based on [1]", citations=citations)
+    assert report.is_simulated is True

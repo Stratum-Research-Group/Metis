@@ -1,5 +1,4 @@
-"""LTHCM / Stoma memory and evidence retrieval adapter with explicit temporal bounds."""
-
+from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional
 from kybernetes.contracts.turn import Citation
@@ -9,10 +8,15 @@ class LTHCMAdapter:
     """
     Adapter for Long-Term Hierarchical Context Memory (LTHCM) and Stoma index.
     Always specifies an explicit `as_of` epoch timestamp to avoid temporal leakage.
+    When operating without a configured external index, explicitly marks citations
+    with is_simulated=True.
     """
 
     def __init__(self, memory_root: Optional[str] = None):
         self.memory_root = memory_root
+        self.is_simulated = True
+        if self.memory_root and Path(self.memory_root).exists():
+            self.is_simulated = False
         self._local_corpus = self._init_local_corpus()
 
     def _init_local_corpus(self) -> List[Dict[str, Any]]:
@@ -87,6 +91,7 @@ class LTHCMAdapter:
                     source_title=item["source_title"],
                     text=item["text"],
                     score=round(min(1.0, 0.5 + score * 0.2), 3),
+                    is_simulated=self.is_simulated,
                 )
             )
 

@@ -19,6 +19,7 @@ class Citation(BaseModel):
     source_title: str = Field(..., description="Friendly document or web title")
     text: str = Field(..., description="Verbatim cited snippet")
     score: float = Field(default=1.0, ge=0.0, description="Retrieval / verifier relevance score")
+    is_simulated: bool = Field(default=False, description="Whether citation comes from simulated demo corpus")
 
 
 class TurnRequest(BaseModel):
