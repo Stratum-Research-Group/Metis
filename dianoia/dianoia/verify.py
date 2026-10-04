@@ -6,6 +6,8 @@ check between the drafted answer and the retrieved evidence (answer-vs-evidence,
 not passage-vs-passage).
 """
 
+from __future__ import annotations
+
 from typing import Any, Dict, List, Optional
 
 try:

@@ -5,6 +5,8 @@ Wraps sentence-transformers to produce query/document vectors compatible
 with LTHCM's d_model dimensionality.
 """
 
+from __future__ import annotations
+
 from typing import List, Optional
 
 try:

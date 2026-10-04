@@ -6,6 +6,8 @@ The core of Dianoia v1: a WalkController that uses a deliberation model
 over an LTHCMEngine instance's memory graph.
 """
 
+from __future__ import annotations
+
 import logging
 import re
 import sys
