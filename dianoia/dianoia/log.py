@@ -31,7 +31,7 @@ import uuid
 
 # Schema version for forward compatibility. A future learner can
 # distinguish v1 logs from later schema revisions.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = "1.0.0"
 
 DEFAULT_LOG_PATH = os.path.expanduser("~/.dianoia/walks.jsonl")
 

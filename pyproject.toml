@@ -51,3 +51,14 @@ stoma = { workspace = true }
 dokime = { workspace = true }
 kleroterion = { workspace = true }
 paideia = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = [
+    ".",
+    "dianoia",
+    "paideia",
+    "stoma/src",
+    "LTHCM",
+    "dokime",
+    "kleroterion",
+]

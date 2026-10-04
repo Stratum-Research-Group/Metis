@@ -45,6 +45,13 @@ class DianoiaWalkRecord(BaseModel):
     initial_path: Optional[List[DianoiaStep]] = Field(default=None, description="Path of failed attempt if this record is a re-walk")
     privacy_label: str = Field(default="internal", description="Privacy classification: public, internal, or restricted")
 
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def validate_and_migrate_schema_version(cls, v: Any) -> str:
+        if v in (1, "1", "1.0.0"):
+            return "1.0.0"
+        raise ValueError(f"Unsupported schema version: {v}. Expected supported v1 schema ('1.0.0', 1, '1').")
+
     @field_validator("walk_id", "question", "model")
     @classmethod
     def not_empty(cls, v: str) -> str:
@@ -57,8 +64,9 @@ class DianoiaWalkRecord(BaseModel):
         """
         Check if trajectory is defensible for policy supervised fine-tuning.
         Rejects walks that failed parsing, had uncorrected conflicts, or empty paths.
+        Continuing conflicts are strictly rejected even if rewalked=True.
         """
-        if self.verification.conflicts_found and not self.verification.rewalked:
+        if self.verification.conflicts_found:
             return False
         if not self.path:
             return False

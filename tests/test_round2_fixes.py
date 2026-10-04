@@ -362,4 +362,140 @@ async def test_defect10_phylax_approval_lifecycle_and_security():
     assert await phylax.wait_for_approval(app_deny, timeout_seconds=1.0) == "deny"
 
 
+def test_defect8_dianoia_producer_and_paideia_schema_version_compatibility(tmp_path):
+    """
+    Verify Dianoia producer output conforms to Paideia schema, supports version 1 migration,
+    rejects unsupported versions, and records audit schema violations.
+    """
+    import json
+    from pydantic import ValidationError
+    from dianoia.log import build_walk_record
+    from paideia.contracts.dianoia_schema import DianoiaWalkRecord
+    from paideia.data.walk_loader import load_walk_dataset
+
+    # 1. Real Dianoia producer record
+    prod_dict = build_walk_record(
+        question="What is Metis architecture?",
+        seeded_nodes=["node_arch_01"],
+        path=[
+            {"node": "node_arch_01", "action": "EXPAND", "raw_output": "expand", "reason": "explore", "parse_failed": False},
+            {"node": "node_arch_02", "action": "ANSWER", "raw_output": "answer", "reason": "complete", "parse_failed": False},
+        ],
+        verification={"conflicts_found": False, "rewalked": False, "report": "ok", "conflict_detail": None},
+        final_answer="Metis is a sovereign local AI stack.",
+        max_steps=10,
+        steps_used=2,
+        model="llama-3.1-8b",
+        fallback_used=False,
+    )
+    rec1 = DianoiaWalkRecord.model_validate(prod_dict)
+    assert rec1.schema_version == "1.0.0"
+
+    # 2. Legacy integer 1 and string '1' schema_version migration
+    legacy_int = prod_dict.copy()
+    legacy_int["schema_version"] = 1
+    legacy_int["walk_id"] = "w-legacy-int"
+    rec_int = DianoiaWalkRecord.model_validate(legacy_int)
+    assert rec_int.schema_version == "1.0.0"
+
+    legacy_str = prod_dict.copy()
+    legacy_str["schema_version"] = "1"
+    legacy_str["walk_id"] = "w-legacy-str"
+    rec_str = DianoiaWalkRecord.model_validate(legacy_str)
+    assert rec_str.schema_version == "1.0.0"
+
+    # 3. Unsupported schema version rejected
+    unsupported = prod_dict.copy()
+    unsupported["schema_version"] = "99.0.0"
+    with pytest.raises(ValidationError):
+        DianoiaWalkRecord.model_validate(unsupported)
+
+    # 4. JSONL file through real loader
+    jsonl_path = tmp_path / "walks_compat.jsonl"
+    with open(jsonl_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(prod_dict) + "\n")
+        f.write(json.dumps(legacy_int) + "\n")
+        f.write(json.dumps(unsupported) + "\n")  # Should be counted as schema violation
+
+    samples, audit = load_walk_dataset(jsonl_path)
+    assert audit.valid_records == 2
+    assert audit.schema_violations == 1
+    assert len(samples) == 4  # 2 steps each from 2 valid records
+
+
+def test_defect9_paideia_rejects_unresolved_re_walks_from_gold_data(tmp_path):
+    """
+    Verify Paideia walk loader rejects re-walks with continuing conflicts from gold data,
+    only accepting genuine resolved re-walks or clean trajectories.
+    """
+    import json
+    from paideia.contracts.dianoia_schema import DianoiaWalkRecord, DianoiaVerification, DianoiaStep
+    from paideia.data.walk_loader import load_walk_dataset
+
+    # 1. Unresolved re-walk (conflicts_found=True and rewalked=True)
+    unresolved_record = DianoiaWalkRecord(
+        walk_id="w-unresolved",
+        question="Unresolved conflict question",
+        model="llama-3.1-8b",
+        path=[
+            DianoiaStep(node="n1", action="ANSWER", reason="done"),
+        ],
+        verification=DianoiaVerification(conflicts_found=True, rewalked=True, report="conflict still present"),
+        final_answer="Contradictory answer",
+    )
+    assert unresolved_record.is_defensible_gold_trajectory() is False
+
+    # 2. Resolved re-walk (attempt 1 had conflicts, attempt 2 resolved with conflicts_found=False)
+    att1 = DianoiaWalkRecord(
+        walk_id="w-resolved",
+        question="Resolvable question",
+        model="llama-3.1-8b",
+        path=[DianoiaStep(node="n1", action="EXPAND", reason="step1")],
+        verification=DianoiaVerification(conflicts_found=True, rewalked=False, report="initial conflict"),
+        final_answer="Draft 1",
+    )
+    att2 = DianoiaWalkRecord(
+        walk_id="w-resolved",
+        question="Resolvable question",
+        model="llama-3.1-8b",
+        path=[
+            DianoiaStep(node="n1", action="EXPAND", reason="step1"),
+            DianoiaStep(node="n2", action="ANSWER", reason="resolved answer"),
+        ],
+        verification=DianoiaVerification(conflicts_found=False, rewalked=True, report="conflict resolved"),
+        final_answer="True verified answer",
+    )
+    assert att1.is_defensible_gold_trajectory() is False
+    assert att2.is_defensible_gold_trajectory() is True
+
+    # 3. Clean attempt
+    clean = DianoiaWalkRecord(
+        walk_id="w-clean",
+        question="Clean question",
+        model="llama-3.1-8b",
+        path=[DianoiaStep(node="n1", action="ANSWER", reason="clean")],
+        verification=DianoiaVerification(conflicts_found=False, rewalked=False, report="ok"),
+        final_answer="Clean answer",
+    )
+    assert clean.is_defensible_gold_trajectory() is True
+
+    # Write to dataset file
+    dataset_file = tmp_path / "walks_conflicts.jsonl"
+    with open(dataset_file, "w", encoding="utf-8") as f:
+        f.write(unresolved_record.model_dump_json() + "\n")
+        f.write(att1.model_dump_json() + "\n")
+        f.write(att2.model_dump_json() + "\n")
+        f.write(clean.model_dump_json() + "\n")
+
+    samples, audit = load_walk_dataset(dataset_file)
+    assert audit.unresolved_conflicts_excluded == 1  # w-unresolved was excluded
+    assert audit.walk_attempts_joined == 1  # w-resolved joined 2 attempts into 1 final
+    # Samples should only contain w-resolved (2 steps) and w-clean (1 step) = 3 samples
+    sample_walk_ids = {s.walk_id for s in samples}
+    assert "w-unresolved" not in sample_walk_ids
+    assert sample_walk_ids == {"w-resolved", "w-clean"}
+    assert len(samples) == 3
+
+
+
 
