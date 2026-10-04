@@ -13,7 +13,8 @@ authors = [
     { name = "N. C. Mynhardt" }
 ]
 dependencies = [
-    # LTHCM core deps (must satisfy submodule)
+    # LTHCM core dependency (monorepo sibling or package)
+    "lthcm==0.1.0",
     "torch>=2.0.0",
     "numpy>=1.24.0",
     "scipy>=1.10.0",
