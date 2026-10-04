@@ -58,18 +58,18 @@
 
 | Stack | Role | Key Capabilities |
 | :--- | :--- | :--- |
-| [**stoma**](file:///home/akarta/Projects/Metis/stoma) | Ingestion & Parsing | Document parsing (PDF, text, code), chunking, sentence-transformers embeddings, directory watching, index generation. |
-| [**LTHCM**](file:///home/akarta/Projects/Metis/LTHCM) | Topological Memory | Long-Term Hierarchical Context Memory with topological retrieval, superposition, wormhole routing, and sheaf verification. |
-| [**dianoia**](file:///home/akarta/Projects/Metis/dianoia) | Deliberation & Walk | Deliberative cognition layer over LTHCM topological memory; bounded graph walks, counterfactual hypothesis testing, and verifier synthesis. |
-| [**hestia**](file:///home/akarta/Projects/Metis/hestia) | Model Serving | OpenAI-compatible local model server wrapping llama.cpp/vLLM/transformers, GPU admission control, `/v1/models` and streaming completions. |
-| [**dokime**](file:///home/akarta/Projects/Metis/dokime) | Evaluation Harness | Reproducible benchmark harness for local models, held-out task suites, statistical significance testing, and regression release gates. |
-| [**kleroterion**](file:///home/akarta/Projects/Metis/kleroterion) | Stochastic Selector | Entropy-aware, masked-softmax/Gaussian action selection among eligible Dianoia walk actions. |
-| [**krisis**](file:///home/akarta/Projects/Metis/krisis) | Candidate Selector | Policy-governed answer evaluation & candidate ranking with hard gates (access, provenance, contradiction, citation resolution). |
-| [**kybernetes**](file:///home/akarta/Projects/Metis/kybernetes) | Central Orchestrator | Central request planner, multi-turn session lifecycle, adapter framework, and strict token/time/cost budget engine. |
-| [**paideia**](file:///home/akarta/Projects/Metis/paideia) | Training Harness | Dataset auditing, trajectory filtering, LoRA adapter registry, and training provenance. |
-| [**phylax**](file:///home/akarta/Projects/Metis/phylax) | Security Guardrails | Capability execution gateway, RBAC policy enforcement, one-time approval handles, and sandboxed tool execution. |
-| [**prosopon**](file:///home/akarta/Projects/Metis/prosopon) | User Interface | Authenticated text & voice client interface, session history, and human-in-the-loop approval management. |
-| [**docs**](file:///home/akarta/Projects/Metis/docs) | System Contracts | Architecture specs, integration contracts ([`STACK_BUILD_CONTRACT.md`](docs/STACK_BUILD_CONTRACT.md)), and integration roadmap ([`stack-integration.md`](docs/stack-integration.md)). |
+| [**stoma**](stoma) | Ingestion & Parsing | Document parsing (PDF, text, code), chunking, sentence-transformers embeddings, directory watching, index generation. |
+| [**LTHCM**](LTHCM) | Topological Memory | Long-Term Hierarchical Context Memory with topological retrieval, superposition, wormhole routing, and sheaf verification. |
+| [**dianoia**](dianoia) | Deliberation & Walk | Deliberative cognition layer over LTHCM topological memory; bounded graph walks, counterfactual hypothesis testing, and verifier synthesis. |
+| [**hestia**](hestia) | Model Serving | OpenAI-compatible local model server wrapping llama.cpp/vLLM/transformers, GPU admission control, `/v1/models` and streaming completions. |
+| [**dokime**](dokime) | Evaluation Harness | Reproducible benchmark harness for local models, held-out task suites, statistical significance testing, and regression release gates. |
+| [**kleroterion**](kleroterion) | Stochastic Selector | Entropy-aware, masked-softmax/Gaussian action selection among eligible Dianoia walk actions. |
+| [**krisis**](krisis) | Candidate Selector | Policy-governed answer evaluation & candidate ranking with hard gates (access, provenance, contradiction, citation resolution). |
+| [**kybernetes**](kybernetes) | Central Orchestrator | Central request planner, multi-turn session lifecycle, adapter framework, and strict token/time/cost budget engine. |
+| [**paideia**](paideia) | Training Harness | Dataset auditing, trajectory filtering, LoRA adapter registry, and training provenance. |
+| [**phylax**](phylax) | Security Guardrails | Capability execution gateway, RBAC policy enforcement, one-time approval handles, and sandboxed tool execution. |
+| [**prosopon**](prosopon) | User Interface | Authenticated text & voice client interface, session history, and human-in-the-loop approval management. |
+| [**docs**](docs) | System Contracts | Architecture specs, integration contracts ([`STACK_BUILD_CONTRACT.md`](docs/STACK_BUILD_CONTRACT.md)), and integration roadmap ([`stack-integration.md`](docs/stack-integration.md)). |
 
 ---
 
@@ -83,7 +83,7 @@ To run tests for a specific stack (e.g., `kybernetes`):
 
 ```bash
 cd kybernetes
-uv run --extra test pytest
+uv run --extra dev pytest
 # or using its existing virtualenv:
 .venv/bin/pytest tests
 ```
