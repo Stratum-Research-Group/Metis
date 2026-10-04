@@ -43,19 +43,37 @@ def get_git_info() -> Dict[str, Any]:
     return {"git_commit": commit, "dirty_tree": dirty}
 
 
-def compute_dir_sha256(directory: Path) -> str:
-    """Compute deterministic collective sha256 checksum of files in a directory."""
+def compute_dir_sha256(directory: Path, exclude_files: Optional[Any] = None) -> str:
+    """
+    Compute deterministic collective sha256 checksum of files in a directory.
+    - Stable sorted traversal of directory trees.
+    - Encodes relative paths into hash to prevent layout collisions.
+    - Excludes registry metadata files (e.g. hestia_registry_entry.json).
+    - Fails closed on unreadable files instead of silently skipping.
+    """
+    if not directory.exists() or not directory.is_dir():
+        raise ValueError(f"Directory for digest computation does not exist or is not a directory: {directory}")
+
     hasher = hashlib.sha256()
-    for root, _, files in os.walk(directory):
+    exclude = set(exclude_files) if exclude_files else set()
+
+    for root, dirs, files in os.walk(directory):
+        dirs.sort()
         for f in sorted(files):
+            if f in exclude:
+                continue
             fp = Path(root) / f
+            rel_path = fp.relative_to(directory).as_posix()
+            hasher.update(rel_path.encode("utf-8"))
             try:
                 with open(fp, "rb") as fh:
                     while chunk := fh.read(65536):
                         hasher.update(chunk)
-            except Exception:
-                pass
+            except Exception as e:
+                raise OSError(f"Failed to read file for digest calculation: {fp} ({e})") from e
+
     return hasher.hexdigest()
+
 
 
 class QLoRATrainingRunner:
@@ -167,13 +185,16 @@ class QLoRATrainingRunner:
                 }, f, indent=2)
 
             t_elapsed = time.perf_counter() - t0
-            manifest.status = "COMPLETED"
+            manifest.status = "SIMULATED"
+            manifest.is_simulated = True
             manifest.completed_at_utc = datetime.now(timezone.utc).isoformat()
             manifest.duration_seconds = t_elapsed
-            manifest.adapter_digest = compute_dir_sha256(checkpoint_dir)
+            manifest.adapter_digest = compute_dir_sha256(checkpoint_dir, exclude_files={"manifest.json", "hestia_registry_entry.json"})
             manifest.metrics = {
                 "train_samples": len(self.splits.train),
-                "epochs_completed": self.config.epochs,
+                "epochs_completed": 0,
+                "simulated": True,
+                "note": "Marker-only checkpoint written without optimizer steps or weight updates.",
                 "peak_vram_mb": hardware_info.total_vram_mb - hardware_info.free_vram_mb,
             }
 

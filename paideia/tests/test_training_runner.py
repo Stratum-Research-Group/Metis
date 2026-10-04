@@ -50,5 +50,8 @@ def test_training_runner_manifest_lifecycle(tmp_path):
 
     assert manifest.run_id == runner.run_id
     # Since torch GPU may not be configured in this test env, runner either completes simulation or fails cleanly
-    assert manifest.status in ["COMPLETED", "FAILED"]
+    assert manifest.status in ["SIMULATED", "COMPLETED", "FAILED"]
+    if manifest.status == "SIMULATED":
+        assert manifest.is_simulated is True
+        assert manifest.metrics["epochs_completed"] == 0
     assert runner.manifest_path.exists()

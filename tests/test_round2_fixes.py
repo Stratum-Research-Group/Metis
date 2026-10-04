@@ -497,5 +497,153 @@ def test_defect9_paideia_rejects_unresolved_re_walks_from_gold_data(tmp_path):
     assert len(samples) == 3
 
 
+def test_defect11_paideia_runner_simulated_status_and_export_acceptance_gate(tmp_path):
+    """
+    Verify Paideia runner marks marker-only training as SIMULATED, reports 0 epochs,
+    and blocks export as a production trained adapter unless allow_simulated=True.
+    """
+    from paideia.training.config import TrainingConfig
+    from paideia.data.splitter import DatasetSplits
+    from paideia.training.runner import QLoRATrainingRunner
+    from paideia.export.registry import export_hestia_adapter_registry
+
+    config = TrainingConfig(
+        output_dir=str(tmp_path / "runs"),
+        epochs=3,
+        batch_size=1,
+    )
+    splits = DatasetSplits(train=[1, 2], dev=[3], test=[4])
+    runner = QLoRATrainingRunner(config=config, splits=splits)
+    manifest = runner.run()
+
+    assert manifest.status == "SIMULATED"
+    assert manifest.is_simulated is True
+    assert manifest.metrics["epochs_completed"] == 0
+    assert manifest.metrics["simulated"] is True
+
+    checkpoint_dir = runner.output_dir / "checkpoints"
+    # Copy manifest into checkpoints or parent dir
+    (checkpoint_dir / "manifest.json").write_text(manifest.model_dump_json())
+
+    # Gate must block production export of simulated run
+    with pytest.raises(ValueError, match="Acceptance gate failure"):
+        export_hestia_adapter_registry(
+            adapter_id="sim-adapter",
+            adapter_dir=checkpoint_dir,
+            base_model_name="meta-llama/Llama-3.1-8B-Instruct",
+            task="question_router",
+            training_data_fingerprint="dummy_fp",
+            evaluation_run_id="eval-1",
+            resource_footprint={"vram": 100},
+            allow_simulated=False,
+        )
+
+    # Allowed when explicitly declared simulated
+    entry = export_hestia_adapter_registry(
+        adapter_id="sim-adapter",
+        adapter_dir=checkpoint_dir,
+        base_model_name="meta-llama/Llama-3.1-8B-Instruct",
+        task="question_router",
+        training_data_fingerprint="dummy_fp",
+        evaluation_run_id="eval-1",
+        resource_footprint={"vram": 100},
+        allow_simulated=True,
+    )
+    assert entry.adapter_id == "sim-adapter"
+
+
+def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_path):
+    """
+    Verify adapter export hash scope:
+    - Excludes hestia_registry_entry.json from hash calculation.
+    - Preserves stable digest across repeated exports.
+    - Senses file mutation and layout changes.
+    - Generates distinct digests for distinct model / task identities.
+    - Fails closed on unreadable files.
+    """
+    import os
+    from paideia.export.registry import export_hestia_adapter_registry, EXCLUDED_REGISTRY_FILES
+    from paideia.training.runner import compute_dir_sha256
+
+    adapter_dir = tmp_path / "real_weights"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    (adapter_dir / "adapter_model.safetensors").write_bytes(b"initial_weight_matrix_content")
+    (adapter_dir / "adapter_config.json").write_text('{"rank": 8, "alpha": 16}')
+
+    # 1. First export
+    entry1 = export_hestia_adapter_registry(
+        adapter_id="lora-v1",
+        adapter_dir=adapter_dir,
+        base_model_name="meta-llama/Llama-3.1-8B-Instruct",
+        task="retrieval_router",
+        training_data_fingerprint="data_fingerprint_001",
+        evaluation_run_id="eval-001",
+        resource_footprint={"vram": 1000},
+    )
+
+    # 2. Check digest matches directory checksum with exclusions
+    computed_digest = compute_dir_sha256(adapter_dir, exclude_files=EXCLUDED_REGISTRY_FILES)
+    assert entry1.adapter_digest == computed_digest
+
+    # 3. Repeated export must be stable and deterministic (must not hash the previous registry file)
+    entry2 = export_hestia_adapter_registry(
+        adapter_id="lora-v1",
+        adapter_dir=adapter_dir,
+        base_model_name="meta-llama/Llama-3.1-8B-Instruct",
+        task="retrieval_router",
+        training_data_fingerprint="data_fingerprint_001",
+        evaluation_run_id="eval-001",
+        resource_footprint={"vram": 1000},
+    )
+    assert entry2.adapter_digest == entry1.adapter_digest
+
+    # 4. Mutation detection
+    (adapter_dir / "adapter_model.safetensors").write_bytes(b"mutated_weight_matrix_content")
+    entry_mutated = export_hestia_adapter_registry(
+        adapter_id="lora-v1",
+        adapter_dir=adapter_dir,
+        base_model_name="meta-llama/Llama-3.1-8B-Instruct",
+        task="retrieval_router",
+        training_data_fingerprint="data_fingerprint_001",
+        evaluation_run_id="eval-001",
+        resource_footprint={"vram": 1000},
+    )
+    assert entry_mutated.adapter_digest != entry1.adapter_digest
+
+    # 5. Distinct model and task identities change digests
+    entry_diff_model = export_hestia_adapter_registry(
+        adapter_id="lora-v1",
+        adapter_dir=adapter_dir,
+        base_model_name="qwen/Qwen2.5-7B",
+        task="different_task",
+        training_data_fingerprint="data_fingerprint_001",
+        evaluation_run_id="eval-001",
+        resource_footprint={"vram": 1000},
+    )
+    assert entry_diff_model.base_model_digest != entry1.base_model_digest
+    assert entry_diff_model.template_digest != entry1.template_digest
+
+    # 6. Unreadable file failure
+    unreadable_file = adapter_dir / "corrupted.bin"
+    unreadable_file.write_bytes(b"data")
+    try:
+        os.chmod(unreadable_file, 0o000)
+        # On root/privileged hosts chmod may not deny read, so only assert if PermissionError/OSError occurs
+        try:
+            with open(unreadable_file, "rb") as test_f:
+                test_f.read(1)
+            can_read = True
+        except PermissionError:
+            can_read = False
+
+        if not can_read:
+            with pytest.raises(OSError):
+                compute_dir_sha256(adapter_dir, exclude_files=EXCLUDED_REGISTRY_FILES)
+    finally:
+        os.chmod(unreadable_file, 0o644)
+        unreadable_file.unlink()
+
+
+
 
 

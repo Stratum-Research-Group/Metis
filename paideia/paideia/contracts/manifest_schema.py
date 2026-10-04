@@ -13,10 +13,11 @@ class RunManifest(BaseModel):
     """
     run_id: str = Field(..., description="Unique UUID for this execution run")
     task_name: str = Field(..., description="Task identifier, e.g. 'router_baseline', 'walk_qlora'")
-    status: Literal["PENDING", "RUNNING", "COMPLETED", "FAILED", "PARTIAL"] = Field(
+    status: Literal["PENDING", "RUNNING", "COMPLETED", "FAILED", "PARTIAL", "SIMULATED"] = Field(
         default="PENDING",
         description="Run execution status",
     )
+    is_simulated: bool = Field(default=False, description="Whether execution was simulated without real weight updates")
     started_at_utc: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat(),
         description="ISO 8601 UTC timestamp of start",
