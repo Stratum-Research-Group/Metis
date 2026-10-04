@@ -1,6 +1,7 @@
 """Command-line interface for Kybernetes orchestrator."""
 
 import asyncio
+from pathlib import Path
 import sys
 import uuid
 import click
@@ -41,18 +42,56 @@ def doctor():
     krisis = KrisisAdapter()
 
     h_health = asyncio.run(hestia.check_health())
-    h_status = "ONLINE" if h_health.get("available") else f"OFFLINE ({h_health.get('url')})"
+    if h_health.get("available"):
+        reg = "registered" if h_health.get("default_model_registered") else "default model not registered"
+        h_status = f"ONLINE ({reg})"
+        h_details = f"Models: {', '.join(h_health.get('models', [])) or 'None'}"
+    else:
+        h_status = f"OFFLINE ({h_health.get('url')})"
+        h_details = "Service unreachable; start Hestia on port 8080"
+
+    # LTHCM / Stoma check
+    has_lthcm_dir = Path("LTHCM").is_dir() or Path("../LTHCM").is_dir() or (lthcm.memory_root and Path(lthcm.memory_root).is_dir())
+    lthcm_status = "READY (SIMULATED)" if not (lthcm.memory_root and Path(lthcm.memory_root).is_dir()) else "READY (INDEX)"
+    lthcm_details = "In-memory demo corpus (4 passages), timestamp bounds active" if lthcm_status == "READY (SIMULATED)" else f"Corpus root: {lthcm.memory_root}"
+
+    # Dianoia check
+    try:
+        import dianoia as _d
+        dianoia_status = "READY (SIMULATED ADAPTER)"
+        dianoia_details = "dianoia module detected; zero-edge fallback enabled"
+    except ImportError:
+        dianoia_status = "STANDALONE (SIMULATED)"
+        dianoia_details = "Zero-edge fallback enabled (dianoia package not in venv)"
+
+    # Phylax check
+    try:
+        import phylax as _p
+        phylax_status = "READY (LOCAL SHIM)"
+        phylax_details = "phylax detected; in-memory approval manager active"
+    except ImportError:
+        phylax_status = "READY (LOCAL SHIM)"
+        phylax_details = "In-memory approval manager active"
+
+    # Krisis check
+    try:
+        import krisis as _k
+        krisis_status = "READY (LOCAL ADAPTER)"
+        krisis_details = "krisis detected; half-even scoring & gate evaluation active"
+    except ImportError:
+        krisis_status = "READY (LOCAL ADAPTER)"
+        krisis_details = "Half-even scoring & gate evaluation active"
 
     table_data = [
-        ["Hestia Model Server", h_status, ", ".join(h_health.get("models", [])) or "None (fallback ready)"],
-        ["LTHCM / Stoma Memory", "READY", "Epoch timestamp bounds active"],
-        ["Dianoia Deliberation", "READY", "Zero-edge fallback enabled"],
-        ["Phylax Capability Gateway", "READY", "Point-of-action enforcement active"],
-        ["Krisis Verifier Gates", "READY", "6dp half-even scoring & quality gates active"],
+        ["Hestia Model Server", h_status, h_details],
+        ["LTHCM / Stoma Memory", lthcm_status, lthcm_details],
+        ["Dianoia Deliberation", dianoia_status, dianoia_details],
+        ["Phylax Capability Gateway", phylax_status, phylax_details],
+        ["Krisis Verifier Gates", krisis_status, krisis_details],
     ]
 
     click.echo(tabulate(table_data, headers=["Subsystem", "Status", "Details"], tablefmt="rounded_grid"))
-    click.echo("\nAll local adapters initialized successfully.\n")
+    click.echo("\nAll local adapters inspected successfully.\n")
 
 
 @cli.command("serve")
