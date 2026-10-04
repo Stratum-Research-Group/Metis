@@ -1,0 +1,257 @@
+KRISIS (krisis, Gk. κρίσις) - selection layer for the Metis stack
+spec v2 - 2026-09-30 - supersedes v1
+status: DRAFT for re-review. v1 was repo-blind; v2 incorporates the
+first review's repo-verified repairs. Remaining unverified items are
+marked [VERIFY].
+
+=====================================================================
+0. WHAT CHANGED FROM v1
+=====================================================================
+- Re-scoped: v0 is a deterministic, auditable answer selector with an
+  abstain path. The full adaptive-measure program is preserved as
+  explicitly gated later phases (section 8), not as v0.
+- "Model NLL as universal configuration prior" replaced with a
+  calibrated model-likelihood FEATURE over answer candidates.
+- Consistency and correctness are separate scores. Agreement alone
+  rewards stable-wrong.
+- One v0 decision rule. The threshold/argmax/hedge mixture is gone.
+- "No single-sample fitness anywhere" replaced with budgeted
+  consistency: multiple validated perturbations for a REPORTED
+  consistency estimate, safe baseline/abstain when unaffordable.
+- tau: fixed, dev-calibrated. Drift detected separately.
+- Ownership boundaries added: Kleroterion, Kybernetes, Phylax,
+  Dokime, Paideia. Krisis never touches their turf.
+- Adversarial robustness line added to the decision contract.
+- Full audit logging schema.
+
+=====================================================================
+1. NAME
+=====================================================================
+krisis (κρίσις) - "judgment, separation, decision", from krinein,
+to separate / to judge. Sits alongside dianoia (thought), hestia
+(hearth), dokime (assay), kleroterion (allotment machine).
+
+=====================================================================
+2. WHY IT EXISTS (the vision, kept whole)
+=====================================================================
+An LLM stack without an explicit selection measure selects by
+accident: temperature picks outputs, recency picks memories, whoever
+shouted last picks configs. Cosmology's version is the measure
+problem; the fix is the same: name the prior, name the fitness, let
+them fight.
+
+The full program: description-length prior + consistency fitness +
+structure conditioning + a measure that learns online. v0 builds the
+spine of that (selection with audit) and defers the parts that need
+evidence to be safe. The analogy motivates; it does not establish
+that description length plus agreement is a probability of truth.
+Every term must earn its place with task-level evidence.
+
+=====================================================================
+3. POSITION IN THE STACK
+=====================================================================
+  Stoma -> LTHCM candidate passages -> [Krisis passage rerank, later]
+  Hestia candidate completions -----> [Krisis answer select, v0]
+                                       -> Kybernetes -> Prosopon
+  Phylax: hard authorization + data-access gates (before AND after)
+  Dokime: perturbation sets + independent evaluation + verdicts
+  Paideia: offline training/adapter promotion (separate from Krisis)
+  Kleroterion: bounded stochastic Dianoia action selection (NOT
+  answer selection - krisis never selects walk actions, kleroterion
+  never selects answers; separate policy state, randomness, metrics)
+
+Krisis returns ranked selections with features, scores, rejected
+candidates and abstention reasons to Kybernetes, which owns when to
+invoke krisis and the final response state. Krisis does not send
+answers to Prosopon, authorize tools, modify LTHCM, change weights,
+or declare itself correct.
+
+Build as an installable library + thin adapter. A standalone network
+service only if multiple processes genuinely require it (latency,
+auth, version-skew costs otherwise).
+
+=====================================================================
+4. v0 DECISION CONTRACT
+=====================================================================
+Input: request/trace ID; a fixed set of candidate answers OR
+passages; stable IDs + provenance; authoritative eligibility result;
+model/index versions; optional measured features; hard inference
+budget. All candidates answer the same frozen query against the same
+evidence snapshot. Never compare raw logprobs across models as if
+they shared a scale.
+
+Output: selected candidate ID or NO_ELIGIBLE_CANDIDATE; ranked
+alternatives; rejection reasons; feature values WITH MISSINGNESS;
+policy + snapshot versions; cost; display status for Kybernetes.
+Recheck candidate/source validity before publication.
+
+Score for eligible candidates (predeclared, frozen on dev data):
+
+  score(c) = w_support  * grounded_support(c)
+           + w_consist  * validated_consistency(c)
+           + w_model    * calibrated_model_feature(c)
+           - w_cost     * normalized_cost(c)
+
+Hard access, provenance, contradiction and version checks are
+OUTSIDE this score and cannot be compensated by high likelihood.
+
+Missing optional features stay missing - never imputed or fabricated.
+
+ADVERSARIAL RULE: feature values from untrusted sources (retrieved
+passages, external text) are inputs to suspicion, not just to score.
+A passage can be crafted to pump likelihood and consistency features.
+Phylax gates authorization and access; nothing in v0 pretends to
+gate feature-gaming - so support/consistency features computed from
+untrusted content are flagged as such in the audit log, and hostile-
+feature cases belong in the eval suite.
+
+=====================================================================
+5. FEATURE DEFINITIONS
+=====================================================================
+5.1 grounded_support(c): citation/claim support for c against the
+    evidence snapshot. Primary feature. Owner: krisis consumes,
+    Dianoia verification contributes [VERIFY boundary].
+
+5.2 validated_consistency(c): agreement of c with the system's
+    answers to VALIDATED perturbations of the query (paraphrase,
+    seed, session-time shifts), where the perturbation is labeled
+    answer-preserving. Time/context shifts that legitimately change
+    the answer are separate cases, not violations. Owner: Dokime
+    owns generators, versions, validation slices; krisis consumes a
+    bounded set. Consistency is a diagnostic and a feature, never a
+    correctness verdict.
+
+5.3 calibrated_model_feature(c): model likelihood of the answer,
+    calibrated per (model, tokenizer, template, version); recorded
+    with logprob availability + normalization method. NOT a
+    configuration prior. Compare against a no-logprob selector;
+    disable if the capability probe fails.
+
+5.4 normalized_cost(c): tokens/latency/model calls for obtaining c
+    and its features, normalized to budget.
+
+5.5 Hestia capability probe: contract for token-level logprob
+    availability and cross-backend schema. If absent on the pinned
+    llama.cpp build/model: documented feature-free baseline, no
+    invented scores.
+
+=====================================================================
+6. THRESHOLDS, BUDGETS, FAILURE
+=====================================================================
+- tau: fixed, dev-calibrated. NO rolling quantile (a rolling
+  quantile forces a fixed fail rate regardless of candidate
+  quality). Drift detected separately; Dokime review required to
+  change tau.
+- Per-turn budgets: candidates, perturbations, tokens, wall time,
+  GPU. Recorded per decision. Consistency estimated only when the
+  budget affords validated perturbations; otherwise the safe
+  baseline/abstention path runs and the missingness is logged.
+- NO_ELIGIBLE_CANDIDATE: typed, with reasons. Kybernetes follows a
+  bounded retry/ask/abstain policy. NEVER silently relax Phylax,
+  provenance, or contradiction gates.
+
+=====================================================================
+7. STRUCTURE CONDITIONING (deferred, kept honest)
+=====================================================================
+v1 called S an "algorithmic sufficient statistic". That is a north
+star, not an interface. v0 uses explicit measured features only:
+path length, edge confidence, source diversity, index generation.
+Each ablated against a flat reranker. LTHCM/index snapshot is
+versioned and immutable per request; cached features invalidated on
+generation change. No LTHCM graph-weight mutation in v0.
+
+Two adapters, two schemas, two benchmarks:
+  select_answers (v0)   - candidate IDs + final status
+  rank_passages (later) - stable passage IDs + citations; enabled
+  only after a separate retrieval benchmark shows gain over LTHCM's
+  own ranking and a flat/hybrid reranker at equal budget.
+
+=====================================================================
+8. PHASED GATES (the full program, with entry criteria)
+=====================================================================
+Gate 0 -> v0 (now): deterministic select_answers, abstain path,
+frozen protocol, audit logging. Entry: this spec frozen.
+
+Gate 1 -> passage reranking. Entry: select_answers beats strongest
+equal-budget baseline on the predeclared primary metric with a
+meaningful paired interval, guardrails pass; separate retrieval
+benchmark for passages shows gain.
+
+Gate 2 -> shadow online updates. Entry: reward provenance, logged
+selection propensity/exploration, bounded weights, holdout checks,
+rollback, Dokime promotion path all exist. No unsupervised
+agreement-only online promotion, ever.
+
+Gate 3 -> configuration-space selection (the original v1 scope:
+selecting weights/memory/sampler configs with the learned measure).
+Entry: Gate 2 evidence + a reliable live-reward signal.
+
+Each gate is a written, checkable condition. "Later" is not a gate.
+
+=====================================================================
+9. EVALUATION REQUIRED BEFORE RELEASE
+=====================================================================
+Datasets: held-out grounded-answer and contradiction cases, multi-
+hop, exact-fact, paraphrase-preserving vs legitimately-changing,
+stable-wrong, hostile-feature cases. Source/model/perturbation
+revisions fixed.
+
+Baselines: no-krisis; highest-likelihood; majority/self-consistency
+vote; citation/verification-only rerank; krisis ablations minus each
+feature. Passages: LTHCM's own ranking + strong flat/hybrid reranker
+at equal budget.
+
+Metrics: correctness, grounded support, contradiction miss rate,
+abstention risk/coverage, stable-wrong rate, selection regret vs
+oracle upper bound, p50/p95 latency, tokens/GPU, extra calls,
+failure rate. Agreement reported as diagnostic only.
+
+Protocol: paired per-question predictions + intervals, seeds where
+stochastic, all failures in denominators, frozen rule, independent
+final test, per-slice results. Dokime renders the report from a
+replayable bundle.
+
+Promotion gate: predeclared primary quality metric beats strongest
+equal-budget baseline with meaningful paired interval, with
+contradiction/abstention/latency/resource guardrails passing.
+Otherwise keep krisis opt-in and report the negative result.
+
+=====================================================================
+10. AUDIT LOGGING (every decision)
+=====================================================================
+candidate IDs, source/citation IDs, feature values + missingness +
+trust flags (5.x), policy version, eligibility mask + reasons,
+Hestia model digest, LTHCM generation, perturbation-set hash,
+latency/tokens/call counts, budget consumption, final Kybernetes
+trace ID. Redact sensitive content. Decisions must be replayable.
+
+=====================================================================
+11. DO-NOT-TOUCH CONSTRAINTS
+=====================================================================
+- krisis never modifies weights, memory contents, LTHCM graph,
+  eval data, or Phylax policy.
+- krisis never selects Dianoia walk actions (Kleroterion's turf).
+- No cross-model raw logprob comparison.
+- No imputed features. Missingness is data.
+- No online weight updates in v0; v0 is read-only/frozen.
+- G generators are Dokime-owned, versioned, workload-derived, with
+  audited validation slices. Private live queries stay out of
+  reusable caches unless retention/consent allows.
+
+=====================================================================
+12. OPEN QUESTIONS FOR THIS REVIEW ROUND
+=====================================================================
+1. Agreement metric per task class: exact match for normalized
+   closed-form only; embedding similarity as screening feature;
+   model-judged equivalence needs calibration + independent audit
+   set. Which classes does v0 actually ship with?
+2. w_* weights: dev-tuned and frozen - on WHICH dev set, and who
+   signs the freeze?
+3. Shadow-phase exploration policy: what propensity floor keeps
+   Gate 2 honest without leaking exploration into user-facing
+   answers?
+4. Hostile-feature eval cases: who authors them, and do they live
+   in Dokime's suites from day one?
+5. Budget defaults on the target hardware (16 GB GPU, latency
+   budget per turn): concrete numbers for candidates, perturbations,
+   tokens.

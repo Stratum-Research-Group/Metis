@@ -1,0 +1,35 @@
+PHYLAX - permissions/guardrails layer. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Phylax (Greek: guardian/watcher) is the policy layer of a local AI stack. The owner writes the rules by hand: what each component may read, what it may do, and what requires an explicit yes first. Kybernetes (orchestrator) consults Phylax before any file read, tool call, or outbound action.
+
+HARD CONSTRAINTS
+- Policy is DATA (YAML), never code. The owner edits rules without touching the codebase.
+- Default deny: anything not covered by a rule is denied. No silent allows.
+- Every decision (allow / deny / ask) is logged with timestamp, component, resource, and rule matched.
+- Phylax decides; it does not sandbox or enforce at the OS level. Enforcement is the caller's duty to consult it.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "phylax", Python package, pyproject.toml.
+
+2. POLICY SCHEMA
+- YAML rules: subject (component, e.g. kybernetes, stoma), resource (path glob, tool name, action type), verb (read / write / execute / send), effect (allow / deny / ask).
+- First-match-wins ordering with an explicit final default-deny.
+
+3. EVALUATOR
+- Single function: decide(subject, verb, resource) -> ALLOW / DENY / ASK, with the matched rule recorded.
+- ASK mode: returns a pending-decision handle the interface layer can resolve later (owner approves or rejects), with timeout -> DENY.
+
+4. KYBERNETES INTEGRATION SHIM
+- A thin wrapper Kybernetes calls before file reads, tool calls, and outbound actions. One call site pattern, documented so other components (stoma, prosopon) can adopt it.
+
+5. AUDIT VIEWER
+- CLI: list decisions by time, component, effect, or resource. Show the rule that matched for each.
+
+OUT OF SCOPE
+- Sandboxing, OS-level enforcement, learning policy from behavior, natural-language policy authoring.
+
+DEMO
+- Policy allows read on a docs folder, denies a private folder, sets ask on send actions. Run three requests through the shim: one allow, one deny, one ask that times out to deny. Show the audit log entries with matched rules.

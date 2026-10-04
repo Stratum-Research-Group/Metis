@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+*/.venv/
+*/*/.venv/
+env/
+venv/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+*/.pytest_cache/
+.coverage
+*/.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Linters & Build
+.ruff_cache/
+*/.ruff_cache/
+.mypy_cache/
+*/.mypy_cache/
+*.egg-info/
+*/*.egg-info/
+dist/
+build/
+
+# Checkpoint binaries & large weights
+*.pt
+*.bin
+*.pth
+*.ckpt
+*.gguf
+runs/*.pt
+runs/*.bin
+runs/*.ckpt
+LTHCM/runs/*.pt
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+
+# Local logs & caches
+*.log

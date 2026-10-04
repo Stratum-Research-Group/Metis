@@ -1,0 +1,54 @@
+# Ignore specification/prompt files and general text notes
+*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# Stoma-owned state, cache, index, and models
+.stoma/
+.pytest_cache/
+.coverage
+htmlcov/
+*.pkl
+*.pt
+*.bin
+indices/
+manifests/
+cache/
+model_weights/
+demo_data/
+user_content/
+test_output/
+

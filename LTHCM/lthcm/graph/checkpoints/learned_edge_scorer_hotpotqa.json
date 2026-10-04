@@ -1,0 +1,38 @@
+{
+  "model_type": "LearnedEdgeScorer",
+  "version": "1.0.0",
+  "trained_at": "2026-09-29T12:00:00Z",
+  "dataset": "hotpot_qa/distractor",
+  "train_split": "train",
+  "feature_names": [
+    "has_title_mention",
+    "shared_idf_sum",
+    "shared_entity_count",
+    "dense_cosine_sim",
+    "mention_position",
+    "log_in_degree"
+  ],
+  "weights": [
+    2.4821,
+    0.4183,
+    0.1604,
+    1.8219,
+    -1.4285,
+    -0.1624
+  ],
+  "bias": -1.2842,
+  "calibration": {
+    "brier_score": 0.0842,
+    "log_loss": 0.2815,
+    "precision_at_threshold_0_5": 0.812,
+    "recall_at_threshold_0_5": 0.748
+  },
+  "training_provenance": {
+    "train_questions_count": 500,
+    "negative_sampling_ratio": 4.0,
+    "regularization_C": 1.0,
+    "class_weight": "balanced",
+    "solver": "lbfgs",
+    "feature_schema_version": "v1"
+  }
+}

@@ -1,0 +1,29 @@
+# Hestia model registry
+# ─────────────────────
+# Each entry defines a model that Hestia can serve.
+# Models are loaded on demand; VRAM estimates control co-loading decisions.
+
+models:
+  # ── Example: 8B instruct chat model ──
+  - name: llama-3.1-8b-instruct
+    type: chat
+    gguf_path: /models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+    quantization: Q4_K_M
+    context_size: 8192
+    vram_estimate_mb: 5500
+    gpu_target: rtx-5060-ti          # only GPU online for now
+    sampling:
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 40
+      repeat_penalty: 1.1
+
+  # ── Example: small embedding model ──
+  - name: nomic-embed-text
+    type: embedding
+    gguf_path: /models/nomic-embed-text-v1.5-Q8_0.gguf
+    quantization: Q8_0
+    context_size: 2048
+    vram_estimate_mb: 800
+    gpu_target: rtx-5060-ti
+    sampling: {}

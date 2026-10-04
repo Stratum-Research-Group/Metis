@@ -1,0 +1,1254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "krisis-policy.schema.json",
+  "title": "Krisis policy manifest",
+  "type": "object",
+  "required": [
+    "manifest_id",
+    "schema_version",
+    "status",
+    "conventions",
+    "governance",
+    "id_assignment",
+    "reason_enum",
+    "reason_precedence",
+    "profiles",
+    "class_routing",
+    "n1_handling",
+    "budgets",
+    "invalidation_events",
+    "audit_card",
+    "retention",
+    "candidate_only_reasons",
+    "reason_mapping",
+    "generation_policy"
+  ],
+  "properties": {
+    "manifest_id": {
+      "const": "krisis-policy-0.1"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "frozen",
+        "retired"
+      ]
+    },
+    "conventions": {
+      "type": "object",
+      "required": [
+        "number_format",
+        "score_arithmetic",
+        "canonical_json"
+      ],
+      "properties": {
+        "number_format": {
+          "type": "string"
+        },
+        "score_arithmetic": {
+          "type": "string"
+        },
+        "canonical_json": {
+          "type": "string"
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "required": [
+        "solo_mode",
+        "roles",
+        "sealed_test",
+        "approval_lag_hours",
+        "evaluation_claim",
+        "external_release_gate"
+      ],
+      "properties": {
+        "solo_mode": {
+          "type": "boolean"
+        },
+        "roles": {
+          "type": "object",
+          "required": [
+            "tuning",
+            "approval",
+            "labeling",
+            "independence_rule"
+          ],
+          "properties": {
+            "tuning": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approval": {
+              "type": "string",
+              "minLength": 1
+            },
+            "labeling": {
+              "type": "string",
+              "minLength": 1
+            },
+            "independence_rule": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "sealed_test": {
+          "type": "object",
+          "required": [
+            "hash_recorded_before_tuning",
+            "sha256",
+            "protocol_sha256",
+            "sealed_at_utc",
+            "custodian",
+            "final_test_access_count"
+          ],
+          "properties": {
+            "hash_recorded_before_tuning": {
+              "type": "boolean"
+            },
+            "sha256": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/sha256"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "protocol_sha256": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/sha256"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sealed_at_utc": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "custodian": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "final_test_access_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "approval_lag_hours": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evaluation_claim": {
+          "enum": [
+            "internal_only_until_independent_final_test",
+            "independent_final_test_passed"
+          ]
+        },
+        "external_release_gate": {
+          "type": "object",
+          "required": [
+            "required",
+            "independent_hidden_test_custodian",
+            "blinded_human_adjudicator_outside_stack_owner",
+            "protocol_and_primary_metric_committed_before_tuning",
+            "one_final_test_access",
+            "immutable_access_and_decision_log",
+            "retire_test_after_failed_final_access",
+            "solo_fallback_claim"
+          ],
+          "properties": {
+            "required": {
+              "const": true
+            },
+            "independent_hidden_test_custodian": {
+              "const": true
+            },
+            "blinded_human_adjudicator_outside_stack_owner": {
+              "const": true
+            },
+            "protocol_and_primary_metric_committed_before_tuning": {
+              "const": true
+            },
+            "one_final_test_access": {
+              "const": true
+            },
+            "immutable_access_and_decision_log": {
+              "const": true
+            },
+            "retire_test_after_failed_final_access": {
+              "const": true
+            },
+            "solo_fallback_claim": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "id_assignment": {
+      "type": "string"
+    },
+    "reason_enum": {
+      "const": [
+        "NO_AUTHORIZED_CANDIDATE",
+        "NO_VALID_CANDIDATE",
+        "QUALITY_BELOW_THRESHOLD",
+        "VERIFIER_UNAVAILABLE",
+        "BUDGET_EXHAUSTED",
+        "STALE",
+        "SCHEMA_INVALID",
+        "UPSTREAM_GENERATION_FAILED",
+        "PROFILE_UNAVAILABLE",
+        "FEATURE_INVALID",
+        "CANCELLED"
+      ]
+    },
+    "reason_precedence": {
+      "const": [
+        "CANCELLED",
+        "SCHEMA_INVALID",
+        "NO_AUTHORIZED_CANDIDATE",
+        "VERIFIER_UNAVAILABLE",
+        "PROFILE_UNAVAILABLE",
+        "NO_VALID_CANDIDATE",
+        "UPSTREAM_GENERATION_FAILED",
+        "BUDGET_EXHAUSTED",
+        "STALE",
+        "QUALITY_BELOW_THRESHOLD"
+      ]
+    },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "required": [
+        "eligibility_baseline",
+        "grounded_support_only",
+        "grounded_v1"
+      ],
+      "properties": {
+        "eligibility_baseline": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "requires_grounding",
+                "hard_gates",
+                "score",
+                "tau",
+                "fallback",
+                "requires_capability",
+                "per_claim_min"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "eligibility",
+                    "grounded"
+                  ]
+                },
+                "requires_grounding": {
+                  "type": "boolean"
+                },
+                "requires_capability": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "verifier_active",
+                      "logprobs",
+                      "perturbation_executor"
+                    ]
+                  },
+                  "uniqueItems": true
+                },
+                "hard_gates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "per_claim_min": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/probability"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "formula": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "weights": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/$defs/probability"
+                          }
+                        },
+                        "cal_ll_map": {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "map_version",
+                            "model_digest",
+                            "formula",
+                            "ll_min",
+                            "ll_max",
+                            "rounding",
+                            "raw_ll_definition",
+                            "calibration_dataset_sha256",
+                            "calibration_report_sha256"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "synthetic_fixture_only",
+                                "validated"
+                              ]
+                            },
+                            "map_version": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "model_digest": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "formula": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "ll_min": {
+                              "$ref": "#/$defs/signed_decimal"
+                            },
+                            "ll_max": {
+                              "$ref": "#/$defs/signed_decimal"
+                            },
+                            "rounding": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "raw_ll_definition": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "calibration_dataset_sha256": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/sha256"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "calibration_report_sha256": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/sha256"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "formula",
+                        "weights"
+                      ]
+                    }
+                  ]
+                },
+                "tau": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/probability"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "fallback": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "release_gate": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "eligibility"
+                },
+                "requires_grounding": {
+                  "const": false
+                },
+                "per_claim_min": {
+                  "type": "null"
+                },
+                "tau": {
+                  "type": "null"
+                },
+                "score": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        },
+        "grounded_support_only": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "requires_grounding",
+                "hard_gates",
+                "score",
+                "tau",
+                "fallback",
+                "requires_capability",
+                "per_claim_min"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "eligibility",
+                    "grounded"
+                  ]
+                },
+                "requires_grounding": {
+                  "type": "boolean"
+                },
+                "requires_capability": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "verifier_active",
+                      "logprobs",
+                      "perturbation_executor"
+                    ]
+                  },
+                  "uniqueItems": true
+                },
+                "hard_gates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "per_claim_min": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/probability"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "formula": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "weights": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/$defs/probability"
+                          }
+                        },
+                        "cal_ll_map": {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "map_version",
+                            "model_digest",
+                            "formula",
+                            "ll_min",
+                            "ll_max",
+                            "rounding",
+                            "raw_ll_definition",
+                            "calibration_dataset_sha256",
+                            "calibration_report_sha256"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "synthetic_fixture_only",
+                                "validated"
+                              ]
+                            },
+                            "map_version": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "model_digest": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "formula": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "ll_min": {
+                              "$ref": "#/$defs/signed_decimal"
+                            },
+                            "ll_max": {
+                              "$ref": "#/$defs/signed_decimal"
+                            },
+                            "rounding": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "raw_ll_definition": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "calibration_dataset_sha256": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/sha256"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "calibration_report_sha256": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/sha256"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "formula",
+                        "weights"
+                      ]
+                    }
+                  ]
+                },
+                "tau": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/probability"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "fallback": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "release_gate": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "grounded"
+                },
+                "requires_grounding": {
+                  "const": true
+                },
+                "per_claim_min": {
+                  "$ref": "#/$defs/probability"
+                },
+                "tau": {
+                  "$ref": "#/$defs/probability"
+                },
+                "requires_capability": {
+                  "const": [
+                    "verifier_active"
+                  ]
+                },
+                "score": {
+                  "type": "object",
+                  "properties": {
+                    "weights": {
+                      "const": {}
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "grounded_v1": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "requires_grounding",
+                "hard_gates",
+                "score",
+                "tau",
+                "fallback",
+                "requires_capability",
+                "per_claim_min"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "eligibility",
+                    "grounded"
+                  ]
+                },
+                "requires_grounding": {
+                  "type": "boolean"
+                },
+                "requires_capability": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "verifier_active",
+                      "logprobs",
+                      "perturbation_executor"
+                    ]
+                  },
+                  "uniqueItems": true
+                },
+                "hard_gates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "per_claim_min": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/probability"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "formula": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "weights": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/$defs/probability"
+                          }
+                        },
+                        "cal_ll_map": {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "map_version",
+                            "model_digest",
+                            "formula",
+                            "ll_min",
+                            "ll_max",
+                            "rounding",
+                            "raw_ll_definition",
+                            "calibration_dataset_sha256",
+                            "calibration_report_sha256"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "synthetic_fixture_only",
+                                "validated"
+                              ]
+                            },
+                            "map_version": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "model_digest": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "formula": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "ll_min": {
+                              "$ref": "#/$defs/signed_decimal"
+                            },
+                            "ll_max": {
+                              "$ref": "#/$defs/signed_decimal"
+                            },
+                            "rounding": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "raw_ll_definition": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "calibration_dataset_sha256": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/sha256"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "calibration_report_sha256": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/sha256"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "formula",
+                        "weights"
+                      ]
+                    }
+                  ]
+                },
+                "tau": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/probability"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "fallback": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "release_gate": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "grounded"
+                },
+                "requires_grounding": {
+                  "const": true
+                },
+                "per_claim_min": {
+                  "$ref": "#/$defs/probability"
+                },
+                "tau": {
+                  "$ref": "#/$defs/probability"
+                },
+                "requires_capability": {
+                  "const": [
+                    "verifier_active",
+                    "logprobs"
+                  ]
+                },
+                "score": {
+                  "type": "object",
+                  "required": [
+                    "cal_ll_map"
+                  ],
+                  "properties": {
+                    "weights": {
+                      "const": {
+                        "w_conf": "0.700000",
+                        "w_ll": "0.300000"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "class_routing": {
+      "type": "object",
+      "required": [
+        "rules",
+        "multi_class",
+        "unclassified",
+        "input_class_normalization",
+        "matching"
+      ],
+      "properties": {
+        "rules": {
+          "const": [
+            {
+              "class": "closed_form_number",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "logprobs": true,
+              "profile": "grounded_v1"
+            },
+            {
+              "class": "closed_form_number",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "logprobs": false,
+              "profile": "grounded_support_only"
+            },
+            {
+              "class": "closed_form_entity",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "logprobs": true,
+              "profile": "grounded_v1"
+            },
+            {
+              "class": "closed_form_entity",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "logprobs": false,
+              "profile": "grounded_support_only"
+            },
+            {
+              "class": "closed_form_choice",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "logprobs": true,
+              "profile": "grounded_v1"
+            },
+            {
+              "class": "closed_form_choice",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "logprobs": false,
+              "profile": "grounded_support_only"
+            },
+            {
+              "class": "unclassified",
+              "requires_grounding": true,
+              "verifier_active": true,
+              "profile": "grounded_support_only"
+            },
+            {
+              "class": "*",
+              "requires_grounding": true,
+              "verifier_active": false,
+              "abstain": "VERIFIER_UNAVAILABLE"
+            },
+            {
+              "class": "*",
+              "requires_grounding": false,
+              "profile": "eligibility_baseline"
+            }
+          ]
+        },
+        "multi_class": {
+          "const": "normalize each class and route separately; equal profiles combine; unequal grounded profiles are incomparable and abstain PROFILE_UNAVAILABLE; any terminal abstention applies"
+        },
+        "unclassified": {
+          "const": "unknown, empty or missing class normalizes to unclassified before rule matching; grounded requests with active verifier use grounded_support_only"
+        },
+        "input_class_normalization": {
+          "const": {
+            "known_classes": [
+              "closed_form_number",
+              "closed_form_entity",
+              "closed_form_choice",
+              "unclassified"
+            ],
+            "unknown_scalar_class": "unclassified",
+            "empty_or_missing_class": "unclassified",
+            "multi_class": "normalize each member, deduplicate, then combine; conflicting profiles abstain PROFILE_UNAVAILABLE"
+          }
+        },
+        "matching": {
+          "const": "omitted boolean field is a wildcard; class * is a wildcard; exactly one rule must match after class normalization"
+        }
+      },
+      "additionalProperties": false
+    },
+    "n1_handling": {
+      "type": "string"
+    },
+    "budgets": {
+      "type": "object"
+    },
+    "invalidation_events": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "audit_card": {
+      "type": "object",
+      "required": [
+        "support_false_positive_ucb_target",
+        "extraction_recall_min",
+        "min_audit_cases",
+        "critical_slices",
+        "confidence_method",
+        "confidence_level",
+        "false_support",
+        "extraction_recall",
+        "slice_gate",
+        "gate_tau_coherence",
+        "multiple_comparison_control"
+      ],
+      "properties": {
+        "support_false_positive_ucb_target": {
+          "$ref": "#/$defs/probability"
+        },
+        "extraction_recall_min": {
+          "$ref": "#/$defs/probability"
+        },
+        "min_audit_cases": {
+          "type": "integer",
+          "minimum": 400
+        },
+        "critical_slices": {
+          "const": [
+            "multi_claim",
+            "negation",
+            "quantity",
+            "scope",
+            "entity_date",
+            "hostile_source"
+          ]
+        },
+        "confidence_method": {
+          "const": "one-sided exact Clopper-Pearson bounds; Bonferroni family-wise 0.050000 across six critical slices times two metrics"
+        },
+        "confidence_level": {
+          "const": "0.950000"
+        },
+        "false_support": {
+          "type": "object",
+          "required": [
+            "denominator",
+            "numerator",
+            "gate",
+            "min_eligible_per_slice"
+          ],
+          "properties": {
+            "min_eligible_per_slice": {
+              "type": "integer",
+              "minimum": 107
+            }
+          }
+        },
+        "extraction_recall": {
+          "type": "object",
+          "required": [
+            "denominator",
+            "numerator",
+            "gate",
+            "min_eligible_per_slice"
+          ],
+          "properties": {
+            "min_eligible_per_slice": {
+              "type": "integer",
+              "minimum": 272
+            }
+          }
+        },
+        "slice_gate": {
+          "const": "each named critical slice must meet both count minima and both confidence-bound gates; overlapping cases may count in multiple slices; global minimum alone never suffices"
+        },
+        "gate_tau_coherence": {
+          "const": {
+            "grounded_support_only": "tau > per_claim_min; 0.850000 > 0.800000",
+            "grounded_v1": "tau > w_conf * per_claim_min; 0.700000 > 0.700000 * 0.800000 = 0.560000"
+          }
+        },
+        "multiple_comparison_control": {
+          "const": {
+            "family_alpha": "0.050000",
+            "number_of_gates": 12,
+            "per_gate_alpha_fraction": "1/240"
+          }
+        }
+      }
+    },
+    "retention": {
+      "type": "object"
+    },
+    "candidate_only_reasons": {
+      "const": [
+        "FEATURE_INVALID"
+      ]
+    },
+    "reason_mapping": {
+      "type": "object",
+      "required": [
+        "candidate_failures",
+        "precedence_scope",
+        "all_candidates_below_tau",
+        "no_candidate_survives_hard_gates_or_feature_checks",
+        "no_candidate_generated_after_all_attempts",
+        "partial_generation_failure_with_valid_survivor"
+      ],
+      "properties": {
+        "candidate_failures": {
+          "const": {
+            "access": "NO_AUTHORIZED_CANDIDATE",
+            "provenance": "NO_VALID_CANDIDATE",
+            "contradiction": "NO_VALID_CANDIDATE",
+            "citation_resolution": "NO_VALID_CANDIDATE",
+            "per_claim_support": "NO_VALID_CANDIDATE",
+            "feature_invalid": "NO_VALID_CANDIDATE"
+          }
+        },
+        "precedence_scope": {
+          "const": "terminal abstention only, after routing, hard gates, feature checks and score threshold; never overrides selected survivor"
+        },
+        "all_candidates_below_tau": {
+          "const": "QUALITY_BELOW_THRESHOLD"
+        },
+        "no_candidate_survives_hard_gates_or_feature_checks": {
+          "type": "string",
+          "minLength": 1
+        },
+        "no_candidate_generated_after_all_attempts": {
+          "const": "UPSTREAM_GENERATION_FAILED"
+        },
+        "partial_generation_failure_with_valid_survivor": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "generation_policy": {
+      "const": {
+        "partial_failure_with_valid_survivor": "select survivor if it passes all gates and tau; log attempts and failures",
+        "all_attempts_failed": "abstain UPSTREAM_GENERATION_FAILED"
+      }
+    }
+  },
+  "$comment": "Schema for policy 0.1. Frozen numeric operating points and routing/reason tables are version locked; changing them requires a new schema version and sealed audit.",
+  "$defs": {
+    "probability": {
+      "type": "string",
+      "pattern": "^(?:0\\.[0-9]{6}|1\\.000000)$"
+    },
+    "signed_decimal": {
+      "type": "string",
+      "pattern": "^-?(?:0|[1-9][0-9]*)\\.[0-9]{6}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "frozen"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "governance": {
+            "properties": {
+              "sealed_test": {
+                "properties": {
+                  "hash_recorded_before_tuning": {
+                    "const": true
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/sha256"
+                  },
+                  "protocol_sha256": {
+                    "$ref": "#/$defs/sha256"
+                  },
+                  "sealed_at_utc": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "custodian": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          },
+          "profiles": {
+            "properties": {
+              "grounded_support_only": {
+                "properties": {
+                  "per_claim_min": {
+                    "const": "0.800000"
+                  },
+                  "tau": {
+                    "const": "0.850000"
+                  }
+                }
+              },
+              "grounded_v1": {
+                "properties": {
+                  "per_claim_min": {
+                    "const": "0.800000"
+                  },
+                  "tau": {
+                    "const": "0.700000"
+                  },
+                  "score": {
+                    "properties": {
+                      "cal_ll_map": {
+                        "properties": {
+                          "status": {
+                            "const": "validated"
+                          },
+                          "model_digest": {
+                            "$ref": "#/$defs/sha256"
+                          },
+                          "calibration_dataset_sha256": {
+                            "$ref": "#/$defs/sha256"
+                          },
+                          "calibration_report_sha256": {
+                            "$ref": "#/$defs/sha256"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "governance": {
+            "properties": {
+              "evaluation_claim": {
+                "const": "independent_final_test_passed"
+              }
+            }
+          }
+        },
+        "required": [
+          "governance"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "frozen"
+          },
+          "governance": {
+            "properties": {
+              "solo_mode": {
+                "const": false
+              },
+              "sealed_test": {
+                "properties": {
+                  "hash_recorded_before_tuning": {
+                    "const": true
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/sha256"
+                  },
+                  "protocol_sha256": {
+                    "$ref": "#/$defs/sha256"
+                  },
+                  "custodian": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "final_test_access_count": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

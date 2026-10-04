@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dianoia"
+version = "0.1.0"
+description = "Deliberative cognition layer over LTHCM topological memory. LTHCM remembers, Dianoia thinks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "N. C. Mynhardt" }
+]
+dependencies = [
+    # LTHCM core deps (must satisfy submodule)
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "networkx>=3.0",
+    # Dianoia's own deps
+    "sentence-transformers>=2.2.0",
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+nli = [
+    # NLI model for sheaf verification (sentence-transformers cross-encoder)
+    "sentence-transformers>=2.2.0",
+]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+dianoia = "dianoia.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dianoia*"]

@@ -1,0 +1,112 @@
+# Phylax Default Policy for Metis Ecosystem
+# Strict least-privilege rules with explicit final default deny.
+
+version: "1.0.0"
+owner: "metis-owner"
+description: "Default least-privilege policy for Metis stack components"
+
+redaction:
+  redact_content: true
+  mask_patterns:
+    - api_key
+    - token
+    - secret
+    - password
+    - pin
+    - auth
+  mask_replacement: "[REDACTED]"
+
+rules:
+  # 1. Stoma: read and write document indices
+  - id: "stoma_workspace_docs"
+    description: "Allow Stoma to read and index documents"
+    subject: "stoma"
+    verb: "read"
+    resource:
+      class: "file"
+      path_root: "docs"
+      path_glob: "**/*"
+    effect: "allow"
+    priority: 10
+
+  - id: "stoma_indices_write"
+    description: "Allow Stoma to update vector and search indices"
+    subject: "stoma"
+    verb: "write"
+    resource:
+      class: "file"
+      path_root: "data/indices"
+      path_glob: "**/*"
+    effect: "allow"
+    priority: 10
+
+  # 2. LTHCM: read memory graphs
+  - id: "lthcm_memory_access"
+    description: "Allow LTHCM to access memory checkpoints"
+    subject: "lthcm"
+    verb: "read"
+    resource:
+      class: "file"
+      path_root: "data/memory"
+      path_glob: "**/*"
+    effect: "allow"
+    priority: 10
+
+  # 3. Explicit Denial for all components: Private and Secret folders
+  - id: "deny_private_keys"
+    description: "Strictly forbid reading private keys, credentials, or SSH directories"
+    subject: "*"
+    verb: "read"
+    resource:
+      class: "file"
+      path_root: "private"
+      path_glob: "**/*"
+    effect: "deny"
+    priority: 1
+
+  # 4. Kybernetes: read documents
+  - id: "kybernetes_read_docs"
+    description: "Allow Kybernetes to read public documentation"
+    subject: "kybernetes"
+    verb: "read"
+    resource:
+      class: "file"
+      path_root: "docs"
+      path_glob: "**/*"
+    effect: "allow"
+    priority: 50
+
+  # 5. Outbound network send actions require explicit owner approval
+  - id: "ask_outbound_send"
+    description: "Require human owner approval before sending external network payloads"
+    subject: "*"
+    verb: "send"
+    resource:
+      class: "network"
+      destination: "*"
+    effect: "ask"
+    priority: 20
+    ask_ttl_seconds: 300
+
+  # 6. Critical tool executions require explicit owner approval
+  - id: "ask_dangerous_tools"
+    description: "Require human owner approval for destructive or shell tools"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "shell_exec"
+    effect: "ask"
+    priority: 20
+    ask_ttl_seconds: 180
+
+  # 7. Final Mandatory Default Deny
+  - id: "default_deny_all"
+    description: "Explicit default deny for any unlisted subject, verb, or resource"
+    subject: "*"
+    verb: "*"
+    resource:
+      class: "*"
+      path_root: "*"
+    effect: "deny"
+    priority: 1000

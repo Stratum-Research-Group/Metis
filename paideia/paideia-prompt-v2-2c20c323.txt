@@ -1,0 +1,35 @@
+PAIDEIA - training harness. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Paideia turns logged outcomes into weights for a local AI stack. Inputs: LTHCM benchmark outcome data (question-type routing outcomes) and Dianoia walk logs (JSONL records of deliberative walks). Outputs: small QLoRA adapters that measurably improve specific decisions.
+
+HARD CONSTRAINTS
+- Training uses unsloth with QLoRA 4-bit, target 7-8B base models, must run under 16GB VRAM (RTX 5060 Ti 16GB, Tesla V100 SXM2 16GB).
+- Every run writes a manifest: dataset checksums, hyperparameters, base model hash, adapter hash, hardware line, run_id. Same reproducibility standard as LTHCM.
+- An adapter is only reported as an improvement if it beats the baseline on held-out data with a confidence interval that excludes zero. Publish negative results.
+- Add the existing stack projects to the workspace as git submodules, pinned to their current commits: LTHCM (https://gitlab.com/akarta-315h/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6) and dianoia (https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c). They are read-only dependencies: never modify their contents, never copy their files into this repo's own tree, and never push or upload their contents anywhere.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "paideia", Python package, pyproject.toml with unsloth dependency.
+
+2. DATASET LOADERS
+- LTHCM routing outcomes -> router training set (question text -> bridge/comparison label).
+- Dianoia walk logs (JSONL) -> walk-policy SFT set (state -> EXPAND/BACKTRACK/ANSWER decisions with reasons).
+
+3. TRAINING RUNNER
+- QLoRA config surface: learning rate, rank, epochs, held-out split fraction.
+- Fixed seeds; manifest written before and after the run.
+
+4. EVALUATION
+- Before/after comparison on the held-out split: accuracy plus paired bootstrap CI (10k, seed 42), matching the LTHCM stats convention.
+
+5. EXPORT
+- Adapter artifact plus a registry entry the Hestia serving layer can use (base model + adapter pair).
+
+OUT OF SCOPE
+- Full fine-tuning, RLHF, multi-GPU, dataset generation by model (no synthetic labels in v1).
+
+DEMO
+- Train the LTHCM router replacement on existing N=500 outcome data and report the before/after misrouting rate against the regex baseline, with CI.

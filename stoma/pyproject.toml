@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stoma"
+version = "0.1.0"
+description = "Ingestion pipeline and mouth for local AI stack topological memory (LTHCM)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Stoma Contributors" }
+]
+dependencies = [
+    # Core topological memory & deliberative cognition dependencies
+    # Bound to exact submodule pins: deps/LTHCM @ 336f4af and deps/dianoia @ da7ce83
+    # Runtime import origin is strictly verified by stoma.config.verify_runtime_dependencies()
+    "lthcm==0.1.0",
+    "dianoia==0.1.0",
+    "torch>=2.0.0",
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "networkx>=3.0",
+    # Source parsing and file watching
+    "pypdf>=3.0.0",
+    "watchdog>=3.0.0",
+    "click>=8.1.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+stoma = "stoma.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

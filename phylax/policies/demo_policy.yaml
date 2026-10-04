@@ -1,0 +1,63 @@
+# Phylax Demo Policy
+# Configured specifically for the 5-step evaluation and live demo.
+
+version: "1.0.0-demo"
+owner: "metis-demo-user"
+description: "Phylax demo policy: allowed docs read, denied private read, ask on send"
+
+redaction:
+  redact_content: true
+  mask_patterns:
+    - secret
+    - token
+    - key
+    - password
+  mask_replacement: "[REDACTED]"
+
+rules:
+  # 1. Deny reading private files (High priority)
+  - id: "deny_private_folder"
+    description: "Strictly deny reading private folder files"
+    subject: "*"
+    verb: "read"
+    resource:
+      class: "file"
+      path_root: "workspace/private"
+      path_glob: "**/*"
+    effect: "deny"
+    priority: 1
+
+  # 2. Allow reading documentation files
+  - id: "allow_docs_folder"
+    description: "Allow components to read docs folder files"
+    subject: "*"
+    verb: "read"
+    resource:
+      class: "file"
+      path_root: "workspace/docs"
+      path_glob: "**/*"
+    effect: "allow"
+    priority: 10
+
+  # 3. Require approval for outbound sends (short TTL for demo)
+  - id: "ask_outbound_send"
+    description: "Require owner approval before sending messages"
+    subject: "*"
+    verb: "send"
+    resource:
+      class: "network"
+      destination: "*"
+    effect: "ask"
+    priority: 20
+    ask_ttl_seconds: 5
+
+  # 4. Final explicit default deny
+  - id: "default_deny_all"
+    description: "Explicit default deny for any unlisted subject, verb, or resource"
+    subject: "*"
+    verb: "*"
+    resource:
+      class: "*"
+      path_root: "*"
+    effect: "deny"
+    priority: 1000

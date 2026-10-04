@@ -1,0 +1,31 @@
+PROSOPON - interface layer. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Prosopon (Greek: face/presence) is the daily-driver interface to Kybernetes, the orchestrator of a local AI stack. It turns the stack from a CLI into something you actually use at 11pm: a fast chat UI plus fully local voice.
+
+HARD CONSTRAINTS
+- Everything local: no cloud STT/TTS, no hosted front-end assets with external calls.
+- Prosopon talks to the Kybernetes API only - never directly to models, memory, or tools.
+- Voice path must be fully local: whisper.cpp for speech-to-text, piper for text-to-speech. Both must run on the owner's hardware (RTX 5060 Ti 16GB, Tesla V100 SXM2 16GB).
+- Add the existing stack projects to the workspace as git submodules, pinned to their current commits: LTHCM (https://gitlab.com/akarta-315h/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6) and dianoia (https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c). They are read-only dependencies: never modify their contents, never copy their files into this repo's own tree, and never push or upload their contents anywhere.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "prosopon", Python backend + single-page front-end, pyproject.toml.
+
+2. CHAT UI
+- Browser chat against the Kybernetes API: streaming responses, session history, and a "show work" toggle that displays the route Kybernetes took (direct / memory / deliberation / tool) and why.
+- Mobile-friendly layout first (the owner is on Android).
+
+3. SESSIONS
+- Multiple named sessions, persisted locally, resumable.
+
+4. VOICE
+- Push-to-talk in the browser -> whisper.cpp transcription -> Kybernetes -> piper TTS audio reply. Keep it a round trip under a few seconds on the target hardware; push-to-talk only, no always-on mic.
+
+OUT OF SCOPE
+- User accounts, multi-user, native mobile apps, wake word, video.
+
+DEMO
+- Open the UI on a phone browser, hold one text conversation with streaming, then one full voice round trip: spoken question, transcribed text shown, spoken answer played back.

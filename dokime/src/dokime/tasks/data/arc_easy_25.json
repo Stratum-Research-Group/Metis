@@ -1,0 +1,277 @@
+[
+  {
+    "id": "arc_001",
+    "prompt": "Which tool is best used to measure the mass of a rock?",
+    "choices": {
+      "A": "Balance scale",
+      "B": "Thermometer",
+      "C": "Graduated cylinder",
+      "D": "Ruler"
+    },
+    "expected": "A"
+  },
+  {
+    "id": "arc_002",
+    "prompt": "What form of energy is produced when guitar strings vibrate?",
+    "choices": {
+      "A": "Chemical energy",
+      "B": "Sound energy",
+      "C": "Nuclear energy",
+      "D": "Magnetic energy"
+    },
+    "expected": "B"
+  },
+  {
+    "id": "arc_003",
+    "prompt": "Which process describes liquid water changing into water vapor?",
+    "choices": {
+      "A": "Condensation",
+      "B": "Freezing",
+      "C": "Evaporation",
+      "D": "Precipitation"
+    },
+    "expected": "C"
+  },
+  {
+    "id": "arc_004",
+    "prompt": "Which organ in the human body is primarily responsible for pumping blood?",
+    "choices": {
+      "A": "Lungs",
+      "B": "Liver",
+      "C": "Stomach",
+      "D": "Heart"
+    },
+    "expected": "D"
+  },
+  {
+    "id": "arc_005",
+    "prompt": "Which material is the best electrical conductor?",
+    "choices": {
+      "A": "Copper wire",
+      "B": "Plastic rod",
+      "C": "Rubber band",
+      "D": "Glass bottle"
+    },
+    "expected": "A"
+  },
+  {
+    "id": "arc_006",
+    "prompt": "How long does it take for Earth to complete one full orbit around the Sun?",
+    "choices": {
+      "A": "One day",
+      "B": "One year",
+      "C": "One month",
+      "D": "One week"
+    },
+    "expected": "B"
+  },
+  {
+    "id": "arc_007",
+    "prompt": "Which property of a substance determines whether it will float or sink in water?",
+    "choices": {
+      "A": "Color",
+      "B": "Texture",
+      "C": "Density",
+      "D": "Hardness"
+    },
+    "expected": "C"
+  },
+  {
+    "id": "arc_008",
+    "prompt": "What is the primary source of energy for almost all ecosystems on Earth?",
+    "choices": {
+      "A": "Geothermal vents",
+      "B": "Ocean currents",
+      "C": "Wind",
+      "D": "The Sun"
+    },
+    "expected": "D"
+  },
+  {
+    "id": "arc_009",
+    "prompt": "Which state of matter has a definite volume but no definite shape?",
+    "choices": {
+      "A": "Liquid",
+      "B": "Solid",
+      "C": "Gas",
+      "D": "Plasma"
+    },
+    "expected": "A"
+  },
+  {
+    "id": "arc_010",
+    "prompt": "Which structure in plant cells performs photosynthesis?",
+    "choices": {
+      "A": "Mitochondria",
+      "B": "Chloroplast",
+      "C": "Cell wall",
+      "D": "Vacuole"
+    },
+    "expected": "B"
+  },
+  {
+    "id": "arc_011",
+    "prompt": "When iron reacts with oxygen and water, what new substance is formed?",
+    "choices": {
+      "A": "Steel",
+      "B": "Carbon dioxide",
+      "C": "Rust",
+      "D": "Bronze"
+    },
+    "expected": "C"
+  },
+  {
+    "id": "arc_012",
+    "prompt": "Which animal group is characterized by having feathers and laying eggs?",
+    "choices": {
+      "A": "Mammals",
+      "B": "Amphibians",
+      "C": "Reptiles",
+      "D": "Birds"
+    },
+    "expected": "D"
+  },
+  {
+    "id": "arc_013",
+    "prompt": "What force pulls dropped objects toward the ground?",
+    "choices": {
+      "A": "Gravity",
+      "B": "Friction",
+      "C": "Magnetism",
+      "D": "Buoyancy"
+    },
+    "expected": "A"
+  },
+  {
+    "id": "arc_014",
+    "prompt": "Which layer of Earth is the thinnest outer solid layer?",
+    "choices": {
+      "A": "Mantle",
+      "B": "Crust",
+      "C": "Outer core",
+      "D": "Inner core"
+    },
+    "expected": "B"
+  },
+  {
+    "id": "arc_015",
+    "prompt": "Which gas do plants absorb from the air during photosynthesis?",
+    "choices": {
+      "A": "Nitrogen",
+      "B": "Oxygen",
+      "C": "Carbon dioxide",
+      "D": "Helium"
+    },
+    "expected": "C"
+  },
+  {
+    "id": "arc_016",
+    "prompt": "Which simple machine consists of a grooved wheel with a rope around it?",
+    "choices": {
+      "A": "Lever",
+      "B": "Wedge",
+      "C": "Inclined plane",
+      "D": "Pulley"
+    },
+    "expected": "D"
+  },
+  {
+    "id": "arc_017",
+    "prompt": "What happens to the molecules of a liquid when it is heated?",
+    "choices": {
+      "A": "They move faster and spread farther apart",
+      "B": "They stop moving completely",
+      "C": "They become heavier and sink",
+      "D": "They move slower and pack closer together"
+    },
+    "expected": "A"
+  },
+  {
+    "id": "arc_018",
+    "prompt": "Which celestial body orbits a planet?",
+    "choices": {
+      "A": "Star",
+      "B": "Moon",
+      "C": "Comet",
+      "D": "Asteroid"
+    },
+    "expected": "B"
+  },
+  {
+    "id": "arc_019",
+    "prompt": "What type of rock is formed from cooled magma or lava?",
+    "choices": {
+      "A": "Sedimentary",
+      "B": "Metamorphic",
+      "C": "Igneous",
+      "D": "Fossil"
+    },
+    "expected": "C"
+  },
+  {
+    "id": "arc_020",
+    "prompt": "Which organism is a primary producer in a pond food chain?",
+    "choices": {
+      "A": "Frog",
+      "B": "Bass fish",
+      "C": "Heron",
+      "D": "Algae"
+    },
+    "expected": "D"
+  },
+  {
+    "id": "arc_021",
+    "prompt": "Which part of a plant is primarily responsible for absorbing water from the soil?",
+    "choices": {
+      "A": "Roots",
+      "B": "Leaves",
+      "C": "Flowers",
+      "D": "Stem"
+    },
+    "expected": "A"
+  },
+  {
+    "id": "arc_022",
+    "prompt": "Sound cannot travel through which of the following?",
+    "choices": {
+      "A": "Water",
+      "B": "A vacuum",
+      "C": "Steel",
+      "D": "Air"
+    },
+    "expected": "B"
+  },
+  {
+    "id": "arc_023",
+    "prompt": "What is the boiling point of pure water at sea level?",
+    "choices": {
+      "A": "0 degrees Celsius",
+      "B": "50 degrees Celsius",
+      "C": "100 degrees Celsius",
+      "D": "212 degrees Celsius"
+    },
+    "expected": "C"
+  },
+  {
+    "id": "arc_024",
+    "prompt": "Which system of the human body removes waste products from the blood?",
+    "choices": {
+      "A": "Skeletal system",
+      "B": "Nervous system",
+      "C": "Muscular system",
+      "D": "Excretory system"
+    },
+    "expected": "D"
+  },
+  {
+    "id": "arc_025",
+    "prompt": "Why do polar bears have thick layers of blubber and dense fur?",
+    "choices": {
+      "A": "To insulate against freezing Arctic temperatures",
+      "B": "To swim faster than seals",
+      "C": "To store sunlight during winter",
+      "D": "To blend in with dark ocean water"
+    },
+    "expected": "A"
+  }
+]

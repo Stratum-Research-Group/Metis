@@ -1,0 +1,352 @@
+KRISIS (krisis, Gk. κρίσις) - selection layer for the Metis stack
+spec v3 - 2026-09-30 - supersedes v2
+status: build contract draft for re-review. v3 closes the operational
+gaps from review round 2: answer-only v0, candidate generation
+contract, typed support states, feature profiles, threshold
+semantics, typed failures, contract fixture.
+
+=====================================================================
+0. WHAT CHANGED FROM v2
+=====================================================================
+- v0 input is AnswerCandidate[] ONLY. Passage reranking schema moved
+  to Gate 1 entirely; the v0 endpoint must reject passage IDs.
+- grounded_support is now gated on a real claim-level support
+  verifier with typed states. Dianoia's contradiction check is NOT
+  support and must not be relabeled as such. This verifier is v0's
+  critical path (section 6.1).
+- Score formula now operates over a decision-wide FEATURE PROFILE:
+  all candidates in one decision use the same active terms and
+  calibrations. Asymmetric missingness rejects the candidate or
+  triggers a named fallback; it never silently drops a term.
+- Cost removed from the ranking score (sunk acquisition cost
+  punishes the best candidate and saves nothing). Cost lives in the
+  generation/admission policy; only incremental future cost may
+  appear in ranking.
+- tau now names its thresholded quantity, and failure is a typed
+  taxonomy instead of one NO_ELIGIBLE bucket.
+- Candidate generation is specified: Kybernetes owns n, decoding,
+  dedup, snapshot sharing, token caps, failure counting.
+- Shadow vs exploration split honestly: pure shadow makes no causal
+  claims; exploration is a separate consented trial.
+- Gate 3 selects among immutable registered artifact versions only.
+- Adversarial handling promoted from a log flag to contract (12).
+- Contract fixture added (14): expected outputs decidable without a
+  model call.
+
+=====================================================================
+1. NAME
+=====================================================================
+krisis (κρίσις) - "judgment, separation, decision", from krinein.
+Family: dianoia, hestia, dokime, kleroterion.
+
+=====================================================================
+2. WHY IT EXISTS
+=====================================================================
+A stack without an explicit selection measure selects by accident:
+temperature picks outputs, recency picks memories, whoever shouted
+last picks configs. The fix is to name the prior, name the fitness,
+and let them fight. v0 builds the spine: deterministic selection
+with typed abstention and a replayable audit trail. Learned and
+adaptive parts arrive behind written evidence gates (section 9).
+The cosmology analogy motivates; it establishes nothing. Every term
+earns its place with task-level evidence or it does not ship.
+
+=====================================================================
+3. POSITION IN THE STACK
+=====================================================================
+  Stoma -> LTHCM candidate passages -> [Krisis passage rerank: G1]
+  Hestia completions -> Kybernetes candidate generation
+                     -> [Krisis answer select: v0] -> Kybernetes
+                     -> Prosopon
+  Phylax: hard authorization + data-access gates (before AND after)
+  Dokime: perturbation specs, evaluation, verdicts, hostile suites
+  Paideia: offline training/adapter promotion (separate)
+  Kleroterion: bounded stochastic Dianoia action selection (krisis
+  never selects walk actions; kleroterion never selects answers)
+
+Krisis is a library + thin adapter returning ranked selections,
+features, rejections and abstention reasons. It never sends to
+Prosopon, authorizes tools, mutates LTHCM, changes weights, or
+declares itself correct.
+
+=====================================================================
+4. v0 SCOPE
+=====================================================================
+Answer selection only. Input schema: SelectAnswersRequest. The v0
+endpoint rejects passage IDs (test this). PassageCandidate[] is a
+Gate 1 artifact with its own schema, benchmark and owners.
+
+v0 may legitimately ship with NO learned features: a deterministic
+eligibility filter with typed abstention and full audit is a valid
+release. Feature profiles activate only when their data sources and
+calibrations exist.
+
+=====================================================================
+5. v0 DECISION CONTRACT
+=====================================================================
+5.1 Input (SelectAnswersRequest)
+    - request/trace ID, question class
+    - immutable evidence snapshot ID (LTHCM/index generation)
+    - 1..N generated AnswerCandidates with stable IDs, text, cited
+      passage IDs, provenance
+    - model digest, decoding parameters, candidate-generation seed
+    - hard eligibility mask + rejection reasons (Phylax / source
+      checks)
+    - deadline + token/VRAM budget
+    - feature provenance: which features were measured, by what,
+      at which version
+
+5.2 Candidate generation (owned by Kybernetes, NOT krisis)
+    - n, sampler settings, seeds, model digest recorded
+    - all candidates share one frozen query + evidence snapshot
+    - deduplication: near-duplicate candidates merged before
+      submission (duplicates inflate agreement signals)
+    - max total tokens; generation failures count as failures, not
+      as absent candidates
+    - n=1: use the direct baseline or abstain. Never simulate a
+      selection gain from one candidate.
+
+5.3 Decision order (deterministic)
+    1. Validate schema, versions, IDs, snapshot, budget.
+    2. Apply non-compensable gates: access, provenance,
+       contradiction, citation resolution. No score can buy these.
+    3. Select ONE frozen feature profile for this decision; verify
+       its feature availability and calibrated units. All remaining
+       candidates use the same active terms.
+    4. Score and rank deterministically. Ties break on stable
+       candidate ID (documented order). Boundary equality rule:
+       score == tau is a PASS/FAIL [pick one and freeze it].
+    5. Return selection or typed abstention. Kybernetes rechecks the
+       selected candidate against current policy/index before
+       streaming; on failed recheck see 7.3.
+
+5.4 Output
+    - outcome: SELECTED | NO_AUTHORIZED_CANDIDATE |
+      NO_SUPPORTED_CANDIDATE | QUALITY_BELOW_THRESHOLD |
+      VERIFIER_UNAVAILABLE | BUDGET_EXHAUSTED
+    - selected ID (if any), full ranking, every score component with
+      missingness, active profile ID, threshold value + quantity,
+      decision reason
+    - model/index/policy versions, total-turn cost, incremental
+      selection cost, trace ID
+    Kybernetes maps each typed outcome to a bounded action
+    (retry/ask/abstain). Never relax a hard gate to convert a
+    failure into a selection.
+
+5.5 tau semantics
+    tau thresholds exactly one named quantity: the final profile
+    score of the top-ranked candidate. Hard eligibility is separate
+    and prior. tau is fixed, dev-calibrated, recorded in the policy
+    manifest with its dataset IDs. Drift is detected separately;
+    changing tau requires Dokime review.
+
+=====================================================================
+6. FEATURES AND PROFILES
+=====================================================================
+6.1 grounded_support(c)  *** v0 CRITICAL PATH ***
+    Requires a claim-to-cited-span support verifier with states:
+    supported | unsupported | contradicted | unverified |
+    verifier_unavailable. Citations must resolve to exact passage
+    IDs + snapshot generation. Owner + version must be named in the
+    policy manifest [VERIFY: new component vs Dianoia extension].
+    Dianoia's verify_answer_against_evidence is a CONTRADICTION
+    check; "no conflict detected" is not support and must never be
+    scored as support. Until this verifier exists: the support
+    profile is unavailable, krisis runs the eligibility baseline,
+    and no output may be labeled grounded.
+
+6.2 validated_consistency(c)
+    v0 ships closed-form question classes only: number/unit, exact
+    entity/date, canonical choice - with audited equivalence rules.
+    Open-ended multi-claim prose is EXCLUDED from consistency
+    scoring; the excluded share is reported and never counted as
+    stable. Split of responsibilities:
+      PerturbationSpec     - Dokime-owned, versioned, validated,
+                             with expected invariants
+      PerturbationExecutor - optional runtime adapter under
+                             Kybernetes budget; v0 may run zero live
+                             perturbations and mark consistency
+                             unavailable
+    Final-test items are never reused for tuning.
+
+6.3 calibrated_model_feature(c)
+    Optional. Model likelihood calibrated per (model, tokenizer,
+    template, version); logprob availability from the Hestia
+    capability probe; normalization method recorded. Never a
+    configuration prior; never compared raw across models. Disabled
+    => documented feature-free profile.
+
+6.4 cost
+    Not a ranking term. Candidate acquisition cost is set by the
+    generation/admission policy (n, decoding, token caps). Only
+    incremental FUTURE cost may enter a ranking (when choosing c
+    triggers different downstream work). Total-turn cost is measured
+    and logged regardless.
+
+6.5 Profile semantics
+    A profile = named set of active terms + weights + calibrations,
+    frozen in the policy manifest with a hash. If a required term is
+    missing for a candidate: reject that candidate, or apply the
+    profile's named fallback (e.g. eligibility-baseline profile) -
+    the choice is part of the profile, not of the moment. Asymmetric
+    missingness is a required test case.
+
+=====================================================================
+7. THRESHOLDS, BUDGETS, STALENESS
+=====================================================================
+7.1 Starting budget configuration (to benchmark, not a promise):
+    at most 2 candidates, zero live perturbation calls, no extra GPU
+    model call inside krisis, fixed fraction of Kybernetes's
+    remaining deadline/token budget. Overrun => reject or abstain,
+    never borrow.
+7.2 Real wall-time/VRAM limits come from a Hestia baseline on the
+    target 16 GB device, then freeze in the policy manifest.
+7.3 Stale snapshot on pre-publication recheck: return a typed
+    STALE/REJECTED result. Kybernetes may rebuild the full candidate
+    set once under the new snapshot if budget permits; otherwise
+    abstain. Never publish the old ranking as current.
+
+=====================================================================
+8. STRUCTURE CONDITIONING (Gate 1, unchanged in spirit)
+=====================================================================
+Measured features only (path length, edge confidence, source
+diversity, index generation), each ablated against a flat reranker.
+Versioned immutable snapshot per request. No LTHCM graph mutation.
+"Algorithmic sufficient statistic" remains the north star, not an
+interface.
+
+=====================================================================
+9. PHASED GATES
+=====================================================================
+Gate 0 ENTRY (build readiness): frozen schemas, feature-source
+contracts, deterministic fixtures (section 14), Hestia capability
+probe, baseline, audit format.
+Gate 0 EXIT (measured release): section 10 eval passes; otherwise
+krisis stays opt-in and the negative result is reported.
+Gate 1 (passage reranking): separate hypothesis, own retrieval
+benchmark, own gain requirement. Does not inherit answer-selection
+results.
+Gate 2 (shadow scoring): pure shadow makes NO causal claims - it
+observes the deployed policy and scores alternatives only where
+independent labels exist. Offline full-information replay is the
+evaluation tool. No propensity floor, no exploration in shadow.
+Gate 2b (exploration trial): only if causal online learning is
+needed later - separately designed, consented, bounded, with logged
+propensities and user-facing safeguards.
+Gate 3 (configuration selection): selects among immutable
+REGISTERED model/index/policy versions only. Paideia/Hestia/Stoma
+own all artifact changes. Krisis never modifies weights, memory or
+indices.
+
+=====================================================================
+10. EVALUATION
+=====================================================================
+Before any final test, freeze: benchmark cards, primary metric
+(selective risk / grounded correctness), minimum useful effect,
+paired CI/test method, risk-coverage operating point, max p95 and
+VRAM overhead, multiple-comparison policy. Save per-query results
+and all failures.
+Datasets: held-out grounded-answer, contradiction, multi-hop,
+exact-fact, paraphrase-preserving vs legitimately-changing,
+stable-wrong, hostile-source, hostile-feature. Fixed revisions.
+Baselines: no-krisis direct answer; eligibility-only; highest-
+likelihood (when available); majority vote; citation-only rerank;
+ablations minus each feature. Passages (G1): LTHCM ranking +
+flat/hybrid reranker at equal budget.
+Metrics: correctness, grounded support, contradiction miss rate,
+abstention risk/coverage, stable-wrong rate, regret vs oracle,
+p50/p95, tokens/GPU, extra calls, failure rate. Agreement is a
+diagnostic, never the headline.
+Protocol: paired per-question predictions + intervals, seeds,
+failures in denominators, frozen rule, independent final test,
+per-slice results. Dokime renders from a replayable bundle.
+Promotion: predeclared primary metric beats strongest equal-budget
+baseline inside guardrails, or the result is reported negative.
+
+=====================================================================
+11. AUDIT LOGGING (every decision)
+=====================================================================
+candidate IDs, source/citation IDs + generations, feature values +
+missingness + trust flags, active profile ID + manifest hash,
+eligibility mask + reasons, threshold quantity + value, typed
+outcome + decision reason, Hestia model digest, LTHCM generation,
+perturbation-set hash (if any), latency/tokens/calls, total-turn and
+incremental cost, Kybernetes trace ID. Sensitive text redacted by
+default. Decisions must be replayable from the log alone.
+
+=====================================================================
+12. UNTRUSTED CONTENT (contract, not a flag)
+=====================================================================
+Candidate text and retrieved passages are parsed as untrusted data.
+- Citations must resolve to real passage IDs at the current
+  generation before scoring support.
+- Claims are verified independently of the passage's own asserted
+  authority; instruction-like content inside evidence is rejected
+  as authority (prompt-injection surface).
+- Feature values derived from untrusted content carry trust flags
+  in the audit log.
+- Stable-wrong and hostile-source fixtures are part of the release
+  gate, not an afterthought. Dokime owns the frozen hostile suite
+  from day one; component maintainers contribute attack fixtures;
+  an independent reviewer labels support/citation validity; some
+  attacks stay held out from all tuning.
+
+=====================================================================
+13. DO-NOT-TOUCH CONSTRAINTS
+=====================================================================
+- krisis never modifies weights, memory, LTHCM graph, eval data,
+  Phylax policy, or artifact registrations.
+- krisis never selects Dianoia walk actions.
+- No cross-model raw logprob comparison.
+- No imputed features; missingness is data.
+- No causal claims from shadow scoring.
+- No passage reranking at the v0 endpoint.
+- No relabeling contradiction checks as grounded support.
+- No publishing under a stale snapshot.
+
+=====================================================================
+14. CONTRACT FIXTURE (decidable without a model call)
+=====================================================================
+Fixture A - supported vs fluent-unsupported:
+  c1 fluent, cites passage P9 which does not contain the claim
+     (support verifier: unsupported)
+  c2 plain, cites P4 which contains the claim (supported)
+  Expected: SELECTED c2, regardless of c1's likelihood feature.
+
+Fixture B - asymmetric missingness:
+  c1 has all profile features; c2 lacks a required term.
+  Expected: c2 rejected (or named fallback profile applied per
+  manifest); never scored with a silently dropped term.
+
+Fixture C - stale snapshot:
+  selection made under generation 7; pre-publication recheck finds
+  generation 8 with changed evidence.
+  Expected: STALE result; one rebuild permitted under budget, else
+  abstain. Old ranking never published.
+
+Fixture D - all gated:
+  every candidate fails access/provenance/contradiction gates.
+  Expected: NO_AUTHORIZED_CANDIDATE with per-candidate reasons.
+  No score computed, no exception granted.
+
+Fixture E - verifier unavailable:
+  support verifier down; likelihood feature available.
+  Expected: VERIFIER_UNAVAILABLE (or eligibility-baseline profile
+  if the manifest names it); no output labeled grounded.
+
+Fixture F - single candidate:
+  n=1. Expected: direct baseline path or abstain; no selection
+  machinery, no simulated comparison.
+
+=====================================================================
+15. OPEN QUESTIONS FOR THIS ROUND
+=====================================================================
+1. Support verifier home: new component or Dianoia extension?
+   [VERIFY against repo ownership] Name owner + interface version.
+2. Dev split for weight tuning: which Dokime suite, and is it
+   disjoint by source/question family from the final test?
+3. Concrete wall-time/VRAM numbers after the Hestia baseline run -
+   the manifest freezes them.
+4. Boundary equality at tau: pass or fail - pick and freeze.
+5. Equivalence rules for the three closed-form classes: who audits
+   them, and at what sample size?

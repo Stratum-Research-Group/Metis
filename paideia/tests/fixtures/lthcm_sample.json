@@ -1,0 +1,142 @@
+[
+  {
+    "query_id": "hotpot_q1",
+    "question": "Were Scott Derrickson and Ed Wood of the same nationality?",
+    "gold_type": "comparison",
+    "route_outcomes": {
+      "flat": {
+        "route_id": "flat",
+        "quality_score": 0.85,
+        "latency_ms": 12.5,
+        "compute_cost": 1.0,
+        "status": "completed",
+        "evidence_ids": ["doc_scott", "doc_ed"]
+      },
+      "mined": {
+        "route_id": "mined",
+        "quality_score": 0.60,
+        "latency_ms": 45.2,
+        "compute_cost": 3.5,
+        "status": "completed",
+        "evidence_ids": ["doc_scott"]
+      },
+      "routed_rerank": {
+        "route_id": "routed_rerank",
+        "quality_score": 0.85,
+        "latency_ms": 13.0,
+        "compute_cost": 1.1,
+        "status": "completed",
+        "evidence_ids": ["doc_scott", "doc_ed"]
+      }
+    },
+    "metadata": {
+      "corpus": "hotpotqa_distractor"
+    }
+  },
+  {
+    "query_id": "hotpot_q2",
+    "question": "What government position was held by the woman who portrayed Corliss Archer in Kiss and Tell?",
+    "gold_type": "bridge",
+    "route_outcomes": {
+      "flat": {
+        "route_id": "flat",
+        "quality_score": 0.40,
+        "latency_ms": 11.8,
+        "compute_cost": 1.0,
+        "status": "completed",
+        "evidence_ids": ["doc_kiss_and_tell"]
+      },
+      "mined": {
+        "route_id": "mined",
+        "quality_score": 0.90,
+        "latency_ms": 38.4,
+        "compute_cost": 3.0,
+        "status": "completed",
+        "evidence_ids": ["doc_kiss_and_tell", "doc_shirley_temple"]
+      },
+      "routed_rerank": {
+        "route_id": "routed_rerank",
+        "quality_score": 0.90,
+        "latency_ms": 39.0,
+        "compute_cost": 3.1,
+        "status": "completed",
+        "evidence_ids": ["doc_kiss_and_tell", "doc_shirley_temple"]
+      }
+    },
+    "metadata": {
+      "corpus": "hotpotqa_distractor"
+    }
+  },
+  {
+    "query_id": "hotpot_q3",
+    "question": "Are both The Lord of the Rings and The Hobbit written by J. R. R. Tolkien?",
+    "gold_type": "comparison",
+    "route_outcomes": {
+      "flat": {
+        "route_id": "flat",
+        "quality_score": 0.95,
+        "latency_ms": 10.1,
+        "compute_cost": 1.0,
+        "status": "completed"
+      },
+      "mined": {
+        "route_id": "mined",
+        "quality_score": 0.55,
+        "latency_ms": 42.0,
+        "compute_cost": 3.2,
+        "status": "completed"
+      }
+    },
+    "metadata": {
+      "corpus": "hotpotqa_distractor"
+    }
+  },
+  {
+    "query_id": "hotpot_q4",
+    "question": "Which director directed Inception and Oppenheimer?",
+    "gold_type": "comparison",
+    "route_outcomes": {
+      "flat": {
+        "route_id": "flat",
+        "quality_score": 0.88,
+        "latency_ms": 11.2,
+        "compute_cost": 1.0,
+        "status": "completed"
+      },
+      "mined": {
+        "route_id": "mined",
+        "quality_score": 0.65,
+        "latency_ms": 40.5,
+        "compute_cost": 3.0,
+        "status": "completed"
+      }
+    },
+    "metadata": {
+      "corpus": "hotpotqa_distractor"
+    }
+  },
+  {
+    "query_id": "hotpot_q5",
+    "question": "What is the birth city of the creator of the Python programming language?",
+    "gold_type": "bridge",
+    "route_outcomes": {
+      "flat": {
+        "route_id": "flat",
+        "quality_score": 0.35,
+        "latency_ms": 10.5,
+        "compute_cost": 1.0,
+        "status": "completed"
+      },
+      "mined": {
+        "route_id": "mined",
+        "quality_score": 0.85,
+        "latency_ms": 36.0,
+        "compute_cost": 2.8,
+        "status": "completed"
+      }
+    },
+    "metadata": {
+      "corpus": "hotpotqa_distractor"
+    }
+  }
+]

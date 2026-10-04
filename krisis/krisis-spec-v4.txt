@@ -1,0 +1,446 @@
+KRISIS (krisis, Gk. κρίσις) - selection layer for the Metis stack
+spec v4 - BUILD CONTRACT DRAFT - 2026-09-30 - supersedes v3
+incorporates four review rounds. Canonical companion artifacts
+(manifest + fixtures) to be frozen as JSON; this text is the
+normative prose.
+
+=====================================================================
+0. WHAT CHANGED FROM v3
+=====================================================================
+- Two-track release: Foundation vs Selector Promotion (5).
+- Grounded profiles: unsupported/contradicted are hard pre-score
+  rejections; the verifier rule (8.1) is verbatim contract.
+- Verifier reliability contract (8.2): false-support upper
+  confidence bound, fail-closed deactivation, versioned reactivation,
+  correction-by-new-run (never in-place override).
+- New: claim-extraction recall is an audited metric (8.3).
+- New: generator/verifier independence requirement (8.4).
+- Outcome model split: status + typed reason + per-candidate list (7.4).
+- Question-class routing contract: default profile, most-restrictive
+  multi-class rule, harmful-misrouting audit (9).
+- Dedup: exact normalized text + identical citations only, in v0 (7.2).
+- Privacy: field-level sensitivity labels, retention, replay vs
+  recomputation (13).
+- Budgets: Hestia baseline AND full-stack benchmark required (10).
+- Worked policy manifest with numbers (16); fixture pack split into
+  pure-policy (byte-reproducible) and live-integration (17).
+
+=====================================================================
+1. NAME
+=====================================================================
+krisis (κρίσις) - judgment, separation, decision; from krinein.
+Family: dianoia, hestia, dokime, kleroterion.
+
+=====================================================================
+2. WHY IT EXISTS
+=====================================================================
+A stack without an explicit selection measure selects by accident.
+Krisis names the prior, names the fitness, and lets them fight. v0
+builds the spine: deterministic selection, typed abstention,
+replayable audit. Learned/adaptive parts sit behind written evidence
+gates. The cosmology analogy motivates; it establishes nothing.
+Every term earns its place with task-level evidence or does not ship.
+
+=====================================================================
+3. POSITION IN THE STACK
+=====================================================================
+  Stoma -> LTHCM passages -> [Krisis passage rerank: Gate 1]
+  Hestia completions -> Kybernetes candidate generation
+                     -> [Krisis answer select: v0] -> Kybernetes
+                     -> Prosopon
+  Phylax: hard authorization + data-access gates (before AND after)
+  Dokime: perturbation specs, evaluation, verdict audits, hostile
+          suites, verifier reliability audits
+  Paideia: offline training/adapter promotion
+  Kleroterion: stochastic Dianoia action selection (disjoint turf)
+  Kybernetes: owns verify_answer_claims contract (see 8.5 caveat)
+
+Krisis is a library + thin adapter. It never sends to Prosopon,
+authorizes tools, mutates LTHCM, changes weights, or declares itself
+correct.
+
+=====================================================================
+4. v0 SCOPE
+=====================================================================
+Answer selection only. The v0 endpoint rejects passage IDs (test).
+PassageCandidate[] is a Gate 1 artifact. v0 may ship with zero
+learned features (Foundation track, section 5).
+
+=====================================================================
+5. TWO-TRACK RELEASE
+=====================================================================
+FOUNDATION RELEASE: contract, authorization, abstention, audit,
+reliability. NO answer-quality claim. If user-facing, its
+failure/abstention behavior is compared against the current
+Kybernetes path; the claim is limited to safety/contract behavior.
+Deterministic eligibility-only tie rule: lowest stable candidate ID;
+else abstain.
+
+SELECTOR PROMOTION: an optional feature profile may claim a quality
+gain only after beating the strongest equal-budget baseline on
+held-out data inside guardrails (section 11). Until then it stays
+opt-in. Reports label the two tracks separately; no wording may let
+Foundation imply a quality gain.
+
+=====================================================================
+6. v0 DECISION CONTRACT
+=====================================================================
+6.1 Input (SelectAnswersRequest)
+    request/trace ID; question class (or unclassified);
+    requires_grounding flag; immutable evidence snapshot ID;
+    1..N AnswerCandidates (stable IDs, text, cited passage IDs,
+    provenance); model digest + decoding params + generation seeds;
+    generation attempts + failures; hard eligibility mask + reasons;
+    deadline + token/VRAM budget; feature provenance.
+
+6.2 Candidate generation (Kybernetes, NOT krisis)
+    n, sampler, seeds, digests recorded; shared frozen query +
+    snapshot; max total tokens; generation failures counted as
+    failures. Dedup v0: merge ONLY exact normalized text AND
+    identical citation ID sets at the same snapshot; lineage logged.
+    Semantic dedup deferred (needs validated equivalence model;
+    adversarial pairs: negation, units, dates, quantifiers, entities,
+    negated clauses). n=1: all hard gates still run; only ranking is
+    skipped; no simulated selection gain.
+
+6.3 Decision order (deterministic)
+    1. Validate schema, versions, IDs, snapshot, budget.
+    2. Hard gates (non-compensable): access, provenance,
+       contradiction, citation resolution; in grounded profiles add
+       support verdicts (8.1).
+    3. Route question class -> ONE profile for the whole decision
+       (section 9). Verify profile availability + calibrated units.
+    4. Score and rank deterministically; ties break on stable
+       candidate ID order. Boundary: score >= tau PASSES (frozen
+       convention, not a quality claim).
+    5. Return selection or typed abstention. Kybernetes rechecks
+       against current policy/index before streaming; stale -> 7.3.
+
+6.4 Outcome model
+    status: selected | abstained | failed | cancelled
+    reason (typed): NO_AUTHORIZED_CANDIDATE | NO_VALID_CANDIDATE |
+      QUALITY_BELOW_THRESHOLD | VERIFIER_UNAVAILABLE |
+      BUDGET_EXHAUSTED | STALE | SCHEMA_INVALID |
+      UPSTREAM_GENERATION_FAILED | CANCELLED
+    plus per-candidate rejection lists and upstream attempt counts.
+    Precedence defines only the single aggregate reason; secondary
+    causes are never discarded. Partial upstream failure with one
+    surviving valid candidate is a required test case. Kybernetes
+    maps each reason to a bounded action; never relax a hard gate.
+
+=====================================================================
+7. FEATURES AND PROFILES
+=====================================================================
+7.1 grounded_support(c) - see the verbatim contract (8.1) and the
+    reliability contract (8.2). PRIMARY feature of grounded
+    profiles. Until the verifier exists and passes its audit,
+    grounded profiles are unavailable and no output may be labeled
+    grounded.
+7.2 validated_consistency(c) - closed-form classes only
+    (number/unit, entity/date, canonical choice) with audited
+    equivalence rules; open-ended prose excluded, excluded share
+    reported, never counted stable. PerturbationSpec owned by
+    Dokime; PerturbationExecutor optional, budget-bounded; v0 may
+    run zero live perturbations (consistency unavailable).
+7.3 calibrated_model_feature(c) - optional likelihood feature,
+    calibrated per (model, tokenizer, template, version); Hestia
+    capability probe; never cross-model raw comparison; never a
+    configuration prior.
+7.4 cost - never a ranking term for acquisition; only incremental
+    FUTURE cost may rank. Total-turn cost measured and logged.
+7.5 Profiles: named sets of active terms + weights + calibrations,
+    frozen in the manifest (hash). One profile per decision.
+    Required-term missing for a candidate: reject it, or the whole
+    decision switches to the manifest's named fallback profile -
+    never mix profiles inside one decision. NaN or out-of-range
+    feature value: candidate rejected, reason FEATURE_INVALID.
+
+=====================================================================
+8. THE VERIFIER
+=====================================================================
+8.1 Source-grounding rule (VERBATIM CONTRACT):
+    "A grounded profile may select an answer only when every factual
+    claim has a versioned `supported` verdict against its exact
+    cited passage and snapshot. `Unsupported`, `contradicted`,
+    `unverified`, verifier outage, and stale citations cannot be
+    converted to support by likelihood or consistency. The
+    verifier's support precision and coverage are measured on
+    independent, human-audited held-out data with a preregistered
+    bound and slice gates. If the current verifier version or corpus
+    is outside the validated envelope, Kybernetes deactivates
+    grounded selection and returns an explicit unavailable/abstain
+    state. A corrected verdict is a new auditable verification run,
+    not an in-place override."
+    This is a source-grounding contract. It does not certify the
+    cited source is TRUE; source trust and contradictory-source
+    handling get separate labels and evaluation.
+
+8.2 Reliability contract
+    - Versioned claim-level labels; false-support UPPER CONFIDENCE
+      BOUND at a frozen operating point (preregistered method,
+      minimum audited cases, critical per-domain slices).
+    - Source/corpus shift checks; Dokime audit before every manifest
+      freeze and on verifier version bump.
+    - Kybernetes-owned activation switch: bad/unavailable/stale
+      verifier => grounded profiles deactivate automatically
+      (fail closed), typed status returned.
+    - Reactivation requires a new passing Dokime bundle. Rollback
+      and stale-audit-artifact cases are tested.
+    - Verdict correction = new versioned verification run with
+      provenance + approval; never in-place mutation. Krisis may
+      abstain; it may not override.
+    - Adjudication throughput: the human-correction queue is
+      bounded (sampling + batching policy in the manifest); an
+      overflowing queue forces conservative behavior, not backlog.
+
+8.3 Claim-extraction recall
+    "Every claim supported" is vacuous for claims never extracted.
+    Extraction gets its own audited metric: missed-claim rate on
+    multi-claim answers, human-audited, with a slice for
+    number/negation/scope changes. Grounded labels require both
+    support precision AND extraction recall inside their bounds.
+
+8.4 Generator/verifier independence
+    Same-base-model generation + verification correlates errors
+    (shared blind spots grade each other). Requirement: verifier is
+    a different model or family where hardware allows; the audit
+    measures false-support CONDITIONAL on same-model candidates so
+    correlation is visible if independence is impossible. The 16 GB
+    constraint is recorded as a manifest risk, not discovered later.
+
+8.5 Ownership
+    Kybernetes owns the public verify_answer_claims(answer,
+    cited_spans, snapshot) contract; shared library implements;
+    Dianoia may call it later; Krisis consumes typed verdicts.
+    Caveat (accepted risk, recorded): Kybernetes also generates
+    candidates. Independence rests on the Dokime audit (8.2) and it
+    is non-negotiable.
+
+=====================================================================
+9. QUESTION-CLASS ROUTING
+=====================================================================
+Class assignment is part of the versioned manifest: explicit rules
+or a named classifier + version. Rules:
+- unclassified/ambiguous -> DEFAULT profile: most conservative
+  (eligibility + support when available; abstain-leaning). The
+  default profile states requires_grounding behavior and the
+  verifier-unavailable branch explicitly (abstain).
+- multi-class match -> the MOST RESTRICTIVE applicable requirements,
+  or abstain; never the first/weakest rule.
+- classification logged per decision (class, rule/classifier
+  version, confidence).
+- a classifier is Dokime-audited for HARMFUL misrouting (weaker
+  profile activated), not just overall accuracy.
+
+=====================================================================
+10. THRESHOLDS, BUDGETS, STALENESS
+=====================================================================
+tau: one named quantity (top candidate's profile score), fixed,
+dev-calibrated, in the manifest with dataset IDs; drift detected
+separately; Dokime review to change.
+Starting configuration: <=2 candidates, zero live perturbation
+calls, no extra GPU call inside krisis, fixed fraction of
+Kybernetes deadline/token budget. Overrun => reject or abstain.
+Absolute limits require BOTH a Hestia capacity baseline AND a
+full-stack cold/warm benchmark on the target 16 GB device
+(candidate generation + verification + routing + ranking + UI),
+freezing per-turn deadline, generation budget, verifier budget,
+queue behavior, p95 end-to-end overhead, verifier failure counts,
+GPU contention. Both benchmarks are release prerequisites.
+Stale recheck: typed STALE; one full rebuild under budget, else
+abstain; never publish the old ranking.
+
+=====================================================================
+11. PHASED GATES
+=====================================================================
+Gate 0 ENTRY (build readiness): frozen schemas, feature-source
+contracts, pure-policy fixtures replay green, capability probe,
+baseline, audit format.
+Gate 0 EXIT (Foundation): functional/security gates pass; no
+quality claim. May release with zero measured gain.
+SELECTOR PROMOTION: held-out gate (12) passes; else opt-in and the
+negative result is reported.
+Gate 1 (passages): separate hypothesis, own retrieval benchmark.
+Gate 2 (shadow): no causal claims; offline replay; no propensity
+floor, no exploration.
+Gate 2b (exploration trial): separately designed, consented,
+bounded, propensities logged, user-facing safeguards.
+Gate 3 (configuration selection): immutable REGISTERED versions
+only; Paideia/Hestia/Stoma own artifact changes.
+
+=====================================================================
+12. EVALUATION
+=====================================================================
+Selector ablations: same frozen candidate sets AND same hard
+eligibility mask across arms (eligibility-only, likelihood-only
+where available, support-only, full profile); vary only the named
+ranking feature.
+Pipeline comparison: whole n=2 pipeline vs n=1 direct baseline,
+all generation/verification costs and failures counted. Attribution
+reported separately (selector value vs extra generation value).
+Predeclared before final test: benchmark cards, primary metric
+(selective risk / grounded correctness), minimum useful effect,
+paired CI method, risk-coverage point, max p95/VRAM overhead,
+multiplicity policy. Per-query results saved; failures in
+denominators; per-slice results; independent final test; Dokime
+renders from a replayable bundle.
+Foundation and Promotion verdicts reported separately.
+
+=====================================================================
+13. AUDIT, PRIVACY, RETENTION
+=====================================================================
+Per decision log: candidate IDs, source/citation IDs + generations,
+feature values + missingness + trust flags, profile ID + manifest
+hash, classification (class, version, confidence), eligibility mask
++ reasons, threshold quantity + value, status + reason + per-
+candidate lists, model/index/policy versions, perturbation-set hash
+(if any), latency/tokens/calls, total-turn + incremental cost,
+trace ID.
+Field-level sensitivity labels + retention periods. Decision REPLAY
+(re-running the policy arithmetic) works from the redacted log.
+Feature RECOMPUTATION requires access-controlled immutable
+artifacts + digests; document what becomes non-recomputable after
+each deletion class. Redaction and authorized replay are tested.
+
+=====================================================================
+14. UNTRUSTED CONTENT
+=====================================================================
+Candidate text and passages are untrusted data. Citations resolve
+to real passage IDs at the current generation before support is
+scored. Claims verified independently of asserted authority.
+Instruction-like content in evidence is never obeyed as authority;
+it remains readable as DATA when the user asks about it (quoted
+commands are a test case). Trust flags logged. Stable-wrong,
+hostile-source and hostile-feature fixtures are in the release
+gate; Dokime owns the frozen hostile suite; maintainers contribute
+attacks; an independent reviewer labels; some attacks stay held
+out from tuning. Red-team fixture refresh is tied to every
+verifier version bump (adversarial adaptation), separate from
+distribution-shift checks.
+
+=====================================================================
+15. DO-NOT-TOUCH
+=====================================================================
+- krisis never modifies weights, memory, LTHCM graph, eval data,
+  Phylax policy, artifact registrations.
+- krisis never selects Dianoia walk actions.
+- No cross-model raw logprob comparison.
+- No imputed features; missingness is data.
+- No causal claims from shadow scoring.
+- No passage reranking at the v0 endpoint.
+- No relabeling contradiction checks as support.
+- No publishing under a stale snapshot.
+- No in-place verdict mutation.
+- No grounded label while extraction recall or support precision is
+  outside bounds.
+
+=====================================================================
+16. POLICY MANIFEST (worked example, v0.1-manifest)
+=====================================================================
+manifest_id: krisis-policy-0.1  (hash frozen with fixtures)
+profiles:
+
+  eligibility_baseline:
+    terms: none (hard gates only)
+    selection: lowest stable candidate ID among eligible
+    grounded requests (requires_grounding=true): ABSTAIN, reason
+      VERIFIER_UNAVAILABLE or NO_VALID_CANDIDATE as applicable
+    tie: deterministic by ID order
+
+  grounded_v1:
+    requires: verifier active, audit in date, extraction audit in
+      date, requires_grounding=true
+    hard pre-score: every extracted claim verdict == supported
+      (exact cited span, current snapshot); else candidate rejected
+    score(c) = 0.7 * mean_verifier_confidence(c)
+             + 0.3 * cal_ll(c)
+    domains: mean_verifier_confidence in [0,1] (verifier-reported,
+      versioned); cal_ll in [0,1] via frozen per-model affine map
+      (ll_min, ll_max recorded per model digest)
+    NaN/out-of-range -> reject candidate, FEATURE_INVALID
+    tau = 0.55 on score; score >= tau passes
+    fallback: none for grounded requests (abstain)
+    non-grounded requests may not activate this profile
+
+class_mapping:
+  closed_form_number  -> grounded_v1 (if available, else default)
+  closed_form_entity  -> grounded_v1
+  closed_form_choice  -> grounded_v1
+  unclassified/other  -> eligibility_baseline (default profile)
+  multi-class match   -> most restrictive requirements, else
+    abstain
+  classifier: explicit ruleset v1 (manifest section); classifier
+    version + decision logged
+
+budgets (starting, to be replaced by measured values post-
+benchmark): n <= 2 candidates; zero live perturbation calls; no
+extra GPU model call inside krisis; deadline = 40% of Kybernetes
+remaining turn budget; overrun => abstain BUDGET_EXHAUSTED.
+
+canonical form: manifest + fixtures frozen as canonical JSON
+(sorted keys, UTF-8); two implementations must reproduce identical
+bytes for the policy decision.
+
+=====================================================================
+17. FIXTURE PACK
+=====================================================================
+PURE-POLICY (stubbed typed verifier/classifier/dedup outputs,
+numeric features; expected results decidable without a model call;
+frozen as JSON):
+
+  A  supported vs fluent-unsupported: c1 verdict unsupported
+     (cited span lacks claim), cal_ll 0.95; c2 all claims supported
+     @ verifier confidence 0.90, cal_ll 0.80.
+     Expected: c1 rejected pre-score. c2 score = 0.7*0.90+0.3*0.80
+     = 0.87 >= 0.55 => SELECTED c2. Likelihood never converts.
+  B  asymmetric missingness: c2 lacks required term =>
+     reject c2 (grounded_v1 has no fallback) or whole-decision
+     fallback per manifest branch; never mixed scoring.
+  C  stale: selection under gen 7; recheck finds gen 8 changed =>
+     STALE; one rebuild; else abstain.
+  D  mixed gates: c1 unauthorized, c2 contradicted => abstained,
+     aggregate reason per precedence, both per-candidate reasons
+     present.
+  E  requires_grounding=true + verifier outage => abstained,
+     VERIFIER_UNAVAILABLE; baseline profile forbidden; no grounded
+     label.
+  F  n=1: hard gates run, ranking skipped; fail => typed rejection.
+  G  fallback branch: manifest names fallback profile; ENTIRE
+     decision switches; log shows one profile ID only.
+  H  dedup: identical normalized text + identical citations merge
+     (lineage logged); pair differing only by negation does NOT
+     merge.
+  I  routing: no-class => default profile; two-class => most
+     restrictive; both logged with classifier version.
+  J  injection: evidence containing quoted commands readable as
+     data, never obeyed; support scoring unaffected by embedded
+     instructions.
+  K  boundary: candidate score exactly 0.55 => SELECTED
+     (score >= tau passes).
+  L  partial upstream failure: 1 of 2 generations fails, survivor
+     valid => decision proceeds on survivor; failure counted and
+     logged.
+
+LIVE-INTEGRATION (real verifier/model, human labels):
+  M  verifier support precision + extraction recall audit slices
+     (incl. multi-claim answers with hidden missed claims).
+  N  hostile suite (stable-wrong, hostile-source, hostile-feature,
+     adapted-to-verifier attacks at current version).
+  O  full-stack cold/warm benchmark on the 16 GB device.
+  P  fail-closed drill: verifier version bump => deactivation,
+     typed status, reactivation only via new passing bundle.
+
+=====================================================================
+18. OPEN QUESTIONS FOR THIS ROUND
+=====================================================================
+1. Initial weights (0.7/0.3) and tau (0.55) are placeholders: which
+   Dokime dev split tunes them, disjoint by source family and query
+   cluster from final test?
+2. Verifier model choice under 16 GB: what runs independently of
+   the generator (8.4), and what is the documented risk if it
+   cannot?
+3. Extraction-recall target and audit sample size: what bound makes
+   the grounded label honest?
+4. Adjudication queue bound: concrete number before conservative
+   behavior triggers?
+5. Retention periods per sensitivity class: concrete values?

@@ -1,0 +1,115 @@
+KRISIS v4 - RE-REVIEW REQUEST (2026-09-30)
+for the reviewer, with krisis-spec-v3.txt and the round 3 review.
+v4 will incorporate every round-3 repair plus the items below.
+For each: what v4 will say, and what to check. Fight anything
+under-specified.
+
+=====================================================================
+1. TWO-TRACK RELEASE
+v4: Foundation Release (contract, auth, abstention, audit,
+reliability; NO quality-gain claim) and Selector Promotion (optional
+feature profile beats equal-budget baselines on held-out data) are
+separate gates with separately labeled reports.
+Check: no wording anywhere lets Foundation imply a quality gain.
+
+=====================================================================
+2. GROUNDED PROFILE HARD REJECTIONS
+v4: in a grounded profile, unsupported and contradicted are hard
+rejections BEFORE scoring; unverified and verifier_unavailable are
+non-grounded states, never zero-contradiction. Non-grounded profiles
+may not claim grounded selection. Fixture A rewritten with an
+explicit profile, numeric features, and tau.
+Check: c1 (fluent, unsupported) is rejected pre-score; c2 selected
+only if it clears the acceptance threshold.
+
+=====================================================================
+3. POLICY MANIFEST EXAMPLE (the core of v4)
+v4 ships a worked manifest: exact score equation, feature
+domains/units, calibration IDs, question-class -> profile mapping,
+missing-feature fallback branch, tie order, tau with score >= tau
+as pass, NaN/out-of-range rejection. Numeric fixtures decidable
+without a model call.
+Check: a second implementation could reproduce every score and
+outcome from the manifest alone.
+
+=====================================================================
+4. VERIFIER OWNERSHIP + FAIL-CLOSED AUDIT (new, mine)
+v4: Kybernetes owns verify_answer_claims(answer, cited_spans,
+snapshot); shared library implements; Dianoia may call it later;
+Krisis consumes typed verdicts. Caveat written in: Kybernetes also
+generates candidates, so independence rests on Dokime auditing the
+verifier's false-support and false-reject rates before every
+manifest freeze. If the audit crosses agreed error bounds, grounded
+profiles deactivate automatically (fail closed). Verdicts can only
+be abstained from, never overridden.
+Check: the fail-closed trigger has an owner, a threshold, and a
+test. Challenge the ownership choice if you see a cleaner home.
+
+=====================================================================
+5. QUESTION-CLASS ROUTING (new, mine)
+v4: class assignment is part of the versioned manifest - explicit
+rules or a named classifier + version. Unclassified/ambiguous
+queries fall to a DEFAULT profile (most conservative: eligibility +
+support only, abstain-leaning). Classification logged per decision
+(class, rule/classifier version, confidence). A classifier is itself
+Dokime-audited for misclassification rate. Fixtures: no-class match
+-> default; two-class match -> documented precedence.
+Check: no request can reach scoring without a deterministic class
+decision.
+
+=====================================================================
+6. SAME-CANDIDATE-SET EVALUATION ARM
+v4: selection ablations run over identical frozen candidate sets
+(same models, prompts, evidence, acquisition cost): eligibility-
+only, likelihood-only where available, support-only, full profile.
+Separately: whole n=2 pipeline vs n=1 direct baseline with all
+generation failures and tokens counted. Foundation and Promotion
+verdicts reported separately.
+Check: no claim attributes n=2-vs-n=1 gains to Krisis selection.
+
+=====================================================================
+7. COMPLETE OUTCOME ENUM
+v4: one enum - SELECTED, NO_AUTHORIZED_CANDIDATE (authorization
+only), NO_VALID_CANDIDATE (provenance/contradiction/support), 
+QUALITY_BELOW_THRESHOLD, VERIFIER_UNAVAILABLE, BUDGET_EXHAUSTED,
+STALE, SCHEMA_INVALID, UPSTREAM_GENERATION_FAILED, CANCELLED -
+with deterministic precedence for mixed reasons, a Krisis-decision
+vs Kybernetes-failure split, and retry limits.
+Check: every fixture maps to exactly one enum value.
+
+=====================================================================
+8. FIXTURE PACK (revised + new)
+A: supported vs fluent-unsupported, with numbers (item 2).
+D: mixed gate failures -> typed precedence, not one bucket.
+E: verifier unavailable under requires_grounding=true -> abstain;
+   baseline fallback forbidden for grounded requests.
+F: n=1 -> hard gates still run; only ranking is skipped.
+New G: fallback branch - one candidate missing a required term;
+   whole decision switches profile or rejects that candidate per
+   manifest, never mixed scoring.
+New H: dedup - near-duplicates merged preserving distinct claims,
+   negation, numbers, citations; merge lineage logged. Include a
+   pair differing only by negation.
+New I: routing - no-class -> default profile; two-class ->
+   precedence.
+New J: injection - evidence containing quoted commands stays
+   readable as data, never obeyed as authority.
+Check: each fixture's expected output is decidable by inspection.
+
+=====================================================================
+9. REPLAY VS RECOMPUTATION
+v4: decision replay works from a redacted log (exact feature
+values, policy hash, tie order, mask retained). Feature
+recomputation needs access-controlled immutable artifacts +
+digests. Retention and deletion rules stated.
+Check: no claim of full recomputation from the redacted log.
+
+=====================================================================
+10. BUDGET FREEZE
+v4: first manifest freezes candidate-count limit (start 2), zero
+live perturbation calls, no extra GPU call inside Krisis, absolute
+wall deadline, token/VRAM ceiling. Absolute numbers land only after
+the Hestia baseline on the 16 GB box (cold + warm p95, peak VRAM,
+failed-generation rate) - the baseline run is a release
+prerequisite, and the spec says so instead of promising numbers.
+Check: no performance claims without the measured baseline.

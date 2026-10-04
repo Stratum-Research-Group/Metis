@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hestia"
+version = "0.1.0"
+description = "Local AI model serving layer — shared model hosting for the local stack"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "click>=8.1",
+    "pynvml>=12.0",
+    "pydantic>=2.0",
+    "sse-starlette>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-httpx>=0.30",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+hestia = "hestia.cli.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hestia"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = ["deps", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks integration tests (deselect with '-m \"not integration\"')",
+]

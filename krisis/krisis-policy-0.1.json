@@ -1,0 +1,310 @@
+{
+  "manifest_id": "krisis-policy-0.1",
+  "schema_version": "1.0.0",
+  "status": "draft",
+  "conventions": {
+    "number_format": "decimal strings, 6 places, half-even rounding",
+    "score_arithmetic": "compute in arbitrary precision, render at 6dp half-even; comparisons on rendered values",
+    "canonical_json": "UTF-8, sorted keys, no insignificant whitespace; two implementations must reproduce identical bytes"
+  },
+  "governance": {
+    "solo_mode": true,
+    "roles": {
+      "tuning": "stack_owner with assistant assistance",
+      "approval": "stack_owner",
+      "labeling": "model-assisted development labels; independent blinded human adjudicator required for external release claim",
+      "independence_rule": "24h owner approval is an internal control only; external independence requires separate hidden-test custodian and blinded adjudicator, precommitted protocol and metric, one final access, immutable access log; failed sealed tests are retired"
+    },
+    "sealed_test": {
+      "hash_recorded_before_tuning": false,
+      "sha256": null,
+      "protocol_sha256": null,
+      "sealed_at_utc": null,
+      "custodian": null,
+      "final_test_access_count": 0
+    },
+    "approval_lag_hours": 24,
+    "evaluation_claim": "internal_only_until_independent_final_test",
+    "external_release_gate": {
+      "required": true,
+      "independent_hidden_test_custodian": true,
+      "blinded_human_adjudicator_outside_stack_owner": true,
+      "protocol_and_primary_metric_committed_before_tuning": true,
+      "one_final_test_access": true,
+      "immutable_access_and_decision_log": true,
+      "retire_test_after_failed_final_access": true,
+      "solo_fallback_claim": "internal evaluation only; prospective post-freeze cases, blinded attribution, no reuse after failure"
+    }
+  },
+  "id_assignment": "random ULID per candidate at generation time, logged; IDs carry no ordering semantics; tie and baseline resolution by lexicographic ID order is therefore random and documented",
+  "reason_enum": [
+    "NO_AUTHORIZED_CANDIDATE",
+    "NO_VALID_CANDIDATE",
+    "QUALITY_BELOW_THRESHOLD",
+    "VERIFIER_UNAVAILABLE",
+    "BUDGET_EXHAUSTED",
+    "STALE",
+    "SCHEMA_INVALID",
+    "UPSTREAM_GENERATION_FAILED",
+    "PROFILE_UNAVAILABLE",
+    "FEATURE_INVALID",
+    "CANCELLED"
+  ],
+  "reason_precedence": [
+    "CANCELLED",
+    "SCHEMA_INVALID",
+    "NO_AUTHORIZED_CANDIDATE",
+    "VERIFIER_UNAVAILABLE",
+    "PROFILE_UNAVAILABLE",
+    "NO_VALID_CANDIDATE",
+    "UPSTREAM_GENERATION_FAILED",
+    "BUDGET_EXHAUSTED",
+    "STALE",
+    "QUALITY_BELOW_THRESHOLD"
+  ],
+  "profiles": {
+    "eligibility_baseline": {
+      "kind": "eligibility",
+      "requires_grounding": false,
+      "requires_capability": [],
+      "hard_gates": [
+        "access",
+        "provenance",
+        "contradiction",
+        "citation_resolution"
+      ],
+      "per_claim_min": null,
+      "score": null,
+      "tau": null,
+      "selection": "lowest lexicographic candidate ID among eligible; responses labeled unverified",
+      "fallback": null
+    },
+    "grounded_support_only": {
+      "kind": "grounded",
+      "requires_grounding": true,
+      "requires_capability": [
+        "verifier_active"
+      ],
+      "hard_gates": [
+        "access",
+        "provenance",
+        "contradiction",
+        "citation_resolution",
+        "per_claim_support"
+      ],
+      "per_claim_min": "0.800000",
+      "score": {
+        "formula": "mean_calibrated_claim_confidence",
+        "weights": {}
+      },
+      "tau": "0.850000",
+      "fallback": null
+    },
+    "grounded_v1": {
+      "kind": "grounded",
+      "requires_grounding": true,
+      "requires_capability": [
+        "verifier_active",
+        "logprobs"
+      ],
+      "hard_gates": [
+        "access",
+        "provenance",
+        "contradiction",
+        "citation_resolution",
+        "per_claim_support"
+      ],
+      "per_claim_min": "0.800000",
+      "score": {
+        "formula": "w_conf * mean_calibrated_claim_confidence + w_ll * cal_ll",
+        "weights": {
+          "w_conf": "0.700000",
+          "w_ll": "0.300000"
+        },
+        "cal_ll_map": {
+          "status": "synthetic_fixture_only",
+          "map_version": "fixture-affine-0.1",
+          "model_digest": "fixture-model-not-for-release",
+          "formula": "clamp((raw_ll - ll_min) / (ll_max - ll_min), 0, 1)",
+          "ll_min": "-10.000000",
+          "ll_max": "0.000000",
+          "rounding": "six decimal places, half-even after affine map",
+          "raw_ll_definition": "mean per-answer-token natural log probability under the fixed model digest and prompt format; prompt tokens excluded",
+          "calibration_dataset_sha256": null,
+          "calibration_report_sha256": null
+        }
+      },
+      "tau": "0.700000",
+      "fallback": null,
+      "release_gate": "inactive outside pure-policy fixtures until model-specific calibration map and validation are frozen"
+    }
+  },
+  "class_routing": {
+    "rules": [
+      {
+        "class": "closed_form_number",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "logprobs": true,
+        "profile": "grounded_v1"
+      },
+      {
+        "class": "closed_form_number",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "logprobs": false,
+        "profile": "grounded_support_only"
+      },
+      {
+        "class": "closed_form_entity",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "logprobs": true,
+        "profile": "grounded_v1"
+      },
+      {
+        "class": "closed_form_entity",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "logprobs": false,
+        "profile": "grounded_support_only"
+      },
+      {
+        "class": "closed_form_choice",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "logprobs": true,
+        "profile": "grounded_v1"
+      },
+      {
+        "class": "closed_form_choice",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "logprobs": false,
+        "profile": "grounded_support_only"
+      },
+      {
+        "class": "unclassified",
+        "requires_grounding": true,
+        "verifier_active": true,
+        "profile": "grounded_support_only"
+      },
+      {
+        "class": "*",
+        "requires_grounding": true,
+        "verifier_active": false,
+        "abstain": "VERIFIER_UNAVAILABLE"
+      },
+      {
+        "class": "*",
+        "requires_grounding": false,
+        "profile": "eligibility_baseline"
+      }
+    ],
+    "multi_class": "normalize each class and route separately; equal profiles combine; unequal grounded profiles are incomparable and abstain PROFILE_UNAVAILABLE; any terminal abstention applies",
+    "unclassified": "unknown, empty or missing class normalizes to unclassified before rule matching; grounded requests with active verifier use grounded_support_only",
+    "input_class_normalization": {
+      "known_classes": [
+        "closed_form_number",
+        "closed_form_entity",
+        "closed_form_choice",
+        "unclassified"
+      ],
+      "unknown_scalar_class": "unclassified",
+      "empty_or_missing_class": "unclassified",
+      "multi_class": "normalize each member, deduplicate, then combine; conflicting profiles abstain PROFILE_UNAVAILABLE"
+    },
+    "matching": "omitted boolean field is a wildcard; class * is a wildcard; exactly one rule must match after class normalization"
+  },
+  "n1_handling": "single candidate still receives all hard gates, per-claim support validation, feature validation and the profile tau; only pairwise comparison is skipped",
+  "budgets": {
+    "source": "PLACEHOLDER - replace with Hestia baseline + full-stack Kybernetes API benchmark on target 16 GB device before release",
+    "max_candidates": 2,
+    "live_perturbation_calls": 0,
+    "extra_gpu_calls_inside_krisis": 0,
+    "deadline_fraction_of_kybernetes_turn_budget": "0.400000",
+    "overrun": "abstain BUDGET_EXHAUSTED"
+  },
+  "invalidation_events": [
+    "verifier_version_change",
+    "generator_model_digest_change",
+    "index_generation_change",
+    "policy_schema_version_change",
+    "calibration_map_version_change"
+  ],
+  "audit_card": {
+    "support_false_positive_ucb_target": "0.050000",
+    "extraction_recall_min": "0.980000",
+    "min_audit_cases": 400,
+    "critical_slices": [
+      "multi_claim",
+      "negation",
+      "quantity",
+      "scope",
+      "entity_date",
+      "hostile_source"
+    ],
+    "confidence_method": "one-sided exact Clopper-Pearson bounds; Bonferroni family-wise 0.050000 across six critical slices times two metrics",
+    "verifier_confidence_calibration": "reliability map versioned per verifier version; per_claim_min applies to CALIBRATED confidence",
+    "reactivation": "new passing Dokime bundle only; rollback tested",
+    "adjudication_queue": {
+      "cap": 50,
+      "max_age_days": 7,
+      "overflow": "typed VERIFIER_UNAVAILABLE for affected grounded requests; never silently mark supported"
+    },
+    "correlated_error_audit": "false-support measured conditional on same-model candidates; independence preferred, risk recorded if impossible",
+    "brevity_bias_note": "mean-over-claims ranking prefers few-claim answers; accepted as a safety-leaning bias, recorded here as a normative choice",
+    "gate_tau_coherence": {
+      "grounded_support_only": "tau > per_claim_min; 0.850000 > 0.800000",
+      "grounded_v1": "tau > w_conf * per_claim_min; 0.700000 > 0.700000 * 0.800000 = 0.560000"
+    },
+    "confidence_level": "0.950000",
+    "false_support": {
+      "denominator": "independently adjudicated verifier-supported claims in the slice",
+      "numerator": "claims adjudicated unsupported despite verifier supported",
+      "gate": "one-sided Clopper-Pearson upper bound <= 0.050000",
+      "min_eligible_per_slice": 107
+    },
+    "extraction_recall": {
+      "denominator": "independently adjudicated material claims in source answers in the slice",
+      "numerator": "material claims correctly extracted",
+      "gate": "one-sided Clopper-Pearson lower bound >= 0.980000",
+      "min_eligible_per_slice": 272
+    },
+    "slice_gate": "each named critical slice must meet both count minima and both confidence-bound gates; overlapping cases may count in multiple slices; global minimum alone never suffices",
+    "multiple_comparison_control": {
+      "family_alpha": "0.050000",
+      "number_of_gates": 12,
+      "per_gate_alpha_fraction": "1/240"
+    }
+  },
+  "retention": {
+    "raw_query_answer_text": "30d",
+    "derived_features": "180d",
+    "audit_metadata": "365d",
+    "human_labels": "indefinite",
+    "rule": "deletion invalidates dependent recomputation; decision replay survives on redacted logs; what remains auditable is recorded per deletion"
+  },
+  "candidate_only_reasons": [
+    "FEATURE_INVALID"
+  ],
+  "reason_mapping": {
+    "candidate_failures": {
+      "access": "NO_AUTHORIZED_CANDIDATE",
+      "provenance": "NO_VALID_CANDIDATE",
+      "contradiction": "NO_VALID_CANDIDATE",
+      "citation_resolution": "NO_VALID_CANDIDATE",
+      "per_claim_support": "NO_VALID_CANDIDATE",
+      "feature_invalid": "NO_VALID_CANDIDATE"
+    },
+    "precedence_scope": "terminal abstention only, after routing, hard gates, feature checks and score threshold; never overrides selected survivor",
+    "all_candidates_below_tau": "QUALITY_BELOW_THRESHOLD",
+    "no_candidate_survives_hard_gates_or_feature_checks": "highest mapped reason by reason_precedence",
+    "no_candidate_generated_after_all_attempts": "UPSTREAM_GENERATION_FAILED",
+    "partial_generation_failure_with_valid_survivor": "selected with counted upstream warning; not aggregate failure"
+  },
+  "generation_policy": {
+    "partial_failure_with_valid_survivor": "select survivor if it passes all gates and tau; log attempts and failures",
+    "all_attempts_failed": "abstain UPSTREAM_GENERATION_FAILED"
+  }
+}

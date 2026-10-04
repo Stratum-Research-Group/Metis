@@ -1,0 +1,427 @@
+"""Hestia API — OpenAI-compatible endpoints with routing, admission queue, and strict schemas."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import httpx
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import ValidationError
+
+from hestia.api.schemas import (
+    ChatCompletionRequest,
+    EmbeddingRequest,
+    ManageModelRequest,
+    ModelListResponse,
+    ModelObject,
+)
+from hestia.backend.llamacpp import LlamaCppBackend
+from hestia.config import ServiceConfig
+from hestia.registry import ModelRegistry, ModelType
+from hestia.server import (
+    GpuQueryError,
+    InsufficientVramError,
+    ModelFailedError,
+    ModelNotFoundError,
+    NoFreePortError,
+    QueueTimeoutError,
+    ServerManager,
+    ServerOverloadedError,
+)
+from hestia.vram import get_free_vram_mb, get_gpu_name, get_total_vram_mb
+
+logger = logging.getLogger(__name__)
+
+# Module-level references set during lifespan
+_manager: ServerManager | None = None
+_registry: ModelRegistry | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan — start/stop the server manager and shared HTTP client."""
+    global _manager, _registry
+
+    config_path = Path(app.state.config_path)
+    models_path = Path(app.state.models_path)
+
+    config = ServiceConfig.from_yaml(config_path)
+
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, config.log_level.upper(), logging.INFO),
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    )
+
+    registry = ModelRegistry()
+    registry.load_from_yaml(models_path)
+    _registry = registry
+
+    backend = LlamaCppBackend(binary_path=config.llamacpp_binary)
+    manager = ServerManager(registry=registry, backend=backend, config=config)
+    _manager = manager
+
+    # Shared HTTP client for proxying requests cleanly
+    app.state.http_client = httpx.AsyncClient(timeout=300.0)
+
+    await manager.start()
+    logger.info("Hestia API ready on port %d", config.listen_port)
+    try:
+        yield
+    finally:
+        await app.state.http_client.aclose()
+        await manager.shutdown()
+
+
+def create_app(
+    config_path: str = "hestia.yaml",
+    models_path: str = "models.yaml",
+) -> FastAPI:
+    """Create the FastAPI application."""
+    app = FastAPI(
+        title="Hestia",
+        description="Local AI model serving layer",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    app.state.config_path = config_path
+    app.state.models_path = models_path
+
+    app.include_router(_build_router())
+    return app
+
+
+def _build_router():
+    """Build the API routes."""
+    from fastapi import APIRouter
+
+    router = APIRouter()
+
+    @router.get("/v1/models")
+    async def list_v1_models() -> JSONResponse:
+        """OpenAI-compatible model listing endpoint for Dianoia, Kybernetes, and external tools."""
+        registry = _get_registry()
+        models_data = []
+        for m in registry.list_all():
+            models_data.append(
+                ModelObject(
+                    id=m.name,
+                    root=m.name,
+                    type=m.model_type.value,
+                    context_size=m.context_size,
+                    quantization=m.quantization,
+                ).model_dump()
+            )
+        return JSONResponse(ModelListResponse(data=models_data).model_dump())
+
+    @router.get("/v1/models/{model_name}")
+    async def get_v1_model(model_name: str) -> JSONResponse:
+        """OpenAI-compatible single model lookup."""
+        registry = _get_registry()
+        m = registry.get(model_name)
+        if not m:
+            raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found")
+        return JSONResponse(
+            ModelObject(
+                id=m.name,
+                root=m.name,
+                type=m.model_type.value,
+                context_size=m.context_size,
+                quantization=m.quantization,
+            ).model_dump()
+        )
+
+    @router.post("/v1/chat/completions", response_model=None)
+    async def chat_completions(request: Request) -> Response:
+        """OpenAI-compatible chat completions endpoint with admission control."""
+        manager = _get_manager()
+
+        try:
+            body = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+
+        model_name = body.get("model")
+        if not model_name:
+            raise HTTPException(status_code=400, detail="'model' field is required")
+
+        # Validate request schema
+        try:
+            validated_req = ChatCompletionRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        # Validate model type
+        model = _get_registry().get(model_name)
+        if model and model.model_type != ModelType.CHAT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{model_name}' is type '{model.model_type.value}', not 'chat'",
+            )
+
+        # Apply model-level sampling defaults if not specified by caller
+        if model and model.sampling:
+            if "temperature" not in body or body["temperature"] is None:
+                body["temperature"] = model.sampling.temperature
+            if "top_p" not in body or body["top_p"] is None:
+                body["top_p"] = model.sampling.top_p
+
+        # Concurrency admission control
+        try:
+            await manager.acquire_admission(model_name)
+        except ServerOverloadedError as exc:
+            raise HTTPException(
+                status_code=429,
+                detail=str(exc),
+                headers={"Retry-After": "5"},
+            ) from exc
+        except QueueTimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail=str(exc),
+                headers={"Retry-After": "5"},
+            ) from exc
+
+        try:
+            try:
+                process = await manager.ensure_loaded(model_name, track_inflight=True)
+            except ModelNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+            except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError) as exc:
+                raise HTTPException(status_code=503, detail=str(exc))
+
+            stream = validated_req.stream
+
+            if stream:
+                try:
+                    client, resp = await _open_stream_request(process.base_url, body)
+                except Exception as exc:
+                    manager.request_finished(model_name)
+                    raise HTTPException(status_code=503, detail=f"Backend connection error: {exc}")
+
+                if resp.status_code != 200:
+                    err_bytes = await resp.aread()
+                    await resp.aclose()
+                    await client.aclose()
+                    manager.request_finished(model_name)
+                    raise HTTPException(
+                        status_code=resp.status_code,
+                        detail=err_bytes.decode(errors="replace"),
+                    )
+
+                async def _stream_generator() -> AsyncGenerator[str, None]:
+                    try:
+                        async for line in resp.aiter_lines():
+                            yield f"{line}\n"
+                    except Exception as exc:
+                        logger.error("Error during streaming for %s: %s", model_name, exc)
+                        error_payload = json.dumps({"error": str(exc)})
+                        yield f"data: {error_payload}\n\n"
+                    finally:
+                        await resp.aclose()
+                        await client.aclose()
+                        await _safe_request_finished(manager, model_name)
+                        await _safe_release_admission(manager, model_name)
+
+                return StreamingResponse(_stream_generator(), media_type="text/event-stream")
+            else:
+                try:
+                    return await _proxy_request(process.base_url, body, path="/v1/chat/completions")
+                finally:
+                    await _safe_request_finished(manager, model_name)
+        except Exception:
+            # If an error occurred before returning the streaming response generator
+            await _safe_release_admission(manager, model_name)
+            raise
+
+        # For non-streaming requests, release admission here
+        await _safe_release_admission(manager, model_name)
+
+    @router.post("/v1/embeddings")
+    async def embeddings(request: Request) -> JSONResponse:
+        """OpenAI-compatible embeddings endpoint with admission control."""
+        manager = _get_manager()
+
+        try:
+            body = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+
+        model_name = body.get("model")
+        if not model_name:
+            raise HTTPException(status_code=400, detail="'model' field is required")
+
+        try:
+            EmbeddingRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        # Validate model type
+        model = _get_registry().get(model_name)
+        if model and model.model_type != ModelType.EMBEDDING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{model_name}' is type '{model.model_type.value}', not 'embedding'",
+            )
+
+        # Concurrency admission control
+        try:
+            await manager.acquire_admission(model_name)
+        except ServerOverloadedError as exc:
+            raise HTTPException(
+                status_code=429,
+                detail=str(exc),
+                headers={"Retry-After": "5"},
+            ) from exc
+        except QueueTimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail=str(exc),
+                headers={"Retry-After": "5"},
+            ) from exc
+
+        try:
+            try:
+                process = await manager.ensure_loaded(model_name, track_inflight=True)
+            except ModelNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+            except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError) as exc:
+                raise HTTPException(status_code=503, detail=str(exc))
+
+            try:
+                return await _proxy_request(process.base_url, body, path="/v1/embeddings")
+            finally:
+                await _safe_request_finished(manager, model_name)
+        finally:
+            await _safe_release_admission(manager, model_name)
+
+    @router.get("/models")
+    async def list_models() -> JSONResponse:
+        """List all registered models with their internal operational status."""
+        manager = _get_manager()
+        return JSONResponse({"models": manager.get_all_status()})
+
+    @router.post("/manage/load")
+    async def manage_load(request: Request) -> JSONResponse:
+        """Explicitly load a model (used by CLI)."""
+        manager = _get_manager()
+        body = await request.json()
+        model_name = body.get("model")
+        if not model_name:
+            raise HTTPException(status_code=400, detail="'model' field is required")
+
+        try:
+            ManageModelRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            await manager.load_model_explicit(model_name)
+        except ModelNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError) as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+
+        return JSONResponse({"status": "loaded", "model": model_name})
+
+    @router.post("/manage/unload")
+    async def manage_unload(request: Request) -> JSONResponse:
+        """Explicitly unload a model (used by CLI)."""
+        manager = _get_manager()
+        body = await request.json()
+        model_name = body.get("model")
+        if not model_name:
+            raise HTTPException(status_code=400, detail="'model' field is required")
+
+        try:
+            ManageModelRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            await manager.unload_model_explicit(model_name)
+        except ModelNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        return JSONResponse({"status": "unloaded", "model": model_name})
+
+    async def _safe_request_finished(mgr: ServerManager, m_name: str) -> None:
+        res = mgr.request_finished(m_name)
+        if asyncio.iscoroutine(res):
+            await res
+
+    async def _safe_release_admission(mgr: ServerManager, m_name: str) -> None:
+        res = mgr.release_admission(m_name)
+        if asyncio.iscoroutine(res):
+            await res
+
+    @router.get("/health")
+    async def health() -> JSONResponse:
+        """Service and per-model health with live GPU metrics."""
+        manager = _get_manager()
+        models_status = manager.get_all_status()
+
+        any_failed = any(m["state"] == "failed" for m in models_status)
+        service_status = "degraded" if any_failed else "healthy"
+
+        return JSONResponse(
+            {
+                "status": service_status,
+                "models": models_status,
+                "gpu": {
+                    "name": get_gpu_name(),
+                    "vram_free_mb": get_free_vram_mb(),
+                    "vram_total_mb": get_total_vram_mb(),
+                },
+            }
+        )
+
+    return router
+
+
+async def _proxy_request(
+    base_url: str,
+    body: dict,
+    path: str = "/v1/chat/completions",
+) -> JSONResponse:
+    """Proxy a non-streaming request to the backend."""
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        resp = await client.post(f"{base_url}{path}", json=body)
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+async def _open_stream_request(
+    base_url: str,
+    body: dict,
+) -> tuple[httpx.AsyncClient, httpx.Response]:
+    """Open an upstream streaming request to the backend."""
+    client = httpx.AsyncClient(timeout=300.0)
+    try:
+        req = client.build_request(
+            "POST",
+            f"{base_url}/v1/chat/completions",
+            json=body,
+        )
+        resp = await client.send(req, stream=True)
+        return client, resp
+    except Exception:
+        await client.aclose()
+        raise
+
+
+def _get_manager() -> ServerManager:
+    if _manager is None:
+        raise HTTPException(status_code=503, detail="Server manager not initialized")
+    return _manager
+
+
+def _get_registry() -> ModelRegistry:
+    if _registry is None:
+        raise HTTPException(status_code=503, detail="Registry not initialized")
+    return _registry

@@ -1,0 +1,11 @@
+# Git ignore
+*.txt
+*.pyc
+__pycache__/
+.venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite
+*.db

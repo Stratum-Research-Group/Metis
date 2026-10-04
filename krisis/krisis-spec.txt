@@ -1,0 +1,126 @@
+KRISIS (krisis, Gk. κρίσις) - selection layer for the Metis stack
+draft spec + build prompt - 2026-09-30
+status: DRAFT for 2nd review. Anything marked [PROPOSED] is repo-blind -
+verify against the actual repos before building.
+
+=====================================================================
+0. TL;DR
+=====================================================================
+krisis is the selection operator of the stack: it decides which
+systems, memories, and outputs survive. It replaces "whatever the
+sampler returned" with an explicit measure: description-length prior +
+consistency fitness + structure conditioning, updated online.
+Anthropic selection over the stack's configuration space, made
+engineering.
+
+=====================================================================
+1. NAME
+=====================================================================
+krisis (κρίσις) - "judgment, separation, decision", from krinein,
+to separate / to judge. The component that separates surviving
+structures from rejected ones. Fits the family: dianoia (thought),
+hestia (hearth), dokime (assay).
+Runner-up: ekloge (ἐκλογή, "selection"). Rejected - krisis carries
+the veto, ekloge is too passive.
+
+=====================================================================
+2. WHY IT EXISTS
+=====================================================================
+An LLM stack without an explicit selection measure selects by
+accident: temperature picks outputs, recency picks memories, and
+whoever shouted last picks configs. Cosmology has the same bug (the
+measure problem for the multiverse). The fix is the same in both:
+name the prior, name the fitness, and let them fight.
+
+=====================================================================
+3. POSITION IN THE STACK
+=====================================================================
+Inputs:
+  - from the model runtime: token/sequence logprobs (for the prior),
+    candidate outputs
+  - from LTHCM: memory topology S, retrieval paths, path lengths
+  - from the eval side: perturbation batches (paraphrase / seed /
+    session-time shifts of live queries)
+Outputs:
+  - selected outputs (post-veto)
+  - retrieval reweighting (path prior adjustments)
+  - selection statistics (agreement rates, prior masses) for the
+    fitness harness
+
+[PROPOSED] krisis is a standalone repo/service. It must not own
+weights, memory writes, or eval generation. It consumes streams and
+emits selections.
+
+=====================================================================
+4. FORMAL SPEC
+=====================================================================
+System space M = reachable configs (weights th, memory contents,
+retrieval policy pi, sampler s).
+Workload W = live query distribution.
+
+4.1 Prior (generative measure)
+    P(m) ~ 2^-L(m)
+    L via the model itself: description length of a fragment =
+    negative log-likelihood under current weights. The observer
+    compresses its own space - no external compressor, no extra
+    machinery. For configs, fall back to config description length
+    (bytes of diff from default).
+
+4.2 Fitness (the anthropic condition)
+    Perturbation semigroup G on queries: paraphrases, seed shifts,
+    session-time shifts.
+    F(m) = E_{q~W}[ agreement(m(q), m(g.q)) over g~G ] + task reward
+    The agreement term is the boltzmann-brain suppressor: one-off
+    lucky outputs fail, stable structure passes.
+    Non-negotiable: no single-sample fitness anywhere in the stack.
+
+4.3 Selected measure
+    mu(m) ~ 2^-L(m) * 1[F(m) >= tau]
+    Deployment = argmax of -L(m) + lambda * F(m).
+    tau adapts to workload drift (see open questions).
+
+4.4 Structure conditioning (the radix move)
+    When workload structure S is measured (query manifold, LTHCM
+    topology), replace L(m) with L(m | S). S = algorithmic sufficient
+    statistic of the workload. Topological retrieval is radix sort
+    for memory: exploit the representation, don't compare everything.
+
+4.5 Update rule
+    mu_{t+1}(m) ~ mu_t(m) * exp(-loss_t)
+    Exponential weights (hedge) over system space. The measure learns
+    continuously - the thing the cosmology version cannot do.
+
+=====================================================================
+5. IMPLEMENTATION NOTES
+=====================================================================
+- Prior is free: read NLL from the runtime's existing logprob stream.
+- Agreement sampling is the cost center: budget perturbation batches
+  per query class, reuse cached paraphrases, batch on GPU.
+- v0 scope: output selection + retrieval reweighting only. No weight
+  updates driven by krisis in v0.
+- Every decision logged with (prior, fitness, tau, S-version) for
+  audit.
+
+=====================================================================
+6. DO-NOT-TOUCH CONSTRAINTS
+=====================================================================
+- krisis never modifies weights, memory contents, or eval data.
+  Selection layer only.
+- No external compressor dependency (breaks the self-measure
+  property).
+- No single-sample fitness flags, ever.
+- G generators must be workload-derived, not hand-written lists.
+
+=====================================================================
+7. OPEN QUESTIONS FOR THE REVIEWER
+=====================================================================
+1. tau adaptation: fixed quantile of the rolling F distribution, or
+   an explicit drift detector?
+2. Agreement metric: exact match, embedding distance, or
+   model-judged equivalence? (cost vs fidelity)
+3. Does S update online as LTHCM's topology shifts, or versioned
+   snapshots?
+4. Where does the consistency harness live - krisis, or dokime by
+   semantics (assay)? [PROPOSED: dokime generates, krisis consumes]
+5. Failure mode: what does the stack do when NOTHING passes tau?
+   (refuse, relax, or alert)

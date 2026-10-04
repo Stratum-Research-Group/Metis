@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dokime"
+version = "0.1.0"
+description = "Measurement layer and evaluation harness for local AI stack"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Dokime Contributors" },
+]
+dependencies = [
+    "httpx>=0.24.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+dokime = "dokime.cli:main"
+
+[project.entry-points."dokime.tasks"]
+arc_easy_25 = "dokime.tasks.arc:ArcEasy25Task"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"dokime.tasks" = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -1,0 +1,72 @@
+
+1. DIOPTRA - the actual ancient greek optical instrument (hero of alexandria built one): a precision sighting tool, ancestor of the telescope and theodolite. the toolkit is literally an instrument for seeing into something you can't reach by hand. technically accurate, like dianoia. my pick
+
+2. LYCHNOS - "lamp". the poetic option: interpretability is shining a lamp into the black box
+
+3. KATOPTRON - "mirror". the mind held up to itself
+
+dioptra is the one - and it completes the pattern: your stack names aren't just greek words, they're the EXACT greek word for what the thing does
+
+
+MODEL DEBUGGING / INTERPRETABILITY TOOLKIT
+==========================================
+For looking INSIDE language models - what attention heads do, what
+features fire, why the model said what it said.
+
+
+1. TRANSFORMERLENS  (the microscope)
+   Hook into a model's internals: every attention head, MLP layer,
+   and residual stream, for 9,000+ open models across 50+ families.
+   Load a model, run it, read or edit any internal activation.
+
+   pip install transformer-lens
+
+   from transformer_lens import HookedTransformer
+   model = HookedTransformer.from_pretrained("gpt2-small")
+   logits, cache = model.run_with_cache("The capital of France is")
+   # cache now holds every internal activation from that forward pass
+
+
+2. CIRCUITSVIS  (the display)
+   Visualization library from the TransformerLens org. Attention
+   pattern heatmaps, neuron activations, token-level attribution -
+   renders inline in Jupyter, also usable from JavaScript/React.
+
+   pip install circuitsvis
+
+   from circuitsvis.attention import attention_heads
+   attention_heads(
+       attention=cache["pattern", 0],   # layer 0 attention patterns
+       tokens=model.to_str_tokens("The capital of France is")
+   )
+
+
+3. NEURONPEDIA  (the no-code option)
+   Web dashboards for interpretability features: top activations,
+   top logits, activation density, live inference testing in the
+   browser. Poke at models they host without running anything.
+   Also has an API and Python/TypeScript libraries.
+
+   https://www.neuronpedia.org
+
+
+4. NNSIGHT  (the alternate microscope)
+   Same job as TransformerLens, different style: wrap any
+   HuggingFace model and intervene on internals mid-forward-pass.
+   Good when the model you want is not in TransformerLens format.
+
+   pip install nnsight
+
+
+TYPICAL WORKFLOW
+----------------
+1. TransformerLens to hook and extract internals from a forward pass
+2. CircuitsVis to actually SEE the patterns in your notebook
+3. Neuronpedia to compare against known features / explore hosted
+   models without burning your own GPU
+4. nnsight when the model you need is a raw HuggingFace checkpoint
+
+HARDWARE NOTE
+-------------
+gpt2-small and similar fit anywhere. For 7-8B models at 4-bit you
+need ~6GB VRAM - the 5060 Ti or the V100 both handle that easily.

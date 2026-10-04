@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paideia"
+version = "0.1.0"
+description = "Production-grade local training, policy evaluation, and adapter verification pipeline for Metis"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Metis Paideia Authors" }
+]
+dependencies = [
+    "pydantic>=2.4.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "scikit-learn>=1.3.0",
+    "tabulate>=0.9.0",
+]
+
+[project.optional-dependencies]
+cli = [
+    "click>=8.1.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+gpu = [
+    "torch>=2.2.0",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "bitsandbytes>=0.43.0",
+    "accelerate>=0.28.0",
+    "datasets>=2.18.0",
+]
+all = [
+    "click>=8.1.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "torch>=2.2.0",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "bitsandbytes>=0.43.0",
+    "accelerate>=0.28.0",
+    "datasets>=2.18.0",
+]
+
+[project.scripts]
+paideia = "paideia.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["paideia*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
