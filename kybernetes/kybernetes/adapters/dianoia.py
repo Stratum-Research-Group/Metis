@@ -16,12 +16,14 @@ class DianoiaDeliberationResult(BaseModel):
     deliberation_summary: str = ""
     refined_citations: List[Citation] = Field(default_factory=list)
     conflicted: bool = False
+    is_simulated: bool = Field(default=True, description="Whether deliberation was executed via simulated adapter")
 
 
 class DianoiaAdapter:
     """
     Adapter for Dianoia thought-graph deliberation.
     Gracefully handles zero-edge states by falling back to flat passage retrieval.
+    Explicitly discloses simulated adapter status when running without live Dianoia engine.
     """
 
     def __init__(self, dianoia_module: Any = None):
@@ -47,9 +49,10 @@ class DianoiaAdapter:
                 edges_traversed=0,
                 zero_edge_fallback_used=True,
                 fallback_reason="Zero thought-graph edges discovered. Executing flat passage reranking fallback.",
-                deliberation_summary="Direct evidence aggregation via flat passage reranking.",
+                deliberation_summary="Direct evidence aggregation via flat passage reranking (simulated adapter).",
                 refined_citations=seed_citations,
                 conflicted=False,
+                is_simulated=True,
             )
 
         # Multi-edge simulated deliberation walk across connected evidence
@@ -58,7 +61,7 @@ class DianoiaAdapter:
 
         summary = (
             f"Deliberated across {len(seed_citations)} evidence passages in {walk_steps} steps "
-            f"traversing {edges_traversed} conceptual relation edges."
+            f"traversing {edges_traversed} conceptual relation edges (simulated adapter)."
         )
 
         return DianoiaDeliberationResult(
@@ -70,4 +73,5 @@ class DianoiaAdapter:
             deliberation_summary=summary,
             refined_citations=seed_citations,
             conflicted=False,
+            is_simulated=True,
         )
