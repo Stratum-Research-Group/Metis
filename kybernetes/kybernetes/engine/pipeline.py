@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from kybernetes.adapters.dianoia import DianoiaAdapter
 from kybernetes.adapters.hestia import HestiaAdapter
-from kybernetes.adapters.krisis import KrisisAdapter
+from kybernetes.adapters.krisis import KrisisAdapter, KrisisVerificationReport
 from kybernetes.adapters.lthcm import LTHCMAdapter
 from kybernetes.adapters.phylax import PhylaxAdapter
 from kybernetes.budget.engine import BudgetEngine
@@ -124,6 +124,7 @@ class ExecutionPipeline:
         deliberation_summary = ""
         zero_edge_fallback = False
         tool_output: Optional[Dict[str, Any]] = None
+        v_report: Optional[KrisisVerificationReport] = None
         response_text = ""
         stage_outcomes: List[StageOutcome] = []
         components_used = ["Hestia", "Phylax", "Krisis"]
@@ -439,9 +440,18 @@ class ExecutionPipeline:
                 stage_outcomes.append(
                     StageOutcome(
                         stage=StageName.VERIFY,
-                        success=True,
+                        success=(v_report.status not in (TurnOutcomeStatus.FAILED,)),
                         latency_ms=stage_lat,
-                        output={"status": v_report.status.value, "score": v_report.score},
+                        output={
+                            "status": v_report.status.value,
+                            "score": v_report.score,
+                            "supported_claims": v_report.supported_claims,
+                            "unsupported_claims": v_report.unsupported_claims,
+                            "conflict_detected": v_report.conflict_detected,
+                            "is_simulated": v_report.is_simulated,
+                            "verifier_mode": v_report.verifier_mode,
+                            "explanation": v_report.explanation,
+                        },
                     )
                 )
 
@@ -450,8 +460,20 @@ class ExecutionPipeline:
         total_lat = (time.perf_counter() - start_time) * 1000
         timings_ms["total"] = round(total_lat, 2)
 
-        # Determine final status
-        final_status = TurnOutcomeStatus.VERIFIED if (citations or tool_output) else TurnOutcomeStatus.DRAFT
+        # Determine final status following actual verification verdict and stage outcomes
+        if any(not so.success for so in stage_outcomes):
+            final_status = TurnOutcomeStatus.FAILED
+        elif v_report is not None:
+            final_status = v_report.status
+        elif tool_output is not None:
+            final_status = TurnOutcomeStatus.VERIFIED
+        else:
+            final_status = TurnOutcomeStatus.DRAFT
+
+        is_turn_simulated = (
+            any(c.is_simulated for c in citations)
+            or (v_report.is_simulated if v_report else False)
+        )
 
         # 7. Completed event with route_summary matching Prosopon
         show_work = ShowWorkInfo(
@@ -462,6 +484,8 @@ class ExecutionPipeline:
             citations=citations,
             timings_ms=timings_ms,
             verifier_status=final_status.value,
+            verifier_mode=v_report.verifier_mode if v_report else None,
+            is_simulated=is_turn_simulated,
             budget_summary=reconcile_report.total_actual,
             zero_edge_fallback_used=zero_edge_fallback,
         )
@@ -476,6 +500,8 @@ class ExecutionPipeline:
                     "components_used": list(set(components_used)),
                     "latency_ms": round(total_lat, 2),
                     "verifier_status": final_status.value,
+                    "verifier_mode": v_report.verifier_mode if v_report else None,
+                    "is_simulated": is_turn_simulated,
                     "zero_edge_fallback_used": zero_edge_fallback,
                     "citations_count": len(citations),
                 },
@@ -507,6 +533,12 @@ class ExecutionPipeline:
             final_status=final_status,
             zero_edge_fallback_used=zero_edge_fallback,
             budget_usage=reconcile_report.total_actual,
+            metadata={
+                "verifier_mode": v_report.verifier_mode if v_report else None,
+                "is_simulated": is_turn_simulated,
+                "verifier_status": final_status.value,
+                "verifier_score": v_report.score if v_report else None,
+            },
         )
         self._traces[turn_id] = trace
 

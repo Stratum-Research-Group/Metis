@@ -104,12 +104,14 @@ async def test_stack_e2e_factual_orchestration_flow(mock_hestia_adapter):
     assert all("citation_id" in c for c in citations)
     assert all(c.get("is_simulated") is True for c in citations)
 
-    # Verify final completed event is verified and route summary is populated
+    # Verify final completed event reflects draft/simulated status because demo citations are simulated
     final_event = events[-1]
     assert final_event.event_type == "completed"
-    assert final_event.status == "verified"
+    assert final_event.status == "draft"
     assert "route_summary" in final_event.payload
     assert final_event.payload["route_summary"]["route"] == "retrieval_augmented"
+    assert final_event.payload["route_summary"]["is_simulated"] is True
+    assert final_event.payload["route_summary"]["verifier_status"] == "draft"
     assert "show_work" in final_event.payload
 
     # Verify streamed response text contains cited claims

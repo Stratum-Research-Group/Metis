@@ -60,6 +60,8 @@ class ShowWorkInfo(BaseModel):
     citations: List[Citation] = Field(default_factory=list)
     timings_ms: Dict[str, float] = Field(default_factory=dict)
     verifier_status: str = Field(default="draft")
+    verifier_mode: Optional[str] = Field(default=None, description="Verification engine mode e.g. heuristic, formal, simulated")
+    is_simulated: bool = Field(default=False, description="Whether turn used simulated components or evidence")
     approval_status: Optional[str] = Field(default=None)
     budget_summary: Dict[str, Any] = Field(default_factory=dict)
     zero_edge_fallback_used: bool = Field(default=False)
