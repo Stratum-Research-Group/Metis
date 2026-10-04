@@ -1,6 +1,7 @@
 """Command-Line Interface for Prosopon."""
 
 from pathlib import Path
+from typing import Optional
 import click
 import uvicorn
 
@@ -17,14 +18,15 @@ def cli():
     pass
 
 
-@cli.command()
+@cli.command("serve")
 @click.option("--host", default="127.0.0.1", help="Bind address (use 0.0.0.0 for LAN mode)")
 @click.option("--port", default=8000, type=int, help="Port to listen on")
 @click.option("--lan", is_flag=True, help="Enable LAN mode (bind 0.0.0.0 with pairing requirement)")
 @click.option("--tls", is_flag=True, help="Enable HTTPS with auto-generated self-signed certificate")
 @click.option("--mock/--no-mock", default=True, help="Use mock Kybernetes orchestrator for local testing")
+@click.option("--kybernetes-url", default=None, help="Base URL for versioned Kybernetes API (e.g. http://127.0.0.1:8081/v1)")
 @click.option("--data-dir", default="./data", help="Directory for persistent sessions and tokens")
-def serve(host: str, port: int, lan: bool, tls: bool, mock: bool, data_dir: str):
+def serve(host: str, port: int, lan: bool, tls: bool, mock: bool, kybernetes_url: Optional[str], data_dir: str):
     """Start the Prosopon local web and voice interface server."""
     bind_host = "0.0.0.0" if lan else host
     cfg = ProsoponConfig(
@@ -32,8 +34,23 @@ def serve(host: str, port: int, lan: bool, tls: bool, mock: bool, data_dir: str)
         port=port,
         enable_tls=tls,
         mock_kybernetes=mock,
+        kybernetes_api_url=kybernetes_url or "http://127.0.0.1:8081/v1",
         data_dir=Path(data_dir),
     )
+
+
+@cli.command("run", hidden=True)
+@click.option("--host", default="127.0.0.1", help="Bind address")
+@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--lan", is_flag=True, help="Enable LAN mode")
+@click.option("--tls", is_flag=True, help="Enable HTTPS")
+@click.option("--mock/--no-mock", default=True, help="Use mock Kybernetes")
+@click.option("--kybernetes-url", default=None, help="Base URL for Kybernetes API")
+@click.option("--data-dir", default="./data", help="Directory for persistent data")
+@click.pass_context
+def run(ctx: click.Context, **kwargs):
+    """Run alias for serve."""
+    ctx.invoke(serve, **kwargs)
 
     cert_path = None
     key_path = None

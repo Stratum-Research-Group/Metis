@@ -48,9 +48,25 @@ wait_for_url() {
 
 cd "${ROOT_DIR}"
 
+MOCK_MODE=false
+for arg in "$@"; do
+    case "$arg" in
+        --mock)
+            MOCK_MODE=true
+            ;;
+        --help|-h)
+            echo "Usage: ./scripts/run_stack.sh [--mock]"
+            echo "Starts Hestia (:$HESTIA_PORT), Kybernetes (:$KYBERNETES_PORT), and Prosopon (:$PROSOPON_PORT)."
+            echo "Use --mock to run Prosopon in standalone mock-orchestrator mode."
+            exit 0
+            ;;
+    esac
+done
+
 echo "======================================================================"
 echo " Metis Stack Startup: Sovereign Local AI"
 echo " Ports: Hestia (:$HESTIA_PORT) | Kybernetes (:$KYBERNETES_PORT) | Prosopon (:$PROSOPON_PORT)"
+echo " Mode: $( [ "$MOCK_MODE" = "true" ] && echo "MOCK ORCHESTRATOR" || echo "LIVE CONNECTED STACK" )"
 echo "======================================================================"
 
 # Step 1: Pre-flight doctor check
@@ -58,16 +74,20 @@ echo -e "\n[Step 1/4] Running pre-flight subsystem inspection..."
 if [ -x "kybernetes/.venv/bin/python" ]; then
     "kybernetes/.venv/bin/python" -m kybernetes.cli doctor || true
 elif command -v uv >/dev/null 2>&1; then
-    uv run --package kybernetes kybernetes doctor || true
+    uv run kybernetes doctor || true
 fi
 
 # Step 2: Launch Hestia Model Server
 echo -e "\n[Step 2/4] Starting Hestia Model Server on port ${HESTIA_PORT}..."
+HESTIA_CMD=("serve" "--port" "${HESTIA_PORT}" "--config" "hestia/hestia.yaml" "--models" "hestia/models.yaml")
 if [ -x "hestia/.venv/bin/hestia" ]; then
-    hestia/.venv/bin/hestia serve --port "${HESTIA_PORT}" &
+    hestia/.venv/bin/hestia "${HESTIA_CMD[@]}" &
+    PIDS+=($!)
+elif [ -x ".venv/bin/hestia" ]; then
+    .venv/bin/hestia "${HESTIA_CMD[@]}" &
     PIDS+=($!)
 elif command -v uv >/dev/null 2>&1; then
-    uv run --package hestia hestia serve --port "${HESTIA_PORT}" &
+    uv run hestia "${HESTIA_CMD[@]}" &
     PIDS+=($!)
 else
     echo "Hestia binary not found. Skipping live inference server."
@@ -76,22 +96,41 @@ wait_for_url "http://127.0.0.1:${HESTIA_PORT}/v1/models" "Hestia" 5 || true
 
 # Step 3: Launch Kybernetes Orchestrator
 echo -e "\n[Step 3/4] Starting Kybernetes Orchestrator on port ${KYBERNETES_PORT}..."
+export HESTIA_BASE_URL="http://127.0.0.1:${HESTIA_PORT}/v1"
+KYB_CMD=("serve" "--host" "127.0.0.1" "--port" "${KYBERNETES_PORT}")
 if [ -x "kybernetes/.venv/bin/kybernetes" ]; then
-    kybernetes/.venv/bin/kybernetes serve --host 127.0.0.1 --port "${KYBERNETES_PORT}" &
+    kybernetes/.venv/bin/kybernetes "${KYB_CMD[@]}" &
+    PIDS+=($!)
+elif [ -x ".venv/bin/kybernetes" ]; then
+    .venv/bin/kybernetes "${KYB_CMD[@]}" &
     PIDS+=($!)
 elif command -v uv >/dev/null 2>&1; then
-    uv run --package kybernetes kybernetes serve --host 127.0.0.1 --port "${KYBERNETES_PORT}" &
+    uv run kybernetes "${KYB_CMD[@]}" &
     PIDS+=($!)
 fi
-wait_for_url "http://127.0.0.1:${KYBERNETES_PORT}/v1/health" "Kybernetes" 10 || true
+if ! wait_for_url "http://127.0.0.1:${KYBERNETES_PORT}/v1/health" "Kybernetes" 10; then
+    echo "[ERROR] Kybernetes orchestrator failed to start on :${KYBERNETES_PORT}."
+    exit 1
+fi
 
 # Step 4: Launch Prosopon UI
 echo -e "\n[Step 4/4] Starting Prosopon Web Interface on port ${PROSOPON_PORT}..."
+PROS_OPTS=("serve" "--port" "${PROSOPON_PORT}" "--kybernetes-url" "http://127.0.0.1:${KYBERNETES_PORT}/v1")
+if [ "$MOCK_MODE" = "true" ]; then
+    echo "[Metis] Running Prosopon in MOCK mode (--mock)."
+    PROS_OPTS+=("--mock")
+else
+    echo "[Metis] Connecting Prosopon to live Kybernetes upstream at http://127.0.0.1:${KYBERNETES_PORT}/v1 (--no-mock)."
+    PROS_OPTS+=("--no-mock")
+fi
+
 echo "[Metis] Open http://127.0.0.1:${PROSOPON_PORT} in your browser."
 if [ -x "prosopon/.venv/bin/prosopon" ]; then
-    prosopon/.venv/bin/prosopon run --port "${PROSOPON_PORT}"
+    prosopon/.venv/bin/prosopon "${PROS_OPTS[@]}"
+elif [ -x ".venv/bin/prosopon" ]; then
+    .venv/bin/prosopon "${PROS_OPTS[@]}"
 elif command -v uv >/dev/null 2>&1; then
-    uv run --package prosopon prosopon run --port "${PROSOPON_PORT}"
+    uv run prosopon "${PROS_OPTS[@]}"
 else
     echo "Prosopon not found. Waiting for background processes."
     wait

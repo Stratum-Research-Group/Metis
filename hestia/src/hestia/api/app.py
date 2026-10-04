@@ -90,6 +90,13 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
+    cfg_p = Path(config_path)
+    if not cfg_p.is_file() and (Path("hestia") / config_path).is_file():
+        config_path = str(Path("hestia") / config_path)
+    mod_p = Path(models_path)
+    if not mod_p.is_file() and (Path("hestia") / models_path).is_file():
+        models_path = str(Path("hestia") / models_path)
+
     app.state.config_path = config_path
     app.state.models_path = models_path
 

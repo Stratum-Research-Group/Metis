@@ -1,6 +1,7 @@
 """Hestia local inference server adapter for model discovery and streaming generation."""
 
 import json
+import os
 from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
 
@@ -13,11 +14,12 @@ class HestiaAdapter:
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8080/v1",
+        base_url: Optional[str] = None,
         default_model: str = "llama-3.1-8b-instruct",
         timeout_seconds: float = 30.0,
     ):
-        self.base_url = base_url.rstrip("/")
+        resolved_url = base_url or os.environ.get("HESTIA_BASE_URL", "http://127.0.0.1:8080/v1")
+        self.base_url = resolved_url.rstrip("/")
         self.default_model = default_model
         self.timeout = timeout_seconds
 

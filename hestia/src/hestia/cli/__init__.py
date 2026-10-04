@@ -149,29 +149,69 @@ def status(ctx: click.Context) -> None:
 
 
 @cli.command()
+@click.option("--host", type=str, default=None, help="Host to listen on")
+@click.option("--port", type=int, default=None, help="Port to listen on")
+@click.option("--config", "config_path", type=str, default=None, help="Path to hestia.yaml config")
+@click.option("--models", "models_path", type=str, default=None, help="Path to models.yaml registry")
 @click.pass_context
-def serve(ctx: click.Context) -> None:
+def serve(
+    ctx: click.Context,
+    host: Optional[str] = None,
+    port: Optional[int] = None,
+    config_path: Optional[str] = None,
+    models_path: Optional[str] = None,
+) -> None:
     """Start the Hestia API server."""
     import uvicorn
-
+    from pathlib import Path
+    from hestia.config import ServiceConfig
     from hestia.api.app import create_app
 
-    app = create_app()
-    config_path = "hestia.yaml"
+    # Resolve config file path
+    resolved_config: Optional[Path] = None
+    candidates = [
+        config_path,
+        "hestia.yaml",
+        "hestia/hestia.yaml",
+        str(Path(__file__).resolve().parent.parent.parent.parent / "hestia.yaml"),
+    ]
+    for c in candidates:
+        if c and Path(c).is_file():
+            resolved_config = Path(c).resolve()
+            break
 
-    # Read listen port from config
-    from pathlib import Path
-
-    from hestia.config import ServiceConfig
-
-    try:
-        svc_config = ServiceConfig.from_yaml(Path(config_path))
-    except FileNotFoundError:
-        click.echo(f"Config not found: {config_path}", err=True)
+    if not resolved_config:
+        click.echo(f"Config not found: {config_path or 'hestia.yaml'}", err=True)
         sys.exit(1)
 
-    click.echo(f"Starting Hestia on {svc_config.listen_host}:{svc_config.listen_port}...")
-    uvicorn.run(app, host=svc_config.listen_host, port=svc_config.listen_port, log_level="info")
+    # Resolve models file path
+    resolved_models: Optional[Path] = None
+    m_candidates = [
+        models_path,
+        "models.yaml",
+        "hestia/models.yaml",
+        str(Path(__file__).resolve().parent.parent.parent.parent / "models.yaml"),
+    ]
+    for m in m_candidates:
+        if m and Path(m).is_file():
+            resolved_models = Path(m).resolve()
+            break
+
+    models_arg = str(resolved_models) if resolved_models else "models.yaml"
+
+    try:
+        svc_config = ServiceConfig.from_yaml(resolved_config)
+    except FileNotFoundError:
+        click.echo(f"Config not found: {resolved_config}", err=True)
+        sys.exit(1)
+
+    listen_host = host or svc_config.listen_host
+    listen_port = port or svc_config.listen_port
+
+    app = create_app(config_path=str(resolved_config), models_path=models_arg)
+
+    click.echo(f"Starting Hestia on {listen_host}:{listen_port}...")
+    uvicorn.run(app, host=listen_host, port=listen_port, log_level="info")
 
 
 if __name__ == "__main__":
