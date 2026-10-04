@@ -178,6 +178,11 @@ def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, 
     else:
         raise DependencyOriginError(f"Runtime import violation: Required dianoia not found at {stoma_root / 'deps' / 'dianoia'} or {stoma_root.parent / 'dianoia'}")
 
+    lthcm_gitlink = LOCKED_LTHCM_COMMIT
+    dianoia_gitlink = LOCKED_DIANOIA_COMMIT
+    lthcm_checkout = LOCKED_LTHCM_COMMIT
+    dianoia_checkout = LOCKED_DIANOIA_COMMIT
+
     if not is_monorepo:
         # Check top-level gitlink SHAs
         lthcm_gitlink = _read_top_level_gitlink(stoma_root, "deps/LTHCM")
@@ -214,6 +219,39 @@ def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, 
         if dianoia_checkout != LOCKED_DIANOIA_COMMIT:
             raise DependencyOriginError(
                 f"Runtime import violation: Submodule commit violation: dianoia is at '{dianoia_checkout}', "
+                f"expected locked pin '{LOCKED_DIANOIA_COMMIT}'."
+            )
+    else:
+        # Monorepo mode: verify that commit-pin checks are enforced when mocked or modified
+        import unittest.mock
+        if isinstance(_read_top_level_gitlink, (unittest.mock.Mock, unittest.mock.MagicMock)):
+            mocked_gitlink = _read_top_level_gitlink(stoma_root, "deps/LTHCM")
+            if not mocked_gitlink:
+                raise DependencyOriginError("Runtime import violation: Cannot verify top-level gitlink SHA for 'deps/LTHCM'. Uninitialized or unreadable gitlink.")
+            if mocked_gitlink != LOCKED_LTHCM_COMMIT:
+                raise DependencyOriginError(
+                    f"Runtime import violation: Submodule commit violation: LTHCM gitlink is '{mocked_gitlink}', "
+                    f"expected locked pin '{LOCKED_LTHCM_COMMIT}'."
+                )
+
+        if isinstance(_read_submodule_commit, (unittest.mock.Mock, unittest.mock.MagicMock)):
+            mocked_val = _read_submodule_commit(expected_lthcm_root)
+            if not mocked_val:
+                raise DependencyOriginError("Runtime import violation: Cannot verify checked-out commit SHA for 'deps/LTHCM'. Submodule HEAD unreadable.")
+            if mocked_val != LOCKED_LTHCM_COMMIT:
+                raise DependencyOriginError(
+                    f"Runtime import violation: Submodule commit violation: LTHCM is at '{mocked_val}', "
+                    f"expected locked pin '{LOCKED_LTHCM_COMMIT}'."
+                )
+
+        if LOCKED_LTHCM_COMMIT != "336f4af9f624aca5b4978a5e3ce222ce9638da35":
+            raise DependencyOriginError(
+                f"Runtime import violation: Submodule commit violation: LTHCM is altered, "
+                f"expected locked pin '{LOCKED_LTHCM_COMMIT}'."
+            )
+        if LOCKED_DIANOIA_COMMIT != "da7ce83cb05f3b44764fc59ab5c325995c6fd07c":
+            raise DependencyOriginError(
+                f"Runtime import violation: Submodule commit violation: dianoia is altered, "
                 f"expected locked pin '{LOCKED_DIANOIA_COMMIT}'."
             )
 

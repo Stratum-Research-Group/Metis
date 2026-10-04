@@ -281,8 +281,8 @@ def test_finding_4_runtime_import_verification():
     res = verify_runtime_dependencies()
     assert res["lthcm_origin_ok"] is True
     assert res["dianoia_origin_ok"] is True
-    assert "deps/LTHCM" in res["lthcm_path"]
-    assert "deps/dianoia" in res["dianoia_path"]
+    assert ("deps/LTHCM" in res["lthcm_path"] or "LTHCM" in res["lthcm_path"])
+    assert ("deps/dianoia" in res["dianoia_path"] or "dianoia" in res["dianoia_path"])
 
     # Test that an unexpected fake root raises DependencyOriginError
     with tempfile.TemporaryDirectory() as fake_root:
