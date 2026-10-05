@@ -222,18 +222,16 @@ def create_admin_router(
                 except Exception:
                     saved_data = {"error": "Failed to parse configuration file"}
 
-        effective_data = saved_data.copy() if saved_data else {"status": "unreported"}
-
         return ConfigView(
             module_id=module_id,
             saved=saved_data,
-            effective=effective_data,
+            effective=None,
             sources=sources_data,
             restart_required_keys=list(saved_data.keys()),
             schema_ref=descriptor.schema_ref,
             config_hash=compute_dict_hash(saved_data) if saved_data else None,
             loaded_at=datetime.now(timezone.utc).isoformat(),
-            drift=False,
+            drift=None,
         )
 
     @router.get("/sessions")

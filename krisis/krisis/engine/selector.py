@@ -44,8 +44,8 @@ class KrisisSelector:
                 trust_flags[ev.passage_id] = ev.trust_flag
 
         # 1. Stale-snapshot recheck
-        if req.selection_snapshot and req.recheck_snapshot:
-            if req.selection_snapshot != req.recheck_snapshot and req.evidence_changed:
+        if req.selection_snapshot:
+            if not req.recheck_snapshot or req.selection_snapshot != req.recheck_snapshot:
                 if req.rebuilds_remaining == 0 or req.remaining_rebuild_budget is False:
                     return KrisisDecision(
                         status=DecisionStatus.ABSTAINED.value,
@@ -56,7 +56,7 @@ class KrisisSelector:
                     return KrisisDecision(
                         status=DecisionStatus.REBUILD_REQUIRED.value,
                         reason=Reason.STALE.value,
-                        policy="snapshot evidence changed; rebuild required before release",
+                        policy="snapshot evidence changed or missing recheck; rebuild required before release",
                     )
 
         # 2. Upstream generation failure check

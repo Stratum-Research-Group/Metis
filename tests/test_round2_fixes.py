@@ -202,13 +202,13 @@ def test_defect5_krisis_adapter_marker_validation_and_grounding():
     assert rep_conflict.status == TurnOutcomeStatus.CONFLICTED
     assert rep_conflict.conflict_detected is True
 
-    # 5. Genuinely supported claim with real citation
+    # 5. Genuinely supported claim with real citation (heuristic verifier returns CITED_UNVERIFIED)
     rep_verified = krisis.verify_response(
         query="architecture",
         response_text="Kybernetes serves as the orchestrator coordinating Hestia [1].",
         citations=[real_citation],
     )
-    assert rep_verified.status == TurnOutcomeStatus.VERIFIED
+    assert rep_verified.status == TurnOutcomeStatus.CITED_UNVERIFIED
     assert rep_verified.supported_claims == 1
     assert rep_verified.unsupported_claims == 0
 
@@ -383,7 +383,16 @@ def test_defect8_dianoia_producer_and_paideia_schema_version_compatibility(tmp_p
             {"node": "node_arch_01", "action": "EXPAND", "raw_output": "expand", "reason": "explore", "parse_failed": False},
             {"node": "node_arch_02", "action": "ANSWER", "raw_output": "answer", "reason": "complete", "parse_failed": False},
         ],
-        verification={"conflicts_found": False, "rewalked": False, "report": "ok", "conflict_detail": None},
+        verification={
+            "verified": True,
+            "verifier_mode": "sheaf",
+            "is_correct": True,
+            "provenance": "dianoia_sheaf_verification",
+            "conflicts_found": False,
+            "rewalked": False,
+            "report": "ok",
+            "conflict_detail": None,
+        },
         final_answer="Metis is a sovereign local AI stack.",
         max_steps=10,
         steps_used=2,
@@ -442,7 +451,13 @@ def test_defect9_paideia_rejects_unresolved_re_walks_from_gold_data(tmp_path):
         path=[
             DianoiaStep(node="n1", action="ANSWER", reason="done"),
         ],
-        verification=DianoiaVerification(conflicts_found=True, rewalked=True, report="conflict still present"),
+        verification=DianoiaVerification(
+            verified=False,
+            is_correct=False,
+            conflicts_found=True,
+            rewalked=True,
+            report="conflict still present",
+        ),
         final_answer="Contradictory answer",
     )
     assert unresolved_record.is_defensible_gold_trajectory() is False
@@ -453,7 +468,13 @@ def test_defect9_paideia_rejects_unresolved_re_walks_from_gold_data(tmp_path):
         question="Resolvable question",
         model="llama-3.1-8b",
         path=[DianoiaStep(node="n1", action="EXPAND", reason="step1")],
-        verification=DianoiaVerification(conflicts_found=True, rewalked=False, report="initial conflict"),
+        verification=DianoiaVerification(
+            verified=False,
+            is_correct=False,
+            conflicts_found=True,
+            rewalked=False,
+            report="initial conflict",
+        ),
         final_answer="Draft 1",
     )
     att2 = DianoiaWalkRecord(
@@ -464,7 +485,15 @@ def test_defect9_paideia_rejects_unresolved_re_walks_from_gold_data(tmp_path):
             DianoiaStep(node="n1", action="EXPAND", reason="step1"),
             DianoiaStep(node="n2", action="ANSWER", reason="resolved answer"),
         ],
-        verification=DianoiaVerification(conflicts_found=False, rewalked=True, report="conflict resolved"),
+        verification=DianoiaVerification(
+            verified=True,
+            verifier_mode="sheaf",
+            is_correct=True,
+            provenance="dianoia_sheaf_verification",
+            conflicts_found=False,
+            rewalked=True,
+            report="conflict resolved",
+        ),
         final_answer="True verified answer",
     )
     assert att1.is_defensible_gold_trajectory() is False
@@ -476,7 +505,15 @@ def test_defect9_paideia_rejects_unresolved_re_walks_from_gold_data(tmp_path):
         question="Clean question",
         model="llama-3.1-8b",
         path=[DianoiaStep(node="n1", action="ANSWER", reason="clean")],
-        verification=DianoiaVerification(conflicts_found=False, rewalked=False, report="ok"),
+        verification=DianoiaVerification(
+            verified=True,
+            verifier_mode="sheaf",
+            is_correct=True,
+            provenance="dianoia_sheaf_verification",
+            conflicts_found=False,
+            rewalked=False,
+            report="ok",
+        ),
         final_answer="Clean answer",
     )
     assert clean.is_defensible_gold_trajectory() is True
@@ -565,12 +602,18 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
     - Fails closed on unreadable files.
     """
     import os
+    import json
+    import struct
     from paideia.export.registry import export_hestia_adapter_registry, EXCLUDED_REGISTRY_FILES
     from paideia.training.runner import compute_dir_sha256
 
+    def _make_dummy_safetensors(extra=""):
+        header = json.dumps({"weight": {"dtype": "F32", "shape": [1, 1], "data_offsets": [0, 4], "extra": extra}}).encode("utf-8")
+        return struct.pack("<Q", len(header)) + header + b"\x00\x00\x00\x00"
+
     adapter_dir = tmp_path / "real_weights"
     adapter_dir.mkdir(parents=True, exist_ok=True)
-    (adapter_dir / "adapter_model.safetensors").write_bytes(b"initial_weight_matrix_content")
+    (adapter_dir / "adapter_model.safetensors").write_bytes(_make_dummy_safetensors("initial"))
     (adapter_dir / "adapter_config.json").write_text('{"rank": 8, "alpha": 16}')
     (adapter_dir / "manifest.json").write_text('{"is_simulated": false, "status": "COMPLETED"}')
 
@@ -583,6 +626,9 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
         training_data_fingerprint="data_fingerprint_001",
         evaluation_run_id="eval-001",
         resource_footprint={"vram": 1000},
+        base_model_digest="sha256:base_llama_31_8b",
+        tokenizer_digest="sha256:tok_llama_31_8b",
+        template_digest="sha256:tpl_llama_31_8b",
     )
 
     # 2. Check digest matches directory checksum with exclusions
@@ -598,11 +644,14 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
         training_data_fingerprint="data_fingerprint_001",
         evaluation_run_id="eval-001",
         resource_footprint={"vram": 1000},
+        base_model_digest="sha256:base_llama_31_8b",
+        tokenizer_digest="sha256:tok_llama_31_8b",
+        template_digest="sha256:tpl_llama_31_8b",
     )
     assert entry2.adapter_digest == entry1.adapter_digest
 
     # 4. Mutation detection
-    (adapter_dir / "adapter_model.safetensors").write_bytes(b"mutated_weight_matrix_content")
+    (adapter_dir / "adapter_model.safetensors").write_bytes(_make_dummy_safetensors("mutated"))
     entry_mutated = export_hestia_adapter_registry(
         adapter_id="lora-v1",
         adapter_dir=adapter_dir,
@@ -611,6 +660,9 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
         training_data_fingerprint="data_fingerprint_001",
         evaluation_run_id="eval-001",
         resource_footprint={"vram": 1000},
+        base_model_digest="sha256:base_llama_31_8b",
+        tokenizer_digest="sha256:tok_llama_31_8b",
+        template_digest="sha256:tpl_llama_31_8b",
     )
     assert entry_mutated.adapter_digest != entry1.adapter_digest
 
@@ -623,6 +675,9 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
         training_data_fingerprint="data_fingerprint_001",
         evaluation_run_id="eval-001",
         resource_footprint={"vram": 1000},
+        base_model_digest="sha256:base_qwen25_7b",
+        tokenizer_digest="sha256:tok_qwen25_7b",
+        template_digest="sha256:tpl_qwen25_7b",
     )
     assert entry_diff_model.base_model_digest != entry1.base_model_digest
     assert entry_diff_model.template_digest != entry1.template_digest

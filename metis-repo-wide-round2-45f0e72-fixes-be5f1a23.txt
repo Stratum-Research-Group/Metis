@@ -1,0 +1,472 @@
+METIS REPO-WIDE REVIEW - ROUND 2 FIXES AND RELEASE GATES
+Reviewed 5 October 2026
+Repository: https://gitlab.com/akarta-315h/metis
+Full HEAD: 45f0e727dddb990cf133364ad09764b6729c022b
+Commit: feat(control-dashboard): implement Unified Dashboard, admin API, telemetry, and model support
+Previous review baseline: 2b2ee5194694b0ac706115e4d37376f2c7c7912f (27 findings)
+HEAD was read from the remote on clone and again at close. Unchanged.
+
+0. RESULT, SCOPE AND HOW TO USE THIS
+
+Result: NOT CLEAN. Of the 27 earlier findings, 8 are fixed or mostly fixed, 17 are
+partly fixed, 1 is open, and 1 I could not re-verify. This round also found new defects, including
+4 that you would hit first: LAN pairing is blocked by Host validation, Hestia's
+manage routes are unauthenticated and drive-by reachable, Kybernetes labels a
+response "verified" on single-word overlap, and Paideia can again promote
+unverified walks to gold labels.
+
+Scope: all 11 modules, root setup/launcher/CI, the new admin API and dashboard,
+and cross-module contracts. Every module was diffed from 2b2ee51 to HEAD
+(124 files, +9310/-504). Findings below were re-checked against HEAD, not carried
+over. No tracked source was changed. No GPU, model download, training, production
+server or real outbound action was run.
+
+CORRECTION TO MY LAST REPORT: the round-1 test total was stated as 521 passed.
+The module counts it listed (23+48+32+22+24+43+127+46+33+23) add up to 421, not
+521. The 521 was an addition error on my side. Both sums were re-checked with a
+script; current total below (27+64+34+34+31+43+127+52+36+23 = 471) was also
+checked that way.
+
+Test environment: separate Python 3.12.14 venv, CPU only, no torch, no
+sentence-transformers, NOT the uv.lock environment, offline model flags set,
+PYTHONPATH pointing at module source roots. Bounded regression evidence only.
+
+Test results at 45f0e72:
+  Krisis:       27 passed
+  Kybernetes:   64 passed
+  Phylax:       34 passed
+  Prosopon:     34 passed, 1 FAILED  (see item 7)
+  Paideia:      31 passed
+  Kleroterion:  43 passed
+  Dokime:      127 passed
+  Hestia:       52 passed, 2 integration-marked deselected
+  Dianoia:      36 passed, 23 skipped (Torch-dependent walk/verify untested)
+  Root tests:   23 passed
+  TOTAL:       471 passed, 1 failed, 23 skipped, 2 deselected
+  LTHCM:        collection blocked, no torch, 7 test files. Zero tests executed.
+  Stoma:        collection blocked, no torch, 12 test files. Zero tests executed.
+
+LTHCM and Stoma blocks are environment limits, not asserted repo bugs. A green
+count above says nothing about those two modules or about real model, GPU or
+serving behaviour. Every test that exercises a server uses in-process clients,
+fakes or mocks.
+
+Evidence labels:
+  REPRODUCED = I ran a bounded script against HEAD and saw this exact behaviour.
+  SOURCE     = code path read, effect not executed.
+  GATE       = acceptance evidence still missing, not an invented failing test.
+Priorities:
+  P0 = blocks advertised startup, opens an auth bypass, or corrupts trust labels.
+  P1 = correctness, integration, lifecycle or release-evidence repair.
+  P2 = docs, packaging, maintainability.
+
+Proposed boundaries for the fixes (review suggestions, not instructions; the
+repo is a vendored monorepo, no submodule assumptions):
+  - Keep existing tests; add regression tests beside them rather than weakening them.
+  - Change algorithms, scoring, retrieval maths or model behaviour only where an
+    item says so.
+  - Leave LTHCM core retrieval, Dianoia policy logic, Krisis scoring arithmetic
+    and benchmark numbers alone unless an item names them.
+  - Tests should not start real inference, training, downloads or GPU jobs.
+
+1. RECONCILIATION OF THE 27 EARLIER FINDINGS (status at 45f0e72)
+
+  # Status    Notes
+  1 FIXED     prosopon serve and run each call uvicorn once (CliRunner + patched uvicorn, REPRODUCED).
+  2 FIXED     Remote and LAN-loopback PIN creation now rejected. But see item 1 below: LAN is unusable for a different reason.
+  3 PARTIAL   Prosopon admin guard exists. Open: local-token (item 8), Kybernetes service token fail-open (item 9), Hestia manage routes (item 2). Kybernetes admin plane is fail-closed without an admin token (good).
+  4 PARTIAL   CLI PIN and revoke now go through shared files. But the repo's own test fails (item 7). Tokens still stored plaintext in paired_tokens.json (0600).
+  5 FIXED     File write approvals bind content_sha256. test_file_write_content_digest_binding passes.
+  6 FIXED     Intent is audited before the side effect. test_pre_execution_audit_failure_blocks_action passes.
+  7 PARTIAL   Parent-directory race is documented in THREAT_MODEL 4.2. phylax/README.md:176 still lists "TOCTOU races" as validated (item 19).
+  8 MOSTLY    Gates fail closed and bad citation IDs are rejected. New holes: item 10.
+  9 PARTIAL   REBUILD_REQUIRED status added. Still depends on caller-set flags (item 10).
+ 10 PARTIAL   Doctor now labels adapters SIMULATED honestly. But "verified" labels are not honest (item 3) and the "real" memory adapter is a keyword scan (item 13).
+ 11 OPEN      Kybernetes now reads passages_export.json. Nothing produces it. stoma/REVIEW_AND_GAPS.md lists it as a gap. Still pickle vs JSON (item 13).
+ 12 PARTIAL   as_of and access_filter exist but are opt-in and missing timestamps pass (item 15). Torch walk tests still skipped.
+ 13 PARTIAL   Dianoia CLI is default-deny. Library defaults are still allow (item 14).
+ 14 PARTIAL   hestia.yaml moved backends to 9000-9019 and the allocator probes the OS port. Code default in config.py:67 is still 8081 (item 17).
+ 15 FIXED     acquire_admission releases depth in a finally block.
+ 16 PARTIAL   Shutdown now waits 35s and reports unresolved processes. Concurrent admission and cancellation during start remain source-only, untested.
+ 17 PARTIAL   A device lease exists and both Hestia and Paideia use it, but it has three defects (item 5) and the GPU index mapping is wrong (item 12).
+ 18 PARTIAL   Strict verification fields added, but a one-line validator re-opens the hole (item 4).
+ 19 PARTIAL   Simulated and missing-manifest exports are refused. Item 6 lists what still passes.
+ 20 FIXED     Runner labels runs SIMULATED / marker-only. allow_simulated defaults True (config.py:41), which is fine only because the label is carried through.
+ 21 PARTIAL   Session cap and TTL added (session.py). Cancel endpoint still says cancelled:true for unknown turns (item 9). Not re-exercised with real disconnects.
+ 22 PARTIAL   Argument limits and calculator AST bounds added. Timeouts are still checked after the tool finishes (item 16).
+ 23 UNVERIFIED  Voice code changed and its tests pass. I did not re-review it beyond the tests.
+ 24 FIXED     Frontend ships. Untrusted values go through textContent. The only innerHTML uses are static or empty strings.
+ 25 PARTIAL   CI covers more modules. See item 18.
+ 26 PARTIAL   Dokime records model_identities and marks missing ones "unresolved". Not verified against a real Hestia.
+ 27 PARTIAL   Several claims corrected. New contradictions: item 19.
+
+2. P0 FIXES
+
+ITEM 1. P0 - LAN MODE REJECTS REAL LAN HOSTS [REPRODUCED]
+Where: prosopon/prosopon/server.py:111-120 (allowed_hosts and _validate_host_header),
+called first by require_auth (line 122), pair_device (line 215) and generate_pin.
+Observed: with host=0.0.0.0, allowed_hosts is loopback plus "0.0.0.0". A phone at
+http://192.168.1.50:8000 sends that Host header. POST /api/auth/pair returned 403
+for Host 192.168.1.50 and for Host metis.local. So advertised phone pairing and
+every authenticated route fail in LAN mode. Tests pass only because they use
+the "testserver" host.
+Fix: build the allow-list from explicit config (new setting, e.g. allowed_hosts,
+default loopback names). In LAN mode require the owner to list the LAN IP or
+hostname, or derive from the machine's actual interface addresses at startup and
+log them. Reject everything else with 403. Never allow "0.0.0.0" as a Host value.
+Also remove "testclient", "testserver" and "test" from the production allow-lists
+(server.py:111, :125, :170, :203) and let tests inject them through config.
+Test: LAN config with allowed host 192.168.1.50: pair and sessions succeed with
+that Host; a different Host gets 403; a spoofed Host:evil.example gets 403 even
+from a paired token; "testclient" as client host is not treated as loopback.
+
+ITEM 2. P0 - HESTIA CONTROL ROUTES HAVE NO AUTH, NO HOST CHECK, NO CONTENT-TYPE CHECK [REPRODUCED]
+Where: hestia/src/hestia/api/app.py:348 (/manage/load), :371 (/manage/unload),
+and the /v1 routes. App created at app.py:83-106 with no middleware.
+Observed: an in-process test request to POST /manage/unload with Content-Type:
+text/plain, Origin http://evil.example and Host evil.example:8080 returned 200 and
+called unload (await request.json() ignores content type). This shows the server
+accepts such a request. I did NOT test a real browser or real DNS rebinding;
+browser protections (for example private-network-access checks) may block or
+change the attack in practice, so exploitability is unconfirmed. The server-side
+gap is real either way: no auth, no Host check, no content-type check. Binding
+to loopback does not provide caller authentication.
+Fix: (a) add a Host allow-list middleware like the Kybernetes one (loopback names
+plus configured); (b) require Content-Type application/json on every POST and
+parse through pydantic models, not request.json(); (c) require a service bearer
+token (env HESTIA_SERVICE_TOKEN, compare with secrets.compare_digest) on
+/manage/*, /v1/chat/completions, /v1/embeddings and /models; (d) fail closed if
+the token is unset unless an explicit dev flag is on, and print a loud warning;
+(e) give run_stack.sh and the Kybernetes HestiaAdapter the token.
+Test: no token = 401; wrong Host = 400/403; text/plain body = 415; cross-origin
+Origin gets no CORS grant; the CLI manage commands still work with the token.
+
+ITEM 3. P0 - KYBERNETES REPORTS "VERIFIED" FROM ONE SHARED WORD [REPRODUCED]
+Where: kybernetes/kybernetes/adapters/krisis.py:114-206 (verify_response, final
+return at :198); kybernetes/kybernetes/engine/pipeline.py:659-660 (tool output
+becomes VERIFIED) and :443 (a denied approval is also finalised as VERIFIED).
+Observed with one citation "The moon orbits the earth every month.":
+  "The moon is made entirely of green cheese [1]."  -> status verified
+  "The moon does orbit the earth [1]. The sky is purple." -> status verified
+Support is "any non-stopword in common with the citation or its title". Sentences
+with no marker are skipped. The report says is_simulated=True and
+verifier_mode=heuristic, but status is still "verified" and the explanation says
+"supported by N verified evidence citations". The final turn status is copied
+from that field. Also any tool output (calculator or file_search) sets the turn
+to VERIFIED without a verifier.
+Fix: this adapter must never emit VERIFIED. Cap heuristic results at a new
+status such as CITED_UNVERIFIED (or DRAFT) with the explanation "citations
+present; no entailment check run". A real selector or NLI component is not
+enough on its own to justify VERIFIED. Require named, actually executed checks
+(for example per-claim support against the cited passage by a named verifier and
+version, citations resolved, is_simulated=False) and word the status as "supported
+by cited evidence under check X". Absence of a detected conflict is not truth and
+must not be shown as verified. Calculator output may be VERIFIED only for
+the arithmetic result; file_search output must not be. Denied approval should be
+a typed DENIED status, not VERIFIED (pipeline.py:443). Make uncited sentences
+count as unsupported when the response had citations available.
+Test: the two sentences above must not return verified; a deterministic
+calculator turn may; a denied approval has its own status; the Prosopon UI shows
+the new status text.
+
+ITEM 4. P0 - PAIDEIA PROMOTES UNVERIFIED WALKS TO GOLD AGAIN [REPRODUCED]
+Where: paideia/paideia/contracts/dianoia_schema.py:36-44 (validate_verification_state);
+source of the value: dianoia/dianoia/walk.py:882-889 (_verify_answer).
+Observed: a record whose verification is only
+{"conflicts_found": false, "report": "No evidence passages to verify against."}
+validates with verified=True, provenance="dianoia_sheaf_verification" and
+is_defensible_gold_trajectory() == True. Dianoia emits exactly that shape when it
+has no evidence to check. The validator treats "conflicts_found is not None" as
+proof that a verifier ran. A record with no verification field is correctly
+rejected, so the hole is the auto-promotion.
+Fix: (a) delete the auto-set of verified and provenance in the validator; they
+must come from the producer. (b) Dianoia must emit verified=false (or a
+verifier_mode of "none") when there are no passages and when no verifier ran,
+and conflicts_found=None in that case. (c) Gold requires verified=True from a
+named verifier_mode plus is_correct is True from an independent label, not just
+absence of conflict. Keep unverified counts in the audit.
+Test: the record above is excluded and counted as unverified_excluded; a record
+with verified=True, mode sheaf, provenance set by the producer and is_correct=True
+is kept; legacy records are excluded rather than relabelled.
+
+ITEM 5. P1 - GPU LOCK DOES NOT GIVE MUTUAL EXCLUSION [REPRODUCED]
+Where: paideia/paideia/training/hardware.py:120-136 (release_gpu_lock);
+hestia/src/hestia/device_lock.py:43-53 (release) and :69-72 (acquire).
+Three defects, all reproduced with temp lock directories:
+ a. Paideia's runner calls release_gpu_lock() in a finally block even when its
+    own acquire FAILED. That function unlinks /tmp/metis_gpu.lock regardless of
+    ownership. With Hestia holding the lock, Paideia failed to acquire, released,
+    and deleted Hestia's lock path. A second trainer then acquired a fresh file
+    while Hestia still held the old one. Two holders.
+ b. Hestia's GpuDeviceLease.release() unlinks the lock file after unlocking. A
+    contender that already opened the old inode can lock it while a new caller
+    creates and locks a new inode. Both held a lock at once.
+ c. acquire_device_lease() releases any existing in-process lease for the same
+    device and then hands out a new one, so a second ServerManager or code path in
+    one process silently steals the lock. The second acquire returned a lease.
+Fix: never unlink lock files; they are permanent. Release only unlocks and
+closes the fd you own. Track ownership: release_gpu_lock does nothing if this
+process did not acquire. Remove the "abandoned in-process lease" branch and
+return None when the device is already leased in this process. Create the lock
+directory with 0700 under a per-user path (XDG_RUNTIME_DIR or /run/user/UID) and
+open with O_NOFOLLOW instead of world-writable /tmp.
+Test: holder A, contender fails, contender "release" leaves A's lock intact; two
+acquires in one process: second returns None; unlink race cannot produce two
+holders; stale lock from a dead pid is reclaimed without deleting the file.
+
+ITEM 6. P0 - ADAPTER EXPORT STILL ACCEPTS BAD ARTIFACTS [REPRODUCED]
+Where: paideia/paideia/export/registry.py:66 (is_sim), :76-92 (weights check),
+:89 (evaluation_run_id), :107/:116/:125 (digests).
+Observed: a manifest {"status": "FAILED"} with a zero-byte adapter_model.safetensors
+and evaluation_run_id "N/A" exported successfully. base_model_digest came out
+as "unresolved_alias:<name>". Only SIMULATED/NOT_TRAINED and a missing manifest
+are refused.
+Fix: allow export only when manifest status is a completed-real value (for
+example COMPLETED) and is_simulated is explicitly False. Reject FAILED, RUNNING,
+unknown and missing status. Require weight files to be non-empty and parse as
+safetensors headers (no model load). Require resolvable base/tokenizer/template
+digests for non-simulated exports; "unresolved_alias" is allowed only on
+simulated exports and keeps the simulation_non_release prefix. Validate
+evaluation_run_id against an existing Dokime run manifest file, not a non-empty
+string. Fix the metric at runner.py "peak_vram_mb = total - free" which is
+measured at the end of the run, not peak.
+Test: FAILED manifest, empty weights, "N/A" run id and unresolved digests each
+raise; a real completed fixture with resolvable digests exports.
+
+3. P1 FIXES
+
+ITEM 7. P1 - THE REPO'S OWN REVOCATION TEST FAILS [REPRODUCED, 4 of 4 runs]
+Where: prosopon/prosopon/auth/pairing.py:153 and :202 ("mtime > self._tokens_file_mtime").
+Failing test: prosopon/tests/test_auth_pairing.py::test_cross_process_pairing_and_live_revocation
+Error: assert server_mgr.validate_token(token) is False -> AssertionError (True).
+Cause: change detection compares st_mtime with ">". File timestamps are coarse
+(equal across writes in the same kernel tick), so a revoke right after a pair
+looks unchanged and the running server keeps honouring a revoked token.
+I patched a scratch copy (not the repo) to compare (st_mtime_ns, st_ino, st_size)
+with "!=", stored when loading and saving. The test then passed 4 of 4 times.
+Fix: use that signature, in both validate_token and get_paired_devices. Also
+store token hashes (sha256) in paired_tokens.json instead of raw tokens.
+Test: existing test must pass on ext4 and tmpfs; add a loop of 200 pair/revoke
+cycles in one tick; add a case with a replaced file of identical size.
+
+ITEM 8. P1 - ANY LOCAL PROCESS CAN MINT AN ADMIN TOKEN [REPRODUCED]
+Where: prosopon/prosopon/server.py:198-212 (/api/auth/local-token), guard at :143.
+Observed in local mode: GET /api/dashboard/overview without a token = 401. POST
+/api/auth/local-token (no credentials) returned a token, and that token gave 200
+on /api/dashboard/modules and 200 on /api/approvals/x/resolve. The comment on
+require_admin_auth says "no loopback exemption". In practice loopback is the
+credential, so any local process or user on the host is the owner. Prosopon also
+forwards KYBERNETES_ADMIN_TOKEN upstream (kybernetes_client.py:98-156), so that
+token's reach extends to the Kybernetes admin plane.
+Fix: pick one and say it in the docs. Either (a) require a secret that only the
+launching user can read (token file with 0600 shown at startup, or a one-time
+local URL fragment), or (b) keep loopback trust but split roles: local-token
+issues a "chat" role that cannot reach /api/dashboard/*, /api/approvals/* or
+/api/auth/revoke; those need an "admin" role from an explicit terminal command.
+Also stop falling back from admin token to service token
+(kybernetes_client.py:98 and siblings).
+Test: unauthenticated local-token cannot call dashboard, approvals or revoke; a
+paired phone token cannot call admin routes unless granted.
+
+ITEM 9. P1 - KYBERNETES SERVICE AUTH IS OPT-IN; CANCEL REPORTS FALSE SUCCESS [REPRODUCED]
+Where: kybernetes/kybernetes/server/app.py:143-145 and :264-268.
+Observed: with KYBERNETES_SERVICE_TOKEN unset, require_service_auth returns True.
+Chat, approval resolve, cancel, traces and budget routes are open. Cancel for a
+turn id that does not exist returned {"status":"ok","cancelled":true}. run_stack.sh
+sets tokens, but "kybernetes serve" run by hand does not.
+Fix: fail closed when no service token is configured unless an explicit
+--insecure-dev flag or env is set, and print a warning. Cancel returns
+cancelled:false (404) for unknown or finished turns. Make the admin audit
+fingerprint use the same input on every path (routes.py passes the full header on
+allowed paths and the stripped token on denied paths, so one token gets two
+different fingerprints).
+Test: no token and no dev flag = refuses to start or 401; unknown turn cancel is
+404; same token yields one fingerprint.
+
+ITEM 10. P1 - KRISIS STILL SELECTS ON CALLER ASSERTIONS [REPRODUCED]
+Where: krisis/krisis/gates/evaluator.py:45-61; krisis/krisis/engine/selector.py:47-65.
+Observed (grounded request, one evidence passage p1):
+ - a candidate whose supported claim cites nothing, with all four gates true,
+   was selected. The check rejects unknown IDs but not absent ones.
+ - snapshot ids differ but evidence_changed omitted: selected.
+ - selection_snapshot set, recheck_snapshot missing: selected.
+Gate results are still plain booleans supplied by the caller. Documented, but
+easy to forget.
+Fix: for requires_grounding, every supported claim needs at least one
+cited_passage_id that resolves in req.evidence; no citation = claim unsupported.
+Treat selection_snapshot != recheck_snapshot as stale by itself (do not depend on
+evidence_changed), and treat a missing recheck_snapshot when selection_snapshot
+is set as stale/unknown. Add a typed field saying which component produced each
+gate result and reject gate results with producer "caller".
+Test: each of the three cases above must not select.
+
+ITEM 11. P1 - DASHBOARD HIDES FAILURE AS EMPTY OR "FRESH" [SOURCE, one REPRODUCED]
+Where: prosopon/prosopon/server.py:433 ("freshness": "fresh" on the offline
+overview), :478-500 (sessions, traces, audit-log fall back to empty lists; the
+audit-log fallback has no marker at all); kybernetes/kybernetes/admin/routes.py:207
+and :236 (drift=False hardcoded; "effective" is just the saved file);
+prosopon/server.py config view marks every source "default".
+Observed: with Kybernetes unreachable the audit log page looks identical to
+"no audit events". An offline orchestrator is shown as fresh. A config view
+shows effective == saved and drift false even though no live comparison is made.
+Fix: return a typed {"status": "unreachable", "detail": ...} (HTTP 502/503 or an
+explicit field) for every proxied panel; use freshness "stale" or "unknown" when
+offline; set drift to null and effective to null with "unreported" unless the
+module really reports its live value; report real sources.
+Test: kill the upstream, each dashboard endpoint reports unreachable, never an
+empty success.
+
+ITEM 12. P1 - HESTIA GPU INDEX CONTRADICTS THE DOCS [SOURCE]
+Where: hestia/src/hestia/backend/llamacpp.py:96-102; hestia/models.yaml (every
+model uses gpu_target: rtx-5060-ti); README.md:165-167; docs/HARDWARE_AND_CUDA_GUIDE.md:31-38.
+Observed: the code maps rtx-5060-ti and v100 both to CUDA_VISIBLE_DEVICES=0. The
+README and guide say the V100 is GPU 0 and the RTX 5060 Ti is GPU 1. With both
+cards installed, models tagged rtx-5060-ti would run on the V100 by the repo's
+own documentation. Nothing sets CUDA_DEVICE_ORDER=PCI_BUS_ID, so index order
+depends on driver enumeration. The guide's checklist (line 126) asks for
+CUDA_VISIBLE_DEVICES to be declared in run_stack.sh; it is not. Unknown gpu_target values are
+passed through as the raw device string.
+Fix: one device map in config (name -> UUID or index) read by Hestia, Paideia and
+the docs. Set CUDA_DEVICE_ORDER=PCI_BUS_ID and prefer GPU UUIDs. Reject unknown
+gpu_target values at registry load. Make README, guide and code agree. Do not
+assume which cards are present: runtime enumeration is unknown to me and Nick has
+a V100 16GB SXM2 adapter alongside the 5060 Ti. Keep both the single-GPU and
+dual-GPU cases working and test the map for each.
+Test: mapping table unit test; unknown target rejected; docs example matches the
+map.
+
+ITEM 13. P1 - "REAL" MEMORY IS A KEYWORD SCAN, AND STOMA HAS NO PRODUCER [SOURCE]
+Where: kybernetes/kybernetes/adapters/lthcm.py:126 ("gen-1"), :152 and :163
+(created_epoch defaults to 0.0), :233-246 (scoring, score floor 0.5),
+stoma/ (no writer of passages_export.json).
+Observed: LTHCMAdapter loads a JSON passages file and ranks by substring and
+keyword overlap. It does not call LTHCM. It sets is_simulated=False, so the doctor
+and citations present it as live memory. Confidence is round(min(1, 0.5 + score*0.2)),
+so any single hit reports at least 0.5. Passages with no ingested_at get epoch 0
+and are admitted under any as_of. A corrupt generation id falls back to "gen-1".
+Stoma writes index.pkl and a manifest without text; the export file Kybernetes
+expects is listed as a missing item in stoma/REVIEW_AND_GAPS.md.
+Fix: (a) Stoma writes a versioned data-only passages_export.json with text,
+source hash, location, encoder identity and generation, hash-listed in the
+manifest. (b) Kybernetes verifies that hash. (c) Keep provenance and
+algorithm separate. Reading a real source file can be is_simulated=False, but the
+adapter must declare its capability as "lexical" (not LTHCM topological retrieval)
+in the doctor, citations and turn metadata, so a real source is not mistaken for
+LTHCM retrieval. (d) Missing ingested_at means not eligible for as_of queries.
+(e) Report raw lexical scores and label them uncalibrated, not 0.5 + x. (f) Remove the gen-1 fallback.
+Test: ingest a unique fact through Stoma, load through Kybernetes, retrieve the
+exact passage with version; missing timestamp excluded under as_of; corrupt hash
+refuses; capability string reads "lexical"; scores are reported raw and marked
+uncalibrated.
+
+ITEM 14. P1 - PICKLE GATES DEFAULT TO ALLOW [SOURCE]
+Where: dianoia/dianoia/cli.py:156 (_load_index default True; the CLI flag default
+is False at :363, which is good); stoma/src/stoma/adapter.py:331;
+stoma/src/stoma/interchange.py:22; LTHCM/lthcm/core/contrastive_sheaf.py:233
+(torch.load without weights_only).
+Observed: programmatic callers load pickles by default. expected_index_hash is
+optional and a hash stored next to the file proves nothing about who wrote it.
+Fix: default allow_trusted_pickle to False everywhere; require a hash supplied
+out of band (from the manifest signed or recorded at write time) in the same
+call. For torch.load (contrastive_sheaf.py:233) do NOT switch blindly to
+weights_only=True: the pyproject pin is torch>=2.0, weights_only behaviour and
+defaults differ across versions, and I could not check what the saved checkpoints
+contain (the metadata dict and anything non-tensor) because torch is not
+installed here. Verify first on the Torch machine: load a real saved checkpoint
+with weights_only=True on the pinned torch version; if it works, switch; if it
+fails, migrate the checkpoint format. A data-only index format (npz plus json)
+remains the real fix for index pickles.
+Test: default call refuses; matching hash plus explicit flag loads; a real
+checkpoint round-trips under weights_only=True on the pinned torch (run on the
+Torch machine, not verified here).
+
+ITEM 15. P1 - DIANOIA CAUSAL FILTER IS OPT-IN AND FAILS OPEN [SOURCE]
+Where: dianoia/dianoia/walk.py:384 and the matching meta.get lines in
+_get_neighbours (created = float(... , 0.0)); run()/walk() as_of default None.
+Observed: as_of and access_filter now exist, but None means no filter, and a node
+with no created_epoch/timestamp gets 0.0 and passes any as_of. The 23 Torch walk
+tests are skipped here, so none of this ran.
+Fix: required as_of at the integration boundary (Kybernetes adapter), missing
+timestamps excluded when as_of is set, access_filter denied on error. Keep the
+low-level default for research callers.
+Test: future-dated and untimestamped seeds and neighbours are rejected; run on
+the Torch machine and report counts.
+
+ITEM 16. P1 - TOOL BOUNDS ARE CHECKED AFTER THE FACT [SOURCE]
+Where: kybernetes/kybernetes/tools/registry.py:105-115 (timeout compared after
+execute returns); kybernetes/kybernetes/tools/file_search.py:154 (result-cap
+return says truncated False) and the tool description promising regex.
+Observed: a slow tool still runs to completion and blocks the event loop; the
+timeout only changes the result label. The calculator is bounded (AST depth 10,
+100 nodes, exponent 1000, float overflow caught, checked). file_search is
+substring only.
+Fix: a worker thread can stop the caller waiting but cannot stop a running
+handler, so do not promise a hard stop from threads. Choose per tool: run risky
+or slow tools in an isolated subprocess with a watchdog that kills it at the
+deadline, or make the tool cooperative with bounded checks (deadline polled
+inside loops, such as file_search per file) and return a typed timeout. Set
+truncated True when the result cap stops the scan; fix the description.
+Test: a fake subprocess tool that sleeps is killed at its deadline and the turn
+gets a typed timeout; a cooperative tool stops within one check interval.
+
+ITEM 17. P1 - SMALLER HESTIA ITEMS [SOURCE]
+ a. hestia/src/hestia/config.py:67 still defaults the backend range start to 8081,
+    which collides with the Kybernetes default. Use 9000.
+ b. hestia/src/hestia/backend/llamacpp.py:42-43 silently falls back to
+    /usr/lib/ollama/llama-server. That is a different build with different flags.
+    Remove it or require an explicit setting and log which binary is used.
+ c. hestia/src/hestia/server/__init__.py acquire_admission: slot_acquired is
+    never used and release_admission releases the semaphore without checking that
+    this request acquired one. Track ownership per request.
+
+ITEM 18. P1 - CI CAN BE GREEN WITHOUT TESTING THE RISKY PARTS [SOURCE]
+Where: .gitlab-ci.yml (heavy-ml-test has allow_failure: true at line 49 and is
+manual/scheduled; global PYTHONPATH at the top).
+Observed: LTHCM, Stoma and the Torch-dependent Dianoia tests are outside the
+default pipeline. No JavaScript or dashboard UI test. The global PYTHONPATH can
+hide packaging errors. The pairing test in item 7 would break the default job on
+a normal filesystem.
+Fix: make heavy-ml run on merge requests to main on the Torch machine (or a
+tagged runner) and report skipped counts; fail CI when skipped > 0 for a module
+that is meant to be fully covered; drop the global PYTHONPATH and rely on the uv
+workspace; add a frontend smoke test (node or Playwright, no network) for the
+dashboard.
+Test: CI log shows per-module counts including skips.
+
+4. P2 FIXES
+
+ITEM 19. P2 - DOCS AND SMALL HONESTY ITEMS
+ a. README.md:165-167 and docs/HARDWARE_AND_CUDA_GUIDE.md vs the code (item 12).
+ b. phylax/README.md:176 says TOCTOU races are validated. Reword to what the
+    tests cover and link THREAT_MODEL 4.2 for the residual parent-directory race.
+ c. phylax/phylax/gateway/file_adapter.py:84-89 recomputes the digest of the same
+    string it already hashed. That check can never fail. Remove it or compare
+    against the digest bound in the approval.
+ d. Only LTHCM and Dianoia have a LICENSE file; the root README no longer states a
+    license and the other 9 modules have none. Decide and add files.
+ e. kybernetes/kybernetes/admin/descriptors.py:183 redacts any key containing
+    "key", "auth" or "pin" (hits unrelated names such as "mapping") and
+    descriptors.py:196-198 probes the filesystem while redacting. Use an
+    explicit sensitive-key list.
+ f. Delete or label the claim "29 tests ALL PASSED" in LTHCM/README.md:168 with the
+    commit and environment it came from.
+
+5. UNTESTED GATES (state these honestly in the README, do not mark them done)
+  - LTHCM and Stoma test suites: zero executed here.
+  - Dianoia Torch walk, sheaf and NLI paths: 23 tests skipped.
+  - Any real llama-server launch, port handling under a real process, SIGTERM
+    timing, GPU admission with real VRAM, V100 behaviour.
+  - Real disconnect, restart and duplicate-submit behaviour for turns.
+  - Voice (whisper/piper) with real binaries.
+  - Dashboard UI in a real browser, and all dashboard JavaScript.
+  - The uv.lock install path. I used a hand-built environment.
+  - Kybernetes against a real Hestia, Krisis selector, Phylax gateway or LTHCM.
+
+6. SUGGESTED FIX ORDER
+  1) item 7 (failing test, one small patch, unblocks CI)
+  2) items 1, 2, 3, 4, 6 (P0)
+  3) item 5, items 8, 9 (exclusion and auth)
+  4) items 10, 11, 12, 13
+  5) items 14 to 18, then item 19
+After pushing, send the repo link and I will do round 3 against the new HEAD and
+state the commit in the title.

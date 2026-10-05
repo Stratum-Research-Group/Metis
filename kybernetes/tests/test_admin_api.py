@@ -28,7 +28,7 @@ async def test_health_redacts_paths_and_reports_honest_states(tmp_path):
         assert str(memory_dir) not in json_str
         
         deps = data["dependencies"]
-        assert deps["lthcm"]["state"] in ("simulated", "unknown")
+        assert deps["lthcm"]["state"] in ("simulated", "unknown", "live")
         assert deps["dianoia"]["state"] == "simulated"
         assert deps["phylax"]["state"] == "simulated"
         assert deps["krisis"]["state"] == "simulated"

@@ -117,13 +117,14 @@ class LTHCMAdapter:
                         gen_raw = gen_data.get("generation", gen_data.get("generation_id"))
                         if gen_raw is None:
                             raise ValueError("Missing generation identifier in current_generation.json")
-                        self.generation_id = str(gen_raw)
+                        self.generation_id = f"gen-{gen_raw}" if str(gen_raw).isdigit() else str(gen_raw)
                 except Exception as e:
                     raise ValueError(f"Corrupt current_generation.json in {root_str}: {e}") from e
             elif isinstance(data, dict):
-                self.generation_id = str(data.get("manifest_version", data.get("generation_id", "gen-1")))
+                gen_raw = data.get("manifest_version", data.get("generation_id", data.get("generation")))
+                self.generation_id = f"gen-{gen_raw}" if (gen_raw is not None and str(gen_raw).isdigit()) else (str(gen_raw) if gen_raw is not None else None)
             else:
-                self.generation_id = "gen-1"
+                self.generation_id = None
 
         # Extract passages: check list first to prevent AttributeError: 'list' object has no attribute 'get'
         passages_data = None
@@ -143,24 +144,26 @@ class LTHCMAdapter:
         if isinstance(passages_data, dict):
             for pid, pdata in passages_data.items():
                 text_content = pdata.get("text", pdata.get("chunk_text", ""))
+                created = pdata.get("ingested_at", pdata.get("created_epoch"))
                 loaded.append({
                     "passage_id": pid,
                     "source_id": pdata.get("source_id", "unknown_source"),
                     "source_title": pdata.get("source_title", pdata.get("rel_path", "Document")),
                     "text": text_content,
                     "keywords": pdata.get("keywords", text_content.lower().split()),
-                    "created_epoch": float(pdata.get("ingested_at", pdata.get("created_epoch", 0.0))),
+                    "created_epoch": float(created) if created is not None else None,
                 })
         elif isinstance(passages_data, list):
             for item in passages_data:
                 text_content = item.get("text", item.get("chunk_text", ""))
+                created = item.get("ingested_at", item.get("created_epoch"))
                 loaded.append({
                     "passage_id": item.get("passage_id", f"p_{len(loaded)}"),
                     "source_id": item.get("source_id", "unknown_source"),
                     "source_title": item.get("source_title", item.get("rel_path", "Document")),
                     "text": text_content,
                     "keywords": item.get("keywords", text_content.lower().split()),
-                    "created_epoch": float(item.get("ingested_at", item.get("created_epoch", 0.0))),
+                    "created_epoch": float(created) if created is not None else None,
                 })
 
         if not loaded or any(not p["text"].strip() for p in loaded):
@@ -168,6 +171,7 @@ class LTHCMAdapter:
 
         self._real_passages = loaded
         self.is_simulated = False
+        self.capability = "lexical"
 
     def _init_local_corpus(self) -> List[Dict[str, Any]]:
         return [
@@ -222,7 +226,10 @@ class LTHCMAdapter:
 
         scored_passages = []
         for item in corpus:
-            if item["created_epoch"] > current_time:
+            if as_of is not None:
+                if item["created_epoch"] is None or item["created_epoch"] > as_of:
+                    continue
+            elif item["created_epoch"] is not None and item["created_epoch"] > current_time:
                 continue
 
             matches = sum(1 for kw in item["keywords"] if kw in query.lower())
@@ -242,7 +249,7 @@ class LTHCMAdapter:
                     source_id=item["source_id"],
                     source_title=item["source_title"],
                     text=item["text"],
-                    score=round(min(1.0, 0.5 + score * 0.2), 3),
+                    score=round(float(score), 3),
                     is_simulated=self.is_simulated,
                 )
             )

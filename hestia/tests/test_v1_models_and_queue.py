@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -284,3 +285,60 @@ async def test_server_manager_graceful_shutdown() -> None:
     assert manager._health_checker_task.done()
     mock_backend.stop.assert_awaited_once_with(process)
     assert len(manager._processes) == 0
+
+
+@pytest.mark.asyncio
+async def test_hestia_security_auth_host_and_content_type(mock_registry: ModelRegistry) -> None:
+    """Test Host header check, Content-Type 415, and Bearer token auth enforcement."""
+    app = create_app(config_path="hestia.yaml", models_path="models.yaml")
+
+    mock_manager = AsyncMock()
+    mock_manager.acquire_admission = AsyncMock()
+    mock_manager.release_admission = MagicMock()
+    mock_manager.get_all_status = MagicMock(return_value=[])
+
+    with (
+        patch("hestia.api.app._get_manager", return_value=mock_manager),
+        patch("hestia.api.app._get_registry", return_value=mock_registry),
+    ):
+        # 1. Invalid Host header returns 400
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://evil.example",
+            headers={"Host": "evil.example:8080"},
+        ) as client:
+            resp = await client.get("/v1/models")
+            assert resp.status_code == 400
+
+        # 2. Invalid Content-Type on POST returns 415
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://127.0.0.1",
+            headers={"Host": "127.0.0.1:8080"},
+        ) as client:
+            resp = await client.post(
+                "/manage/load",
+                content=b"model=llama-3.1-8b-instruct",
+                headers={"Content-Type": "text/plain"},
+            )
+            assert resp.status_code == 415
+
+        # 3. Missing auth token when not in insecure dev mode returns 401
+        with patch.dict(os.environ, {"HESTIA_SERVICE_TOKEN": "secret-123", "METIS_INSECURE_DEV": "0"}):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://127.0.0.1",
+                headers={"Host": "127.0.0.1:8080"},
+            ) as client:
+                # Without token
+                resp = await client.get("/models")
+                assert resp.status_code == 401
+
+                # With wrong token
+                resp = await client.get("/models", headers={"Authorization": "Bearer wrong-token"})
+                assert resp.status_code == 401
+
+                # With correct token
+                resp = await client.get("/models", headers={"Authorization": "Bearer secret-123"})
+                assert resp.status_code == 200
+

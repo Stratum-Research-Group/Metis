@@ -142,7 +142,12 @@ def create_app(
 
     async def require_service_auth(authorization: Optional[str] = Header(None)) -> bool:
         if not effective_service_token:
-            return True
+            if os.environ.get("METIS_INSECURE_DEV") == "1":
+                return True
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Kybernetes service token required unless METIS_INSECURE_DEV=1 is set.",
+            )
         token = None
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer ") :].strip()
@@ -264,6 +269,11 @@ def create_app(
     @app.post("/v1/chat/turns/{turn_id}/cancel")
     async def cancel_turn(turn_id: str, _: bool = Depends(require_service_auth)) -> Dict[str, Any]:
         """Cancel an in-flight conversational turn."""
+        if not session_manager.is_turn_active(turn_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Turn '{turn_id}' not found or already finished. Cannot cancel.",
+            )
         session_manager.request_cancellation(turn_id)
         return {"status": "ok", "turn_id": turn_id, "cancelled": True}
 

@@ -41,6 +41,10 @@ class ProsoponConfig(BaseModel):
         default_factory=lambda: ["http://localhost:8000", "https://localhost:8000", "http://127.0.0.1:8000", "https://127.0.0.1:8000"],
         description="Allowed CORS / CSRF origins",
     )
+    allowed_hosts: List[str] = Field(
+        default_factory=lambda: ["127.0.0.1", "localhost", "::1", "testserver"],
+        description="Allowed Host header hostnames and IP addresses",
+    )
 
     # Local voice paths
     whisper_binary: str = Field(default="whisper.cpp", description="Path to whisper.cpp binary or alias")

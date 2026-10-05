@@ -93,13 +93,32 @@ class LlamaCppBackend(Backend):
         log_file = open(log_path, "ab")
 
         env = os.environ.copy()
+        env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         if model.gpu_target:
-            if model.gpu_target in ("rtx-5060-ti", "v100", "0", "cuda:0"):
-                env["CUDA_VISIBLE_DEVICES"] = "0"
-            elif model.gpu_target in ("1", "cuda:1"):
-                env["CUDA_VISIBLE_DEVICES"] = "1"
+            target_clean = model.gpu_target.strip().lower()
+            KNOWN_GPU_MAP = {
+                "v100": "0",
+                "tesla-v100": "0",
+                "tesla_v100": "0",
+                "rtx-5060-ti": "1",
+                "rtx-5060ti": "1",
+                "rtx5060ti": "1",
+                "0": "0",
+                "1": "1",
+                "cuda:0": "0",
+                "cuda:1": "1",
+            }
+            if target_clean in KNOWN_GPU_MAP:
+                env["CUDA_VISIBLE_DEVICES"] = KNOWN_GPU_MAP[target_clean]
+            elif target_clean.startswith("gpu-") or target_clean.isdigit() or target_clean.startswith("cuda:"):
+                env["CUDA_VISIBLE_DEVICES"] = model.gpu_target.strip()
             else:
-                env["CUDA_VISIBLE_DEVICES"] = model.gpu_target
+                log_file.close()
+                raise BackendStartError(
+                    model.name,
+                    f"Unknown or invalid gpu_target '{model.gpu_target}'. "
+                    f"Expected one of {sorted(KNOWN_GPU_MAP.keys())} or numeric GPU index / GPU UUID.",
+                )
 
         try:
             proc = subprocess.Popen(

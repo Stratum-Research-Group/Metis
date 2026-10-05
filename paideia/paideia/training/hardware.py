@@ -18,7 +18,24 @@ class HardwareProfile(BaseModel):
     hardware_line: str = "CPU-only"
 
 
-DEFAULT_LOCK_PATH = Path("/tmp/metis_gpu.lock")
+def get_default_lock_dir() -> Path:
+    uid = os.getuid()
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir and Path(runtime_dir).is_dir():
+        d = Path(runtime_dir) / "metis"
+    elif Path(f"/run/user/{uid}").is_dir():
+        d = Path(f"/run/user/{uid}") / "metis"
+    else:
+        d = Path(f"/tmp/metis_{uid}")
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        os.chmod(d, 0o700)
+    except OSError:
+        pass
+    return d
+
+
+DEFAULT_LOCK_PATH = get_default_lock_dir() / "metis_gpu.lock"
 
 
 def inspect_hardware() -> HardwareProfile:
@@ -84,9 +101,10 @@ def acquire_gpu_lock(lock_file: Path = DEFAULT_LOCK_PATH, device: str = "rtx-506
     Uses atomic OS-level fcntl.flock to eliminate check-then-write race conditions.
     Returns True if acquired, False if already held by another process.
     """
-    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    open_flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
     try:
-        fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o600)
+        fd = os.open(str(lock_file), open_flags, 0o600)
     except OSError:
         return False
 
@@ -129,9 +147,5 @@ def release_gpu_lock(lock_file: Path = DEFAULT_LOCK_PATH) -> None:
             os.close(fd)
         except OSError:
             pass
-    try:
-        if lock_file.exists():
-            lock_file.unlink()
-    except OSError:
-        pass
+    # Never unlink lock files to prevent race conditions with other processes
 

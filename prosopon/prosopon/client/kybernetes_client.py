@@ -95,7 +95,7 @@ class KybernetesClient:
 
     async def get_admin_overview(self, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Fetch centralized stack overview from Kybernetes admin API."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{self.base_url}/admin/overview", headers=headers)
@@ -104,7 +104,7 @@ class KybernetesClient:
 
     async def get_admin_modules(self, admin_token: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetch module descriptors."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{self.base_url}/admin/modules", headers=headers)
@@ -113,7 +113,7 @@ class KybernetesClient:
 
     async def get_admin_module_config(self, module_id: str, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Fetch module config view."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{self.base_url}/admin/modules/{module_id}/config", headers=headers)
@@ -122,7 +122,7 @@ class KybernetesClient:
 
     async def get_admin_sessions(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Fetch orchestrator sessions."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{self.base_url}/admin/sessions?limit={limit}&offset={offset}", headers=headers)
@@ -131,7 +131,7 @@ class KybernetesClient:
 
     async def get_admin_traces(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Fetch execution traces."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{self.base_url}/admin/traces?limit={limit}&offset={offset}", headers=headers)
@@ -140,7 +140,7 @@ class KybernetesClient:
 
     async def get_admin_audit_log(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Fetch admin audit log."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{self.base_url}/admin/audit-log?limit={limit}&offset={offset}", headers=headers)
@@ -149,7 +149,7 @@ class KybernetesClient:
 
     async def run_admin_probe(self, component_id: str, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Trigger functional probe in Kybernetes."""
-        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN") or self.service_token
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(

@@ -165,7 +165,7 @@ Run all 29 automated unit tests covering quantum trace, light cone, sheaf cohomo
 ```bash
 .venv/bin/python -m unittest tests.test_lthcm -v
 ```
-**Status:** `Ran 29 tests — ALL 29 PASSED (OK)`
+**Historical Baseline Status (Torch GPU reference environment):** `Ran 29 tests — ALL 29 PASSED (OK)` *(Note: Requires local PyTorch environment with CUDA/CPU support to run)*
 
 ### 2. Live Real-World Benchmark Suite (`lthcm/benchmark_real_world.py`)
 Tests against real-world clinical claim contradictions, financial/FDA causal timelines, and polysemous Wikipedia entities using live 384D neural sentence embeddings (`all-MiniLM-L6-v2`) and cross-encoder NLI stalks (`cross-encoder/nli-deberta-v3-xsmall`; note: no NLI model is configured by default and NLI checking is optional):

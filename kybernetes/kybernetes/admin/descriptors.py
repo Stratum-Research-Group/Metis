@@ -32,13 +32,13 @@ class ModuleDescriptor(BaseModel):
 class ConfigView(BaseModel):
     module_id: str
     saved: Dict[str, Any] = Field(default_factory=dict, description="Configuration values parsed from disk")
-    effective: Dict[str, Any] = Field(default_factory=dict, description="Configuration values currently active in memory")
+    effective: Optional[Dict[str, Any]] = Field(default=None, description="Configuration values currently active in memory")
     sources: Dict[str, str] = Field(default_factory=dict, description="Source origin per key: default | file | env | cli")
     restart_required_keys: List[str] = Field(default_factory=list, description="Keys that require restart to take effect")
     schema_ref: Optional[str] = None
     config_hash: Optional[str] = None
     loaded_at: Optional[str] = None
-    drift: bool = Field(default=False, description="Whether saved on-disk config differs from effective runtime config")
+    drift: Optional[bool] = Field(default=None, description="Whether saved on-disk config differs from effective runtime config")
 
 
 MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
@@ -180,11 +180,18 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
 def redact_sensitive_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     """Redact passwords, secret tokens, and sensitive internal paths."""
     redacted: Dict[str, Any] = {}
-    sensitive_substrings = ("token", "secret", "password", "key", "auth", "pin")
+    SENSITIVE_EXACT_KEYS = {
+        "token", "secret", "password", "api_key", "service_token", "admin_token",
+        "access_token", "private_key", "auth_token", "pin", "pairing_pin", "device_token"
+    }
     
     for k, v in data.items():
         k_lower = str(k).lower()
-        if any(sub in k_lower for sub in sensitive_substrings):
+        is_sensitive = k_lower in SENSITIVE_EXACT_KEYS or any(
+            k_lower.endswith(f"_{sk}") or k_lower.startswith(f"{sk}_")
+            for sk in ("token", "secret", "password", "key", "pin", "auth")
+        )
+        if is_sensitive:
             redacted[k] = "[REDACTED]" if v else None
         elif isinstance(v, dict):
             redacted[k] = redact_sensitive_dict(v)
@@ -194,8 +201,8 @@ def redact_sensitive_dict(data: Dict[str, Any]) -> Dict[str, Any]:
                 for item in v
             ]
         elif isinstance(v, str) and (v.startswith("/") or "\\" in v) and not v.startswith("http"):
-            # Sanitize full absolute local path to basename or relative representation
-            redacted[k] = Path(v).name if Path(v).exists() else "[PATH_CONFIGURED]"
+            # Sanitize full absolute local path to basename representation without disk probe
+            redacted[k] = Path(v).name or v
         else:
             redacted[k] = v
     return redacted

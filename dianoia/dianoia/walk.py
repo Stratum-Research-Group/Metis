@@ -381,11 +381,19 @@ class WalkController:
 
         filtered = []
         for r in raw_results:
-            created = float(r.get("created_epoch", r.get("timestamp", 0.0)))
-            if as_of is not None and created > as_of:
-                continue
-            if access_filter is not None and not access_filter(r):
-                continue
+            has_time = "created_epoch" in r or "timestamp" in r
+            if as_of is not None:
+                if not has_time:
+                    continue
+                created = float(r.get("created_epoch", r.get("timestamp", 0.0)))
+                if created > as_of:
+                    continue
+            if access_filter is not None:
+                try:
+                    if not access_filter(r):
+                        continue
+                except Exception:
+                    continue
             filtered.append(r)
         return filtered
 
@@ -413,11 +421,19 @@ class WalkController:
         for bridge in bridges:
             target_id = bridge["target"]
             meta = self.engine.wormhole.node_metadata.get(target_id, {})
-            created = float(meta.get("created_epoch", meta.get("timestamp", 0.0)))
-            if as_of is not None and created > as_of:
-                continue
-            if access_filter is not None and not access_filter(meta):
-                continue
+            has_time = "created_epoch" in meta or "timestamp" in meta
+            if as_of is not None:
+                if not has_time:
+                    continue
+                created = float(meta.get("created_epoch", meta.get("timestamp", 0.0)))
+                if created > as_of:
+                    continue
+            if access_filter is not None:
+                try:
+                    if not access_filter(meta):
+                        continue
+                except Exception:
+                    continue
             neighbours.append({
                 "node_id": target_id,
                 "content": meta.get("content", "[content unavailable]"),
@@ -881,7 +897,10 @@ class WalkController:
         """Run sheaf/NLI verification on the answer against evidence."""
         if not visited_passages:
             return {
-                "conflicts_found": False,
+                "verified": False,
+                "verifier_mode": "none",
+                "provenance": "unverified",
+                "conflicts_found": None,
                 "conflict_detail": None,
                 "report": "No evidence passages to verify against.",
             }

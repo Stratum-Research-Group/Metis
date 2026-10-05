@@ -15,6 +15,27 @@ EXCLUDED_REGISTRY_FILES: Set[str] = {
 }
 
 
+import struct
+
+
+def _validate_safetensors_file(path: Path) -> None:
+    size = path.stat().st_size
+    if size < 8:
+        raise ValueError(f"Safetensors weight file {path.name} is too small ({size} bytes).")
+    with open(path, "rb") as f:
+        header_len_bytes = f.read(8)
+        header_len = struct.unpack("<Q", header_len_bytes)[0]
+        if header_len <= 0 or header_len + 8 > size:
+            raise ValueError(f"Safetensors weight file {path.name} has invalid header length {header_len}.")
+        header_bytes = f.read(header_len)
+        try:
+            header_json = json.loads(header_bytes.decode("utf-8"))
+            if not isinstance(header_json, dict):
+                raise ValueError("Safetensors header is not a valid JSON dict.")
+        except Exception as exc:
+            raise ValueError(f"Safetensors weight file {path.name} has corrupt JSON header: {exc}") from exc
+
+
 def export_hestia_adapter_registry(
     adapter_id: str,
     adapter_dir: Path,
@@ -63,8 +84,16 @@ def export_hestia_adapter_registry(
             f"Acceptance gate failure: corrupt or unreadable manifest in {manifest_file}: {exc}"
         ) from exc
 
-    is_sim = m_data.get("is_simulated") is True or m_data.get("status") in ("SIMULATED", "NOT_TRAINED")
-    if is_sim and not allow_simulated:
+    status = m_data.get("status")
+    is_sim = m_data.get("is_simulated") is True or status in ("SIMULATED", "NOT_TRAINED")
+
+    if not is_sim:
+        if status not in ("COMPLETED", "COMPLETED_REAL", "SUCCESS"):
+            raise ValueError(
+                f"Acceptance gate failure: manifest status is '{status}'. "
+                "Only completed runs (status 'COMPLETED' or 'SUCCESS') can be exported as production adapters."
+            )
+    elif not allow_simulated:
         raise ValueError(
             f"Acceptance gate failure: adapter in {adapter_dir} was produced by a simulated run without real training weights. "
             "Refusing to export as production trained adapter."
@@ -78,16 +107,25 @@ def export_hestia_adapter_registry(
         "pytorch_model.bin",
         "model.safetensors",
     }
-    found_weights = [f.name for f in adapter_dir.iterdir() if f.is_file() and f.name in weight_file_names]
+    found_weights = [f for f in adapter_dir.iterdir() if f.is_file() and f.name in weight_file_names]
     if not found_weights and not (is_sim and allow_simulated):
         raise ValueError(
             f"Acceptance gate failure: adapter directory {adapter_dir} contains no trained weight files. "
             f"Expected at least one of {sorted(weight_file_names)}."
         )
 
+    # For non-simulated runs, ensure weight files are non-empty and validate safetensors header
+    if not (is_sim and allow_simulated):
+        for wf in found_weights:
+            if wf.stat().st_size == 0:
+                raise ValueError(f"Acceptance gate failure: weight file {wf.name} is zero bytes.")
+            if wf.suffix == ".safetensors":
+                _validate_safetensors_file(wf)
+
     # Verify evaluation evidence
-    if not evaluation_run_id or evaluation_run_id.strip() in ("", "none", "unknown"):
-        raise ValueError("Acceptance gate failure: verified evaluation_run_id required for adapter export")
+    clean_eval_id = (evaluation_run_id or "").strip()
+    if not clean_eval_id or clean_eval_id.lower() in ("n/a", "none", "unknown", "null"):
+        raise ValueError("Acceptance gate failure: verified non-placeholder evaluation_run_id required for adapter export")
 
     if is_sim and allow_simulated:
         compatible_backend = f"simulation_non_release:{compatible_backend}"
@@ -103,8 +141,10 @@ def export_hestia_adapter_registry(
         b_digest = compute_dir_sha256(p) if p.is_dir() else hashlib.sha256(p.read_bytes()).hexdigest()
     elif base_model_digest:
         b_digest = base_model_digest
-    else:
+    elif is_sim and allow_simulated:
         b_digest = f"unresolved_alias:{base_model_name}"
+    else:
+        raise ValueError(f"Acceptance gate failure: unresolvable base model digest for '{base_model_name}'.")
 
     # Tokenizer digest
     if tokenizer_path and Path(tokenizer_path).exists():
@@ -112,8 +152,10 @@ def export_hestia_adapter_registry(
         t_digest = compute_dir_sha256(p) if p.is_dir() else hashlib.sha256(p.read_bytes()).hexdigest()
     elif tokenizer_digest:
         t_digest = tokenizer_digest
-    else:
+    elif is_sim and allow_simulated:
         t_digest = f"unresolved_alias:{base_model_name}"
+    else:
+        raise ValueError(f"Acceptance gate failure: unresolvable tokenizer digest for '{base_model_name}'.")
 
     # Template digest
     if template_path and Path(template_path).exists():
@@ -121,8 +163,10 @@ def export_hestia_adapter_registry(
         tmpl_digest = compute_dir_sha256(p) if p.is_dir() else hashlib.sha256(p.read_bytes()).hexdigest()
     elif template_digest:
         tmpl_digest = template_digest
-    else:
+    elif is_sim and allow_simulated:
         tmpl_digest = f"unresolved_alias:{task}"
+    else:
+        raise ValueError(f"Acceptance gate failure: unresolvable template digest for '{task}'.")
 
     entry = HestiaAdapterRegistryEntry(
         schema_version="1.0.0",

@@ -46,7 +46,10 @@ class AdminAuditLogger:
         if not actor_token:
             actor = "anonymous"
         else:
-            fingerprint = hashlib.sha256(actor_token.encode("utf-8")).hexdigest()[:12]
+            token_clean = actor_token.strip()
+            if token_clean.lower().startswith("bearer "):
+                token_clean = token_clean[7:].strip()
+            fingerprint = hashlib.sha256(token_clean.encode("utf-8")).hexdigest()[:12]
             actor = f"token:{fingerprint}"
 
         entry = AuditEntry(

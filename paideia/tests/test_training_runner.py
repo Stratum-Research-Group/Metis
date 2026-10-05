@@ -27,14 +27,18 @@ def test_gpu_lock_lifecycle(tmp_path):
     assert ok is True
     assert lock_file.exists()
 
-    # 2. Re-acquire by same process (fails because lock exists and pid is alive)
-    # The lock prevents simultaneous training processes
+    # 2. Re-acquire by same process (fails because lock is currently held)
     ok_second = acquire_gpu_lock(lock_file)
     assert ok_second is False
 
-    # 3. Release
+    # 3. Release (releases flock, file remains)
     release_gpu_lock(lock_file)
-    assert not lock_file.exists()
+    assert lock_file.exists()
+
+    # 4. Re-acquire after release succeeds
+    ok_third = acquire_gpu_lock(lock_file)
+    assert ok_third is True
+    release_gpu_lock(lock_file)
 
 
 def test_training_runner_manifest_lifecycle(tmp_path):

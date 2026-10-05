@@ -146,5 +146,5 @@ async def test_zero_loopback_exemption_for_approvals(app_instance):
             json={"decision": "allow_once"},
         )
         assert resp.status_code == 401
-        assert "Paired token required" in resp.json()["detail"]
+        assert "paired token required" in resp.json()["detail"].lower()
 

@@ -10,7 +10,7 @@ from kybernetes.server.app import create_app
 
 @pytest.fixture
 def app():
-    return create_app(db_path=":memory:")
+    return create_app(db_path=":memory:", service_token="test-service-token")
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,12 @@ async def test_api_chat_turn_stream(app):
             "session_id": "test-session",
             "query": "Hello Metis assistant",
         }
-        async with client.stream("POST", "/v1/chat/turn", json=payload) as resp:
+        async with client.stream(
+            "POST",
+            "/v1/chat/turn",
+            json=payload,
+            headers={"Authorization": "Bearer test-service-token"},
+        ) as resp:
             assert resp.status_code == 200
             assert "text/event-stream" in resp.headers.get("content-type", "")
 
@@ -53,10 +58,23 @@ async def test_api_chat_turn_stream(app):
 @pytest.mark.asyncio
 async def test_api_cancel_turn(app):
     transport = ASGITransport(app=app)
+    # Register active turn
+    app.state.sessions.register_active_turn("turn-999")
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/v1/chat/turns/turn-999/cancel")
+        # Active turn cancellation succeeds
+        resp = await client.post(
+            "/v1/chat/turns/turn-999/cancel",
+            headers={"Authorization": "Bearer test-service-token"},
+        )
         assert resp.status_code == 200
         assert resp.json()["cancelled"] is True
+
+        # Unknown / already finished turn returns 404
+        resp_unknown = await client.post(
+            "/v1/chat/turns/turn-nonexistent/cancel",
+            headers={"Authorization": "Bearer test-service-token"},
+        )
+        assert resp_unknown.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -66,14 +84,16 @@ async def test_api_approval_not_found(app):
         resp = await client.post(
             "/v1/approvals/nonexistent/resolve",
             json={"approval_id": "nonexistent", "decision": "deny"},
+            headers={"Authorization": "Bearer test-service-token"},
         )
         assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_service_token_auth():
-    """Item 3: Authenticate the control boundary on Kybernetes internal routes."""
+    """Item 3 & Item 9: Authenticate the control boundary on Kybernetes internal routes."""
     secured_app = create_app(db_path=":memory:", service_token="secret-service-token-123")
+    secured_app.state.sessions.register_active_turn("turn-1")
     transport = ASGITransport(app=secured_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Health is public
@@ -85,7 +105,7 @@ async def test_service_token_auth():
         assert unauth_resp.status_code == 401
         assert "Valid Kybernetes service token required" in unauth_resp.json()["detail"]
 
-        # Authenticated request succeeds
+        # Authenticated request on active turn succeeds
         auth_resp = await client.post(
             "/v1/chat/turns/turn-1/cancel",
             headers={"Authorization": "Bearer secret-service-token-123"},

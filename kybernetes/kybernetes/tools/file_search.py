@@ -22,13 +22,13 @@ class SafeFileSearch:
         return ToolDefinition(
             name="file_search",
             version="1.0.0",
-            description="Search for keyword or pattern matches in local files within allowed workspace roots.",
+            description="Search for substring keyword matches in local files within allowed workspace roots.",
             parameters_schema={
                 "type": "object",
                 "properties": {
                     "pattern": {
                         "type": "string",
-                        "description": "Text substring or regex pattern to search for",
+                        "description": "Text substring keyword pattern to search for",
                     },
                     "directory": {
                         "type": "string",
@@ -151,7 +151,7 @@ class SafeFileSearch:
                                     }
                                 )
                                 if len(matches) >= max_results:
-                                    return {"matches": matches, "total_matches": len(matches), "truncated": False}
+                                    return {"matches": matches, "total_matches": len(matches), "truncated": True}
                 except (OSError, PermissionError):
                     continue
 

@@ -64,8 +64,8 @@ class ServiceConfig:
 
         port_range_raw = raw.get("backend_port_range", {})
         port_range = PortRange(
-            start=port_range_raw.get("start", 8081),
-            end=port_range_raw.get("end", 8099),
+            start=port_range_raw.get("start", 9000),
+            end=port_range_raw.get("end", 9019),
         )
 
         return cls(

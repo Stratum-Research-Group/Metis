@@ -17,17 +17,25 @@ class HestiaAdapter:
         base_url: Optional[str] = None,
         default_model: str = "llama-3.1-8b-instruct",
         timeout_seconds: float = 30.0,
+        service_token: Optional[str] = None,
     ):
         resolved_url = base_url or os.environ.get("HESTIA_BASE_URL", "http://127.0.0.1:8080/v1")
         self.base_url = resolved_url.rstrip("/")
         self.default_model = os.environ.get("HESTIA_DEFAULT_MODEL", default_model)
         self.timeout = timeout_seconds
+        self.service_token = service_token if service_token is not None else os.environ.get("HESTIA_SERVICE_TOKEN")
+
+    def _get_headers(self) -> Dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self.service_token:
+            headers["Authorization"] = f"Bearer {self.service_token}"
+        return headers
 
     async def check_health(self) -> Dict[str, Any]:
         """Verify Hestia reachability and return model list."""
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get(f"{self.base_url}/models")
+                resp = await client.get(f"{self.base_url}/models", headers=self._get_headers())
                 if resp.status_code == 200:
                     data = resp.json()
                     models = [m.get("id") for m in data.get("data", []) if "id" in m]
@@ -80,6 +88,7 @@ class HestiaAdapter:
                     "POST",
                     f"{self.base_url}/chat/completions",
                     json=payload,
+                    headers=self._get_headers(),
                 ) as resp:
                     resp.raise_for_status()
                     async for line in resp.aiter_lines():

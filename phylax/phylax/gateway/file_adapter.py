@@ -80,10 +80,9 @@ class GuardedFileAdapter:
         def _do_write(**kwargs: Any) -> int:
             target_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Verify payload digest matches authorized intent
-            actual_encoded = content.encode(encoding)
-            actual_digest = hashlib.sha256(actual_encoded).hexdigest()
-            if actual_digest != content_sha256:
+            # Verify payload digest matches authorized intent / bound arguments
+            expected_digest = kwargs.get("content_sha256", content_sha256)
+            if hashlib.sha256(encoded).hexdigest() != expected_digest:
                 raise ValueError("Content tampering detected: payload digest does not match authorized digest")
 
             # Unique exclusive temporary write then rename within same directory
@@ -96,14 +95,14 @@ class GuardedFileAdapter:
             fd = os.open(str(temp_path), flags, 0o600)
             try:
                 with open(fd, "wb", closefd=False) as f:
-                    f.write(actual_encoded)
+                    f.write(encoded)
                     f.flush()
                     os.fsync(fd)
             finally:
                 os.close(fd)
 
             os.replace(str(temp_path), str(target_path))
-            return len(actual_encoded)
+            return len(encoded)
 
         result, _ = self.gateway.authorize_and_execute(
             subject=subject,

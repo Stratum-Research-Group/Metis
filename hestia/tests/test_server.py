@@ -36,7 +36,7 @@ def _make_model(name: str, vram_mb: int, model_type: str = "chat") -> ModelEntry
 
 
 def _make_config(
-    port_start: int = 8081, port_end: int = 8083, idle_timeout_seconds: int = 600
+    port_start: int = 9000, port_end: int = 9003, idle_timeout_seconds: int = 600
 ) -> ServiceConfig:
     return ServiceConfig(
         listen_port=8080,
@@ -148,11 +148,9 @@ class TestLoadLocking:
         config = _make_config()
         manager = ServerManager(registry, backend, config)
 
-        bp = BackendProcess(model_name="slow-load-model", pid=4001, port=8081)
-
-        async def slow_start(*args, **kwargs) -> BackendProcess:
+        async def slow_start(model, port, *args, **kwargs) -> BackendProcess:
             await asyncio.sleep(0.05)
-            return bp
+            return BackendProcess(model_name=model.name, pid=4001, port=port)
 
         backend.start = AsyncMock(side_effect=slow_start)
 
@@ -169,8 +167,8 @@ class TestLoadLocking:
 
         assert model.state == ModelState.UNLOADED
         assert "slow-load-model" not in manager._processes
-        assert manager._port_allocations[8081] is None
-        backend.stop.assert_awaited_once_with(bp)
+        assert manager._port_allocations[9000] is None
+        assert backend.stop.await_count == 1
 
 
 class TestPortAllocation:
@@ -184,7 +182,7 @@ class TestPortAllocation:
         registry._models = {m.name: m for m in [m1, m2]}
 
         backend = _make_backend_mock()
-        config = _make_config(8081, 8083)
+        config = _make_config(9000, 9002)
         manager = ServerManager(registry, backend, config)
 
         with (
@@ -194,8 +192,8 @@ class TestPortAllocation:
             p1 = await manager.ensure_loaded("model-a")
             p2 = await manager.ensure_loaded("model-b")
 
-        assert p1.port == 8081
-        assert p2.port == 8082
+        assert p1.port == 9000
+        assert p2.port == 9001
 
     @pytest.mark.asyncio
     async def test_no_free_port_raises(self) -> None:
@@ -204,8 +202,8 @@ class TestPortAllocation:
         registry._models = {m.name: m for m in models}
 
         backend = _make_backend_mock()
-        # Only 3 ports available (8081, 8082, 8083)
-        config = _make_config(8081, 8083)
+        # Only 3 ports available (9000, 9001, 9002)
+        config = _make_config(9000, 9002)
         manager = ServerManager(registry, backend, config)
 
         with (
@@ -431,14 +429,14 @@ class TestCrashHandling:
         config = _make_config()
         manager = ServerManager(registry, backend, config)
 
-        bp_crashed = BackendProcess(model_name="flaky-model", pid=1001, port=8081)
+        bp_crashed = BackendProcess(model_name="flaky-model", pid=1001, port=9000)
         manager._processes["flaky-model"] = bp_crashed
-        manager._port_allocations[8081] = "flaky-model"
+        manager._port_allocations[9000] = "flaky-model"
         model.state = ModelState.LOADED
-        model.backend_port = 8081
+        model.backend_port = 9000
         model.pid = 1001
 
-        bp_restarted = BackendProcess(model_name="flaky-model", pid=1002, port=8081)
+        bp_restarted = BackendProcess(model_name="flaky-model", pid=1002, port=9000)
         backend.start = AsyncMock(
             side_effect=[
                 BackendStartError("flaky-model", "fail attempt 1"),
@@ -457,7 +455,7 @@ class TestCrashHandling:
         assert model.state == ModelState.LOADED
         assert manager._processes["flaky-model"] == bp_restarted
         assert manager._restart_counts["flaky-model"] == 0
-        assert manager._port_allocations[8081] == "flaky-model"
+        assert manager._port_allocations[9000] == "flaky-model"
 
     @pytest.mark.asyncio
     async def test_crash_retry_fails_all_three_attempts(self) -> None:

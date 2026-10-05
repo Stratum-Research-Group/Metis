@@ -148,7 +148,7 @@ def test_gold_trajectory_verification_gates():
         model="m",
         final_answer="A",
         path=[step],
-        verification=DianoiaVerification(verified=True, conflicts_found=False, is_correct=True, provenance="ground_truth_eval"),
+        verification=DianoiaVerification(verified=True, verifier_mode="ground_truth_eval", conflicts_found=False, is_correct=True, provenance="ground_truth_eval"),
     )
     assert rec_gold.is_defensible_gold_trajectory() is True
 

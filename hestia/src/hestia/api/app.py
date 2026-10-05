@@ -9,8 +9,12 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import os
+import secrets
+from typing import Any
 import httpx
-from fastapi import FastAPI, HTTPException, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import FastAPI, HTTPException, Request, Response, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
@@ -42,6 +46,62 @@ logger = logging.getLogger(__name__)
 # Module-level references set during lifespan
 _manager: ServerManager | None = None
 _registry: ModelRegistry | None = None
+
+
+class HostHeaderValidationMiddleware(BaseHTTPMiddleware):
+    """Validate Host header against allowed loopback and configured host patterns."""
+
+    def __init__(self, app: Any, allowed_hosts: list[str] | None = None):
+        super().__init__(app)
+        self.allowed_hosts = allowed_hosts or ["127.0.0.1", "localhost", "::1", "testserver", "test"]
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        host_header = request.headers.get("host", "").split(":")[0].strip().lower()
+        if host_header and host_header not in self.allowed_hosts and not host_header.startswith("127.0.0."):
+            return Response(
+                content="Invalid Host header",
+                status_code=400,
+            )
+        return await call_next(request)
+
+
+class ContentTypeValidationMiddleware(BaseHTTPMiddleware):
+    """Require Content-Type application/json on all POST endpoints."""
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        if request.method == "POST":
+            ct = request.headers.get("content-type", "").split(";")[0].strip().lower()
+            if ct != "application/json":
+                return JSONResponse(
+                    status_code=415,
+                    content={"detail": "Unsupported Media Type: Content-Type must be application/json"},
+                )
+        return await call_next(request)
+
+
+def require_hestia_auth(request: Request) -> None:
+    """Require valid Hestia service token unless insecure-dev mode is explicitly enabled."""
+    expected_token = os.environ.get("HESTIA_SERVICE_TOKEN")
+    if not expected_token:
+        if os.environ.get("METIS_INSECURE_DEV") == "1":
+            logger.warning("HESTIA_SERVICE_TOKEN unset. Operating in insecure dev mode.")
+            return
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Valid Hestia service token required (HESTIA_SERVICE_TOKEN unset or invalid).",
+        )
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer ") :].strip()
+    elif "x-service-token" in request.headers:
+        token = request.headers["x-service-token"].strip()
+
+    if not token or not secrets.compare_digest(token, expected_token):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Valid Hestia service token required.",
+        )
 
 
 @asynccontextmanager
@@ -100,6 +160,9 @@ def create_app(
 
     app.state.config_path = config_path
     app.state.models_path = models_path
+
+    app.add_middleware(HostHeaderValidationMiddleware)
+    app.add_middleware(ContentTypeValidationMiddleware)
 
     app.include_router(_build_router())
     return app
@@ -172,6 +235,7 @@ def _build_router():
     @router.post("/v1/chat/completions", response_model=None)
     async def chat_completions(request: Request) -> Response:
         """OpenAI-compatible chat completions endpoint with admission control."""
+        require_hestia_auth(request)
         manager = _get_manager()
 
         try:
@@ -284,6 +348,7 @@ def _build_router():
     @router.post("/v1/embeddings")
     async def embeddings(request: Request) -> JSONResponse:
         """OpenAI-compatible embeddings endpoint with admission control."""
+        require_hestia_auth(request)
         manager = _get_manager()
 
         try:
@@ -340,14 +405,16 @@ def _build_router():
             await _safe_release_admission(manager, model_name)
 
     @router.get("/models")
-    async def list_models() -> JSONResponse:
+    async def list_models(request: Request) -> JSONResponse:
         """List all registered models with their internal operational status."""
+        require_hestia_auth(request)
         manager = _get_manager()
         return JSONResponse({"models": manager.get_all_status()})
 
     @router.post("/manage/load")
     async def manage_load(request: Request) -> JSONResponse:
         """Explicitly load a model (used by CLI)."""
+        require_hestia_auth(request)
         manager = _get_manager()
         body = await request.json()
         model_name = body.get("model")
@@ -371,6 +438,7 @@ def _build_router():
     @router.post("/manage/unload")
     async def manage_unload(request: Request) -> JSONResponse:
         """Explicitly unload a model (used by CLI)."""
+        require_hestia_auth(request)
         manager = _get_manager()
         body = await request.json()
         model_name = body.get("model")

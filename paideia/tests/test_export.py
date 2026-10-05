@@ -11,18 +11,30 @@ from paideia.export.privacy import (
 )
 
 
+import json
+import struct
+
+def _create_mock_safetensors(path: Path):
+    hdr = json.dumps({"weight_tensor": {"dtype": "F32", "shape": [1, 1], "data_offsets": [0, 4]}}).encode("utf-8")
+    hdr_len = struct.pack("<Q", len(hdr))
+    path.write_bytes(hdr_len + hdr + b"\x00\x00\x00\x00")
+
+
 def test_export_hestia_adapter_registry(tmp_path):
     adapter_dir = tmp_path / "mock_adapter"
     adapter_dir.mkdir(parents=True, exist_ok=True)
     # Create mock manifest and weight files
     (adapter_dir / "manifest.json").write_text('{"status": "SUCCESS", "is_simulated": false}')
-    (adapter_dir / "adapter_model.safetensors").write_bytes(b"dummy_weights_12345")
+    _create_mock_safetensors(adapter_dir / "adapter_model.safetensors")
     (adapter_dir / "adapter_config.json").write_text('{"rank": 16}')
 
     entry = export_hestia_adapter_registry(
         adapter_id="router-qlora-v1",
         adapter_dir=adapter_dir,
         base_model_name="meta-llama/Llama-3.1-8B-Instruct",
+        base_model_digest="sha256:mock_base_digest_12345",
+        tokenizer_digest="sha256:mock_tok_digest_12345",
+        template_digest="sha256:mock_tmpl_digest_12345",
         task="question_router",
         training_data_fingerprint="data_sha256_mock",
         evaluation_run_id="run-eval-42",
@@ -31,7 +43,9 @@ def test_export_hestia_adapter_registry(tmp_path):
 
     assert entry.adapter_id == "router-qlora-v1"
     assert entry.adapter_digest != ""
-    assert entry.base_model_digest.startswith("unresolved_alias:")
+    assert entry.base_model_digest == "sha256:mock_base_digest_12345"
+    assert entry.tokenizer_digest == "sha256:mock_tok_digest_12345"
+    assert entry.template_digest == "sha256:mock_tmpl_digest_12345"
     assert (adapter_dir / "hestia_registry_entry.json").exists()
 
 

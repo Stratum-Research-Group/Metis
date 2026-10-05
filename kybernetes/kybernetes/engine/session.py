@@ -48,13 +48,13 @@ class SessionManager:
         self.session_ttl_seconds = session_ttl_seconds
         self._sessions: Dict[str, SessionState] = {}
         self._session_access: Dict[str, float] = {}
+        self._active_turns: set[str] = set()
         self._active_cancellations: Dict[str, bool] = {}
         self._cancellation_events: Dict[str, asyncio.Event] = {}
 
     def _prune_sessions(self) -> None:
         """Evict expired sessions or excess sessions exceeding max_sessions by LRU."""
         now = time.time()
-        # 1. Prune expired
         expired_ids = [
             sid for sid, last_acc in self._session_access.items()
             if now - last_acc > self.session_ttl_seconds
@@ -63,7 +63,6 @@ class SessionManager:
             self._sessions.pop(sid, None)
             self._session_access.pop(sid, None)
 
-        # 2. Prune LRU if still exceeding limit
         if len(self._sessions) > self.max_sessions:
             sorted_by_lru = sorted(self._session_access.items(), key=lambda kv: kv[1])
             excess = len(self._sessions) - self.max_sessions
@@ -86,6 +85,18 @@ class SessionManager:
         if turn_id not in self._cancellation_events:
             self._cancellation_events[turn_id] = asyncio.Event()
         return self._cancellation_events[turn_id]
+
+    def register_active_turn(self, turn_id: str) -> None:
+        """Register a turn as currently active/in-flight."""
+        self._active_turns.add(turn_id)
+
+    def unregister_active_turn(self, turn_id: str) -> None:
+        """Unregister a turn upon completion or termination."""
+        self._active_turns.discard(turn_id)
+        self.clear_cancellation(turn_id)
+
+    def is_turn_active(self, turn_id: str) -> bool:
+        return turn_id in self._active_turns
 
     def request_cancellation(self, turn_id: str) -> bool:
         """Mark an in-flight turn for cancellation and notify waiters."""

@@ -87,10 +87,28 @@ def test_krisis_verification_statuses():
     krisis = KrisisAdapter()
     c1 = Citation(citation_id="[1]", passage_id="p1", source_id="s1", source_title="Title", text="Text", score=0.9)
 
-    # 1. Grounded with citation marker
+    # 1. Grounded with citation marker -> capped at CITED_UNVERIFIED for heuristic
     rep1 = krisis.verify_response("query", "Answer with evidence [1].", [c1])
-    assert rep1.status == TurnOutcomeStatus.VERIFIED
+    assert rep1.status == TurnOutcomeStatus.CITED_UNVERIFIED
     assert rep1.score > 0.8
+    assert "citations present; no entailment check run" in rep1.explanation
+
+    # 1b. Uncited sentence alongside cited sentence fails full support
+    moon_cit = Citation(
+        citation_id="[1]",
+        passage_id="p_moon",
+        source_id="s_moon",
+        source_title="Astronomy",
+        text="The moon orbits the earth every month.",
+        score=0.9,
+    )
+    rep1b = krisis.verify_response(
+        "query",
+        "The moon does orbit the earth [1]. The sky is purple.",
+        [moon_cit],
+    )
+    assert rep1b.status != TurnOutcomeStatus.VERIFIED
+    assert rep1b.status == TurnOutcomeStatus.INSUFFICIENT_EVIDENCE
 
     # 2. Tool output
     rep2 = krisis.verify_response("query", "Result is 42.", [], is_tool_output=True)

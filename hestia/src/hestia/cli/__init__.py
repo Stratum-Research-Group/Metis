@@ -17,11 +17,26 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8080"
     envvar="HESTIA_URL",
     help="Hestia API base URL.",
 )
+@click.option(
+    "--token",
+    default=None,
+    envvar="HESTIA_SERVICE_TOKEN",
+    help="Hestia service bearer token.",
+)
 @click.pass_context
-def cli(ctx: click.Context, url: str) -> None:
+def cli(ctx: click.Context, url: str, token: str | None) -> None:
     """Hestia — local AI model serving layer."""
     ctx.ensure_object(dict)
     ctx.obj["url"] = url.rstrip("/")
+    ctx.obj["token"] = token
+
+
+def _get_headers(ctx: click.Context) -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    token = ctx.obj.get("token")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 @cli.command()
@@ -30,7 +45,7 @@ def list(ctx: click.Context) -> None:
     """List all registered models and their status."""
     url = ctx.obj["url"]
     try:
-        resp = httpx.get(f"{url}/models", timeout=10.0)
+        resp = httpx.get(f"{url}/models", headers=_get_headers(ctx), timeout=10.0)
         resp.raise_for_status()
     except httpx.ConnectError:
         click.echo(f"Error: Cannot connect to Hestia at {url}", err=True)
@@ -67,6 +82,7 @@ def load(ctx: click.Context, name: str) -> None:
         resp = httpx.post(
             f"{url}/manage/load",
             json={"model": name},
+            headers=_get_headers(ctx),
             timeout=180.0,
         )
         if resp.status_code == 404:
@@ -92,7 +108,12 @@ def unload(ctx: click.Context, name: str) -> None:
     url = ctx.obj["url"]
 
     try:
-        resp = httpx.post(f"{url}/manage/unload", json={"model": name}, timeout=60.0)
+        resp = httpx.post(
+            f"{url}/manage/unload",
+            json={"model": name},
+            headers=_get_headers(ctx),
+            timeout=60.0,
+        )
         if resp.status_code == 404:
             click.echo(f"Error: Model '{name}' not found.", err=True)
             sys.exit(1)

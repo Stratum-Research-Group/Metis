@@ -32,6 +32,8 @@ class TurnOutcomeStatus(str, Enum):
     Factual correctness is distinguished from raw generation status.
     """
     VERIFIED = "verified"
+    CITED_UNVERIFIED = "cited_unverified"
+    DENIED = "denied"
     CONFLICTED = "conflicted"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
     FAILED = "failed"

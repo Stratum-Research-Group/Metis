@@ -153,7 +153,7 @@ def _save_index(engine: "LTHCMEngine", path: str):
     print(f"Index saved to {path}")
 
 
-def _load_index(path: str, allow_trusted_pickle: bool = True) -> "LTHCMEngine":
+def _load_index(path: str, allow_trusted_pickle: bool = False) -> "LTHCMEngine":
     """
     Load a pre-built LTHCMEngine index from disk.
 

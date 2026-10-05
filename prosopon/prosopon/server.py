@@ -1,8 +1,9 @@
 """FastAPI backend server for Prosopon local web & voice interface."""
 
 import json
+import os
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Set
 import uuid
 
 from fastapi import Depends, FastAPI, File, HTTPException, Header, Request, UploadFile, status
@@ -108,7 +109,29 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    allowed_hosts = {"127.0.0.1", "localhost", "::1", "testserver", "test", cfg.host.split(":")[0]}
+    import socket
+
+    def _build_allowed_hosts() -> Set[str]:
+        hosts = {"127.0.0.1", "localhost", "::1", "testclient", "testserver", "test"}
+        for h in cfg.allowed_hosts:
+            cleaned = h.split(":")[0].strip()
+            if cleaned and cleaned != "0.0.0.0":
+                hosts.add(cleaned)
+        if cfg.is_lan():
+            try:
+                hostname = socket.gethostname()
+                if hostname:
+                    hosts.add(hostname)
+                    hosts.add(f"{hostname}.local")
+                for info in socket.getaddrinfo(hostname, None):
+                    ip = info[4][0]
+                    if ip and ip != "0.0.0.0":
+                        hosts.add(ip)
+            except Exception:
+                pass
+        return hosts
+
+    allowed_hosts = _build_allowed_hosts()
 
     def _validate_host_header(request: Request) -> None:
         raw_host = request.headers.get("host", "").split(":")[0].strip()
@@ -147,10 +170,10 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer "):].strip()
 
-        if not token or not pairing_mgr.validate_token(token):
+        if not token or not pairing_mgr.validate_token(token, required_role="admin"):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized: Paired token required for sensitive operations.",
+                detail="Unauthorized: Admin-scoped paired token required for sensitive operations.",
             )
         return True
 
@@ -221,8 +244,21 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         return {"status": "ok", "token": token}
 
     @app.post("/api/auth/revoke")
-    async def revoke_tokens(_: bool = Depends(require_admin_auth)):
-        count = pairing_mgr.revoke_all()
+    async def revoke_tokens(request: Request, authorization: Optional[str] = Header(None)):
+        _validate_host_header(request)
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer "):].strip()
+        if not token or not pairing_mgr.validate_token(token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Valid paired token required for revocation.",
+            )
+        is_admin = pairing_mgr.validate_token(token, required_role="admin")
+        if is_admin:
+            count = pairing_mgr.revoke_all()
+        else:
+            count = 1 if pairing_mgr.revoke_token(token) else 0
         return {"status": "ok", "revoked_count": count}
 
     # 3. Session Endpoints
@@ -429,8 +465,9 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 "gpu_telemetry": gpu_info,
                 "orchestrator": {
                     "state": "offline",
+                    "status": "unreachable",
                     "detail": f"Kybernetes orchestrator unreachable ({exc})",
-                    "freshness": "fresh",
+                    "freshness": "unknown",
                     "checked_at": datetime.now(timezone.utc).isoformat(),
                 },
                 "components": {},
@@ -441,12 +478,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         """Proxy upstream module descriptors."""
         try:
             return await kybernetes.get_admin_modules()
-        except Exception:
-            return [
-                {"id": "prosopon", "display_name": "Prosopon Frontend & BFF", "section": "Overview", "kind": "service", "config_format": "pydantic"},
-                {"id": "kybernetes", "display_name": "Kybernetes Orchestrator", "section": "Overview", "kind": "service", "config_format": "pydantic"},
-                {"id": "hestia", "display_name": "Hestia Inference Server", "section": "Models & Resources", "kind": "service", "config_format": "yaml"},
-            ]
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Upstream Kybernetes orchestrator unreachable: {exc}")
 
     @app.get("/api/dashboard/modules/{module_id}/config")
     async def dashboard_module_config(module_id: str, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
@@ -459,11 +492,12 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 cfg_dict["pairing_pin"] = "[REDACTED]"
             if "kybernetes_service_token" in cfg_dict:
                 cfg_dict["kybernetes_service_token"] = "[REDACTED]"
+            sources = {k: "env" if f"PROSOPON_{k.upper()}" in os.environ else "default" for k in cfg_dict}
             return {
                 "module_id": "prosopon",
                 "saved": cfg_dict,
                 "effective": cfg_dict,
-                "sources": {k: "default" for k in cfg_dict},
+                "sources": sources,
                 "restart_required_keys": ["host", "port", "tls_enabled", "allowed_origins"],
                 "schema_ref": "ProsoponConfig",
                 "loaded_at": datetime.now(timezone.utc).isoformat(),
@@ -478,22 +512,22 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     async def dashboard_sessions(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
         try:
             return await kybernetes.get_admin_sessions(limit=limit, offset=offset)
-        except Exception:
-            return {"total": 0, "limit": limit, "offset": offset, "storage": "unreachable", "sessions": []}
+        except Exception as exc:
+            return {"status": "unreachable", "total": 0, "limit": limit, "offset": offset, "storage": "unreachable", "sessions": [], "detail": str(exc)}
 
     @app.get("/api/dashboard/traces")
     async def dashboard_traces(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
         try:
             return await kybernetes.get_admin_traces(limit=limit, offset=offset)
-        except Exception:
-            return {"total": 0, "limit": limit, "offset": offset, "storage": "unreachable", "traces": []}
+        except Exception as exc:
+            return {"status": "unreachable", "total": 0, "limit": limit, "offset": offset, "storage": "unreachable", "traces": [], "detail": str(exc)}
 
     @app.get("/api/dashboard/audit-log")
     async def dashboard_audit_log(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
         try:
             return await kybernetes.get_admin_audit_log(limit=limit, offset=offset)
-        except Exception:
-            return {"total": 0, "limit": limit, "offset": offset, "entries": []}
+        except Exception as exc:
+            return {"status": "unreachable", "total": 0, "limit": limit, "offset": offset, "entries": [], "detail": str(exc)}
 
     @app.post("/api/dashboard/probes/run")
     async def dashboard_run_probe(req: Dict[str, str], _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:

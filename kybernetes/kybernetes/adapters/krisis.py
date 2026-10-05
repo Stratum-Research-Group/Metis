@@ -131,6 +131,8 @@ class KrisisAdapter:
         for s in sentences:
             s_markers = re.findall(r"\[([A-Za-z0-9_\-\.\s]+)\]", s)
             if not s_markers:
+                if citations:
+                    unsupported_count += 1
                 continue
 
             s_clean = re.sub(r"\[[^\]]+\]", "", s).lower()
@@ -195,12 +197,12 @@ class KrisisAdapter:
             )
 
         return KrisisVerificationReport(
-            status=TurnOutcomeStatus.VERIFIED,
+            status=TurnOutcomeStatus.CITED_UNVERIFIED,
             score=round(avg_citation_score, 4),
             supported_claims=supported_count,
             unsupported_claims=0,
             conflict_detected=False,
-            explanation=f"Synthesized claims supported by {len(citations)} verified evidence citations.",
+            explanation="citations present; no entailment check run",
             is_simulated=True,
             verifier_mode="heuristic",
         )

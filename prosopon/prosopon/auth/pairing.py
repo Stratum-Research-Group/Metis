@@ -1,18 +1,21 @@
 """Single-owner device pairing and token authentication manager."""
 
+import hashlib
 import json
 import os
 import secrets
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Tuple
 from pydantic import BaseModel, Field
 
 
 class PairedDevice(BaseModel):
     """Metadata for an authorized client device."""
-    token: str = Field(..., description="Cryptographically secure bearer token")
+    token_hash: str = Field(..., description="SHA-256 hash of cryptographically secure bearer token")
+    token: Optional[str] = Field(default=None, description="Optional legacy raw token")
+    role: str = Field(default="chat", description="Token scope/role: 'chat' or 'admin'")
     device_name: str = Field(default="Phone Client", description="Reported or friendly client name")
     paired_at_utc: str = Field(..., description="Timestamp when pairing succeeded")
     expires_at_utc: str = Field(..., description="Timestamp when token expires")
@@ -23,7 +26,7 @@ class PairingManager:
     """
     Manages single-owner PIN pairing, active bearer tokens, and revocation.
     Prevents unauthorized LAN access to chat history and Phylax approvals.
-    Coordinates across processes via owner-only (0600) files.
+    Coordinates across processes via owner-only (0600) files and token hashes.
     """
     def __init__(self, data_dir: Path, expiry_hours: int = 72):
         self.data_dir = data_dir
@@ -37,10 +40,15 @@ class PairingManager:
         self._pin_expires_at: float = 0.0
         self._failed_attempts: int = 0
         self._lockout_until: float = 0.0
-        self._tokens_file_mtime: float = 0.0
+        self._tokens_file_sig: Optional[Tuple[int, int, int]] = None
 
         # Load persisted tokens
         self._paired_tokens: Dict[str, PairedDevice] = self._load_tokens()
+
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        """Compute SHA-256 hash of a bearer token."""
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
     def generate_pairing_pin(self, validity_seconds: int = 300) -> str:
         """Generate a fresh 6-digit pairing PIN valid for 5 minutes and coordinate across processes."""
@@ -68,7 +76,13 @@ class PairingManager:
         self._save_pin_record(new_record)
         return pin
 
-    def verify_pin_and_pair(self, pin: str, device_name: str = "Mobile Browser", ip_address: Optional[str] = None) -> Optional[str]:
+    def verify_pin_and_pair(
+        self,
+        pin: str,
+        device_name: str = "Mobile Browser",
+        ip_address: Optional[str] = None,
+        role: str = "chat",
+    ) -> Optional[str]:
         """
         Validate entered PIN and return a newly minted bearer token if successful.
         Coordinates with persisted pin state so CLI-issued PINs work on running servers.
@@ -91,82 +105,90 @@ class PairingManager:
         if secrets.compare_digest(str(expected_pin).strip(), str(pin).strip()):
             # Correct PIN -> generate token
             token = secrets.token_urlsafe(32)
+            tok_hash = self._hash_token(token)
             now_dt = datetime.now(timezone.utc)
             exp_dt = now_dt + timedelta(hours=self.expiry_hours)
 
             paired = PairedDevice(
-                token=token,
+                token_hash=tok_hash,
+                role=role,
                 device_name=device_name,
                 paired_at_utc=now_dt.isoformat(),
                 expires_at_utc=exp_dt.isoformat(),
                 ip_address=ip_address,
             )
-            # Sync existing tokens from disk first
             self._paired_tokens = self._load_tokens()
-            self._paired_tokens[token] = paired
+            self._paired_tokens[tok_hash] = paired
             self._save_tokens()
 
-            # Invalidate PIN after successful one-time use
+            # Clean up used PIN
             self._current_pin = None
             self._pin_expires_at = 0.0
             self._failed_attempts = 0
             self._save_pin_record(None)
             return token
-        else:
-            failed = (record.get("failed_attempts", 0) if record else self._failed_attempts) + 1
-            new_lockout = (now + 60.0) if failed >= 5 else 0.0
-            if record:
-                record["failed_attempts"] = failed
-                record["lockout_until"] = new_lockout
-                self._save_pin_record(record)
-            self._failed_attempts = failed
-            self._lockout_until = new_lockout
-            return None
 
-    def generate_loopback_token(self, device_name: str = "Local Browser") -> str:
-        """Generate and register a token for local loopback sessions without PIN entry."""
+        # Failed attempt -> record and potentially trigger lockout
+        self._failed_attempts += 1
+        fails = (record.get("failed_attempts", 0) if record else 0) + 1
+        if fails >= 5:
+            lockout_time = now + 900.0  # 15-minute brute-force lockout
+            self._lockout_until = lockout_time
+            if record:
+                record["lockout_until"] = lockout_time
+                record["failed_attempts"] = fails
+                self._save_pin_record(record)
+        else:
+            if record:
+                record["failed_attempts"] = fails
+                self._save_pin_record(record)
+        return None
+
+    def generate_loopback_token(self, device_name: str = "Local Browser", role: str = "chat") -> str:
+        """Generate a token for local loopback sessions without PIN entry."""
         token = secrets.token_urlsafe(32)
+        tok_hash = self._hash_token(token)
         now_dt = datetime.now(timezone.utc)
         exp_dt = now_dt + timedelta(hours=self.expiry_hours)
 
         paired = PairedDevice(
-            token=token,
+            token_hash=tok_hash,
+            role=role,
             device_name=device_name,
             paired_at_utc=now_dt.isoformat(),
             expires_at_utc=exp_dt.isoformat(),
             ip_address="127.0.0.1",
         )
         self._paired_tokens = self._load_tokens()
-        self._paired_tokens[token] = paired
+        self._paired_tokens[tok_hash] = paired
         self._save_tokens()
         return token
 
-    def validate_token(self, token: Optional[str]) -> bool:
-        """Verify whether token exists and has not expired, reloading live state from disk if changed."""
+    def generate_admin_token(self, device_name: str = "CLI Admin") -> str:
+        """Generate an admin-privileged bearer token (used via terminal)."""
+        return self.generate_loopback_token(device_name=device_name, role="admin")
+
+    def validate_token(self, token: Optional[str], required_role: Optional[str] = None) -> bool:
+        """Verify whether token exists, has not expired, and satisfies required_role if specified."""
         if not token:
             return False
 
         # Live sync: reload tokens if disk state changed or removed
-        if self.tokens_file.exists():
-            try:
-                mtime = self.tokens_file.stat().st_mtime
-                if mtime > self._tokens_file_mtime:
-                    self._paired_tokens = self._load_tokens()
-            except Exception:
-                pass
-        else:
-            if self._paired_tokens:
-                self._paired_tokens = {}
-                self._tokens_file_mtime = 0.0
+        self._sync_disk_state()
 
-        if token not in self._paired_tokens:
+        tok_hash = self._hash_token(token)
+        paired = self._paired_tokens.get(tok_hash) or self._paired_tokens.get(token)
+        if not paired:
             return False
 
-        paired = self._paired_tokens[token]
+        if required_role == "admin" and paired.role != "admin":
+            return False
+
+        key_to_use = tok_hash if tok_hash in self._paired_tokens else token
         try:
             exp = datetime.fromisoformat(paired.expires_at_utc)
             if datetime.now(timezone.utc) > exp:
-                del self._paired_tokens[token]
+                del self._paired_tokens[key_to_use]
                 self._save_tokens()
                 return False
             return True
@@ -175,16 +197,24 @@ class PairingManager:
 
     def revoke_token(self, token: str) -> bool:
         """Revoke a specific device token and write immediately to disk."""
-        self._paired_tokens = self._load_tokens()
-        if token in self._paired_tokens:
-            del self._paired_tokens[token]
+        self._sync_disk_state()
+        tok_hash = self._hash_token(token)
+        
+        target_key = None
+        if tok_hash in self._paired_tokens:
+            target_key = tok_hash
+        elif token in self._paired_tokens:
+            target_key = token
+
+        if target_key:
+            del self._paired_tokens[target_key]
             self._save_tokens()
             return True
         return False
 
     def revoke_all(self) -> int:
         """Revoke all active device tokens and invalidate any pending PIN."""
-        self._paired_tokens = self._load_tokens()
+        self._sync_disk_state()
         count = len(self._paired_tokens)
         self._paired_tokens.clear()
         self._save_tokens()
@@ -196,14 +226,23 @@ class PairingManager:
         return count
 
     def get_paired_devices(self) -> Dict[str, PairedDevice]:
+        self._sync_disk_state()
+        return dict(self._paired_tokens)
+
+    def _sync_disk_state(self) -> None:
+        """Check file signature (mtime_ns, inode, size) and reload if modified."""
         if self.tokens_file.exists():
             try:
-                mtime = self.tokens_file.stat().st_mtime
-                if mtime > self._tokens_file_mtime:
+                stat = self.tokens_file.stat()
+                current_sig = (stat.st_mtime_ns, stat.st_ino, stat.st_size)
+                if current_sig != self._tokens_file_sig:
                     self._paired_tokens = self._load_tokens()
             except Exception:
                 pass
-        return dict(self._paired_tokens)
+        else:
+            if self._paired_tokens or self._tokens_file_sig is not None:
+                self._paired_tokens = {}
+                self._tokens_file_sig = None
 
     def _load_pin_record(self) -> Optional[Dict[str, Any]]:
         if not self.pin_file.exists():
@@ -237,14 +276,21 @@ class PairingManager:
 
     def _load_tokens(self) -> Dict[str, PairedDevice]:
         if not self.tokens_file.exists():
-            self._tokens_file_mtime = 0.0
+            self._tokens_file_sig = None
             return {}
         try:
             stat = self.tokens_file.stat()
-            self._tokens_file_mtime = stat.st_mtime
+            self._tokens_file_sig = (stat.st_mtime_ns, stat.st_ino, stat.st_size)
             with open(self.tokens_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return {tok: PairedDevice.model_validate(p) for tok, p in data.items()}
+            result = {}
+            for k, p in data.items():
+                if "token_hash" not in p and "token" in p:
+                    p["token_hash"] = self._hash_token(p["token"])
+                if "role" not in p:
+                    p["role"] = "chat"
+                result[k] = PairedDevice.model_validate(p)
+            return result
         except Exception:
             return {}
 
@@ -260,6 +306,7 @@ class PairingManager:
         tmp.replace(self.tokens_file)
         try:
             os.chmod(self.tokens_file, 0o600)
-            self._tokens_file_mtime = self.tokens_file.stat().st_mtime
+            stat = self.tokens_file.stat()
+            self._tokens_file_sig = (stat.st_mtime_ns, stat.st_ino, stat.st_size)
         except Exception:
             pass

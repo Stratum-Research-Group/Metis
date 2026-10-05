@@ -18,7 +18,7 @@ async def test_dashboard_zero_loopback_exemption(tmp_path):
         # Loopback caller without authorization token
         resp = await client.get("/api/dashboard/overview")
         assert resp.status_code == 401
-        assert "Paired token required" in resp.json()["detail"]
+        assert "paired token required" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -28,9 +28,9 @@ async def test_dashboard_authenticated_overview_and_gpu(tmp_path):
     app = create_app(cfg)
     pairing_mgr = app.state.pairing_mgr
 
-    # Generate and verify token
+    # Generate and verify token with admin role
     pin = pairing_mgr.generate_pairing_pin()
-    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Test Browser")
+    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Test Browser", role="admin")
     assert token is not None
     headers = {"Authorization": f"Bearer {token}"}
     transport = ASGITransport(app=app)
@@ -70,7 +70,7 @@ async def test_dashboard_graceful_kybernetes_offline_tolerance(tmp_path):
     app = create_app(cfg)
     pairing_mgr = app.state.pairing_mgr
     pin = pairing_mgr.generate_pairing_pin()
-    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Test Browser")
+    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Test Browser", role="admin")
     assert token is not None
     headers = {"Authorization": f"Bearer {token}"}
     transport = ASGITransport(app=app)

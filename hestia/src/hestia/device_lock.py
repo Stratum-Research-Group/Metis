@@ -13,11 +13,25 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LOCK_DIR = Path("/tmp")
+def get_default_lock_dir() -> Path:
+    uid = os.getuid()
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir and Path(runtime_dir).is_dir():
+        d = Path(runtime_dir) / "metis"
+    elif Path(f"/run/user/{uid}").is_dir():
+        d = Path(f"/run/user/{uid}") / "metis"
+    else:
+        d = Path(f"/tmp/metis_{uid}")
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        os.chmod(d, 0o700)
+    except OSError:
+        pass
+    return d
 
 
 def get_device_lock_path(device: str = "rtx-5060-ti", lock_dir: Optional[Path] = None) -> Path:
-    base = lock_dir or DEFAULT_LOCK_DIR
+    base = lock_dir or get_default_lock_dir()
     clean_device = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in device)
     return base / f"metis_gpu_{clean_device}.lock"
 
@@ -43,13 +57,7 @@ class GpuDeviceLease:
                     os.close(fd)
                 except OSError:
                     pass
-        for path in (self.lock_path, self.default_lock_path):
-            if path is not None:
-                try:
-                    if path.exists():
-                        path.unlink()
-                except OSError:
-                    pass
+        # Permanent lock files — never unlink to avoid races between contenders
 
 
 _ACTIVE_LEASES: dict[str, GpuDeviceLease] = {}
@@ -62,19 +70,22 @@ def acquire_device_lease(
 ) -> Optional[GpuDeviceLease]:
     """Atomically acquire an exclusive OS flock lease on a GPU device.
     
-    Locks both the per-device lock file and the shared default lock file (/tmp/metis_gpu.lock)
+    Locks both the per-device lock file and the shared default lock file
     to guarantee mutual exclusion between serving and training.
     """
     if device in _ACTIVE_LEASES:
-        # Cleanly release abandoned in-process lease from prior instance (e.g. sequential unit tests)
-        old_lease = _ACTIVE_LEASES.pop(device)
-        old_lease.release()
-    lock_path = get_device_lock_path(device, lock_dir)
-    default_lock_path = (lock_dir or DEFAULT_LOCK_DIR) / "metis_gpu.lock"
+        # Reject duplicate in-process lease attempts
+        return None
+
+    resolved_lock_dir = lock_dir or get_default_lock_dir()
+    lock_path = get_device_lock_path(device, resolved_lock_dir)
+    default_lock_path = resolved_lock_dir / "metis_gpu.lock"
+
+    open_flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
 
     # Open and lock per-device file
     try:
-        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+        fd = os.open(str(lock_path), open_flags, 0o600)
     except OSError as exc:
         logger.warning("Failed to open device lock file %s: %s", lock_path, exc)
         return None
@@ -89,7 +100,7 @@ def acquire_device_lease(
     default_fd: Optional[int] = None
     if default_lock_path != lock_path:
         try:
-            default_fd = os.open(str(default_lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+            default_fd = os.open(str(default_lock_path), open_flags, 0o600)
             fcntl.flock(default_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (BlockingIOError, OSError):
             # Roll back per-device lock if shared lock fails

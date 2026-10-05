@@ -100,18 +100,20 @@ def load_walk_dataset(
         else:
             target_record = attempts[0]
             if not target_record.is_defensible_gold_trajectory():
-                if not target_record.verification.verified:
+                if target_record.verification.conflicts_found is not False:
+                    audit.unresolved_conflicts_excluded += 1
+                elif not target_record.verification.verified:
                     audit.unverified_excluded += 1
                 elif target_record.is_simulated or target_record.verification.simulated or target_record.fallback_used:
                     audit.simulated_excluded += 1
-                elif target_record.verification.conflicts_found is not False:
-                    audit.unresolved_conflicts_excluded += 1
                 elif target_record.verification.is_correct is False:
                     audit.incorrect_excluded += 1
                 elif any(s.parse_failed for s in target_record.path):
                     audit.parse_failures_excluded += 1
                 elif not target_record.final_answer.strip():
                     audit.empty_answers_excluded += 1
+                else:
+                    audit.unverified_excluded += 1
                 continue
 
         # Extract bounded state -> action step pairs

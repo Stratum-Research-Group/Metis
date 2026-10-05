@@ -41,7 +41,7 @@ def test_dianoia_walk_gold_trajectory_filtering():
         walk_id="w-1",
         question="Who was X?",
         path=[step1, step2],
-        verification=DianoiaVerification(conflicts_found=False),
+        verification=DianoiaVerification(verified=True, conflicts_found=False, verifier_mode="sheaf", provenance="sheaf", is_correct=True),
         final_answer="Answer X",
         model="test_model",
     )
@@ -52,7 +52,7 @@ def test_dianoia_walk_gold_trajectory_filtering():
         walk_id="w-2",
         question="Who was X?",
         path=[step1, step2],
-        verification=DianoiaVerification(conflicts_found=True, rewalked=False),
+        verification=DianoiaVerification(verified=True, conflicts_found=True, rewalked=False, verifier_mode="sheaf", provenance="sheaf", is_correct=True),
         final_answer="Answer X",
         model="test_model",
     )
@@ -63,7 +63,7 @@ def test_dianoia_walk_gold_trajectory_filtering():
         walk_id="w-2",
         question="Who was X?",
         path=[step1, step2],
-        verification=DianoiaVerification(conflicts_found=False, rewalked=True),
+        verification=DianoiaVerification(verified=True, conflicts_found=False, rewalked=True, verifier_mode="sheaf", provenance="sheaf", is_correct=True),
         final_answer="Answer X",
         model="test_model",
     )

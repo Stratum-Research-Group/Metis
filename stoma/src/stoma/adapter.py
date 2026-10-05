@@ -328,7 +328,7 @@ class StomaLTHCMAdapter:
         embedder: StomaEmbedder,
         manifest: Optional[ProvenanceManifest] = None,
         expected_index_hash: Optional[str] = None,
-        allow_trusted_pickle: bool = True,
+        allow_trusted_pickle: bool = False,
     ) -> StomaLTHCMAdapter:
         """
         Load a persisted engine and validate d_model and num_facets before serving.

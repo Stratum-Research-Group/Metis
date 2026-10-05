@@ -133,7 +133,7 @@ class ExecutionPipeline:
                 status=final_status.value,
             ),
         )
-        self.sessions.clear_cancellation(turn_id)
+        self.sessions.unregister_active_turn(turn_id)
 
     def get_trace(self, turn_id: str) -> Optional[TraceRecord]:
         return self._traces.get(turn_id)
@@ -147,6 +147,7 @@ class ExecutionPipeline:
         """
         start_time = time.perf_counter()
         turn_id = request.turn_id or f"turn-{uuid.uuid4().hex[:8]}"
+        self.sessions.register_active_turn(turn_id)
         trace_id = f"trace-{uuid.uuid4().hex[:8]}"
         seq_num = 0
         emitted_events: List[TurnEvent] = []
@@ -223,6 +224,8 @@ class ExecutionPipeline:
             hard_stop_enabled=False,
         )
         self.budget_engine.prepare_task_estimate(task_plan)
+
+        executed_tool_name: Optional[str] = None
 
         # Iterate through stages
         for stage_plan in plan.stages:
@@ -409,7 +412,7 @@ class ExecutionPipeline:
                                 seq_num=seq_num,
                                 event_type=EventType.DELTA.value,
                                 payload={"text": denied_msg},
-                                status=TurnOutcomeStatus.VERIFIED.value,
+                                status=TurnOutcomeStatus.DENIED.value,
                             )
                             emitted_events.append(e_delta)
                             yield e_delta
@@ -428,7 +431,7 @@ class ExecutionPipeline:
                                         "latency_ms": denied_lat,
                                     }
                                 },
-                                status=TurnOutcomeStatus.VERIFIED.value,
+                                status=TurnOutcomeStatus.DENIED.value,
                             )
                             emitted_events.append(e_comp)
                             yield e_comp
@@ -440,7 +443,7 @@ class ExecutionPipeline:
                                 components_used=components_used,
                                 stage_outcomes=stage_outcomes,
                                 total_lat=denied_lat,
-                                final_status=TurnOutcomeStatus.VERIFIED,
+                                final_status=TurnOutcomeStatus.DENIED,
                                 zero_edge_fallback=False,
                                 is_turn_simulated=is_turn_simulated,
                                 v_report=None,
@@ -479,6 +482,7 @@ class ExecutionPipeline:
                     )
                     return
 
+                executed_tool_name = tool_name
                 t_res = self.tool_registry.execute(ToolCallRequest(tool_id=tool_name, arguments=tool_args))
                 tool_output = t_res.data
                 stage_lat = (time.perf_counter() - stage_start) * 1000
@@ -656,7 +660,7 @@ class ExecutionPipeline:
             final_status = TurnOutcomeStatus.FAILED
         elif v_report is not None:
             final_status = v_report.status
-        elif tool_output is not None:
+        elif executed_tool_name == "calculator" and tool_output is not None:
             final_status = TurnOutcomeStatus.VERIFIED
         else:
             final_status = TurnOutcomeStatus.DRAFT

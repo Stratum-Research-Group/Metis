@@ -35,11 +35,7 @@ class DianoiaVerification(BaseModel):
 
     @model_validator(mode="after")
     def validate_verification_state(self) -> "DianoiaVerification":
-        if self.conflicts_found is not None:
-            if not self.verified:
-                self.verified = True
-            if not self.provenance:
-                self.provenance = "dianoia_sheaf_verification"
+        # Verified state and provenance must come explicitly from the producer, never auto-promoted
         return self
 
 
@@ -86,9 +82,11 @@ class DianoiaWalkRecord(BaseModel):
             return False
         if not self.verification.verified:
             return False
+        if not self.verification.verifier_mode or self.verification.verifier_mode in ("none", "unverified"):
+            return False
         if self.verification.conflicts_found is not False:
             return False
-        if self.verification.is_correct is False:
+        if self.verification.is_correct is not True:
             return False
         if not self.verification.provenance or self.verification.provenance in ("unverified", "simulated", "heuristic_unverified"):
             return False

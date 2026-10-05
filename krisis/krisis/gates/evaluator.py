@@ -39,6 +39,11 @@ class GateEvaluator:
         if candidate.gate_failure:
             return False, candidate.gate_failure, f"Failed gate: {candidate.gate_failure}"
 
+        # Reject untrusted caller-produced gate results
+        producer = getattr(candidate.gate_results, "producer", None) or (candidate.gate_results.get("producer") if isinstance(candidate.gate_results, dict) else None)
+        if producer == "caller":
+            return False, "provenance", "Gate results with untrusted producer 'caller' rejected"
+
         # 2. Citation resolution against valid passage IDs if grounded
         if "citation_resolution" in self.profile.hard_gates and valid_passage_ids is not None:
             # Validate candidate-level cited passages
@@ -50,9 +55,11 @@ class GateEvaluator:
             # Validate claim-level cited passages
             for cl in candidate.claims:
                 pids = getattr(cl, "cited_passage_ids", None) or (cl.get("cited_passage_ids") if isinstance(cl, dict) else [])
+                claim_id = getattr(cl, "claim_id", "unknown") or (cl.get("claim_id", "unknown") if isinstance(cl, dict) else "unknown")
+                if not pids:
+                    return False, "citation_resolution", f"Supported claim '{claim_id}' cites no evidence passages"
                 for pid in pids:
                     if pid and pid not in valid_passage_ids:
-                        claim_id = getattr(cl, "claim_id", "unknown") or (cl.get("claim_id", "unknown") if isinstance(cl, dict) else "unknown")
                         return False, "citation_resolution", f"Claim '{claim_id}' cites nonexistent passage '{pid}'"
 
         # 3. Per-claim support verification (grounded profiles)

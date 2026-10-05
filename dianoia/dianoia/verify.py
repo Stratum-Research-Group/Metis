@@ -119,6 +119,9 @@ def verify_answer_against_evidence(
     report = "\n".join(report_lines)
 
     return {
+        "verified": True,
+        "verifier_mode": "sheaf_nli" if actual_nli_active else "sheaf_laplacian",
+        "provenance": "dianoia_sheaf_verification",
         "conflicts_found": conflicts_found,
         "conflict_detail": conflict_detail,
         "report": report,
