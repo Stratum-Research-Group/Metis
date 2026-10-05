@@ -1,25 +1,23 @@
-# Stoma
+# Stoma (Στόμα)
 
 > **Ingestion pipeline and mouth for local AI topological memory (LTHCM)**
 
-Stoma feeds the memory of a local AI stack. While **LTHCM** (topological memory) is the memory substrate, Stoma is the mouth: it takes local documents and media, parses them into passages with granular location information, and indexes them into LTHCM with durable provenance.
+**Stoma** (Greek: *mouth*) is the ingestion pipeline and document feeder for the Metis local AI stack. While **LTHCM** is the topological memory substrate, Stoma is the mouth: it takes local documents, source code, and media transcripts, parses them into structured passages with granular location information, and indexes them into LTHCM with durable provenance and light-cone causal timestamps.
 
 ---
 
-## Hard Constraints & Architecture
+## 1. Hard Constraints & Core Principles
 
 - **100% Local at Runtime**: No cloud parsers, no hosted OCR, no external APIs. User documents, transcripts, passages, and embeddings never leave the local machine.
-- **Pinned Git Submodules**:
-  * **LTHCM**: `https://gitlab.com/akarta-315h/LTHCM` @ `336f4af9f624aca5b4978a5e3ce222ce9638da35`
-  * **dianoia**: `https://gitlab.com/akarta-315h/dianoia` @ `da7ce83cb05f3b44764fc59ab5c325995c6fd07c`
-  * **hestia**: `https://gitlab.com/akarta-315h/hestia` @ `edd1bcf411180dd3c9b1171057d03f400b3bfb96`
-  * **dokime**: `https://gitlab.com/akarta-315h/dokime` @ `43c025348098aa9511f56acfb26ed19a62983177`
-- **Submodules are strictly read-only**: Never modified or copied into Stoma's source tree.
+- **Offline Runtime Enforcement**: Offline environment variables (`TRANSFORMERS_OFFLINE=1`, `HF_HUB_OFFLINE=1`) are enforced at startup; model hub network calls are blocked.
+- **Honest Provenance & Monorepo Verification**:
+  - In submodule configurations: Verifies pinned git commits for `deps/LTHCM` and `deps/dianoia`.
+  - In integrated Metis monorepo configurations: Verifies cryptographic SHA-256 directory tree digests (`compute_component_digest()`) recorded in `vendored_provenance.json` (or `release_manifest.json`), strictly scoped to the Stoma root, failing closed if provenance is altered or missing.
 - **Narrow LTHCM Adapter**: Encapsulates LTHCM engine interactions, enforcing shape validation and provenance tracking.
 
 ---
 
-## Locked Architectural Decisions
+## 2. Locked Architectural Decisions
 
 ### 1. Encoder & Single-Facet Geometry
 - **Runtime Embedder**: Stoma imports the pinned `dianoia.embedding.TextEmbedder` at runtime (`sentence-transformers/all-MiniLM-L6-v2`).
@@ -30,7 +28,6 @@ Stoma feeds the memory of a local AI stack. While **LTHCM** (topological memory)
 ### 2. Measured Model Identity & Token-Bounded Chunking
 - Stoma inspects the loaded encoder's tokenizer and limits at setup without guessing:
   - Model: `sentence-transformers/all-MiniLM-L6-v2`
-  - Revision: `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`
   - Weights Checksum (state_dict SHA-256): `2c705a5e3279febcd4b210fc95a6231ced10be71e400e863ab41b623d5799508`
   - Tokenizer: `BertTokenizer` (`transformers.models.bert.tokenization_bert.BertTokenizer`)
   - Raw `max_seq_length`: `256`
@@ -56,23 +53,19 @@ Stoma feeds the memory of a local AI stack. While **LTHCM** (topological memory)
 - Failed extractions, mid-stream batch errors, or serialization failures leave the serving generation completely untouched.
 - File moves/renames are transactional: removing the old ID set and creating the new path under a new ID set, preventing stale references or duplicate ghosts.
 
-### 5. Offline Runtime Enforcement & Strict Submodule Pinning
-- Offline environment variables (`TRANSFORMERS_OFFLINE=1`, `HF_HUB_OFFLINE=1`) are enforced before model initialization; model hub network calls are blocked at runtime.
-- Startup invokes `verify_runtime_dependencies()` to verify exact submodule commits for `deps/LTHCM` (`336f4af9f624aca5b4978a5e3ce222ce9638da35`) and `deps/dianoia` (`da7ce83cb05f3b44764fc59ab5c325995c6fd07c`), failing loudly on altered commits or wrong origin paths.
-
-### 6. Streaming Ingestion & Dual-Store Integrity
+### 5. Streaming Ingestion & Dual-Store Integrity
 - Ingestion operates via generators (`extract_file_stream` + `chunk_raw_passages_stream`) in bounded embedding batches.
 - Explicit 25MB safe size cap on non-streaming AST (`CodePlugin`) and JSON parsers (`OCRPlugin`, `WhisperPlugin`).
 - Adapters validate both hyperbolic `documents` (with duplicate ID detection) and superposition `doc_index`, ensuring 100% parity with manifest passage IDs.
 
-### 7. Dianoia Interchange Compatibility
-- Pinned Dianoia CLI (`deps/dianoia/dianoia/cli.py:206-219`) requires `graph_edges > 0` for its deliberative walk. Stoma v1 has zero graph edges (graph mining is out of scope for v1).
+### 6. Dianoia Interchange Compatibility
+- Pinned Dianoia CLI requires `graph_edges > 0` for its deliberative walk. Stoma v1 has zero graph edges (graph mining is out of scope for v1).
 - Stoma exercises the actual Dianoia loader under controlled subprocess invocation, captures the real edge-gate rejection, and accurately reports `direct_cli_walk_unsupported_zero_edges` (exit code 1).
-- Stoma's index matches Dianoia's serialization format (`pickle`), `d_model` (384), and single-facet geometry. Subprocess failures (e.g. timeout, missing module) are distinguished from edge gate refusal and reported honestly.
+- Stoma's index matches Dianoia's serialization format (`pickle`), `d_model` (384), and single-facet geometry.
 
 ---
 
-## Supported Source Plugins
+## 3. Supported Source Plugins
 
 | Plugin | Formats | Features |
 |---|---|---|
@@ -84,33 +77,11 @@ Stoma feeds the memory of a local AI stack. While **LTHCM** (topological memory)
 
 ---
 
-## Installation & Setup
-
-```bash
-# 1. Clone repository with submodules
-git clone --recursive <repo-url> stoma
-cd stoma
-
-# 2. Set up virtual environment using uv or python
-uv venv --python 3.11 .venv
-source .venv/bin/activate
-
-# 3. Install dependencies and local submodules
-uv pip install -e deps/LTHCM -e deps/dianoia
-uv pip install -e .
-
-# 4. Optional: Prefetch embedding model cache ahead of offline runtime
-stoma setup-model
-# or: python -m stoma.embedder prefetch
-```
-
----
-
-## CLI Usage
+## 4. CLI Usage
 
 ### Setup & Model Prefetch
 ```bash
-# Download and cache SentenceTransformer weights while online
+# Prefetch and verify SentenceTransformer model weights
 stoma setup-model
 ```
 
@@ -155,28 +126,15 @@ stoma interchange
 
 ---
 
-## Running Tests
+## 5. Running Tests
 
 ```bash
-pytest -v
+uv run pytest stoma/tests -v --cov=stoma
 ```
-All **90 unit, integration, and regression tests** validate:
+All unit, integration, and regression tests validate:
 - Source plugins & image-only PDF detection with typed exception hierarchy
 - Token bounding and deduplication
 - Adapter shape validation and loud failure
 - Causal light-cone filtering (past document present, future excluded, no fallback)
-- Lifecycle (unchanged skipped, edited swapped, deleted purged)
-- Persistence and restart durability with mismatched model rejection
-- Symlink exclusion outside allowed roots
-- Direct Dianoia interchange & edge refusal reporting
-- Round 1, Round 2, Round 3, and Round 4 regression suites:
-  * Single atomic commit point (`current.json` swap) and monotonic prefix recovery from `commit_chain.json`
-  * Watcher retries for moves, deletions, and ingests with dead-letter queue and capped error memory
-  * Explicit offline cache miss naming setup step and weights checksum verification
-  * Dual submodule verification: top-level gitlink and checked-out HEAD
-  * Streaming rebuild without full chunk accumulation or duplicate extract passes
-  * Subprocess Dianoia interchange capturing real returncode 1 and edge refusal
-  * Dual-store unconditional equality enforcement
-  * Mid-extraction modification detection and transactional rollback
-  * Strict file descriptor and directory fsync durability semantics
-  * Robust watcher event scheduling with bounded exponential backoff
+- Generational commit durability and atomic current swap
+- Honest monorepo provenance verification (`vendored_provenance.json`)

@@ -170,9 +170,46 @@ Answer-time verification runs LTHCM's sheaf cohomological contradiction filter o
   - In environments without cross-encoder weights: `Method: sheaf cohomological contradiction filter (NLI inactive: vector sheaf Laplacian only)`.
 - When answer-evidence conflicts are detected: prepends the conflict report, logs the initial walk path, and triggers at most one re-walk.
 
-### Walk Logs
+### Walk Logs & Training Signal
 
-Walk logs are appended to `~/.dianoia/walks.jsonl` by default (override with `--log-path`). Each line is a self-contained JSON record conforming to `schema_version = 1`.
+Walk logs are appended to `~/.dianoia/walks.jsonl` by default (override with `--log-path`). Each line is a self-contained JSON record conforming to `schema_version = "1.0.0"`.
+
+#### JSON Record Schema (`1.0.0`)
+```json
+{
+  "schema_version": "1.0.0",
+  "walk_id": "4b684cb6-09ec-45c1-9278-6e5414d7a7c0",
+  "question": "What is hippocampal replay?",
+  "seeded_nodes": ["node_1", "node_2"],
+  "path": [
+    {
+      "node": "node_1",
+      "action": "EXPAND",
+      "raw_output": "ACTION: EXPAND node_2\nREASON: Relevant to hippocampal replay",
+      "reason": "Relevant to hippocampal replay",
+      "parse_failed": false
+    },
+    {
+      "node": "node_2",
+      "action": "ANSWER",
+      "raw_output": "ACTION: ANSWER\nREASON: Sufficient context retrieved",
+      "reason": "Sufficient context retrieved",
+      "parse_failed": false
+    }
+  ],
+  "verification": {
+    "conflicts_found": false,
+    "rewalked": false,
+    "report": "Consistent with evidence",
+    "conflict_detail": null
+  },
+  "final_answer": "Hippocampal replay is the replay of neural activity patterns...",
+  "max_steps": 12,
+  "steps_used": 2,
+  "model": "qwen2.5-7b-instruct",
+  "fallback_used": false
+}
+```
 
 #### Conflict & Re-Walk Two-Record Pattern
 When answer verification detects a contradiction between the synthesized answer and the evidence graph:
@@ -180,7 +217,11 @@ When answer verification detects a contradiction between the synthesized answer 
 2. **Re-Walk Record**: The controller executes a re-walk informed by the conflict report. When completed, it logs the re-walk outcome with `verification.rewalked = true`, its own verification report, its own `conflict_detail`, and `initial_path` preserving the first trajectory. If the re-walk fails to complete, `verification.rewalk_failed = true` is logged.
 3. **Log Linkage**: Both records in the pair share the same `walk_id` (a UUIDv4 string), enabling downstream analysis and policy training pipelines to join the failing attempt with the corrective re-walk. Normal walks without contradictions emit a single record with its own unique `walk_id`.
 
-These logs are the future training signal for a learned walk policy. No learner is built in v1.
+#### Paideia Gold Defensible Trajectory Criteria
+Downstream training harnesses ([Paideia](file:///home/akarta/Projects/Metis/paideia)) consume these walk logs to train learned walk policies. Trajectories are filtered strictly according to defensibility criteria:
+- **Parse-Failed Trajectories**: Trajectories containing parse failures or truncated steps are excluded from supervised policy training sets.
+- **Unresolved Contradictions**: Trajectories where verification found conflicts and either no re-walk occurred or the re-walk failed to resolve the contradiction are excluded from gold datasets.
+- **Resolved Re-Walks**: Re-walk records that successfully eliminated evidence contradictions are paired via `walk_id` with their initial trajectory, forming high-value contrastive and corrective supervisory pairs.
 
 ## Hard Constraints (v1)
 

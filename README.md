@@ -1,124 +1,187 @@
 # Metis: Sovereign Local AI Cognitive & Multi-Agent Stack
 
-**Metis** is a modular, single-owner, sovereign local AI ecosystem designed to ingest documents, maintain hierarchical topological memory, deliberate over graph-structured evidence, serve local open-weights models, enforce strict security and capability guardrails, and provide unified orchestration and interfaces—without paid third-party APIs or cloud lock-in.
+**Metis** (Greek: *Μῆτις*, wisdom, counsel, craft) is a modular, single-owner, sovereign local AI ecosystem. It unites hierarchical non-Euclidean memory, deliberative graph-based thought traversal, local model serving, action-bound capability guardrails, policy-governed factual answer selection, reproducible statistical evaluation, and authenticated text and voice interfaces—**completely offline, with zero paid APIs, telemetry, or cloud lock-in.**
 
 ---
 
-## Architecture Overview
+## 1. System Architecture
 
-```
-                      +---------------------------------------+
-                      |         Prosopon (UI & Voice)         |
-                      +-------------------+-------------------+
-                                          | Turn & Approval Events
-                                          v
-                      +---------------------------------------+
-                      |       Kybernetes (Orchestrator)       |
-                      |       (Planner & Budget Engine)       |
-                      +---------+-------------------+---------+
-                                |                   |
-                 +--------------+                   +---------------+
-                 | Evaluates & Selects                              | Policy Gates
-                 v                                                  v
-    +-------------------------+                       +-------------------------+
-    | Krisis (Answer Selector)|                       |   Phylax (Guardrails)   |
-    +-------------------------+                       +-------------------------+
-                 |                                                  |
-                 v                                                  v
-    +-------------------------+                       +-------------------------+
-    |   Hestia (Model Server) |                       |     External Tools      |
-    +-------------------------+                       +-------------------------+
-                 ^
-                 | Reasoning & Verification
-                 v
-    +-------------------------+
-    |  Dianoia (Deliberation) | <---> Kleroterion (Stochastic Action Selector)
-    +-------------------------+
-                 ^
-                 | Graph Walks & Topological Memory
-                 v
-    +-------------------------+
-    | LTHCM (Context Memory)  |
-    +-------------------------+
-                 ^
-                 | Ingestion & Indexing
-                 v
-    +-------------------------+
-    |     Stoma (Ingestion)   |
-    +-------------------------+
+```mermaid
+flowchart TD
+    subgraph Presentation ["Presentation Layer"]
+        PROSOPON["Prosopon (Web SPA & Voice)<br/><i>FastAPI • Vanilla JS • WebM/Opus • Whisper • Piper</i>"]
+    end
 
-    Cross-cutting:
-    - Dokime: Reproducible evaluation harness & release gates
-    - Paideia: Dataset auditing, LoRA fine-tuning & adapter registry
+    subgraph Orchestration ["Orchestration & Governance Layer"]
+        KYBERNETES["Kybernetes (Central Orchestrator)<br/><i>7-Stage Pipeline • Kalman Filter • EVM Budget Loop</i>"]
+        PHYLAX["Phylax (Guarded Capability Gateway)<br/><i>Action-Bound Approvals • Audit Hash-Chain • Default Deny</i>"]
+        KRISIS["Krisis (Candidate Answer Selector)<br/><i>Hard Eligibility Gates • Half-Even Scoring • Reason Precedence</i>"]
+    end
+
+    subgraph Cognition ["Cognition & Memory Layer"]
+        DIANOIA["Dianoia (Deliberative Reasoning)<br/><i>Thought-Graph Walks • Sheaf Contradiction Re-Walk</i>"]
+        KLEROTERION["Kleroterion (Stochastic Decision Submodule)<br/><i>Entropy Diagnostic • Masked Softmax • Proposal Sampling</i>"]
+        LTHCM["LTHCM (Topological Context Memory)<br/><i>POVM Superposition • Lorentzian Light Cone • Sheaf Cohomology</i>"]
+        STOMA["Stoma (Memory Mouth & Ingestion)<br/><i>AST/PDF Chunking • Epoch Timestamps • Commit-Chain Ledger</i>"]
+    end
+
+    subgraph Infrastructure ["Inference, Training & Evaluation Infrastructure"]
+        HESTIA["Hestia (Local Model Server)<br/><i>OpenAI Compatibility • VRAM Admission • Idle Unloading</i>"]
+        PAIDEIA["Paideia (Training & Evidence Pipeline)<br/><i>Baseline Ladder • Gold Trajectory Filter • Adapter Registry</i>"]
+        DOKIME["Dokime (Evaluation & Release Gates)<br/><i>Paired Bootstrap 10k CI • Matrix Benchmarks • Hestia Integration</i>"]
+    end
+
+    PROSOPON <-->|SSE TurnStream & Approvals| KYBERNETES
+    KYBERNETES <-->|Capability Mediation| PHYLAX
+    KYBERNETES <-->|Answer Gating & Scoring| KRISIS
+    KYBERNETES <-->|OpenAI Chat / Completions| HESTIA
+    KYBERNETES <-->|Deliberative Walks| DIANOIA
+    DIANOIA <-->|Stochastic Action Proposal| KLEROTERION
+    DIANOIA <-->|Graph Memory & Verification| LTHCM
+    STOMA -->|Generational Ingestion| LTHCM
+    DOKIME -.->|Release Gate Evaluation| HESTIA
+    PAIDEIA -.->|Export Validated Adapters| HESTIA
 ```
 
 ---
 
-## Component Stacks
+## 2. Component Stacks & Module Documentation
 
-| Stack | Role | Key Capabilities |
-| :--- | :--- | :--- |
-| [**stoma**](stoma) | Ingestion & Parsing | Document parsing (PDF, text, code), chunking, sentence-transformers embeddings, directory watching, index generation. |
-| [**LTHCM**](LTHCM) | Topological Memory | Long-Term Hierarchical Context Memory with topological retrieval, superposition, wormhole routing, and sheaf verification. |
-| [**dianoia**](dianoia) | Deliberation & Walk | Deliberative cognition layer over LTHCM topological memory; bounded graph walks, counterfactual hypothesis testing, and verifier synthesis. |
-| [**hestia**](hestia) | Model Serving | OpenAI-compatible local model server wrapping llama.cpp/vLLM/transformers, GPU admission control, `/v1/models` and streaming completions. |
-| [**dokime**](dokime) | Evaluation Harness | Reproducible benchmark harness for local models, held-out task suites, statistical significance testing, and regression release gates. |
-| [**kleroterion**](kleroterion) | Stochastic Selector | Entropy-aware, masked-softmax/Gaussian action selection among eligible Dianoia walk actions. |
-| [**krisis**](krisis) | Candidate Selector | Policy-governed answer evaluation & candidate ranking with hard gates (access, provenance, contradiction, citation resolution). |
-| [**kybernetes**](kybernetes) | Central Orchestrator | Central request planner, multi-turn session lifecycle, adapter framework, and strict token/time/cost budget engine. |
-| [**paideia**](paideia) | Training Harness | Dataset auditing, trajectory filtering, LoRA adapter registry, and training provenance. |
-| [**phylax**](phylax) | Security Guardrails | Capability execution gateway, RBAC policy enforcement, one-time approval handles, and sandboxed tool execution. |
-| [**prosopon**](prosopon) | User Interface | Authenticated text & voice client interface, session history, and human-in-the-loop approval management. |
-| [**docs**](docs) | System Contracts | Architecture specs, integration contracts ([`STACK_BUILD_CONTRACT.md`](docs/STACK_BUILD_CONTRACT.md)), and integration roadmap ([`stack-integration.md`](docs/stack-integration.md)). |
+Each of the 11 component stacks in Metis is an independently testable, production-grade module with its own dedicated documentation:
+
+| Module | Architectural Role | Key Technologies & Capabilities | Documentation |
+| :--- | :--- | :--- | :--- |
+| **stoma** | Ingestion & Memory Mouth | Document parsing (PDF, text, code, OCR, transcripts), token bounding ($\le 254$), epoch-timestamped causal tagging, generational commit-chain durability, and honest monorepo provenance verification. | [**stoma/README.md**](stoma/README.md) |
+| **LTHCM** | Topological Context Memory | Non-Euclidean memory substrate with Quantum POVM density operators, Lorentzian light-cone attention, Cellular Sheaf Laplacian contradiction filters, hyperbolic Poincaré taxonomy, and spectral wormhole routing. | [**LTHCM/README.md**](LTHCM/README.md) |
+| **dianoia** | Deliberative Thought Walks | Graph traversal deliberative cognition over LTHCM (`EXPAND`, `BACKTRACK`, `ANSWER`), dual-model fallback proxy, sheaf contradiction re-walks, and versioned JSONL walk logging (`1.0.0`). | [**dianoia/README.md**](dianoia/README.md) |
+| **kleroterion** | Stochastic Action Selector | Entropy-aware, dimension-scaled ($1/\sqrt{d}$) masked-softmax and Gaussian proposal selection for Dianoia walk actions, preventing cognitive mode collapse. | [**kleroterion/README.md**](kleroterion/README.md) |
+| **hestia** | Local Model Serving | OpenAI-compatible server (`/v1/models`, `/v1/chat/completions`), VRAM admission control, idle model unloading, multi-model configs (`models.yaml`), and queue depth limiting. | [**hestia/README.md**](hestia/README.md) |
+| **krisis** | Candidate Answer Selector | Deterministic eligibility gating (access, provenance, contradiction, citation resolution, claim support), 6-decimal Half-Even scoring, deduplication, and reason precedence. | [**krisis/README.md**](krisis/README.md) |
+| **kybernetes** | Central Orchestrator | 7-stage de-siloed execution pipeline, real-time Bayesian-Kalman budget loop, EVM cost tracking, safe AST tools, action-bound Phylax gating, and SSE streaming. | [**kybernetes/README.md**](kybernetes/README.md) |
+| **phylax** | Security Guardrails & Gateway | Point-of-action capability mediation, default-deny YAML policies, action-bound single-use approval state machine, anti-argument-swap verification, and fail-closed audit hash chain. | [**phylax/README.md**](phylax/README.md) |
+| **prosopon** | UI & Sovereign Voice Client | Authenticated single-owner browser interface, PIN pairing, self-signed TLS for mobile microphone access, local audio transcoding (WebM $\to$ WAV $\to$ Whisper/Piper), and ShowWork drawer. | [**prosopon/README.md**](prosopon/README.md) |
+| **paideia** | Training & Policy Pipeline | Evidence-to-policy pipeline, ladder of baselines (Majority $\to$ Regex $\to$ Lexical $\to$ Embedding), Dianoia gold defensible trajectory filtering, 10,000 paired bootstrap gates, and content-addressed adapter export. | [**paideia/README.md**](paideia/README.md) |
+| **dokime** | Evaluation & Release Gates | Reproducible evaluation harness, 10,000 paired bootstrap confidence intervals, matrix benchmark runs, Hestia integration, immutable run manifests, and regression release gates. | [**dokime/README.md**](dokime/README.md) |
 
 ---
 
-## Getting Started
+## 3. Cross-Module Architectural Contracts
 
-Metis is managed as a unified [`uv`](https://github.com/astral-sh/uv) workspace across all 11 component stacks.
+To maintain strict interoperability and avoid runtime breakage, Metis enforces explicit cross-module contracts:
 
-### 1. Workspace Bootstrap
+| Producer | Consumer | Interface / Contract | Invariant & Validation Rules |
+| :--- | :--- | :--- | :--- |
+| **Stoma** | **LTHCM** | `LTHCMEngine.index_document()` | - Single-facet shape `[1, 384]` enforced with loud `ShapeMismatchError`.<br/>- Real epoch timestamps (`time.time()`) to keep documents inside the past light cone.<br/>- Monorepo provenance verified via SHA-256 directory digests in `vendored_provenance.json`. |
+| **LTHCM** | **Dianoia** | `LTHCMRetriever` | - Read-only inference with deterministic seed retrieval.<br/>- Sheaf cohomological contradiction filter triggers at most one corrective re-walk upon conflict. |
+| **Dianoia** | **Kleroterion** | `StochasticProposalEngine` | - Action logits scaled by $1/\sqrt{d}$ before masked softmax.<br/>- Valid action masking prevents exploring visited or disconnected nodes. |
+| **Dianoia** | **Paideia** | Walk Log JSONL (`~/.dianoia/walks.jsonl`) | - Schema version strictly `"1.0.0"`.<br/>- Linked re-walks share identical `walk_id`.<br/>- Unresolved contradictions or parse failures are excluded from gold policy sets. |
+| **Paideia** | **Hestia** | Adapter Registry (`models.yaml`) | - Content-addressed SHA-256 digests computed strictly over immutable adapter weights and config files, omitting transient metadata timestamps. |
+| **Kybernetes** | **Phylax** | `GuardedGateway` / `KybernetesShim` | - Action-bound state machine: `PENDING -> APPROVED -> EXECUTED`.<br/>- Approvals are single-use tokens consumed atomically upon execution.<br/>- Cryptographic argument digest verification prevents argument tampering. |
+| **Kybernetes** | **Prosopon** | HTTP SSE (`/v1/chat/turn`) | - Typed `TurnEvent` streaming: `stage_start`, `stage_end`, `content_delta`, `approval_request`, `trace_complete`, `error`.<br/>- Redacted ShowWork metadata without leaking raw internal system prompts. |
+| **Kybernetes** | **Krisis** | `KrisisSelector.evaluate()` | - Strict Half-Even Decimal 6-place scoring: $0.7 \cdot \bar{c} + 0.3 \cdot \text{cal\_ll}$.<br/>- Bracket citation validation (`[1]`, `[doc:123]`) against available evidence.<br/>- Hard gates eliminate unverified candidates before scoring. |
 
-To bootstrap all dependencies and initialize the workspace under Python 3.12:
+---
 
+## 4. End-to-End Execution Flow
+
+When a user asks a complex, multi-hop question via the Prosopon voice interface:
+
+1. **Voice Ingestion**: The mobile browser captures push-to-talk audio via `MediaRecorder` (WebM/Opus) and sends it over a W3C-secure TLS connection to Prosopon.
+2. **Audio Transcoding & STT**: Prosopon transcodes the audio to 16kHz mono WAV via local `ffmpeg` and transcribes it via local `whisper.cpp`.
+3. **Turn Dispatch**: Prosopon opens an SSE stream to Kybernetes (`POST /v1/chat/turn`).
+4. **Planning & Authorization**: Kybernetes checks tool permissions with Phylax and initializes the Bayesian-Kalman budget tracker.
+5. **Memory Retrieval**: Kybernetes queries Stoma-indexed LTHCM memory within the Lorentzian past light cone.
+6. **Deliberative Reasoning**: If multi-hop reasoning is required, Dianoia traverses the knowledge graph, choosing actions via Kleroterion's entropy-aware selector.
+7. **Synthesis & Verification**: Hestia generates candidate responses. Krisis evaluates candidates against hard eligibility gates, checks citation markers, computes 6-decimal Half-Even scores, and selects the winning response.
+8. **Guarded Action**: If an outbound action or tool is required, Phylax issues an interactive `ApprovalCard` to Prosopon; upon user confirmation, the single-use token is consumed and the tool executed.
+9. **Streaming & Voice Playback**: Verified tokens and citations stream to Prosopon in real-time, followed by audio waveform playback synthesized locally via `piper`.
+
+---
+
+## 5. Getting Started & Workspace Setup
+
+Metis is managed as a unified workspace using [`uv`](https://github.com/astral-sh/uv).
+
+### Prerequisites
+- Linux OS (Ubuntu 22.04+ recommended)
+- Python 3.11 or 3.12
+- `uv` installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- `ffmpeg` installed for voice features (`sudo apt-get install -y ffmpeg`)
+
+### 1. Workspace Initialization
 ```bash
+# Clone the repository
+git clone https://gitlab.com/akarta-315h/metis.git
+cd metis
+
+# Bootstrap all virtual environments and workspace dependencies
 ./scripts/setup_workspace.sh
-# or directly with uv:
+
+# Or directly with uv:
 uv sync --python 3.12
 ```
 
-### 2. Running Stack Integration & Component Tests
-
-To run the end-to-end multi-stack smoke test suite:
-
+### 2. Running Test Suites
 ```bash
+# Multi-stack integration smoke test
 PYTHONPATH="kybernetes:prosopon:hestia/src:stoma/src" uv run pytest tests/test_stack_smoke.py -v
+
+# Regression suite covering cross-module fixes
+uv run pytest tests/test_round2_fixes.py -v
+
+# Individual stack unit tests
+uv run pytest dianoia/tests -v
+uv run pytest dokime/tests -v
+uv run pytest hestia/tests -v
+uv run pytest kleroterion/tests -v
+uv run pytest krisis/tests -v
+uv run pytest kybernetes/tests -v
+uv run pytest paideia/tests -v
+uv run pytest phylax/tests -v
+uv run pytest prosopon/tests -v
+uv run pytest stoma/tests -v
 ```
 
-To run individual stack unit tests:
-
+### 3. Launching the Sovereign Stack
 ```bash
-# Kybernetes orchestrator
-uv run --package kybernetes pytest kybernetes/tests -v
-
-# Prosopon UI & Session store
-uv run --package prosopon pytest prosopon/tests -v
-```
-
-### 3. Launching the Local Stack
-
-Start the full sovereign local AI stack (Hestia on port `8080`, Kybernetes on port `8081`, and Prosopon on port `8000`):
-
-```bash
+# Launch Hestia (8080), Kybernetes (8081), and Prosopon (8000)
 ./scripts/run_stack.sh
 ```
+Navigate to `http://127.0.0.1:8000` to interact with the system.
 
-Then navigate to `http://127.0.0.1:8000` to interact with Prosopon.
+For phone access over your local Wi-Fi network:
+```bash
+prosopon serve --lan --tls --port 8000 --kybernetes-url http://127.0.0.1:8081
+```
+Enter the 6-digit terminal pairing PIN on your phone browser (`https://<host-ip>:8000`) for authenticated text and push-to-talk voice.
 
 ---
 
-## Hardware & Architecture Guides
+## 6. Hardware & GPU Partitioning Guide
 
-- **Heterogeneous GPU & CUDA Architecture**: [`docs/HARDWARE_AND_CUDA_GUIDE.md`](docs/HARDWARE_AND_CUDA_GUIDE.md) (covers dual NVIDIA Tesla V100 Volta `sm_70` and RTX 5060 Ti Blackwell `sm_120` environment partitioning).
-- **Stack Build Contract**: [`docs/STACK_BUILD_CONTRACT.md`](docs/STACK_BUILD_CONTRACT.md)
-- **Integration Roadmap**: [`docs/stack-integration.md`](docs/stack-integration.md)
+Metis is designed for efficient execution on heterogeneous local hardware:
+
+- **Inference & Model Serving (NVIDIA Tesla V100 SXM2 16GB / Volta `sm_70`)**:
+  - Pinned to CUDA 12.2 / 12.4.
+  - Runs `llama-server` (llama.cpp) or vLLM serving Qwen2.5-7B-Instruct (Q4_K_M) and Llama-3.1-8B-Instruct.
+- **Topological Computation & Embeddings (NVIDIA RTX 5060 Ti 16GB / Blackwell `sm_120`)**:
+  - Pinned to PyTorch with CUDA 12.8.
+  - Accelerates LTHCM non-Euclidean geometry, Sinkhorn optimal transport, and sentence embedding inference.
+- **Control Plane & Gate Evaluation (CPU Host)**:
+  - Kybernetes, Krisis, Phylax, Prosopon, and SQLite budget engine run with minimal CPU and memory overhead (~500MB RAM).
+
+For in-depth hardware setup, environment variables, and driver configurations, see [**docs/HARDWARE_AND_CUDA_GUIDE.md**](docs/HARDWARE_AND_CUDA_GUIDE.md).
+
+---
+
+## 7. Architecture Specifications & Integration Roadmap
+
+- [**docs/STACK_BUILD_CONTRACT.md**](docs/STACK_BUILD_CONTRACT.md): Foundational build contract and component responsibilities.
+- [**docs/stack-integration.md**](docs/stack-integration.md): Ecosystem integration roadmap, test matrices, and dependency graphs.
+- [**docs/HARDWARE_AND_CUDA_GUIDE.md**](docs/HARDWARE_AND_CUDA_GUIDE.md): Hardware allocation and multi-GPU partitioning guide.
+
+---
+
+## 8. License
+
+Metis and its component stacks are licensed under the [MIT License](LICENSE).

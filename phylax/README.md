@@ -1,6 +1,6 @@
-# Phylax
+# Phylax (Φύλαξ)
 
-**Phylax** (Greek: *guardian* / *watcher*) is the local policy engine and guarded capability gateway for the Metis ecosystem.
+**Phylax** (Greek: *guardian* / *watcher*) is the local policy engine, capability authorization gateway, and security guardrail for the Metis ecosystem.
 
 It provides point-of-action capability mediation for files, tools, system processes, and network operations, verifying that callers possess authorized permissions according to hand-written, human-auditable YAML policies with default-deny semantics.
 
@@ -8,36 +8,15 @@ It provides point-of-action capability mediation for files, tools, system proces
 
 ## 1. Product Outcome & Threat Model Summary
 
-- **Enforcement Model**: Point-of-action capability gateway (`GuardedGateway`, `GuardedFileAdapter`, `GuardedToolAdapter`, `GuardedSendAdapter`). Permissions are checked and operations executed atomically inside the guarded gateway.
-- **Fail-Closed Audit**: Append-only cryptographic hash chain where each entry links `record_hash = sha256(prev_hash + record_fields)`. Any failure to flush to the audit log immediately aborts the operation and returns `DENY`.
-- **Approval Lifecycle**: `ASK` decisions produce single-use, cryptographically bound approval handles (`argument_digest = sha256(args)`). Expired approvals, replays, or argument-tampering attempts are strictly denied.
-- **Trust Boundary**: Phylax is an in-process Python capability gateway. It does not provide kernel sandboxing. Untrusted plugins must be isolated using OS-level mechanisms (e.g., `bubblewrap`, containers, or unprivileged UIDs).
-
-For complete threat analysis and operation inventory across all Metis components (Stoma, LTHCM, Dianoia, Hestia, Kybernetes, Prosopon, Dokime, Paideia), see [THREAT_MODEL.md](file:///home/akarta/Projects/Metis/phylax/THREAT_MODEL.md).
-
----
-
-## 2. Installation & Quickstart
-
-Phylax requires Python `>=3.11` and uses `pydantic`, `pyyaml`, `click`, and `tabulate`.
-
-```bash
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
-```
-
-Verify your environment using the Phylax CLI:
-```bash
-phylax doctor
-```
+- **Point-of-Action Capability Gateway**: `GuardedGateway`, `GuardedFileAdapter`, `GuardedToolAdapter`, `GuardedSendAdapter`. Permissions are checked and operations executed atomically inside the guarded gateway.
+- **Action-Bound Single-Use Approvals**: Sensitive operations (`ASK` effect) emit single-use cryptographic approval handles. Once approved, execution transitions state atomically from `APPROVED` to `EXECUTED`. Token replay, double-execution, or concurrent reuse are strictly impossible.
+- **Anti-Argument-Swap Verification**: Approvals bind to the exact cryptographic digest of their arguments (`argument_digest = sha256(canonical_json(args))`). Any attempt to alter arguments between owner approval and execution triggers immediate abort with `DENY`.
+- **Fail-Closed Audit Hash Chain**: Append-only cryptographic hash chain where each entry links `record_hash = sha256(prev_hash + record_fields)`. Any failure to flush to the audit log immediately aborts the operation and returns `DENY`.
+- **Symlink & Path Traversal Containment**: File access uses `O_NOFOLLOW` and verified `fstat` checks, preventing symlink race conditions (TOCTOU) and path traversal (`../`) attacks.
 
 ---
 
-## 3. Policy Specification & Linter
+## 2. Policy Specification & Default Deny
 
 Policies are written strictly in YAML and validated against a schema with `extra="forbid"`. No executable code is permitted.
 
@@ -101,9 +80,40 @@ phylax validate policies/default_policy.yaml
 
 ---
 
-## 4. Guarded Capabilities Usage
+## 3. Approval Lifecycle & State Machine
 
-### 4.1 Kybernetes Orchestrator Shim
+```
+[Request Operation]
+        │
+        ├── Rule Matches 'allow' ──► [Execute Atomically & Audit Log]
+        │
+        ├── Rule Matches 'deny'  ──► [Abort Operation & Audit Log]
+        │
+        └── Rule Matches 'ask'   ──► [Generate Approval Handle]
+                                            │
+                                            ▼
+                                     State: PENDING (with TTL)
+                                            │
+                        ┌───────────────────┴───────────────────┐
+                        │                                       │
+                  [User Approves]                        [User Denies / TTL Expires]
+                        │                                       │
+                        ▼                                       ▼
+                 State: APPROVED                         State: DENIED / EXPIRED
+                        │                                       │
+                [Execute Gateway]                               ▼
+                        │                               [Abort Execution]
+                        ▼
+                 State: EXECUTED (Consumed)
+                        │
+                [Replay Attempt -> DENY]
+```
+
+---
+
+## 4. Integration Examples
+
+### Kybernetes Orchestrator Shim
 ```python
 from phylax.engine.manager import PolicyManager
 from phylax.audit.logger import AuditLogger
@@ -129,14 +139,13 @@ except PermissionError as exc:
     print(f"Approval required: {exc}")
 ```
 
-### 4.2 Prosopon Approval Integration
+### Prosopon Approval Integration
 Pending requests conform to Prosopon's `ApprovalCard` contract:
 ```python
 from phylax.adapters.prosopon import ProsoponApprovalAdapter
 
 adapter = ProsoponApprovalAdapter(gateway.approval_manager)
 cards = adapter.get_pending_cards()
-# [{ "approval_id": "appr-...", "turn_id": "...", "action": "send", ... }]
 
 # Owner approves in Prosopon UI
 adapter.resolve("appr-12345", approved=True, reason="Owner approved")
@@ -159,27 +168,9 @@ adapter.resolve("appr-12345", approved=True, reason="Owner approved")
 
 ---
 
-## 6. End-to-End Demo
+## 6. Running Tests
 
-Run the automated live demonstration:
 ```bash
-python demo.py
+uv run pytest phylax/tests -v --cov=phylax
 ```
-
-The script demonstrates:
-1. **Allowed docs read**: Safe file access within authorized directories.
-2. **Denied private read**: Blocked file access into sensitive folders.
-3. **Approval flow**: Outbound message triggers `ASK`, owner approves via Prosopon/CLI adapter, executed once, replay denied.
-4. **Timeout denial**: Unanswered approval times out to `DENY` after TTL expires.
-5. **Anti-Argument-Swap**: Arguments altered before execution trigger SHA-256 digest mismatch denial.
-6. **Audit log verification**: Cryptographic verification of hash chain and redacted secrets.
-
----
-
-## 7. Test Suite
-
-Run unit and integration tests with coverage:
-```bash
-pytest --cov=phylax
-```
-All 32 tests validate contract schemas, static linter warnings, symlink containment, deny-precedence, TOCTOU races, argument digests, fail-closed audit writing, and CLI execution.
+All tests validate contract schemas, static linter warnings, symlink containment, deny-precedence, TOCTOU races, argument digests, single-use token consumption, fail-closed audit writing, and CLI execution.

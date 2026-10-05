@@ -10,7 +10,7 @@ from dianoia.log import SCHEMA_VERSION, append_walk_log, build_walk_record
 
 class TestWalkLogging(unittest.TestCase):
     def test_schema_version(self):
-        self.assertEqual(SCHEMA_VERSION, 1)
+        self.assertEqual(SCHEMA_VERSION, "1.0.0")
 
     def test_build_walk_record(self):
         record = build_walk_record(
@@ -59,7 +59,7 @@ class TestWalkLogging(unittest.TestCase):
             "fallback_used",
         }
         self.assertEqual(set(record.keys()), expected_keys)
-        self.assertEqual(record["schema_version"], 1)
+        self.assertEqual(record["schema_version"], "1.0.0")
         self.assertTrue(isinstance(record["walk_id"], str) and len(record["walk_id"]) > 0)
         self.assertEqual(record["max_steps"], 8)
         self.assertEqual(record["steps_used"], 2)

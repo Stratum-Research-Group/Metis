@@ -61,4 +61,6 @@ pythonpath = [
     "LTHCM",
     "dokime",
     "kleroterion",
+    "kleroterion/src",
+    "hestia/src",
 ]

@@ -1,10 +1,12 @@
-# Paideia: Production-Grade Local Training and Policy Evaluation Pipeline
+# Paideia (Παιδεία)
 
-Paideia turns validated, logged local outcomes from the Metis stack into deployable routing and deliberative walk-policy artifacts. It acts as an **evidence-to-policy pipeline**: fine-tuning a QLoRA adapter is treated as a candidate output evaluated against a ladder of cheap baselines, not an assumed default definition of success.
+**Paideia** (Greek: *education* / *training*) is the production-grade local training, dataset auditing, and policy evaluation pipeline of the Metis ecosystem.
+
+Paideia turns validated, logged local outcomes (LTHCM router benchmark results and Dianoia deliberative walk logs) into deployable routing and deliberative walk-policy artifacts. It treats fine-tuning a QLoRA adapter as a candidate output evaluated against a ladder of cheap baselines, not an assumed default definition of success.
 
 ---
 
-## 1. Core Architecture & Pipeline Components
+## 1. Core Architecture & Evidence-to-Policy Pipeline
 
 ```
                 +-----------------------------------------+
@@ -40,7 +42,7 @@ Paideia turns validated, logged local outcomes from the Metis stack into deploya
                 |         4. QLoRA Runner (Opt-in)        |
                 | - VRAM headroom admission (>=12GB free) |
                 | - Exclusive GPU lock (/tmp/metis_gpu)   |
-                | - Atomic manifest lifecycle & OOM safety|
+                | - SIMULATED status for mock runs        |
                 +--------------------+--------------------+
                                      |
                                      v
@@ -55,7 +57,8 @@ Paideia turns validated, logged local outcomes from the Metis stack into deploya
                                      v
                 +-----------------------------------------+
                 |        6. Hestia Registry Export        |
-                | - Verified base / adapter / tok digests |
+                | - Deterministic content hashing         |
+                | - Exclude transient metadata timestamps |
                 | - Rollback target specification         |
                 +-----------------------------------------+
 ```
@@ -64,21 +67,29 @@ Paideia turns validated, logged local outcomes from the Metis stack into deploya
 
 ## 2. Key Responsibilities & Invariants
 
-1. **Separation of Task Classifier vs. Best-Route Policy:**
-   - Question-type classification (e.g. HotpotQA `bridge` vs `comparison`) is kept distinct from best-route misrouting.
-   - Best-route labels are derived strictly from counterfactual paired outcomes under a declared utility function:
-     $$\text{Utility} = \text{quality} - \lambda_{\text{lat}} \cdot \text{latency} - \lambda_{\text{cost}} \cdot \text{cost}$$
-     Ties and missing counterfactuals are explicitly excluded.
-2. **Defensible Dianoia Trajectories:**
-   - Dianoia walk logs are joined by `walk_id`. Unresolved contradictions or parse failures are excluded from gold policy data. Re-walks that successfully resolved conflicts are retained.
-3. **Statistical Gates:**
-   - An adapter is promoted **only** if:
-     1. Primary held-out metric delta $> 0$.
-     2. Paired 95% bootstrap confidence interval strictly excludes zero ($CI_{\text{lower}} > 0$).
-     3. Paired null hypothesis test is statistically significant ($p < 0.05$).
-     4. Latency (p95), peak memory, and failure rate guardrails pass.
-4. **Reproducibility & Provenance:**
-   - Every run writes an atomic `RunManifest` capturing git commit hash, dirty tree flag, package versions, hardware specs, dataset and split SHA-256 digests, hyperparameters, and execution duration.
+### 1. Separation of Task Classifier vs. Best-Route Policy
+- Question-type classification (e.g. HotpotQA `bridge` vs `comparison`) is kept distinct from best-route decisions.
+- Best-route labels are derived strictly from counterfactual paired outcomes under a declared utility function:
+  $$\text{Utility} = \text{quality} - \lambda_{\text{lat}} \cdot \text{latency} - \lambda_{\text{cost}} \cdot \text{cost}$$
+  Ties and missing counterfactuals are explicitly excluded.
+
+### 2. Defensible Dianoia Trajectories
+- Dianoia walk logs are joined by `walk_id`.
+- Unresolved contradictions or parse failures are excluded from gold policy training data.
+- Re-walks that successfully resolved conflicts are retained, forming paired contrastive supervision.
+
+### 3. Strict Promotion Gates
+An adapter is promoted to production candidate **only** if:
+1. Primary held-out metric delta $> 0$ over the strongest baseline on the ladder.
+2. Paired 95% bootstrap confidence interval strictly excludes zero ($CI_{\text{lower}} > 0$).
+3. Paired null hypothesis test is statistically significant ($p < 0.05$).
+4. Latency ($p95$), peak memory, and failure rate guardrails pass.
+
+### 4. Honest Training Artifacts (`SIMULATED` vs `TRAINED`)
+When running in environments without genuine GPU hardware, mock/dry-run executions record an explicit `SIMULATED` status in the run manifest. Mock passes cannot be passed off as trained adapter weights.
+
+### 5. Content-Addressed Adapter Registry
+When exporting adapters to Hestia's adapter registry (`models.yaml`), cryptographic checksums are computed strictly over immutable adapter weights and architecture configuration files, excluding transient metadata timestamps to ensure deterministic reproducibility.
 
 ---
 
@@ -129,7 +140,7 @@ paideia verify-run --manifest runs/test_run/manifest.json
 
 ## 4. Running Tests
 
-Execute the full unit and integration test suite:
 ```bash
-pytest -v --cov=paideia
+uv run pytest paideia/tests -v --cov=paideia
 ```
+All unit and integration tests validate Pydantic data schemas, leakage-safe splits, baseline ladder evaluation, bootstrap statistical significance testing, and registry export formatting.
