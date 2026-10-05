@@ -9,6 +9,8 @@ class DecisionStatus(str, Enum):
     ABSTAINED = "abstained"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    REBUILD_REQUIRED = "rebuild_required"
+
 
 
 class Reason(str, Enum):

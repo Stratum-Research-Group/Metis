@@ -172,6 +172,20 @@ def run_evaluation(
     with open(summary_path, "w", encoding="utf-8") as sf:
         json.dump(summary_data, sf, indent=2)
 
+    # Resolve served model identities from Hestia client
+    model_identities: dict[str, Any] = {}
+    try:
+        available_models = client.get_models_metadata()
+        models_by_name = {m.get("name"): m for m in available_models if isinstance(m, dict) and m.get("name")}
+        for mid in config.models:
+            if mid in models_by_name:
+                model_identities[mid] = models_by_name[mid]
+            else:
+                model_identities[mid] = {"name": mid, "state": "unresolved"}
+    except Exception:
+        for mid in config.models:
+            model_identities[mid] = {"name": mid, "state": "unresolved"}
+
     # Item 7: Finalize manifest.json including summary.json checksum
     manifest = create_manifest(
         run_id=run_id,
@@ -187,6 +201,7 @@ def run_evaluation(
         prompt_template_path=config.prompt_template_path,
         prompt_template_artifact_path=prompt_template_artifact_path,
         output_path=manifest_path,
+        model_identities=model_identities,
     )
 
     return {

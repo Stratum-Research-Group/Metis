@@ -81,8 +81,8 @@ pip install -e ".[dev]"
 # Start server with default host (127.0.0.1) and port (8080)
 hestia serve
 
-# Start on custom host, port, and config paths
-hestia serve --host 0.0.0.0 --port 8080 --config hestia.yaml --models models.yaml
+# Start on custom host, port, and config paths (listen_host must be loopback e.g. 127.0.0.1)
+hestia serve --host 127.0.0.1 --port 8080 --config hestia.yaml --models models.yaml
 ```
 
 ### Model Management CLI Commands
@@ -142,15 +142,14 @@ curl http://127.0.0.1:8080/v1/embeddings \
 
 ### `hestia.yaml` (Service Configuration)
 ```yaml
-host: "127.0.0.1"
-port: 8080
-llama_cpp_binary: "/usr/local/bin/llama-server"
+listen_host: "127.0.0.1"
+listen_port: 8080
+llamacpp_binary: "/usr/local/bin/llama-server"
 idle_timeout_seconds: 600
-load_timeout_seconds: 120
 max_concurrent_requests_per_model: 4
 max_queue_depth_per_model: 16
 queue_timeout_seconds: 30
-log_level: "info"
+log_level: "INFO"
 ```
 
 ### `models.yaml` (Model Registry)

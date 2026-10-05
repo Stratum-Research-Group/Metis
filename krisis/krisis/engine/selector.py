@@ -52,6 +52,12 @@ class KrisisSelector:
                         reason=Reason.STALE.value,
                         policy="no rebuild allowance remains; abstain STALE and never publish old ranking",
                     )
+                else:
+                    return KrisisDecision(
+                        status=DecisionStatus.REBUILD_REQUIRED.value,
+                        reason=Reason.STALE.value,
+                        policy="snapshot evidence changed; rebuild required before release",
+                    )
 
         # 2. Upstream generation failure check
         if req.generation_attempts is not None and req.generation_failures is not None:
@@ -112,9 +118,13 @@ class KrisisSelector:
         mapped_reasons: dict[str, str] = {}
 
         candidate_failure_mappings = self.policy.reason_mapping.get("candidate_failures", {})
+        evidence_ids = {ev.passage_id for ev in req.evidence if ev.passage_id}
 
         for cand in unique_candidates:
-            passed, gate_name, detail = gate_evaluator.evaluate_candidate(cand)
+            passed, gate_name, detail = gate_evaluator.evaluate_candidate(
+                cand,
+                valid_passage_ids=evidence_ids if (req.evidence or req.requires_grounding) else None,
+            )
             if not passed:
                 assert gate_name is not None
                 mapped_reason = candidate_failure_mappings.get(gate_name, Reason.NO_VALID_CANDIDATE.value)

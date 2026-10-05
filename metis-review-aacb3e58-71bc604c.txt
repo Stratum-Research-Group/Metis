@@ -1,0 +1,79 @@
+METIS REVIEW - gitlab.com/akarta-315h/metis  (corrected, replaces earlier file)
+Commit reviewed: aacb3e58 (main, the only commit, "feat: initial release of Metis sovereign local AI stack", 2026-10-04 20:24 +02:00)
+Method: static read of the source archive at that commit, plus two read-only uv checks in a /tmp copy (uv lock / uv sync --dry-run; nothing installed, repo untouched).
+Not run: tests, installs, model jobs, GPU. "Found in code" = read, not executed.
+Labels: [ERROR] = observed failure or defect with file:line. [OBSERVED] = fact from code. [RECOMMENDATION] = my suggestion, not an existing requirement.
+
+=== 1. WHAT IS IN THE REPO [OBSERVED]
+Vendored monorepo (no .gitmodules), 11 component dirs + docs/. No root pyproject.toml, setup.sh, run.sh, compose file or stack manifest.
+Approx non-test Python LOC / test files: LTHCM 17.7k/7, stoma 5.7k/12, kybernetes 3.5k/9, dokime 2.7k/17, phylax 2.6k/9, paideia 2.2k/7, kleroterion 1.8k/9, hestia 1.8k/4, dianoia 1.7k/6, prosopon 1.4k/7, krisis 1.2k/7.
+paideia, phylax, kybernetes, prosopon now have code and tests, so "prompt only" is out of date for them.
+Each of the 11 except LTHCM and kleroterion defines a CLI script in pyproject.toml.
+
+=== 2. KYBERNETES ADAPTER PATH: SIMULATED, NOT CALLING SIBLINGS [OBSERVED]
+Scope: this is what I read in kybernetes/kybernetes/adapters/*.py and where cli.py/server/app.py construct them. I did not trace every code path; I did not run it.
+ - adapters/lthcm.py:14-16 stores memory_root and builds self._local_corpus; :18 _init_local_corpus() returns 4 hardcoded passages; :54 retrieve() scores them by keyword/token overlap. memory_root is never used. No import of lthcm or stoma.
+ - adapters/dianoia.py:30 deliberate(): :56-57 walk_steps = min(max_steps, len(seed_citations)+1), edges_traversed = walk_steps - 1; :59-60 summary says "traversing N conceptual relation edges". No dianoia call; the walk is arithmetic on the citation count.
+ - adapters/krisis.py:38-46: deterministic-tool outputs return status VERIFIED, score 1.0; later branches score by whether citation markers appear in the response text. No krisis package call.
+ - adapters/phylax.py:17-18 constructor takes shim=None; approval logic is local (in-memory dicts). adapters/dokime.py:27 _history is an empty in-memory list; priors come from it.
+ - adapters/hestia.py is a real HTTP client (httpx) to an OpenAI-style API.
+ - server/app.py:31-33 and cli.py:79-81 build the adapters with defaults (HestiaAdapter(), LTHCMAdapter(), DianoiaAdapter()), so a default `serve` or `chat` uses these.
+ - cli.py:42-48 `doctor` prints READY for LTHCM/Stoma, Dianoia, Phylax and Krisis as fixed strings (not probes); only Hestia is actually checked (cli.py:37-40).
+Static conclusion: on the adapter path above, retrieval, deliberation and verification are simulated, so a default Kybernetes answer is not grounded in a real LTHCM/Stoma index. I did not check whether other code paths or extension points (e.g. passing real modules in) exist beyond the constructors named above.
+Across the monorepo, cross-package imports in non-test code are only LTHCM-internal plus stoma -> lthcm/dianoia and dianoia -> lthcm (lazy, inside functions). Kleroterion has adapters/dianoia/ but dianoia does not import kleroterion (grep of non-test code).
+
+=== 3. PORTS AND LAUNCH FLOW (resolved) [OBSERVED]
+Defaults in code:
+ - Hestia: hestia/hestia.yaml:8 listen_port 8080 (also hestia/src/hestia/config.py:32,73; hestia/src/hestia/cli/__init__.py:10,173-174).
+ - Kybernetes serve: kybernetes/kybernetes/cli.py:58-66: `kybernetes serve` --host 127.0.0.1 --port 8080 --db-path kybernetes_budget.db. Routes under /v1 (server/app.py: /v1/health, /v1/chat/turn, /v1/chat/stream, /v1/approvals/{id}/resolve, /v1/chat/turns/{id}/cancel, /v1/traces/{id}, /v1/budget/report/{id}).
+ - Prosopon: prosopon/prosopon/cli.py:21-22 --port default 8000; its Kybernetes upstream default is http://127.0.0.1:8080/v1 (prosopon/config.py:18). That matches Kybernetes' port, so my earlier "Prosopon targets Hestia's port" claim was wrong: Prosopon->Kybernetes is consistent.
+ - Kybernetes->Hestia: adapters/hestia.py:16 base_url default http://127.0.0.1:8000/v1. Nothing in the defaults listens on 8000 except Prosopon.
+[ERROR] Two defaults conflict: Hestia and Kybernetes both default to port 8080 (hestia.yaml:8 vs kybernetes/cli.py:60), so both cannot run with defaults on one host.
+[ERROR] Kybernetes' Hestia client default 8000 (adapters/hestia.py:16) does not match Hestia's 8080 (hestia.yaml:8); it matches Prosopon's default listen port (prosopon/cli.py:22).
+[OBSERVED] Default model name adapters/hestia.py:17 "qwen2.5-7b-instruct" is not among hestia/models.yaml registered names (lines 8, 22: llama-3.1-8b-instruct, nomic-embed-text; example GGUF paths under /models/).
+[OBSERVED] hestia.yaml llamacpp_binary is /usr/local/bin/llama-server, which must exist outside uv.
+Launch flow from code: three separate processes (hestia, kybernetes serve, prosopon) each started by its own CLI; I found no script that starts or orders them, and no readiness checks beyond kybernetes `doctor` (Hestia only).
+
+=== 4. YOUR uv OPTIONS (checked against pyproject files and uv docs)
+Python: highest requires-python is >=3.12 (hestia, dokime). 3.12 satisfies all 11 (hestia/dokime >=3.12; kybernetes, krisis, phylax >=3.11; others >=3.10).
+Option 1 (unified editable install): every extra named exists (LTHCM[bench], dianoia[nli], kleroterion[test], hestia/krisis/dokime/phylax/kybernetes/prosopon[dev], paideia[dev,cli]). stoma depends on lthcm==0.1.0 and dianoia==0.1.0 (stoma/pyproject.toml); both local versions are 0.1.0. In my uv lock check (below) the 11 projects resolved together, which supports Option 1's resolve step, but I did not run `uv pip install`.
+ [OBSERVED] dianoia imports lthcm (dianoia/dianoia/walk.py:29, verify.py:19, cli.py:77-79,178) but dianoia/pyproject.toml does not declare lthcm. Works in the unified env; fails in an isolated dianoia env unless lthcm is installed there.
+ [OBSERVED] stoma.config.verify_runtime_dependencies() (stoma/src/stoma/config.py:154-240) checks lthcm/dianoia are imported from LTHCM/ and dianoia/ next to stoma/ (monorepo mode skips the commit-pin checks, lines 164-181). Editable installs from this layout should satisfy it; not run.
+Option 2 (per-dir .venv): matches .gitignore patterns; needs lthcm installed into dianoia's and stoma's venvs (your note covers stoma; dianoia needs it too, per above). Not run.
+Option 3 (uv workspace): I tested a copy in /tmp with a root pyproject.toml containing only the [tool.uv.workspace] members list from your paste.
+ [ERROR] `uv lock` fails: "Failed to build `stoma @ file:///tmp/ws/stoma` ... `lthcm` is included as a workspace member, but is missing an entry in `tool.uv.sources` (e.g., `lthcm = { workspace = true }`)". Cause: stoma lists lthcm and dianoia as dependencies; in a workspace they need workspace sources. (uv 0.12.19.) 
+ With this added to the root pyproject.toml it locked: [tool.uv.sources] lthcm = { workspace = true } dianoia = { workspace = true }  -> "Resolved 145 packages" with --python 3.12. uv docs say root-level sources apply to members unless a member overrides; my run is consistent with that.
+ uv docs (https://docs.astral.sh/uv/concepts/projects/workspaces/): `uv lock` covers the whole workspace in one lockfile; `uv run`/`uv sync` act on the workspace root by default (`--package` selects a member); workspaces enforce one requires-python = intersection of members (here >=3.12); workspaces are not suited to members with conflicting requirements or members that want separate venvs. Docs also state "Every workspace needs a root, which is also a workspace member"; my virtual root (no [project]) was accepted by uv 0.12.19.
+ Observed with the sources fix: `uv sync --python 3.12 --dry-run` listed all 11 members plus torch==2.14.1 as to-be-installed. Dry run only. Extras (bench, nli, etc.) are not included by default; I did not test them. Without --python, uv picked CPython 3.14.7 for my test, so pin 3.12 explicitly (e.g. `uv sync --python 3.12`) [RECOMMENDATION].
+ Caveats: kleroterion/uv.lock exists and is ignored in a workspace (single lockfile at root); the Option 3 pasted text omits the sources entries (above); a shared single venv means any real conflict between members becomes one resolve failure.
+Single setup command: possible with Option 1. A single command that also launches the stack does not exist in the repo.
+
+=== 5. TORCH / GPUs (conditional, unresolved) [OBSERVED from PyTorch docs]
+Source: https://github.com/pytorch/pytorch/blob/HEAD/RELEASE.md. For PyTorch 2.12, 2.13 and 2.14 on Linux x86: the CUDA 12.6 build lists Volta (7.0) but not Blackwell 12.0; the CUDA 13.0 build lists Blackwell (12.0+PTX) but not Volta. So for those releases no single listed build covers both V100 (7.0) and a Blackwell card. The uv resolve above picked torch 2.14.1 from PyPI; I did not check which CUDA flavor that wheel carries. Which torch to use for the V100 and 5060 Ti is unresolved: it depends on your driver and on whether you run one card per environment, an older torch release, or a different arrangement. I did not verify the 5060 Ti's compute capability beyond PyTorch's "Blackwell (10.0, 12.0+PTX)" wording.
+
+=== 6. DESIGNED vs IMPLEMENTED vs MISSING (as of aacb3e58, static)
+Source exists with tests (not run by me): LTHCM, dianoia, stoma, kleroterion, hestia, krisis, dokime, phylax, kybernetes, prosopon, paideia.
+Simulated inside Kybernetes adapters: memory retrieval, Dianoia walk, Krisis scoring, Phylax approvals, Dokime priors (section 2).
+Designed only in docs: shared contracts package/schemas, stack lock manifest, setup/doctor checks, whole-stack Dokime eval (docs/stack-integration.md, dated 2026-09-29 and written from prompts, so some of its blockers may be stale; I rechecked only the Hestia one: /v1/models exists at hestia/src/hestia/api/app.py:106).
+Not found in this commit: root manifest/launcher, a kybernetes->real-LTHCM/Stoma adapter, a stack-level test.
+README (lines 61-72) links are file:///home/akarta/...; README:86 says `uv run --extra test pytest` for kybernetes, whose only extra is dev (kybernetes/pyproject.toml:24-25).
+
+=== 7. FIX PROMPT FOR YOUR CODING AI
+Constraints (do-not-touch): LTHCM/ source (any file under LTHCM/lthcm); krisis/krisis-*.json and krisis spec/review .txt/.md files; all *-review.md, *-build-prompt.md, *-prompt*.txt; docs/*.txt. Tests: legitimate updates and added regression tests are fine; do not weaken or delete assertions to get green. No model/dataset downloads. Report one commit per item.
+Exact errors/defects (fix these):
+ 1. kybernetes/kybernetes/cli.py:60 and hestia/hestia.yaml:8 both default to 8080. Choose distinct defaults and update every reference (README, prosopon/config.py:18, adapters/hestia.py:16).
+ 2. kybernetes/kybernetes/adapters/hestia.py:16 default port 8000 does not match Hestia (8080 today). Align with whatever Hestia port you choose.
+ 3. kybernetes/kybernetes/adapters/hestia.py:17 default model "qwen2.5-7b-instruct" is not in hestia/models.yaml. Make them agree, or have startup report the registered model names when the default is missing.
+ 4. README.md:61-72 file:///home/akarta links -> relative links. README.md:86 `--extra test` -> `--extra dev` for kybernetes.
+ 5. dianoia/pyproject.toml: lthcm is imported (walk.py:29, verify.py:19, cli.py:77-79,178) but not declared; declare it consistently with how stoma does.
+ 6. kybernetes/kybernetes/cli.py:42-48 `doctor` prints READY as fixed strings; make it reflect real checks or label them "not checked".
+ 7. kybernetes/kybernetes/adapters/dianoia.py:56-60 reports edges_traversed and a "traversing N relation edges" summary from citation counts. Make the output say it is simulated, or make it call dianoia.
+Recommendations (design choices, not existing requirements; decide yourself):
+ R1. adapters/lthcm.py: decide how Kybernetes should reach LTHCM/Stoma (library call or API). If retrieval is real, define what it does when no index is configured (memory_root is unused today, adapters/lthcm.py:14-15) rather than falling back silently to the 4 demo passages. Whether to require an as_of argument is your design call: the adapter currently accepts as_of optional and defaults to time.time() (lthcm.py:54-66).
+ R2. Mark demo/stub adapters clearly in output and traces so stub results are distinguishable from real ones; decide what status values the stub Krisis/Phylax paths may return (today krisis.py:38-46 can return VERIFIED for deterministic tool output).
+ R3. Add a root setup script and launch order doc/script (hestia -> kybernetes -> prosopon) with a doctor step; optional. For Option 3, the root pyproject needs the [tool.uv.sources] entries from section 4.
+ R4. Add a stack-level smoke test (e.g. stoma ingest -> kybernetes with a stubbed Hestia) once R1 is decided; add regression tests for items 1-3, 7.
+ R5. Torch: choose per-card or per-environment torch builds after checking the CUDA/arch tables in section 5 against your driver; do not assume one wheel covers both GPUs.
+
+=== 8. NOT CHECKED
+Tests, installs (`uv pip install`, `uv sync` actual), Python imports at runtime, GPU/serving, Stoma ingest, anything inside LTHCM/dianoia/stoma/krisis/phylax/paideia/prosopon beyond the cited lines, whether Kybernetes has other paths that use real components, and the CUDA flavor of the PyPI torch wheel uv selected.

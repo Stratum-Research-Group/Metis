@@ -29,10 +29,10 @@ class GateResults(BaseModel):
     """Boolean status of pre-evaluated hard gates."""
     model_config = ConfigDict(extra="allow")
 
-    access: bool = True
-    provenance: bool = True
-    contradiction: bool = True
-    citation_resolution: bool = True
+    access: bool | None = None
+    provenance: bool | None = None
+    contradiction: bool | None = None
+    citation_resolution: bool | None = None
 
 
 class Candidate(BaseModel):
@@ -52,8 +52,11 @@ class Candidate(BaseModel):
     gate_failure: str | None = None
 
     def get_gate_result(self, gate_name: str) -> bool:
+        """Retrieve boolean gate result, strictly failing closed if absent or unverified."""
         if isinstance(self.gate_results, GateResults):
-            return getattr(self.gate_results, gate_name, True)
+            val = getattr(self.gate_results, gate_name, None)
+            return val is True
         elif isinstance(self.gate_results, dict):
-            return self.gate_results.get(gate_name, True)
-        return True
+            val = self.gate_results.get(gate_name)
+            return val is True
+        return False

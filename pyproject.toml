@@ -59,8 +59,12 @@ pythonpath = [
     "paideia",
     "stoma/src",
     "LTHCM",
-    "dokime",
+    "dokime/src",
     "kleroterion",
     "kleroterion/src",
     "hestia/src",
+    "kybernetes",
+    "prosopon",
+    "phylax",
+    "krisis",
 ]

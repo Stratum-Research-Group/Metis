@@ -65,3 +65,82 @@ def test_r2_krisis_adapter_simulation_flag():
     ]
     report = adapter.verify_response(query="test", response_text="Answer based on [1]", citations=citations)
     assert report.is_simulated is True
+
+
+@pytest.mark.asyncio
+async def test_item10_health_canonical_states_and_honest_simulation():
+    """Verify /v1/health reports honest canonical states (simulated, offline) without false ready claims."""
+    from httpx import AsyncClient, ASGITransport
+    from kybernetes.server.app import create_app
+
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/v1/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        deps = data["dependencies"]
+
+        # Default unconfigured stack must be honest about simulation
+        assert deps["lthcm"]["status"] == "simulated"
+        assert deps["lthcm"]["mode"] == "simulated"
+
+        assert deps["dianoia"]["status"] == "simulated"
+        assert deps["dianoia"]["mode"] == "simulated"
+
+        assert deps["phylax"]["status"] == "simulated"
+        assert deps["phylax"]["mode"] == "simulated"
+
+        assert deps["krisis"]["status"] == "simulated"
+        assert deps["krisis"]["mode"] == "simulated"
+
+        # Hestia should be offline when no real server running at port 8080
+        assert deps["hestia"]["mode"] in ("live", "offline")
+
+
+def test_item10_serve_cli_memory_root_option():
+    """Verify kybernetes serve exposes --memory-root option."""
+    serve_cmd = cli.commands["serve"]
+    mem_param = next((p for p in serve_cmd.params if p.name == "memory_root"), None)
+    assert mem_param is not None
+    assert mem_param.default is None
+
+
+@pytest.mark.asyncio
+async def test_item26_pipeline_trace_records_served_model_identity():
+    """Verify pipeline TraceRecord records actual served model identity instead of generic 'local'."""
+    from kybernetes.contracts.turn import TurnRequest
+    from kybernetes.engine.pipeline import ExecutionPipeline
+    from kybernetes.routing.router import PlanRouter
+    from kybernetes.budget.engine import BudgetEngine
+    from kybernetes.budget.storage import BudgetDatabase
+    from kybernetes.tools.registry import ToolRegistry
+    from kybernetes.adapters.hestia import HestiaAdapter
+    from kybernetes.adapters.lthcm import LTHCMAdapter
+    from kybernetes.adapters.dianoia import DianoiaAdapter
+    from kybernetes.adapters.phylax import PhylaxAdapter
+    from kybernetes.adapters.krisis import KrisisAdapter
+    from kybernetes.engine.session import SessionManager
+
+    hestia = HestiaAdapter(default_model="qwen-2.5-7b-instruct")
+    pipeline = ExecutionPipeline(
+        router=PlanRouter(),
+        budget_engine=BudgetEngine(BudgetDatabase(":memory:")),
+        tool_registry=ToolRegistry(),
+        hestia_adapter=hestia,
+        lthcm_adapter=LTHCMAdapter(),
+        dianoia_adapter=DianoiaAdapter(),
+        phylax_adapter=PhylaxAdapter(),
+        krisis_adapter=KrisisAdapter(),
+        session_manager=SessionManager(),
+    )
+
+    req = TurnRequest(session_id="trace-test-session", query="What is 5 + 5?")
+    async for _ in pipeline.execute_turn_stream(req):
+        pass
+
+    traces = list(pipeline._traces.values())
+    assert len(traces) > 0
+    trace = traces[-1]
+    assert trace.dependency_versions["hestia"] == "qwen-2.5-7b-instruct"
+    assert trace.metadata["served_model"] == "qwen-2.5-7b-instruct"

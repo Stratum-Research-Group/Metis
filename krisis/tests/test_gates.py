@@ -35,7 +35,7 @@ def test_unsupported_claim_rejection(grounded_profile):
     evaluator = GateEvaluator(grounded_profile)
     cand = Candidate(
         id="c1",
-        gate_results=GateResults(),
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
         claims=[
             Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.950000"),
             Claim(claim_id="cl2", verdict="unsupported", calibrated_confidence="0.900000"),
@@ -51,7 +51,7 @@ def test_low_confidence_claim_rejection(grounded_profile):
     evaluator = GateEvaluator(grounded_profile)
     cand = Candidate(
         id="c1",
-        gate_results=GateResults(),
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
         claims=[
             Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.790000"),  # Below 0.800000
         ],
@@ -66,7 +66,7 @@ def test_valid_grounded_candidate_passes(grounded_profile):
     evaluator = GateEvaluator(grounded_profile)
     cand = Candidate(
         id="c1",
-        gate_results=GateResults(),
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
         claims=[
             Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.850000"),
             Claim(claim_id="cl2", verdict="supported", calibrated_confidence="0.920000"),
@@ -75,3 +75,57 @@ def test_valid_grounded_candidate_passes(grounded_profile):
     passed, gate, detail = evaluator.evaluate_candidate(cand)
     assert passed is True
     assert gate is None
+
+
+def test_omitted_or_partial_gate_results_fail_closed(grounded_profile):
+    """Item 8: Omitted, null, or partial gate results fail closed."""
+    evaluator = GateEvaluator(grounded_profile)
+    # Completely empty GateResults
+    cand_empty = Candidate(
+        id="c_empty",
+        gate_results=GateResults(),
+        claims=[Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.950000")],
+    )
+    passed, gate, detail = evaluator.evaluate_candidate(cand_empty)
+    assert passed is False
+    assert gate == "access"
+
+    # Partial GateResults (access=True, but provenance is None)
+    cand_partial = Candidate(
+        id="c_partial",
+        gate_results=GateResults(access=True),
+        claims=[Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.950000")],
+    )
+    passed, gate, detail = evaluator.evaluate_candidate(cand_partial)
+    assert passed is False
+    assert gate == "provenance"
+
+
+def test_nonexistent_citation_resolution_fails_closed(grounded_profile):
+    """Item 8: Candidates citing non-existent passages fail citation_resolution gate."""
+    evaluator = GateEvaluator(grounded_profile)
+    cand = Candidate(
+        id="c_bad_cite",
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
+        citations=["nonexistent_passage_999"],
+        claims=[Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.950000")],
+    )
+    # Provided valid evidence only contains "doc1_p1"
+    passed, gate, detail = evaluator.evaluate_candidate(cand, valid_passage_ids={"doc1_p1"})
+    assert passed is False
+    assert gate == "citation_resolution"
+    assert "does not exist in verified evidence" in detail
+
+
+def test_non_finite_confidence_fails_closed(grounded_profile):
+    """Item 8: NaN, Inf, or out-of-range confidence values fail closed."""
+    evaluator = GateEvaluator(grounded_profile)
+    cand = Candidate(
+        id="c_nan",
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
+        claims=[Claim(claim_id="cl1", verdict="supported", calibrated_confidence="NaN")],
+    )
+    passed, gate, detail = evaluator.evaluate_candidate(cand)
+    assert passed is False
+    assert gate == "feature_valid"
+

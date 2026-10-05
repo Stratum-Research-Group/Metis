@@ -71,40 +71,67 @@ def inspect_hardware() -> HardwareProfile:
     return profile
 
 
-def acquire_gpu_lock(lock_file: Path = DEFAULT_LOCK_PATH) -> bool:
+import fcntl
+import json
+import time
+
+_HELD_LEASES: Dict[str, int] = {}
+
+
+def acquire_gpu_lock(lock_file: Path = DEFAULT_LOCK_PATH, device: str = "rtx-5060-ti") -> bool:
     """
     Acquire exclusive GPU lock to coordinate training with Hestia serving layer.
+    Uses atomic OS-level fcntl.flock to eliminate check-then-write race conditions.
     Returns True if acquired, False if already held by another process.
     """
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if lock_file.exists():
-            # Check if PID in lock is still alive
-            with open(lock_file, "r") as f:
-                content = f.read().strip()
-            if content.isdigit():
-                pid = int(content)
-                try:
-                    os.kill(pid, 0)
-                    # Process is alive -> lock is held
-                    return False
-                except OSError:
-                    # Stale lock file
-                    pass
-        # Write our PID
-        with open(lock_file, "w") as f:
-            f.write(str(os.getpid()))
+        fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        return False
+
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        os.close(fd)
+        return False
+
+    try:
+        os.ftruncate(fd, 0)
+        os.lseek(fd, 0, os.SEEK_SET)
+        payload = json.dumps({
+            "pid": os.getpid(),
+            "owner": "paideia_training",
+            "device": device,
+            "acquired_at": time.time(),
+        })
+        os.write(fd, payload.encode("utf-8"))
+        _HELD_LEASES[str(lock_file)] = fd
         return True
-    except Exception:
+    except OSError:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        os.close(fd)
         return False
 
 
 def release_gpu_lock(lock_file: Path = DEFAULT_LOCK_PATH) -> None:
     """Release GPU lock upon training completion or failure."""
+    fd = _HELD_LEASES.pop(str(lock_file), None)
+    if fd is not None:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass
     try:
         if lock_file.exists():
-            with open(lock_file, "r") as f:
-                content = f.read().strip()
-            if content == str(os.getpid()):
-                lock_file.unlink()
-    except Exception:
+            lock_file.unlink()
+    except OSError:
         pass
+

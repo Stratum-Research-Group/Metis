@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from unittest.mock import AsyncMock, call, patch
 
@@ -11,7 +12,14 @@ import pytest
 from hestia.backend import BackendProcess, BackendStartError
 from hestia.config import PortRange, ServiceConfig
 from hestia.registry import ModelEntry, ModelRegistry, ModelState, ModelType, SamplingParams
-from hestia.server import GpuQueryError, ModelNotFoundError, NoFreePortError, ServerManager
+from hestia.server import (
+    GpuDeviceConflictError,
+    GpuQueryError,
+    ModelNotFoundError,
+    NoFreePortError,
+    ServerManager,
+    ServerOverloadedError,
+)
 
 
 def _make_model(name: str, vram_mb: int, model_type: str = "chat") -> ModelEntry:
@@ -552,3 +560,138 @@ class TestVramBudgetFit:
         with patch("hestia.server.get_total_vram_mb", return_value=0):
             with pytest.raises(GpuQueryError, match="failed to query GPU VRAM capacity"):
                 await manager.ensure_loaded("test-model")
+
+
+class TestBatch3Remediations:
+    """Regression tests for Batch 3 (Items 14-17): port range, queue cancellation, rollback, and GPU locking."""
+
+    def test_default_port_range_does_not_overlap_with_kybernetes(self) -> None:
+        cfg = ServiceConfig()
+        assert cfg.backend_port_range.start == 9000
+        assert cfg.backend_port_range.end == 9019
+        assert 8081 not in cfg.backend_port_range.ports
+
+    def test_occupied_os_port_is_skipped(self) -> None:
+        registry = ModelRegistry()
+        model = _make_model("m1", 2000)
+        registry._models = {model.name: model}
+
+        backend = _make_backend_mock()
+        config = _make_config(port_start=9000, port_end=9002)
+        manager = ServerManager(registry, backend, config)
+
+        with patch.object(manager, "_is_port_available", side_effect=lambda p: p != 9000):
+            port = manager._allocate_port("m1")
+            assert port == 9001
+            assert manager._port_allocations[9001] == "m1"
+
+    def test_exhausted_port_range_raises_no_free_port(self) -> None:
+        registry = ModelRegistry()
+        model = _make_model("m1", 2000)
+        registry._models = {model.name: model}
+
+        backend = _make_backend_mock()
+        config = _make_config(port_start=9000, port_end=9001)
+        manager = ServerManager(registry, backend, config)
+
+        with patch.object(manager, "_is_port_available", return_value=False):
+            port = manager._allocate_port("m1")
+            assert port is None
+
+    @pytest.mark.asyncio
+    async def test_cancellation_releases_queue_depth(self) -> None:
+        registry = ModelRegistry()
+        backend = _make_backend_mock()
+        # concurrency=1, max_queue=1
+        config = ServiceConfig(
+            max_concurrent_requests_per_model=1,
+            max_queue_depth_per_model=1,
+            queue_timeout_seconds=5.0,
+        )
+        manager = ServerManager(registry, backend, config)
+
+        # Acquire the only concurrency slot
+        await manager.acquire_admission("m1")
+
+        # Spawn a waiter task that will be queued
+        waiter = asyncio.create_task(manager.acquire_admission("m1"))
+        await asyncio.sleep(0.01)
+
+        # Waiter is in queue; another request should hit queue full
+        with pytest.raises(ServerOverloadedError):
+            await manager.acquire_admission("m1")
+
+        # Cancel the queued waiter
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        # Queue depth must be 0, not stuck at 1
+        assert manager._model_queue_depths.get("m1", 0) == 0
+
+        # Now a new waiter should be able to enter the queue without ServerOverloadedError
+        new_waiter = asyncio.create_task(manager.acquire_admission("m1"))
+        await asyncio.sleep(0.01)
+        assert manager._model_queue_depths.get("m1", 0) == 1
+
+        # Release first slot, new_waiter acquires and finishes
+        manager.release_admission("m1")
+        await new_waiter
+        assert manager._model_queue_depths.get("m1", 0) == 0
+        manager.release_admission("m1")
+
+    @pytest.mark.asyncio
+    async def test_load_failure_rolls_back_state_and_releases_port(self) -> None:
+        registry = ModelRegistry()
+        model = _make_model("faulty-model", 2000)
+        registry._models = {model.name: model}
+
+        backend = _make_backend_mock()
+        backend.start = AsyncMock(side_effect=BackendStartError("faulty-model", "Fatal crash on startup"))
+        config = _make_config(port_start=9000, port_end=9001)
+        manager = ServerManager(registry, backend, config)
+
+        with (
+            patch("hestia.server.get_free_vram_mb", return_value=16000),
+            patch("hestia.server.get_total_vram_mb", return_value=16384),
+        ):
+            with pytest.raises(BackendStartError):
+                await manager.ensure_loaded("faulty-model")
+
+            # State must be UNLOADED, port freed, device lease cleaned
+            assert model.state == ModelState.UNLOADED
+            assert model.backend_port is None
+            assert manager._port_allocations[9000] is None
+            assert "rtx-5060-ti" not in manager._device_leases
+
+    @pytest.mark.asyncio
+    async def test_gpu_lock_mutual_exclusion_with_training(self) -> None:
+        from hestia.device_lock import get_device_lock_path
+
+        registry = ModelRegistry()
+        model = _make_model("m1", 2000)
+        registry._models = {model.name: model}
+
+        backend = _make_backend_mock()
+        config = _make_config()
+        manager = ServerManager(registry, backend, config)
+
+        # Simulate training holding the device flock
+        lock_file = get_device_lock_path("rtx-5060-ti")
+        import fcntl
+        fd = os.open(str(lock_file), os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        try:
+            with (
+                patch("hestia.server.get_free_vram_mb", return_value=16000),
+                patch("hestia.server.get_total_vram_mb", return_value=16384),
+            ):
+                with pytest.raises(GpuDeviceConflictError, match="locked by another process"):
+                    await manager.ensure_loaded("m1")
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+            if lock_file.exists():
+                lock_file.unlink()
+

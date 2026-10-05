@@ -22,6 +22,10 @@ class ProsoponConfig(BaseModel):
         default=True,
         description="Use realistic local mock if real Kybernetes server is offline",
     )
+    kybernetes_service_token: Optional[str] = Field(
+        default=None,
+        description="Service bearer token for Kybernetes orchestrator API",
+    )
     
     # Security & Pairing
     data_dir: Path = Field(
@@ -43,6 +47,7 @@ class ProsoponConfig(BaseModel):
     whisper_model: str = Field(default="base.en", description="Whisper model name or GGML file path")
     piper_binary: str = Field(default="piper", description="Path to piper TTS binary or alias")
     piper_model: str = Field(default="en_US-lessac-medium", description="Piper voice model file")
+    voice_mock_mode: bool = Field(default=False, description="Explicit mock mode for local speech engines")
 
     def is_lan(self) -> bool:
         return self.host not in ("127.0.0.1", "localhost")

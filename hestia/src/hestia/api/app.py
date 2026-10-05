@@ -21,6 +21,7 @@ from hestia.api.schemas import (
     ModelListResponse,
     ModelObject,
 )
+from hestia.backend import BackendStartError
 from hestia.backend.llamacpp import LlamaCppBackend
 from hestia.config import ServiceConfig
 from hestia.registry import ModelRegistry, ModelType
@@ -110,6 +111,24 @@ def _build_router():
 
     router = APIRouter()
 
+    @router.get("/")
+    async def root() -> JSONResponse:
+        """Service index and endpoint discovery for Hestia."""
+        return JSONResponse(
+            {
+                "service": "hestia",
+                "name": "Hestia Local Model Server",
+                "version": "0.1.0",
+                "endpoints": {
+                    "health": "/health",
+                    "models": "/v1/models",
+                    "chat_completions": "/v1/chat/completions",
+                    "embeddings": "/v1/embeddings",
+                    "docs": "/docs",
+                },
+            }
+        )
+
     @router.get("/v1/models")
     async def list_v1_models() -> JSONResponse:
         """OpenAI-compatible model listing endpoint for Dianoia, Kybernetes, and external tools."""
@@ -123,6 +142,9 @@ def _build_router():
                     type=m.model_type.value,
                     context_size=m.context_size,
                     quantization=m.quantization,
+                    artifact_digest=m.artifact_digest,
+                    gpu_target=m.gpu_target,
+                    state=m.state.value if hasattr(m.state, "value") else str(m.state),
                 ).model_dump()
             )
         return JSONResponse(ModelListResponse(data=models_data).model_dump())
@@ -141,6 +163,9 @@ def _build_router():
                 type=m.model_type.value,
                 context_size=m.context_size,
                 quantization=m.quantization,
+                artifact_digest=m.artifact_digest,
+                gpu_target=m.gpu_target,
+                state=m.state.value if hasattr(m.state, "value") else str(m.state),
             ).model_dump()
         )
 
@@ -178,6 +203,12 @@ def _build_router():
                 body["temperature"] = model.sampling.temperature
             if "top_p" not in body or body["top_p"] is None:
                 body["top_p"] = model.sampling.top_p
+            if "top_k" not in body or body["top_k"] is None:
+                if model.sampling.top_k is not None:
+                    body["top_k"] = model.sampling.top_k
+            if "repeat_penalty" not in body or body["repeat_penalty"] is None:
+                if model.sampling.repeat_penalty is not None:
+                    body["repeat_penalty"] = model.sampling.repeat_penalty
 
         # Concurrency admission control
         try:
@@ -200,7 +231,7 @@ def _build_router():
                 process = await manager.ensure_loaded(model_name, track_inflight=True)
             except ModelNotFoundError as exc:
                 raise HTTPException(status_code=404, detail=str(exc))
-            except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError) as exc:
+            except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError, BackendStartError) as exc:
                 raise HTTPException(status_code=503, detail=str(exc))
 
             stream = validated_req.stream
@@ -298,7 +329,7 @@ def _build_router():
                 process = await manager.ensure_loaded(model_name, track_inflight=True)
             except ModelNotFoundError as exc:
                 raise HTTPException(status_code=404, detail=str(exc))
-            except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError) as exc:
+            except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError, BackendStartError) as exc:
                 raise HTTPException(status_code=503, detail=str(exc))
 
             try:
@@ -332,7 +363,7 @@ def _build_router():
             await manager.load_model_explicit(model_name)
         except ModelNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError) as exc:
+        except (ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError, BackendStartError) as exc:
             raise HTTPException(status_code=503, detail=str(exc))
 
         return JSONResponse({"status": "loaded", "model": model_name})

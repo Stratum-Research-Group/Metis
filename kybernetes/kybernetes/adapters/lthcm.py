@@ -37,43 +37,104 @@ class LTHCMAdapter:
         if not files:
             raise ValueError(f"Memory root directory is empty: {root_str}")
 
-        # Look for manifest or index snapshot: manifest.json, index.json, or passages.json
-        manifest_file = root / "manifest.json"
-        index_file = root / "index.json"
-        passages_file = root / "passages.json"
-
+        current_pointer = root / "current.json"
         target_file = None
-        if manifest_file.is_file():
-            target_file = manifest_file
-        elif index_file.is_file():
-            target_file = index_file
-        elif passages_file.is_file():
-            target_file = passages_file
-        else:
-            raise ValueError(f"Incompatible index in memory root {root_str}: missing manifest.json or index.json")
+        data = None
 
-        try:
-            with open(target_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            raise ValueError(f"Corrupted index in memory root {root_str}: {e}") from e
-
-        # Extract generation identity if available
-        gen_file = root / "current_generation.json"
-        if gen_file.is_file():
+        if current_pointer.is_file():
             try:
-                with open(gen_file, "r", encoding="utf-8") as gf:
-                    gen_data = json.load(gf)
-                    self.generation_id = str(gen_data.get("generation", gen_data.get("generation_id", "gen-1")))
-            except Exception:
-                self.generation_id = "gen-1"
-        else:
-            self.generation_id = str(data.get("manifest_version", data.get("generation_id", "gen-1")))
+                with open(current_pointer, "r", encoding="utf-8") as f:
+                    ptr_data = json.load(f)
+            except Exception as e:
+                raise ValueError(f"Corrupted current.json pointer in memory root {root_str}: {e}") from e
 
-        # Extract passages: can be dict of passages or list of passages
-        passages_data = data.get("passages")
-        if passages_data is None and isinstance(data, list):
+            gen_val = ptr_data.get("generation")
+            if gen_val is None:
+                raise ValueError(f"Corrupted generation pointer in {root_str}/current.json: missing generation number")
+            try:
+                gen_int = int(gen_val)
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"Invalid generation ID '{gen_val}' in {root_str}/current.json: {e}") from e
+
+            self.generation_id = f"gen-{gen_int}"
+            gen_dir = root / "generations" / f"gen_{gen_int:06d}"
+            if not gen_dir.is_dir():
+                gen_dir = root / "generations" / f"gen_{gen_int}"
+            if not gen_dir.is_dir():
+                raise FileNotFoundError(f"Referenced generation directory does not exist: {gen_dir}")
+
+            # Verify manifest hash if present in pointer
+            expected_man_hash = ptr_data.get("manifest_hash")
+            man_file = gen_dir / "manifest.json"
+            if expected_man_hash and man_file.is_file():
+                import hashlib
+                actual_man_hash = hashlib.sha256(man_file.read_bytes()).hexdigest()
+                if actual_man_hash != expected_man_hash:
+                    raise ValueError(f"Manifest hash mismatch for generation {gen_int}: expected {expected_man_hash}, got {actual_man_hash}")
+
+            # Locate passages file in generation directory
+            if (gen_dir / "passages_export.json").is_file():
+                target_file = gen_dir / "passages_export.json"
+            elif (gen_dir / "passages.json").is_file():
+                target_file = gen_dir / "passages.json"
+            elif man_file.is_file():
+                target_file = man_file
+            else:
+                raise ValueError(f"Generation directory {gen_dir} contains no passages_export.json or manifest.json")
+
+            try:
+                with open(target_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as e:
+                raise ValueError(f"Corrupted passages file in {target_file}: {e}") from e
+        else:
+            # Fallback to direct root files: manifest.json, index.json, passages.json
+            manifest_file = root / "manifest.json"
+            index_file = root / "index.json"
+            passages_file = root / "passages.json"
+
+            if manifest_file.is_file():
+                target_file = manifest_file
+            elif index_file.is_file():
+                target_file = index_file
+            elif passages_file.is_file():
+                target_file = passages_file
+            else:
+                raise ValueError(f"Incompatible index in memory root {root_str}: missing current.json, manifest.json, or index.json")
+
+            try:
+                with open(target_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as e:
+                raise ValueError(f"Corrupted index in memory root {root_str}: {e}") from e
+
+            # Extract generation identity if available
+            gen_file = root / "current_generation.json"
+            if gen_file.is_file():
+                try:
+                    with open(gen_file, "r", encoding="utf-8") as gf:
+                        gen_data = json.load(gf)
+                        gen_raw = gen_data.get("generation", gen_data.get("generation_id"))
+                        if gen_raw is None:
+                            raise ValueError("Missing generation identifier in current_generation.json")
+                        self.generation_id = str(gen_raw)
+                except Exception as e:
+                    raise ValueError(f"Corrupt current_generation.json in {root_str}: {e}") from e
+            elif isinstance(data, dict):
+                self.generation_id = str(data.get("manifest_version", data.get("generation_id", "gen-1")))
+            else:
+                self.generation_id = "gen-1"
+
+        # Extract passages: check list first to prevent AttributeError: 'list' object has no attribute 'get'
+        passages_data = None
+        if isinstance(data, list):
             passages_data = data
+        elif isinstance(data, dict):
+            passages_data = data.get("passages")
+            if passages_data is None and "text" in data:
+                passages_data = [data]
+        else:
+            raise ValueError(f"Unrecognized index structure in {target_file}")
 
         if not passages_data:
             raise ValueError(f"Memory index has 0 passages: {root_str}")

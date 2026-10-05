@@ -76,18 +76,41 @@ class SafeCalculator:
             idempotent=True,
         )
 
+    MAX_EXPR_LENGTH = 500
+    MAX_AST_DEPTH = 10
+    MAX_AST_NODES = 100
+
     def evaluate(self, expression: str) -> float:
-        """Parse and evaluate math expression AST safely."""
+        """Parse and evaluate math expression AST safely with strict bounds."""
         expr_clean = expression.strip()
         if not expr_clean:
             raise ValueError("Empty mathematical expression")
+
+        if len(expr_clean) > self.MAX_EXPR_LENGTH:
+            raise ValueError(f"Expression exceeds maximum length of {self.MAX_EXPR_LENGTH} characters")
 
         try:
             tree = ast.parse(expr_clean, mode="eval")
         except SyntaxError as e:
             raise ValueError(f"Syntax error in expression: {e}") from e
 
-        return self._eval_node(tree.body)
+        self._validate_ast_limits(tree.body, current_depth=1)
+        result = self._eval_node(tree.body)
+
+        if math.isnan(result) or math.isinf(result):
+            raise ValueError("Mathematical expression evaluated to non-finite result (NaN or Inf)")
+
+        return result
+
+    def _validate_ast_limits(self, node: ast.AST, current_depth: int = 1) -> int:
+        if current_depth > self.MAX_AST_DEPTH:
+            raise ValueError(f"Expression AST depth exceeds limit ({self.MAX_AST_DEPTH})")
+        node_count = 1
+        for child in ast.iter_child_nodes(node):
+            node_count += self._validate_ast_limits(child, current_depth=current_depth + 1)
+            if node_count > self.MAX_AST_NODES:
+                raise ValueError(f"Expression AST node count exceeds limit ({self.MAX_AST_NODES})")
+        return node_count
 
     def _eval_node(self, node: ast.AST) -> float:
         if isinstance(node, ast.Constant):

@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from prosopon.voice.transcoder import transcode_to_wav, AudioTranscodingError
-from prosopon.voice.whisper_stt import WhisperSTTEngine
-from prosopon.voice.piper_tts import PiperTTSEngine
+from prosopon.voice.whisper_stt import WhisperSTTEngine, STTUnavailableError
+from prosopon.voice.piper_tts import PiperTTSEngine, TTSUnavailableError
 
 
 @pytest.mark.asyncio
@@ -31,23 +31,41 @@ async def test_transcoder_valid_audio():
     out_wav.unlink()
 
 
-
 @pytest.mark.asyncio
-async def test_whisper_stt_transcription(tmp_path):
-    stt = WhisperSTTEngine()
+async def test_whisper_stt_fails_honestly_when_binary_missing(tmp_path):
+    stt = WhisperSTTEngine(binary_name="nonexistent_whisper_binary", mock_mode=False)
     mock_wav = tmp_path / "test.wav"
     mock_wav.write_bytes(b"RIFF....WAVEfmt ....data....")
 
-    text, duration_ms = await stt.transcribe(mock_wav)
-    assert isinstance(text, str)
-    assert len(text) > 0
+    with pytest.raises(STTUnavailableError, match="not found on PATH"):
+        await stt.transcribe(mock_wav)
+
+
+@pytest.mark.asyncio
+async def test_whisper_stt_mock_mode_returns_simulated_provenance(tmp_path):
+    stt = WhisperSTTEngine(binary_name="nonexistent_whisper_binary", mock_mode=True)
+    mock_wav = tmp_path / "test.wav"
+    mock_wav.write_bytes(b"RIFF....WAVEfmt ....data....")
+
+    text, duration_ms, is_sim = await stt.transcribe(mock_wav)
+    assert "[SIMULATED TRANSCRIPT]" in text
+    assert is_sim is True
     assert duration_ms >= 0.0
 
 
 @pytest.mark.asyncio
-async def test_piper_tts_synthesis():
-    tts = PiperTTSEngine()
-    wav_bytes, duration_ms = await tts.synthesize("Hello from Metis")
+async def test_piper_tts_fails_honestly_when_binary_missing():
+    tts = PiperTTSEngine(binary_name="nonexistent_piper_binary", mock_mode=False)
+    with pytest.raises(TTSUnavailableError, match="not found on PATH"):
+        await tts.synthesize("Hello from Metis")
+
+
+@pytest.mark.asyncio
+async def test_piper_tts_mock_mode_returns_simulated_provenance():
+    tts = PiperTTSEngine(binary_name="nonexistent_piper_binary", mock_mode=True)
+    wav_bytes, duration_ms, is_sim = await tts.synthesize("Hello from Metis")
     assert isinstance(wav_bytes, bytes)
     assert len(wav_bytes) > 0
+    assert is_sim is True
     assert duration_ms >= 0.0
+

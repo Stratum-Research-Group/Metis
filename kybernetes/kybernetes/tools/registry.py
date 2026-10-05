@@ -62,13 +62,29 @@ class ToolRegistry:
         props = schema.get("properties", {})
         for k, v in arguments.items():
             if k in props:
-                expected_type = props[k].get("type")
-                if expected_type == "string" and not isinstance(v, str):
-                    raise TypeError(f"Parameter '{k}' expected string, got {type(v).__name__}")
-                elif expected_type == "integer" and not isinstance(v, int):
-                    raise TypeError(f"Parameter '{k}' expected integer, got {type(v).__name__}")
-                elif expected_type == "number" and not isinstance(v, (int, float)):
-                    raise TypeError(f"Parameter '{k}' expected number, got {type(v).__name__}")
+                prop_spec = props[k]
+                expected_type = prop_spec.get("type")
+                if expected_type == "string":
+                    if not isinstance(v, str):
+                        raise TypeError(f"Parameter '{k}' expected string, got {type(v).__name__}")
+                    if "maxLength" in prop_spec and len(v) > prop_spec["maxLength"]:
+                        raise ValueError(f"Parameter '{k}' exceeds maxLength {prop_spec['maxLength']}")
+                    if "minLength" in prop_spec and len(v) < prop_spec["minLength"]:
+                        raise ValueError(f"Parameter '{k}' below minLength {prop_spec['minLength']}")
+                elif expected_type == "integer":
+                    if not isinstance(v, int) or isinstance(v, bool):
+                        raise TypeError(f"Parameter '{k}' expected integer, got {type(v).__name__}")
+                    if "minimum" in prop_spec and v < prop_spec["minimum"]:
+                        raise ValueError(f"Parameter '{k}' below minimum {prop_spec['minimum']}")
+                    if "maximum" in prop_spec and v > prop_spec["maximum"]:
+                        raise ValueError(f"Parameter '{k}' exceeds maximum {prop_spec['maximum']}")
+                elif expected_type == "number":
+                    if not isinstance(v, (int, float)) or isinstance(v, bool):
+                        raise TypeError(f"Parameter '{k}' expected number, got {type(v).__name__}")
+                    if "minimum" in prop_spec and v < prop_spec["minimum"]:
+                        raise ValueError(f"Parameter '{k}' below minimum {prop_spec['minimum']}")
+                    if "maximum" in prop_spec and v > prop_spec["maximum"]:
+                        raise ValueError(f"Parameter '{k}' exceeds maximum {prop_spec['maximum']}")
 
     def execute(self, request: ToolCallRequest) -> ToolResult:
         """Execute registered tool safely with timing and error isolation."""
@@ -87,6 +103,15 @@ class ToolRegistry:
             handler = self._handlers[request.tool_id]
             data = handler(request.arguments)
             latency = (time.perf_counter() - start_time) * 1000
+
+            if tool.timeout_ms and latency > tool.timeout_ms:
+                return ToolResult(
+                    tool_id=request.tool_id,
+                    success=False,
+                    error=f"Tool '{request.tool_id}' exceeded declared timeout of {tool.timeout_ms}ms (took {latency:.1f}ms)",
+                    latency_ms=round(latency, 2),
+                )
+
             return ToolResult(
                 tool_id=request.tool_id,
                 success=True,

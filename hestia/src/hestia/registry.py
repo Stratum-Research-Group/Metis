@@ -59,6 +59,7 @@ class ModelEntry:
     vram_estimate_mb: int
     gpu_target: str = "rtx-5060-ti"
     sampling: SamplingParams = field(default_factory=SamplingParams)
+    artifact_digest: str | None = None
 
     # Runtime state — not persisted
     state: ModelState = field(default=ModelState.UNLOADED, repr=False)
@@ -76,6 +77,7 @@ class ModelEntry:
             vram_estimate_mb=int(raw["vram_estimate_mb"]),
             gpu_target=raw.get("gpu_target", "rtx-5060-ti"),
             sampling=SamplingParams.from_dict(raw.get("sampling", {})),
+            artifact_digest=raw.get("artifact_digest"),
         )
 
 

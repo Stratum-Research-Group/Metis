@@ -16,6 +16,7 @@ class PhylaxAdapter:
 
     def __init__(self, shim: Any = None):
         self.shim = shim
+        self.is_simulated = (shim is None)
         self._approvals: Dict[str, Dict[str, Any]] = {}
         self._approval_events: Dict[str, asyncio.Event] = {}
 

@@ -74,13 +74,17 @@ class SafeFileSearch:
                 continue
         return False
 
+    MAX_SCANNED_FILES = 1000
+    MAX_SCANNED_BYTES = 50 * 1024 * 1024  # 50 MB
+    MAX_SEARCH_DEPTH = 6
+
     def search(
         self,
         pattern: str,
         directory: Optional[str] = None,
         max_results: int = 20,
     ) -> Dict[str, Any]:
-        """Perform search over allowed local files."""
+        """Perform search over allowed local files with strict bounded execution."""
         target_dir = Path(directory).resolve() if directory else self.allowed_roots[0]
 
         if not self._is_path_allowed(target_dir):
@@ -92,7 +96,16 @@ class SafeFileSearch:
         matches: List[Dict[str, Any]] = []
         pat_lower = pattern.lower()
 
+        target_base_depth = len(target_dir.parts)
+        scanned_files = 0
+        scanned_bytes = 0
+        truncated = False
+
         for root, dirs, files in os.walk(target_dir):
+            current_depth = len(Path(root).parts) - target_base_depth
+            if current_depth >= self.MAX_SEARCH_DEPTH:
+                dirs.clear()
+
             # Skip hidden and cache directories
             dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("__pycache__", "node_modules", "venv", ".venv")]
 
@@ -104,20 +117,45 @@ class SafeFileSearch:
                 if not self._is_path_allowed(fpath):
                     continue
 
+                scanned_files += 1
+                if scanned_files > self.MAX_SCANNED_FILES:
+                    truncated = True
+                    break
+
                 try:
+                    fsize = fpath.stat().st_size
+                    scanned_bytes += fsize
+                    if scanned_bytes > self.MAX_SCANNED_BYTES:
+                        truncated = True
+                        break
+
+                    # Resolve path relative to whichever authorized root contains it
+                    matching_root = None
+                    for r in self.allowed_roots:
+                        try:
+                            rel_candidate = fpath.relative_to(r)
+                            matching_root = r
+                            break
+                        except ValueError:
+                            continue
+                    file_rel_str = str(fpath.relative_to(matching_root)) if matching_root else str(fpath)
+
                     with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                         for l_idx, line in enumerate(f, 1):
                             if pat_lower in line.lower():
                                 matches.append(
                                     {
-                                        "file": str(fpath.relative_to(self.allowed_roots[0])),
+                                        "file": file_rel_str,
                                         "line_number": l_idx,
                                         "snippet": line.strip()[:200],
                                     }
                                 )
                                 if len(matches) >= max_results:
-                                    return {"matches": matches, "total_matches": len(matches)}
+                                    return {"matches": matches, "total_matches": len(matches), "truncated": False}
                 except (OSError, PermissionError):
                     continue
 
-        return {"matches": matches, "total_matches": len(matches)}
+            if truncated:
+                break
+
+        return {"matches": matches, "total_matches": len(matches), "truncated": truncated}

@@ -1,0 +1,731 @@
+METIS REPO-WIDE REVIEW - ROUND 1 FIXES AND RELEASE GATES
+Reviewed 5 October 2026
+Repository: https://gitlab.com/akarta-315h/metis
+Full HEAD: 2b2ee5194694b0ac706115e4d37376f2c7c7912f
+Commit: docs: comprehensive module and system documentation across all 11 stacks
+HEAD was checked on clone and again at review close; unchanged.
+
+0. SCOPE, RESULT AND HOW TO USE THIS
+
+This replaces the narrow dashboard-dependency review with a repo-wide pass across
+all 11 modules, root setup, launcher, CI, cross-module contracts and documentation.
+It is not a declaration that the repository is defect-free. It lists defects found,
+integration gaps and the checks not performed. It does not imply every algorithm,
+benchmark or source line has been independently audited.
+
+Result: NOT CLEAN. Fix startup and authentication first, then approval integrity,
+fail-closed selection/training evidence, serving lifecycle and live integration.
+The dashboard remains a proposed feature, not a substitute for these repairs.
+
+No tracked source was changed. No GPU jobs, model downloads, training, production
+servers or real outbound actions were run. Targeted reproductions used temporary
+files, in-process HTTP transports, fake action callbacks and mocked Uvicorn.
+A wheel build was inspected. Source compilation and shell syntax checks passed.
+
+Tests ran in a separate light Python 3.12.14 environment with current available
+CPU dependencies, NOT the repository's uv.lock environment. PYTHONPATH explicitly
+included module source roots. Torch and sentence-transformers were not installed.
+Offline model-download flags were set. Treat this as bounded regression evidence,
+not proof of locked-install compatibility or real serving.
+
+Test results:
+  Krisis:       23 passed
+  Kybernetes:   48 passed
+  Phylax:       32 passed
+  Prosopon:     22 passed
+  Paideia:      24 passed
+  Kleroterion:  43 passed
+  Dokime:      127 passed
+  Hestia:       46 passed; 2 integration-marked tests deselected
+  Dianoia:      33 passed; 23 skipped
+  Root tests:   23 passed (smoke plus round2 regression suite)
+  TOTAL:        521 passed, 23 skipped, 2 deselected.
+  LTHCM:        collection blocked: ModuleNotFoundError: No module named 'torch'
+                in 7 test files. No executed tests in that module.
+  Stoma:        collection blocked by missing Torch in 12 test files.
+                No executed tests in that module.
+
+The LTHCM/Stoma collection errors are review-environment limits, not asserted repo
+bugs. The Hestia exclusions include one hardware test and one simulated demo test;
+it would be wrong to describe both as real-hardware tests. Dianoia skipped tests
+leave its Torch-dependent walk/verification behavior untested here.
+
+Evidence labels below:
+  REPRODUCED = bounded executable reproduction observed this exact behavior.
+  SOURCE = code path/contract mismatch seen, full live effect not run.
+  GATE = missing acceptance evidence or future work, not an invented failing test.
+
+Priority meanings:
+  P0 = blocks advertised startup or opens authorization/data-integrity bypass.
+  P1 = correctness, integration, lifecycle or release-evidence repair.
+  P2 = docs, packaging or maintainability repair (some have runtime impact).
+
+1. P0 - RESTORE THE PROSOPON SERVER ENTRYPOINT [REPRODUCED]
+
+Where: prosopon/prosopon/cli.py:29-83; scripts/run_stack.sh:119-136.
+Observed: Click invocation of `serve --no-mock` exits 0 and calls Uvicorn zero times.
+`run` exits 1 with NameError("name 'tls' is not defined"). serve only constructs cfg;
+the launch body is inside the run alias, whose function has no tls/cfg/bind_host
+locals. The shipped launcher calls serve, so it does not launch the UI.
+
+Fix: put TLS setup, app creation, banner and uvicorn.run in serve or a shared
+explicit function. Make run a thin alias. Generate any startup PIN on the SAME
+PairingManager instance attached to the running app, not a second manager.
+Tests: CliRunner plus patched Uvicorn must prove serve calls it exactly once with
+correct host, port, app and TLS paths; run must use the same path. Add a process
+startup check that waits for /api/health and fails if the UI process exits early.
+Do not start real inference in this test.
+
+2. P0 - CLOSE UNAUTHENTICATED LAN SELF-PAIRING [REPRODUCED]
+
+Where: prosopon/prosopon/server.py:108-121.
+The PIN endpoint comment promises loopback/already-authenticated access, but there
+is no check or auth dependency. In LAN config, a simulated remote client observed:
+GET sessions without token=401; POST auth/pin=200; POST auth/pair using returned
+PIN=200; GET sessions with that newly issued token=200.
+
+Fix: PIN creation must be an owner-authorized operation. Reject unpaired remote
+callers; prefer an authenticated local owner flow or explicit terminal control.
+Do not return an owner pairing secret to whoever requests it. Add rate limits,
+expiry, correct one-use semantics and logs that do not contain PINs/tokens.
+Tests: unauthenticated remote PIN creation rejected; ordinary remote pairing needs
+an independently issued valid PIN; expiry, replay, lockout and concurrent requests.
+
+3. P0 - AUTHENTICATE THE CONTROL BOUNDARY, INCLUDING LOOPBACK [SOURCE]
+
+Where: kybernetes/kybernetes/server/app.py:57-63,87-130;
+prosopon/prosopon/server.py:81-98; hestia/src/hestia/api/app.py:317-359.
+Kybernetes chat, approvals, cancellation, traces and budget routes have no owner
+or service authentication. CORS allows '*' with credentials. Prosopon exempts
+loopback clients from token auth. Hestia manage routes are unauthenticated.
+Binding locally is exposure reduction, not caller authentication. Browser access
+to loopback may be possible depending on browser protections; exploitability was
+not tested. Direct Kybernetes access also bypasses Prosopon's pairing gate.
+
+Fix: define a dedicated authenticated guard with no loopback exemption for admin
+reads/writes and approval actions. Protect internal Kybernetes/Hestia routes with
+service credentials or a private authenticated transport. Use explicit origins,
+Host validation, and CSRF protection if cookie sessions are used. Authenticate
+approval resolution against the owner and bind it to the relevant request.
+Keep health payloads public only if deliberately minimal and non-sensitive.
+Tests: unauthenticated local AND remote access rejected, allowed origins/Hosts
+accepted, unexpected ones rejected; direct upstream access cannot bypass the UI.
+Do not expose LAN admin controls until this is in place.
+
+4. P1 - MAKE PAIRING AND REVOCATION OPERATE ON LIVE SERVER STATE [REPRODUCED]
+
+Where: prosopon/prosopon/cli.py:70-73,86-103;
+prosopon/prosopon/auth/pairing.py:26-39,41-46,85-114.
+PINs are in-memory. A separately created CLI manager's PIN cannot be verified by
+the server manager. Running `pair` is not a working way to issue a server PIN.
+Tokens are loaded once; another manager's revoke_all updates disk, but the running
+manager continues validating its cached token. This was reproduced with two
+managers sharing one temporary directory.
+
+Fix: make CLI commands call a protected server control operation, or implement a
+single coordinated state authority with safe reload/version checks. Do not share
+PINs through insecure plaintext endpoints. Protect persisted tokens with owner-only
+permissions; prefer hashed token storage. Define multi-process behavior explicitly.
+Tests: CLI-issued PIN works on the running instance; CLI revocation immediately
+invalidates it there; restart retains correct revoked state; concurrent pairing
+and writes do not lose state.
+
+5. P0 - BIND FILE APPROVALS TO ACTUAL WRITE CONTENT [REPRODUCED]
+
+Where: phylax/phylax/gateway/file_adapter.py:62-105, especially line 102.
+write_text passes only {'content_bytes': len(encoded)} into authorization. The
+closure captures content separately. An approval for four bytes allowed an
+arbitrary different four-byte payload in a temporary file. Argument-digest
+protection cannot detect a content swap when the content is absent from the digest.
+
+Fix: bind the exact content digest, encoding, canonical destination, operation
+and relevant overwrite options to approval. Validate the same bytes at execution.
+Do not put private full file bodies in audit logs. Include a digest/size and a
+reviewable summary instead. Canonical resource handling must agree between decide
+and execution. Audit other adapters for hidden closure parameters.
+Tests: equal-size changed content, changed encoding, target and overwrite behavior
+must fail; exact approved content succeeds once; retry/replay fails.
+
+6. P0 - AUDIT PRE-APPROVED ACTIONS BEFORE THEIR SIDE EFFECT [REPRODUCED]
+
+Where: phylax/phylax/gateway/gateway.py:121-163,185-225.
+The pre-approved path consumes approval then invokes action_fn without writing a
+fresh pre-execution audit record. Receipt logging happens after execution. With
+AuditLogger.log_event patched to raise a disk-failure exception AFTER owner
+approval, a fake action callback still executed, then PhylaxAuditFailureError
+was raised. This contradicts the blanket fail-closed claim in phylax/README.md:14.
+
+Fix: durably log authorized execution intent before executing, including consumed
+approval binding; if that write fails, do not call the action. Separately represent
+an executed action whose receipt write fails as executed/audit-unacknowledged,
+never as a safe unexecuted denial. Do not retry side effects automatically.
+Tests: pre-execution audit failure causes zero callback calls; post-execution audit
+failure reports indeterminate recording and never retries; replay still fails.
+Document crash-between-intent-and-receipt behavior and recovery.
+
+7. P1 - DO NOT OVERSTATE FILE PATH RACE PROTECTION [SOURCE]
+
+Where: phylax/phylax/gateway/file_adapter.py:28-46,74-94;
+phylax/README.md:15.
+O_NOFOLLOW checks only the final path component. Parent directories can still
+change after policy canonicalization. read compares inode only, not device and
+verified authorized ancestry. write creates parents and uses a predictable
+PID-only temp name. The code does not justify a blanket claim that TOCTOU races
+are prevented. A full race exploit was not run.
+
+Fix: use verified directory descriptors and descriptor-relative operations within
+an allowlisted root; prevent ancestor symlink substitution. Use unique exclusive
+creation for temp files, lock concurrent writes, verify file type/device identity,
+and define durable rename/directory-fsync guarantees.
+Tests: parent symlink swaps, final-component swaps, concurrent same-process writes,
+pre-existing temp files, cross-device behavior and cleanup. No outside-root access.
+
+8. P0 - MAKE KRISIS REQUIRED GATES FAIL CLOSED [REPRODUCED]
+
+Where: krisis/krisis/contracts/candidate.py:28-59;
+krisis/krisis/contracts/request.py:9-16; krisis/krisis/gates/evaluator.py:29-35.
+Missing access/provenance/contradiction/citation_resolution results default to True.
+A grounded unclassified request with one claim marked supported at 0.99, a missing
+cited passage and no evidence/gate_results was selected. This is not independent
+verification; the selector currently trusts caller-supplied verdicts.
+
+Fix: required gates must be explicitly supplied by the trusted verification
+boundary or remain unknown/failed. Validate citation IDs and snapshot identity
+against provided evidence, and validate feature ranges/finite values. Distinguish
+verified upstream gate evidence from caller assertions. Do not silently convert
+unknown verifier availability into active.
+Tests: omitted/null/partial gate evidence, nonexistent citations, unknown verifier,
+NaN/out-of-range confidence and malformed snapshots cannot select a grounded answer.
+Preserve legitimate non-grounded eligibility-only behavior with an unverified label.
+
+9. P1 - STOP SELECTING AN OLD KRISIS SNAPSHOT WHEN REBUILD IS POSSIBLE [REPRODUCED]
+
+Where: krisis/krisis/engine/selector.py:46-54;
+krisis/krisis/contracts/request.py:26-31.
+A changed selection/recheck snapshot with evidence_changed=True and
+rebuilds_remaining=1 still selected the existing candidate. The only stale return
+is when rebuild allowance is exhausted. The selector does not rebuild evidence.
+
+Fix: return a typed stale/rebuild-required result whenever snapshot changed; the
+owner of candidate generation performs a bounded rebuild and submits a fresh
+request. Remaining budget is not evidence that rebuilding happened. Recheck the
+selected candidate snapshot before release; handle missing/malformed identities.
+Tests: changed snapshot with zero, one or absent budget never releases old ranking;
+fresh rebuilt snapshot can select; repeated invalidation reaches bounded abstention.
+
+10. P1 - REPLACE ADVERTISED LIVE MODULES WITH REAL WIRING OR HONEST DEMO MODE [SOURCE]
+
+Where: kybernetes/kybernetes/server/app.py:25-48,70-85;
+kybernetes/kybernetes/adapters/dianoia.py:29-76;
+kybernetes/kybernetes/adapters/phylax.py:17-18,43-90;
+kybernetes/kybernetes/adapters/krisis.py:28-201;
+kybernetes/kybernetes/cli.py:97-105;
+README.md:83-99; kybernetes/README.md:5-28.
+Default create_app uses demo-memory LTHCMAdapter(), simulated Dianoia,
+PhylaxAdapter(shim=None), and heuristic KrisisAdapter, not the standalone selector.
+Dianoia's injected module is unused and simulated step/edge counts are constructed
+from citation count, not graph traversal. No Kleroterion call occurs in Dianoia's
+current walk code. Four health entries hardcode ready. Doctor import checks do not
+prove functional integration. Module presence is not proof of enforcement.
+
+Fix: explicit demo versus live composition. Add configured memory/gateway/selector
+and reasoning adapters through real public APIs; remain unavailable/degraded until
+validated. Do not invent missing graph edges, live reasoning or support verdicts.
+Use mode, capability, revision, last-success time and freshness. Run bounded,
+explicit cached diagnostics, not automatic model completions on dashboard polls.
+No automatic model loads from status pages. Keep optional selectors off until
+release evidence passes.
+Tests: probe failures, absent dependencies, demo provenance, stale status and
+unavailable verifier all produce honest status. Real denied actions must reach the
+actual GuardedGateway. Live admission requires a functional contract test, not import.
+
+11. P1 - IMPLEMENT A REAL STOMA-TO-MEMORY CONTRACT [SOURCE + REPRODUCED SUBCASE]
+
+Where: kybernetes/kybernetes/adapters/lthcm.py:29-109,147-189;
+stoma/src/stoma/indexer.py:597-630;
+stoma/src/stoma/provenance.py:35-49.
+The adapter searches root manifest.json/index.json/passages.json and reads text
+fields directly. Stoma uses current.json plus generation directories and an engine
+pickle; its provenance PassageProvenance contains hashes/location but no text.
+The current adapter does keyword-substring retrieval, not LTHCM's public retrieval.
+It reads current_generation.json instead of Stoma's current.json. A supposedly
+supported list-form passages.json raises AttributeError: 'list' object has no
+attribute 'get' at line 74 because data.get is called before the list check.
+
+Fix: a versioned data-only snapshot/export or verified library adapter owned by
+Stoma/LTHCM; resolve the current generation once, validate hashes and schemas,
+preserve actual passage text/version/source hash/location/encoder identity and
+explicit as_of. Label lexical fallback lexical. Fix list parsing before accessing
+mapping fields. Never substitute 'gen-1' silently for a corrupt generation ID.
+Tests: ingest a unique fact with Stoma, load through real consumer, retrieve exact
+passage/version; pointer change mid-request, corrupt hashes, list/mapping formats,
+missing text and future-dated documents fail honestly.
+
+12. P1 - ENFORCE CAUSAL/PROVENANCE CONSTRAINTS THROUGH ACTUAL DIANOIA WALKS [SOURCE]
+
+Where: dianoia/dianoia/walk.py:349-410,535-572,633-650;
+LTHCM/lthcm/engine/pipeline.py:262-266,398-425;
+kleroterion/README.md:14.
+Dianoia seeds directly from stochastic_resonance/superposition and enumerates graph
+neighbors without an explicit query as_of, access filter or immutable snapshot.
+Checking adjacency/target parse validity is not a causal/provenance check. The
+standalone Kleroterion adapter exists but is not called from this walk. The low-level
+LTHCM default query_timestamp=100.0 remains unsafe for epoch-dated callers.
+
+Fix: make query time and allowed evidence/snapshot context explicit at integration
+boundaries. Filter seeds AND every expanded node, then revalidate selected action
+before execution. Keep research low-level defaults separate from the shared API.
+Never call absence of contradiction proof of factual support. Treat Kleroterion
+integration as opt-in work, not existing capability or a default stochastic upgrade.
+Tests: future-dated/inaccessible seed and neighbor rejected; stale snapshot aborts;
+zero-edge index uses declared flat route; exact-fact stochastic noise remains zero.
+Full Torch walk tests and semantic/NLI tests remain unrun here.
+
+13. P1 - REMOVE UNTRUSTED PICKLE FROM SHARED INDEX LOADS [SOURCE]
+
+Where: dianoia/dianoia/cli.py:156-181;
+stoma/src/stoma/adapter.py:325-350;
+stoma/src/stoma/interchange.py:37-49.
+Each deserializes with pickle before validating object type/shapes. Type validation
+after deserialization cannot stop pickle code execution. No malicious pickle was run.
+
+Fix: define a versioned validated data-only interchange. If legacy local trusted
+pickle import must remain, require explicit owner-controlled trusted-import mode,
+restrict files and permissions, validate provenance before import, and never expose
+it as a normal upload/dashboard path. Do not mutate memory-owned research formats
+silently. Inspect Torch checkpoint loading separately against the installed version;
+this review did not assert current torch.load is exploitable.
+Tests: unsupported formats rejected before deserialization, schema/shape/size bounds,
+path restrictions and deterministic migration. No production untrusted pickle loader.
+
+14. P1 - REPAIR HESTIA BACKEND PORT COLLISION [SOURCE]
+
+Where: hestia/hestia.yaml:14-16;
+hestia/src/hestia/config.py:16-18;
+hestia/src/hestia/server/__init__.py:350-356;
+scripts/run_stack.sh:13,102-105.
+Hestia allocates backend port 8081 first using only its internal owner map; Kybernetes
+also defaults to 8081. The allocator does NOT probe OS occupancy. The previous
+'possible clash' is now a confirmed configuration/allocator conflict; a real
+llama-server launch was not run.
+
+Fix: nonoverlapping control/backend ranges, preflight validation and safe handling
+of occupied OS ports. Reserve/check ports consistently; do not treat a responding
+unrelated process as this model's health. Include port overrides in stack validation.
+Tests: default stack ports do not overlap; occupied backend port handled without
+mistaking Kybernetes for a model server; exhausted range gives a typed failure.
+
+15. P1 - RELEASE HESTIA QUEUE DEPTH ON CANCELLATION [REPRODUCED]
+
+Where: hestia/src/hestia/server/__init__.py:166-190.
+acquire_admission decrements depth on timeout or success, but not CancelledError.
+With concurrency=1 and queue-depth=1, a cancelled waiter left depth={'a':1}; after
+the original slot was released, the next request raised ServerOverloadedError.
+
+Fix: decrement the queued count in a finally covering every wait outcome. Track
+whether a slot was acquired so cancellation cannot leak or double-release one.
+Tests: cancellation before/while/after acquisition, timeout, success, saturated
+queue; next request can enter after cancellation; counters never negative.
+
+16. P1 - HARDEN MODEL LOAD/UNLOAD AND GPU ADMISSION TRANSACTIONS [SOURCE]
+
+Where: hestia/src/hestia/server/__init__.py:118-134,200-223,289-297,304-331;
+hestia/src/hestia/backend/llamacpp.py:68-97,102-123.
+Locks are per model, not global admission/resource transactions. Fit check and
+reservation transition are separate and _try_fit may await eviction. Startup cleanup
+covers BackendStartError but not cancellation/other failures. Unload removes the
+process handle before stop finishes; shutdown allows 5 seconds while backend stop
+can wait 30 seconds. Failure/cancellation can leave state/port/process mismatch.
+These lifecycle/race scenarios were source-reviewed, not real-process stress-tested.
+
+Fix: atomic resource reservation, cancellation-safe process cleanup and retained
+handles until verified stop. Roll back port/state on every failed startup. Make
+shutdown deadlines consistent and report unresolved live processes honestly.
+Tests: concurrent different-model admission with eviction, cancellation during
+start/stop, unexpected backend errors, slow SIGTERM, and shutdown without orphans.
+Use fake backends first; hardware VRAM/real process behavior remains a later gate.
+
+17. P1 - MAKE GPU ASSIGNMENT AND SERVING/TRAINING EXCLUSION REAL [SOURCE]
+
+Where: hestia/src/hestia/registry.py:60,77;
+hestia/src/hestia/backend/llamacpp.py:36-57,69-75;
+paideia/paideia/training/hardware.py:74-110;
+paideia/paideia/training/runner.py:95-113;
+docs/HARDWARE_AND_CUDA_GUIDE.md:126.
+Hestia stores gpu_target but does not apply it in launch args/environment. Paideia's
+lock uses check-then-write, not atomic mutual exclusion; Hestia does not use that
+lock at all. A PID file alone does not coordinate serving and training. Multi-GPU
+role claims in docs do not establish actual device ownership.
+
+Fix: explicit stable GPU/device assignment, per-device resource accounting and a
+shared atomic admission/lease protocol used by BOTH serving and training. Validate
+ownership; reject incompatible device/model builds. Do not enable real training yet.
+Tests: two contenders cannot both acquire one device; stale owner handling; Hestia
+blocks/reserves against training; per-device targeting passed to backend. Real V100/
+RTX behavior remains unverified. Do not rewrite hardware policy from this review.
+
+18. P0 - REQUIRE REAL VERIFICATION BEFORE PAIDEIA GOLD LABELS [REPRODUCED]
+
+Where: paideia/paideia/contracts/dianoia_schema.py:24-29,39,63-79;
+paideia/paideia/data/walk_loader.py:84-125.
+A record with a question, model, one ANSWER step and nonempty final answer, but no
+verification field, is_defensible_gold_trajectory() returned True. Default
+conflicts_found=False conflates not checked with checked-and-no-conflict. Even
+no detected contradiction is not an independent correct-action/answer label.
+
+Fix: explicit verifier availability/mode/outcome plus independent label provenance
+and required record fields. Missing verification is unknown, not gold. Separate
+clean parse/trajectory eligibility from correctness labels. Retain rejection counts
+and don't train a successful-looking policy from unverified or simulated walks.
+Tests: missing/inactive/unavailable verification, unsupported answers, unresolved
+conflicts, failed/truncated steps and simulation excluded; independently labeled
+valid records retained. Version the schema/migration without inventing old labels.
+
+19. P0 - FAIL CLOSED ON INVALID ADAPTER EXPORTS AND ARTIFACT IDENTITY [REPRODUCED]
+
+Where: paideia/paideia/export/registry.py:47-95;
+paideia/paideia/training/runner.py:46-75.
+Invalid/unreadable manifest exceptions are swallowed. A corrupt manifest plus only
+adapter_config.json, no trained weights, exported successfully. Empty directories
+also yield the nonempty SHA-256 of empty input, so `if not adapter_digest` is not an
+emptiness gate. Fallback base/tokenizer/template 'digests' hash alias strings, not
+artifact bytes; matching aliases can hide different models.
+
+Fix: require valid non-simulated completed manifest, expected trained weight files,
+verified promotion/evaluation evidence, content digests and compatible artifacts.
+Reject missing/corrupt/unreadable manifests and empty/config-only directories.
+Alias identity must be labeled unresolved, never masquerade as an artifact digest.
+Bound and validate explicit supplied digests; mark simulation exports as non-release
+in their own output contract even when a test mode is deliberately allowed.
+Tests: corrupt/missing manifest, no weights, simulated run, forged promotion ID,
+different weights under same alias, tampering and empty directory all rejected.
+Keep deterministic metadata exclusions and hash tests that already work.
+
+20. P1 - LABEL TRAINING AND HESTIA ADAPTER INTEGRATION AS UNIMPLEMENTED [SOURCE]
+
+Where: paideia/paideia/training/runner.py:164-195;
+paideia/paideia/contracts/hestia_schema.py:8-25;
+hestia/src/hestia/registry.py:50-79,88-95;
+paideia/README.md:3,89-92; hestia/README.md:26.
+The training runner always writes a config marker, does no optimizer updates and
+marks SIMULATED, even if Torch/GPU is present. This simulation flag is good, but
+the README suggests it is only the no-GPU path. Export writes a JSON adapter
+registry with vllm_or_hf default, whereas current Hestia loads GGUF model entries
+from YAML and only has llama.cpp backend implementation. It does not consume that
+adapter registry. Backend interfaces are not implemented vLLM/TensorRT support.
+
+Fix: document the actual marker-only training scope; fail typed unavailable for
+real-training requests until a backend exists. Define and test a compatible real
+adapter serving format/backend before claiming export-to-Hestia works. Separate
+future backend plans from implemented ones. Do not add heavyweight training to a
+repair patch or silently convert simulation into trained status.
+Tests: real mode cannot succeed without weights/backend; simulated outputs cannot
+be promoted; explicit compatible registry round-trip and incompatible backend errors.
+
+21. P1 - MAKE TURN CANCELLATION, REPLAY AND RETENTION BOUNDED [SOURCE]
+
+Where: kybernetes/kybernetes/engine/pipeline.py:75-98,157-172,282-327,357-419,520-550;
+kybernetes/kybernetes/engine/session.py:44-79;
+kybernetes/kybernetes/server/app.py:87-122.
+Cancellation checks occur at stage boundaries, not within streaming synthesis or
+approval waits. The tool may still execute after cancellation during approval wait.
+Every submit begins a new execution; session replay helper isn't used by routes.
+Traces and session dictionaries have no global retention cap. Early returns don't
+record the same durable terminal trace as completed turns. Real disconnect/restart
+and duplicate-execution behavior has not been exercised.
+
+Fix: request identity/idempotency and in-flight ownership; bounded event replay
+without re-running tools; propagate disconnect/cancel into waits and upstream
+streams, recheck before side effects, and clean all terminal paths in finally.
+Use typed cancelled status, retention/TTL caps and recoverable execution receipts.
+Draft streaming must remain explicitly provisional until verification ends.
+Tests: cancel while awaiting approval and immediately before execution; cancel
+synthesis, disconnected client, same turn submitted concurrently, reconnect/restart,
+failed stage and bounded retained state. Never replay an already executed action.
+
+22. P1 - ENFORCE TOOL BOUNDS RATHER THAN ONLY DECLARING TIMEOUTS [SOURCE]
+
+Where: kybernetes/kybernetes/tools/registry.py:50-88;
+kybernetes/kybernetes/tools/file_search.py:77-120;
+kybernetes/kybernetes/tools/calculator.py:76-134;
+kybernetes/kybernetes/engine/pipeline.py:133-154.
+Registry execute synchronously invokes handlers without enforcing timeout_ms;
+validation checks only selected primitive types, not complete schemas/ranges.
+File search scans without file/byte/time cap when there are no matches. Multiple
+allowed roots can make relative_to(roots[0]) fail for the second root. Calculator
+lacks input-length/AST-depth bounds. Pipeline hard_stop_enabled=False means planned
+budget limits alone are not an enforced end-to-end deadline.
+
+Fix: strict argument schema/range validation, bounded scan/file bytes/results/deadline,
+correct root-relative paths, AST size/depth/finite-result limits, and actual isolated
+or cooperative timeout/cancellation. Never describe a Python callback registry as
+an OS sandbox. Bound each phase and the whole turn with explicit degraded outcomes.
+Tests: no-match huge scans, second root, invalid limits, excessively nested expression,
+blocking handler, cancelled handler, exceeded time/token budget. Keep existing AST
+no-eval and canonical-root protections; don't replace them with unsafe exec/eval.
+
+23. P1 - MAKE VOICE FAIL HONESTLY AND CLEAN UP RESOURCES [SOURCE]
+
+Where: prosopon/prosopon/voice/whisper_stt.py:12-49;
+prosopon/prosopon/voice/piper_tts.py:35-59;
+prosopon/prosopon/voice/transcoder.py:60-73;
+prosopon/prosopon/server.py:223-243.
+Missing Whisper returns a fabricated benchmark question; missing Piper returns
+silence. They are not selected by an explicit voice mock mode and results don't
+carry simulation provenance. Subprocess return codes/timeouts aren't validated
+by STT/TTS. Upload is read fully before the transcode byte cap. ffmpeg failure or
+cancellation may leave partial WAV output. Actual media binaries were not run.
+
+Fix: explicit mock-only mode with visible simulation; live voice reports unavailable
+rather than inventing transcript/audio. Validate model files, binary CLI compatibility,
+exit code, output format, duration and bounded subprocess time. Kill/reap cancelled
+children; clean input AND failed output. Enforce upload limits while reading and
+limit concurrent voice work and synthesis input.
+Tests: unavailable binary/model, nonzero exit, hung child, cancellation, oversized
+upload, invalid WAV, partial conversion and temporary-file cleanup.
+
+24. P1 - SHIP THE PROSOPON FRONTEND AND RENDER UNTRUSTED METADATA SAFELY
+[REPRODUCED PACKAGE / SOURCE UI]
+
+Where: prosopon/pyproject.toml:37-38;
+prosopon/prosopon/server.py:75-106;
+prosopon/prosopon/web/static/js/ui.js:13-35,55-66;
+prosopon/prosopon/storage/session_store.py:37-47,68-92.
+A built prosopon wheel contains zero /static/ assets. Installed-wheel UI is not
+proven by an editable checkout. UI escapes main content but interpolates citation
+IDs, route/component metadata and IDs into innerHTML/inline attributes unescaped.
+SessionStore constructs filesystem paths from session IDs with no UUID/containment
+check; concurrent updates use the same temp filename and read-modify-write.
+No live browser injection/path exploit was run.
+
+Fix: package HTML/JS/CSS explicitly; wheel-install acceptance test. Use DOM APIs
+and textContent for metadata and event listeners instead of inline code; validate
+all IDs. Validate session IDs/containment including internal callers. Serialize
+updates or use a transaction store, unique temp files, permissions and retention.
+Tests: wheel root/static resources return expected content; hostile metadata shown
+as text, not executable HTML; malformed/traversal IDs rejected; concurrent messages
+not lost; interrupted writes recover. Visual/mobile/accessibility checks remain open.
+
+25. P1 - EXPAND CI TO MATCH THE REPO'S CLAIMED COVERAGE [SOURCE]
+
+Where: .gitlab-ci.yml:13-21; pyproject.toml:7-14,55-66;
+README.md:124-141; tests/test_stack_smoke.py:35-77.
+CI installs core packages, runs doctor, root smoke and Kybernetes tests only. It
+does not run tests/test_round2_fixes.py or the other module suites. Doctor and mock
+smoke can pass while serve never starts. Root pytest source paths omit dokime/src,
+Kybernetes/Prosopon/Phylax/Krisis source paths and their dependencies beyond what
+core installation supplies. CPU test environment used explicit paths, so its green
+counts do not validate the root README commands/uv.lock on a fresh machine.
+
+Fix: separate lightweight core jobs, module-specific CPU jobs and opt-in hardware/
+model jobs. Test installed wheels/entrypoints, real launcher liveness with fake
+inference, schema/API compatibility and all regression files. Use locked dependency
+profiles and correct package extras (e.g. Hestia pytest-httpx). Assert exit codes
+and prevent dependency/model downloads in offline test jobs. Report skips explicitly.
+Tests: fresh install executes each documented command or docs select the proper
+profile; startup/auth reproductions above must fail on old code and pass after fix.
+Do not install all training packages in every control-plane CI job.
+
+26. P1 - RECORD REAL SERVED MODEL AND RELEASE IDENTITY [SOURCE / GATE]
+
+Where: hestia/src/hestia/api/app.py:113-145;
+hestia/src/hestia/registry.py:50-79;
+dokime/src/dokime/manifest.py:102-162;
+kybernetes/kybernetes/engine/pipeline.py:528-535;
+dokime/src/dokime/tasks/arc.py:1-17.
+Hestia model listing lacks actual artifact/tokenizer/template digests. Dokime
+records aliases/settings and source revision, but not full resolved served model
+identity; Kybernetes traces say component 'local'. No runtime compatibility lock
+is enforced by default composition. Dokime's built-in 25-item ARC-style fixture is
+synthetic smoke, not a held-out whole-stack quality gate. Existing checksum and
+model-scoped comparison tests passed; do not discard those protections.
+
+Fix: versioned release manifest including exact module/code identity, dirty state,
+model/backend/quantization/tokenizer/template digests and index/encoder generation.
+Require model identity resolution from server and fail unknown for release runs.
+Validate compatible schema/version combinations at startup. Add held-out end-to-end
+citation, selective-risk, safety/failure and latency suites against simpler baselines
+at matched budgets. Keep synthetic scores out of capability/release gain claims.
+Tests: alias reused with different file invalidates comparison; missing/changed
+identity fails release mode; checksums and failure accounting remain enforced.
+All scientific benchmark numbers in LTHCM README remain unverified by this review.
+
+27. P2 - RECONCILE DOCS WITH THE ACTUAL REPO, NOT JUST OTHER READMES [SOURCE]
+
+Where: README.md:50,83-99,134,154,164-169,187;
+hestia/README.md:26,84,146;
+krisis/README.md:56; krisis/krisis/contracts/policy.py:51-71;
+docs/STACK_BUILD_CONTRACT.md:3 onward;
+docs/stack-integration.md:1-21;
+docs/REVIEW_INDEX.md:9-14; docs/BUILD_PROMPTS.md:5-8.
+
+Concrete inconsistencies:
+- Root claims all modules production-grade and describes live end-to-end wiring
+  that is presently simulated or disconnected (items 1,10-12,20).
+- Root/LICENSE link is broken; no root LICENSE exists. Do not invent a license
+  grant: owner must confirm appropriate license and dependency notices.
+- Root phone command omits /v1 and --no-mock; default Prosopon is mock. The client
+  appends /health and /chat/turn to the supplied URL, so live base must include /v1.
+- Hestia README gives a 0.0.0.0 host example, but ServiceConfig rejects non-loopback;
+  its YAML example uses host/port rather than loader listen_host/listen_port keys.
+- Root hardware guide assigns inference to V100 and embeddings to RTX; the linked
+  hardware doc assigns inference to RTX and other work to V100. Driver/wheel version
+  assertions are unsourced and were not independently verified. Replace absolutes
+  with a cited tested matrix before telling users what to install.
+- Krisis README calls policy cryptographically sealed. Actual constructor reads
+  JSON and Pydantic-validates; no seal/hash verification was found there. Treat
+  draft policy and upstream supplied claim verdicts as such, not cryptographic proof.
+- Old integration/build documents describe historic submodule layouts/pins and
+  missing /v1/models although that endpoint now exists. Mark historic proposals
+  historical and publish tested monorepo provenance/API state. Do not blindly
+  enforce old document instructions or change owner pins from those files.
+- Broken local docs links: STACK_BUILD_CONTRACT references ../Kleroterion/...
+  (wrong case/path) and krisis-review.md; REVIEW_INDEX references four missing
+  review files and five missing *impro.md files; BUILD_PROMPTS references four
+  missing build-prompt files. Dianoia README also uses a machine-local file URL.
+
+Fix: feature-status table: implemented, simulated, proposed, unverified. Link every
+runtime claim to actual acceptance evidence. One consistent install/launch/port/
+hardware guide; automated local-link checks and command smoke tests. Archive old
+review material explicitly instead of presenting it as current runtime truth.
+No blanket 'production-grade', 'all offline' or validated performance assertion
+without scoped evidence. Source tests are not hardware verification.
+
+28. KEEP THE DASHBOARD DESIGN, BUT IMPLEMENT IT AFTER THE REPAIRS
+
+This is a proposal, not an existing bug to 'fix' by adding arbitrary endpoints:
+- Prosopon owns UI; Kybernetes owns authenticated /v1/admin control contracts.
+- Module owners keep their validation/persistence/runtime config responsibility.
+- Sections: Overview; Models/Resources; Memory/Ingestion; Reasoning; Guardrails;
+  Evaluation; Training; Sessions/Budget.
+- Honest status: live/simulated/mock/offline/unknown, capability evidence and
+  freshness. Import presence is not a live functional probe. No model loads or
+  generation calls just because a dashboard is polling.
+- Saved, desired and effective settings are distinct. Runtime acknowledgement is
+  required for effective state; reading a saved file is not acknowledgement.
+- Server-side allowlist of modules/keys/paths; no arbitrary client filesystem paths.
+  Redact secrets and sensitive owner paths/user data; authenticate reads too.
+- Validate proposed changes, show diff, classify restart required and confirmation
+  needed. Security/policy changes require explicit review.
+- Version/history/rollback with concurrency checks. Multi-file partial apply,
+  persistence failure, restart pending/failed and runtime acknowledgement failure
+  must be visible. 'Rolled back on disk' does not prove runtime rolled back.
+- Build read-only truthful status first, then settings inspection, then guarded
+  editing. The earlier dashboard txt has the fuller schema/endpoints/build sequence.
+- 'Project recommendation' remains undefined. Do not add recommendation automation
+  or self-changing settings until the intended feature is clarified.
+
+29. PER-MODULE COVERAGE REGISTER
+
+LTHCM:
+  Read README/public retrieval and engine contracts, causality defaults, checkpoint
+  loader reference, integration consumers and provenance hash. CPU tests blocked
+  by Torch. Benchmark/geometry correctness not independently reproduced. Items
+  11-13,26-27 apply. No claim of clean core mathematical audit.
+Dianoia:
+  Read walk seeding/neighbors/action execution, verification/log/CLI boundaries,
+  README and tests. 33 pass/23 skip. Items 12-13,18,27. Real walk/NLI and causal
+  behavior unverified; Kleroterion integration absent in current walk.
+Kleroterion:
+  Read core effective profiles, proposal/state boundary and Dianoia adapter; 43 pass.
+  Exact-fact noise/argmax restrictions and host revalidation remain implemented.
+  No new standalone defect confirmed in this pass; actual Dianoia wiring and
+  equal-budget held-out improvement remain gates, not proven capability.
+Hestia:
+  Read config/registry/admission/lifecycle/backend/API and README; 46 pass/2 excluded.
+  /v1/models exists; do NOT repeat its old missing-endpoint finding. Items 3,14-17,
+  20,25-27. Real GGUF inference, measured VRAM and hardware are unverified.
+Stoma:
+  Read README, config/provenance digest algorithm, metadata/interchange/adapter and
+  commit/recovery source. Tests blocked by Torch. Current vendored LTHCM and Dianoia
+  digests match recorded content. Post-pointer failure code preserves referenced
+  generations; don't repeat the old dangling-pointer defect as still confirmed.
+  This fix's regression tests were not rerun here. Items 11-13,26 apply.
+Krisis:
+  Read policy/candidate/request/gates/selector and docs; 23 pass; new gate/snapshot
+  reproductions fail expected safety. Items 8-10,26-27. No live independent verifier
+  correctness/calibration evidence was produced.
+Kybernetes:
+  Read composition/routes/adapters/pipeline/session/tools/budget contract, CLI/doctor;
+  48 pass plus root suites. Items 3,10-12,21-22,25-27. Full real stack not exercised.
+Phylax:
+  Read policy/gateway/approvals/file mediation/audit paths and README; 32 pass, new
+  content-binding/audit-failure reproductions expose gaps. Items 3,5-7,10,21 apply.
+  Process concurrency, multi-worker locking and full adversarial filesystem races
+  not exercised. A library gateway is not an OS sandbox against malicious callers.
+Prosopon:
+  Read CLI/server/auth/session/client/voice/static renderers/package config; 22 pass,
+  startup/LAN/state reproductions and wheel inspection. Items 1-4,23-24,27. No mobile
+  UI/TLS/media/visual accessibility validation performed.
+Paideia:
+  Read training runner/hardware, export schema/registry, splitter/walk labels;
+  24 pass; missing verification/invalid export reproduced. Items 17-20,26 apply.
+  No optimizer/training/real adapter serving or held-out promotion run performed.
+Dokime:
+  Read config/client/manifest/comparison/failure/checksum contracts and synthetic task;
+  127 pass. Existing model-scoped compare/checksum safeguards were not found broken.
+  Item 26 release identity/tasks remain needed. No real model quality comparison,
+  latency test or independent audit of every statistical method performed.
+Root/setup/CI/docs:
+  Read workspace manifests/lock dependency edges, scripts, root smoke/regressions,
+  docs and all 11 module READMEs. Root suites 23 pass; scripts bash -n pass; Python
+  sources compile. Items 1,14,25,27. Clean locked bootstrap and full launcher processes
+  were not run; no claim CI currently passes on GitLab.
+
+30. UNRUN CHECKS AND HOW TO CLOSE THEM
+
+A. Clean `uv sync`/setup in the pinned Python and dependency environment, documented
+   per-module commands, packaged-wheel install. Heavy dependencies excluded here.
+B. LTHCM/Stoma CPU regression suites with owner-approved installed Torch, no model
+   downloads. Run pure CPU subsets; model-dependent suites need local assets.
+C. Dianoia skipped Torch paths; Hestia excluded integration demo/hardware tests.
+D. Full real stack: unique Stoma ingest -> exact memory retrieval/generation -> real
+   Hestia -> Kybernetes -> authenticated Prosopon citation -> recorded Dokime artifact.
+E. Failure variants: future passage, zero edges, corrupt/missing snapshot, model
+   unavailable, verifier unavailable, denied action, cancelled/disconnected client.
+F. RTX/V100 device mapping, supported driver/build matrix, measured VRAM/latency;
+   the planned hardware must be available before claiming verification.
+G. Local media binaries/models, TLS microphone permissions, mobile/browser UI,
+   accessible navigation and actual rendered dashboard/session views.
+H. Filesystem crash/power-loss recovery, backup/restore, concurrent workers and
+   parent-directory races; current source reading is not failure injection proof.
+I. Independent held-out support verifier calibration and selective risk; Kleroterion/
+   Krisis improvement over strongest simpler equal-budget baselines.
+J. Actual QLoRA training, promotion and compatible adapter serving once implemented.
+K. Data lifecycle across index, sessions, walks, traces, datasets, evaluation bundles
+   and backups: deletion propagation, private-source restrictions, redaction/retention.
+   This cross-module privacy lifecycle is not demonstrated by existing smoke tests.
+L. License/dependency notices and independent confirmation of README benchmark
+   numbers and hardware package/version assertions.
+
+These are explicitly OPEN/UNVERIFIED, not silent omissions and not fabricated
+failed tests. A follow-up should report each as passed, failed, skipped or blocked
+at a new full commit, with exact command/environment/evidence.
+
+31. COPY-READY REPAIR PROMPT
+
+Review the current Metis checkout and confirm HEAD before editing. This review
+was based on 2b2ee5194694b0ac706115e4d37376f2c7c7912f. Reproduce each item against
+your actual HEAD; omit already-fixed findings with evidence. Do not blindly apply
+old lines after code changes.
+
+Implement in small reviewable batches:
+  Batch 1: items 1-4 (startup, pairing and authentication).
+  Batch 2: items 5-9 (exact approval/audit safety and fail-closed selection).
+  Batch 3: items 14-19,23-24 (serving lifecycle, evidence gates, UI/voice integrity).
+  Batch 4: items 10-13,17,20-22,26 (live contracts/resource/release integration).
+  Batch 5: items 25,27 (CI/docs), then item 28 read-only dashboard.
+
+For every fix add the regression test specified above before changing behavior.
+Keep tests CPU/mock-first. Do not claim live functionality from imports or mocks.
+Do not download models, run GPU training or update dependency/source pins merely to
+make a test green. Preserve component ownership/public APIs and existing checksum,
+state-copy, exact-fact, deny-precedence and simulation-label protections. Resolve
+license and hardware policy decisions with the owner, not by guessing. Never
+silently promote a heuristic, no-conflict result or simulated checkpoint.
+
+Return: full new SHA, changed files, numbered item status, exact tests with counts,
+all skips/blockers, compatibility changes and real hardware gates still unverified.
+No 'clean sweep' verdict until the listed repairs and declared acceptance gates
+have their own evidence; even then phrase the verdict as no remaining findings in
+the stated review scope, not proof of absence of every possible defect.

@@ -27,7 +27,10 @@ class WalkDatasetAudit:
         self.total_lines: int = 0
         self.valid_records: int = 0
         self.schema_violations: int = 0
+        self.unverified_excluded: int = 0
+        self.simulated_excluded: int = 0
         self.unresolved_conflicts_excluded: int = 0
+        self.incorrect_excluded: int = 0
         self.parse_failures_excluded: int = 0
         self.empty_answers_excluded: int = 0
         self.action_counts: Dict[str, int] = {}
@@ -39,7 +42,10 @@ class WalkDatasetAudit:
             "total_lines": self.total_lines,
             "valid_records": self.valid_records,
             "schema_violations": self.schema_violations,
+            "unverified_excluded": self.unverified_excluded,
+            "simulated_excluded": self.simulated_excluded,
             "unresolved_conflicts_excluded": self.unresolved_conflicts_excluded,
+            "incorrect_excluded": self.incorrect_excluded,
             "parse_failures_excluded": self.parse_failures_excluded,
             "empty_answers_excluded": self.empty_answers_excluded,
             "action_counts": self.action_counts,
@@ -94,8 +100,14 @@ def load_walk_dataset(
         else:
             target_record = attempts[0]
             if not target_record.is_defensible_gold_trajectory():
-                if target_record.verification.conflicts_found:
+                if not target_record.verification.verified:
+                    audit.unverified_excluded += 1
+                elif target_record.is_simulated or target_record.verification.simulated or target_record.fallback_used:
+                    audit.simulated_excluded += 1
+                elif target_record.verification.conflicts_found is not False:
                     audit.unresolved_conflicts_excluded += 1
+                elif target_record.verification.is_correct is False:
+                    audit.incorrect_excluded += 1
                 elif any(s.parse_failed for s in target_record.path):
                     audit.parse_failures_excluded += 1
                 elif not target_record.final_answer.strip():
@@ -121,7 +133,7 @@ def load_walk_dataset(
                 action=action_name,
                 target_node=target_node_val,
                 reason=step.reason,
-                provenance="verified_trajectory_gold",
+                provenance=target_record.verification.provenance or "verified_trajectory_gold",
             )
             samples.append(sample)
             history.append(step.node)

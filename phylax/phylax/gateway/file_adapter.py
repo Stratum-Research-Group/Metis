@@ -1,6 +1,7 @@
-"""Guarded file adapter with symlink protection and TOCTOU mitigations."""
-
+import hashlib
 import os
+import secrets
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -34,12 +35,14 @@ class GuardedFileAdapter:
 
             fd = os.open(target_str, flags)
             try:
-                # Descriptor validation
+                # Descriptor validation: check device, inode, and regular file type
                 fstat_res = os.fstat(fd)
+                if not stat.S_ISREG(fstat_res.st_mode):
+                    raise PermissionError(f"Security violation: target '{target_str}' is not a regular file")
                 stat_res = os.stat(target_str)
-                if fstat_res.st_ino != stat_res.st_ino:
+                if fstat_res.st_ino != stat_res.st_ino or fstat_res.st_dev != stat_res.st_dev:
                     raise PermissionError(
-                        f"TOCTOU Inode mismatch on '{target_str}': file was swapped during open!"
+                        f"TOCTOU device/inode mismatch on '{target_str}': file was swapped during open!"
                     )
 
                 with open(fd, "r", encoding=encoding, closefd=False) as f:
@@ -68,30 +71,39 @@ class GuardedFileAdapter:
         trace_id: str | None = None,
         encoding: str = "utf-8",
     ) -> int:
-        """Safely write text to a file within authorized roots."""
+        """Safely write text to a file within authorized roots, binding exact content digest."""
         target_path = Path(path)
+        encoded = content.encode(encoding)
+        content_sha256 = hashlib.sha256(encoded).hexdigest()
+        content_bytes = len(encoded)
 
         def _do_write(**kwargs: Any) -> int:
             target_path.parent.mkdir(parents=True, exist_ok=True)
-            encoded = content.encode(encoding)
             
-            # Atomic temp write then rename within same directory
-            temp_path = target_path.with_suffix(f".tmp-{os.getpid()}")
-            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            # Verify payload digest matches authorized intent
+            actual_encoded = content.encode(encoding)
+            actual_digest = hashlib.sha256(actual_encoded).hexdigest()
+            if actual_digest != content_sha256:
+                raise ValueError("Content tampering detected: payload digest does not match authorized digest")
+
+            # Unique exclusive temporary write then rename within same directory
+            rand_suffix = secrets.token_hex(6)
+            temp_path = target_path.with_name(f".{target_path.name}.tmp-{os.getpid()}-{rand_suffix}")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
             if hasattr(os, "O_NOFOLLOW"):
                 flags |= os.O_NOFOLLOW
 
             fd = os.open(str(temp_path), flags, 0o600)
             try:
                 with open(fd, "wb", closefd=False) as f:
-                    f.write(encoded)
+                    f.write(actual_encoded)
                     f.flush()
                     os.fsync(fd)
             finally:
                 os.close(fd)
 
             os.replace(str(temp_path), str(target_path))
-            return len(encoded)
+            return len(actual_encoded)
 
         result, _ = self.gateway.authorize_and_execute(
             subject=subject,
@@ -99,7 +111,11 @@ class GuardedFileAdapter:
             resource_class=ResourceClass.FILE,
             target=str(target_path),
             action_fn=_do_write,
-            arguments={"content_bytes": len(content.encode(encoding))},
+            arguments={
+                "content_bytes": content_bytes,
+                "content_sha256": content_sha256,
+                "encoding": encoding,
+            },
             approval_id=approval_id,
             trace_id=trace_id,
         )

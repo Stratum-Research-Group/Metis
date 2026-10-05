@@ -4,6 +4,20 @@
 # Models are loaded on demand; VRAM estimates control co-loading decisions.
 
 models:
+  # ── Primary Chat Model: Gemma 4 26B (A4B Abliterated Q3_K_M) ──
+  - name: gemma-4-26b-a4b-abliterated
+    type: chat
+    gguf_path: /home/akarta/models/Gemma-4-26B-A4B-Abliterated.Q3_K_M.gguf
+    quantization: Q3_K_M
+    context_size: 8192
+    vram_estimate_mb: 13500
+    gpu_target: rtx-5060-ti
+    sampling:
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 40
+      repeat_penalty: 1.1
+
   # ── Example: 8B instruct chat model ──
   - name: llama-3.1-8b-instruct
     type: chat
@@ -11,7 +25,7 @@ models:
     quantization: Q4_K_M
     context_size: 8192
     vram_estimate_mb: 5500
-    gpu_target: rtx-5060-ti          # only GPU online for now
+    gpu_target: rtx-5060-ti
     sampling:
       temperature: 0.7
       top_p: 0.9
@@ -27,3 +41,4 @@ models:
     vram_estimate_mb: 800
     gpu_target: rtx-5060-ti
     sampling: {}
+

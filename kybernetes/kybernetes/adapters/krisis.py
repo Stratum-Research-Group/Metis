@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from pydantic import BaseModel, Field
 
 from kybernetes.contracts.enums import TurnOutcomeStatus
@@ -24,6 +24,10 @@ class KrisisAdapter:
     Evaluates evidence support and ensures raw generation is never
     confused with factual verification.
     """
+
+    def __init__(self, verifier_client: Optional[Any] = None):
+        self.verifier_client = verifier_client
+        self.is_simulated = (verifier_client is None)
 
     def verify_response(
         self,

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -28,7 +30,21 @@ class LlamaCppBackend(Backend):
         binary_path: str = "/usr/local/bin/llama-server",
         log_dir: str = "logs",
     ) -> None:
-        self._binary = Path(binary_path)
+        resolved = Path(binary_path)
+        if not resolved.is_file():
+            env_bin = os.environ.get("HESTIA_LLAMACPP_BINARY")
+            if env_bin and Path(env_bin).is_file():
+                resolved = Path(env_bin)
+            else:
+                which_bin = shutil.which("llama-server")
+                if which_bin and Path(which_bin).is_file():
+                    resolved = Path(which_bin)
+                elif Path("/usr/lib/ollama/llama-server").is_file():
+                    resolved = Path("/usr/lib/ollama/llama-server")
+                elif Path("/usr/bin/llama-server").is_file():
+                    resolved = Path("/usr/bin/llama-server")
+
+        self._binary = resolved
         self._log_dir = Path(log_dir)
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
         self._log_files: dict[str, io.BufferedWriter] = {}
@@ -58,6 +74,17 @@ class LlamaCppBackend(Backend):
 
     async def start(self, model: ModelEntry, port: int) -> BackendProcess:
         """Launch a llama-server process and wait for it to become healthy."""
+        if not Path(model.gguf_path).is_file():
+            raise BackendStartError(
+                model.name,
+                f"Model weights not found at '{model.gguf_path}'. Please configure a valid GGUF path in models.yaml.",
+            )
+        if not self._binary.is_file():
+            raise BackendStartError(
+                model.name,
+                f"llama-server binary not found at '{self._binary}'. Please install llama.cpp or set HESTIA_LLAMACPP_BINARY.",
+            )
+
         args = self.build_launch_args(model, port)
         logger.info("Starting llama.cpp for %s: %s", model.name, " ".join(args))
 
@@ -65,11 +92,21 @@ class LlamaCppBackend(Backend):
         log_path = self._log_dir / f"{model.name}.log"
         log_file = open(log_path, "ab")
 
+        env = os.environ.copy()
+        if model.gpu_target:
+            if model.gpu_target in ("rtx-5060-ti", "v100", "0", "cuda:0"):
+                env["CUDA_VISIBLE_DEVICES"] = "0"
+            elif model.gpu_target in ("1", "cuda:1"):
+                env["CUDA_VISIBLE_DEVICES"] = "1"
+            else:
+                env["CUDA_VISIBLE_DEVICES"] = model.gpu_target
+
         try:
             proc = subprocess.Popen(
                 args,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
+                env=env,
                 # Don't let the child inherit our signals
                 start_new_session=True,
             )

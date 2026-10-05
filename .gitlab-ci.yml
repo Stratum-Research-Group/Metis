@@ -1,21 +1,54 @@
 stages:
   - test
+  - heavy-ml
 
 variables:
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
-  PYTHONPATH: "kybernetes:prosopon:hestia/src:stoma/src"
+  PYTHONPATH: ".:dianoia:paideia:stoma/src:LTHCM:dokime/src:kleroterion/src:hestia/src:kybernetes:prosopon:phylax:krisis"
 
 cache:
   key: "$CI_COMMIT_REF_SLUG"
   paths:
     - .uv-cache/
 
-stack-test:
+core-control-plane-test:
   stage: test
   image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
   script:
-    - echo "=== Metis Sovereign Local AI Stack Verification ==="
+    - echo "=== Metis Core Stack Verification ==="
     - uv sync --python 3.12
     - uv run kybernetes doctor
-    - uv run pytest tests/test_stack_smoke.py -v
-    - uv run --package kybernetes pytest kybernetes/tests -v
+    - echo "--- Running Root Smoke & Regression Suites ---"
+    - uv run pytest tests/test_stack_smoke.py tests/test_round2_fixes.py -v
+    - echo "--- Running Kybernetes Orchestrator Suite ---"
+    - uv run pytest kybernetes/tests -v
+    - echo "--- Running Prosopon UI & Client Suite ---"
+    - uv run pytest prosopon/tests -v
+    - echo "--- Running Hestia Model Server Suite ---"
+    - uv run pytest hestia/tests -v
+    - echo "--- Running Phylax Capability Gateway Suite ---"
+    - uv run pytest phylax/tests -v
+    - echo "--- Running Krisis Verification Gate Suite ---"
+    - uv run pytest krisis/tests -v
+    - echo "--- Running Dianoia Thought Graph Suite ---"
+    - uv run pytest dianoia/tests -v
+    - echo "--- Running Dokime Evaluation Suite ---"
+    - uv run pytest dokime/tests -v
+    - echo "--- Running Paideia Alignment Suite ---"
+    - uv run pytest paideia/tests -v
+    - echo "--- Running Kleroterion Decision Suite ---"
+    - PYTHONPATH=kleroterion/src uv run pytest kleroterion/tests -v
+
+heavy-ml-test:
+  stage: heavy-ml
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_TAG
+    - when: manual
+      allow_failure: true
+  script:
+    - echo "=== Metis Heavy ML & Torch Suites (Opt-In / Scheduled) ==="
+    - uv sync --all-packages --python 3.12
+    - uv run pytest stoma/tests -v
+    - uv run pytest LTHCM/tests -v

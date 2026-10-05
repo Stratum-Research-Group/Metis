@@ -14,7 +14,8 @@ from paideia.export.privacy import (
 def test_export_hestia_adapter_registry(tmp_path):
     adapter_dir = tmp_path / "mock_adapter"
     adapter_dir.mkdir(parents=True, exist_ok=True)
-    # Create mock weight files
+    # Create mock manifest and weight files
+    (adapter_dir / "manifest.json").write_text('{"status": "SUCCESS", "is_simulated": false}')
     (adapter_dir / "adapter_model.safetensors").write_bytes(b"dummy_weights_12345")
     (adapter_dir / "adapter_config.json").write_text('{"rank": 16}')
 
@@ -30,7 +31,96 @@ def test_export_hestia_adapter_registry(tmp_path):
 
     assert entry.adapter_id == "router-qlora-v1"
     assert entry.adapter_digest != ""
+    assert entry.base_model_digest.startswith("unresolved_alias:")
     assert (adapter_dir / "hestia_registry_entry.json").exists()
+
+
+def test_export_rejects_missing_manifest(tmp_path):
+    adapter_dir = tmp_path / "no_manifest"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    (adapter_dir / "adapter_model.safetensors").write_bytes(b"weights")
+
+    with pytest.raises(ValueError, match="missing required manifest.json"):
+        export_hestia_adapter_registry(
+            adapter_id="test-1",
+            adapter_dir=adapter_dir,
+            base_model_name="llama",
+            task="router",
+            training_data_fingerprint="fp",
+            evaluation_run_id="eval-1",
+            resource_footprint={},
+        )
+
+
+def test_export_rejects_corrupt_manifest(tmp_path):
+    adapter_dir = tmp_path / "corrupt_manifest"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    (adapter_dir / "manifest.json").write_text("{corrupted json...")
+    (adapter_dir / "adapter_model.safetensors").write_bytes(b"weights")
+
+    with pytest.raises(ValueError, match="corrupt or unreadable manifest"):
+        export_hestia_adapter_registry(
+            adapter_id="test-2",
+            adapter_dir=adapter_dir,
+            base_model_name="llama",
+            task="router",
+            training_data_fingerprint="fp",
+            evaluation_run_id="eval-1",
+            resource_footprint={},
+        )
+
+
+def test_export_rejects_config_only_without_weights(tmp_path):
+    adapter_dir = tmp_path / "config_only"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    (adapter_dir / "manifest.json").write_text('{"status": "SUCCESS", "is_simulated": false}')
+    (adapter_dir / "adapter_config.json").write_text('{"rank": 16}')
+
+    with pytest.raises(ValueError, match="contains no trained weight files"):
+        export_hestia_adapter_registry(
+            adapter_id="test-3",
+            adapter_dir=adapter_dir,
+            base_model_name="llama",
+            task="router",
+            training_data_fingerprint="fp",
+            evaluation_run_id="eval-1",
+            resource_footprint={},
+        )
+
+
+def test_export_rejects_simulated_run_without_explicit_flag(tmp_path):
+    adapter_dir = tmp_path / "simulated"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    (adapter_dir / "manifest.json").write_text('{"status": "SIMULATED", "is_simulated": true}')
+    (adapter_dir / "adapter_model.safetensors").write_bytes(b"weights")
+
+    with pytest.raises(ValueError, match="produced by a simulated run"):
+        export_hestia_adapter_registry(
+            adapter_id="test-4",
+            adapter_dir=adapter_dir,
+            base_model_name="llama",
+            task="router",
+            training_data_fingerprint="fp",
+            evaluation_run_id="eval-1",
+            resource_footprint={},
+            allow_simulated=False,
+        )
+
+
+def test_export_rejects_empty_directory(tmp_path):
+    adapter_dir = tmp_path / "empty"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ValueError):
+        export_hestia_adapter_registry(
+            adapter_id="test-5",
+            adapter_dir=adapter_dir,
+            base_model_name="llama",
+            task="router",
+            training_data_fingerprint="fp",
+            evaluation_run_id="eval-1",
+            resource_footprint={},
+        )
 
 
 def test_privacy_sanitization():

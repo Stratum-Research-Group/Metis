@@ -62,3 +62,36 @@ def test_tls_generation(tmp_path):
     assert cert_path.read_text().startswith("-----BEGIN CERTIFICATE-----")
     assert key_path.read_text().startswith("-----BEGIN RSA PRIVATE KEY-----")
 
+
+def test_cross_process_pairing_and_live_revocation(tmp_path):
+    """Item 4: CLI-issued PIN coordinates across instances, and revocation immediately invalidates live cache."""
+    # Instance 1: Server manager
+    server_mgr = PairingManager(tmp_path)
+    
+    # Instance 2: Separate CLI manager (e.g. running 'prosopon pair')
+    cli_mgr = PairingManager(tmp_path)
+    pin = cli_mgr.generate_pairing_pin()
+    assert (tmp_path / "pairing_pin.json").exists()
+    
+    # Server manager verifies PIN issued by CLI manager
+    token = server_mgr.verify_pin_and_pair(pin, device_name="Phone")
+    assert token is not None
+    assert server_mgr.validate_token(token) is True
+    # PIN file consumed
+    assert not (tmp_path / "pairing_pin.json").exists()
+
+    # Check 0600 permissions on paired_tokens.json
+    import stat
+    tokens_file = tmp_path / "paired_tokens.json"
+    assert tokens_file.exists()
+    file_mode = stat.S_IMODE(tokens_file.stat().st_mode)
+    assert file_mode == 0o600
+
+    # Instance 3: CLI revocation (e.g. running 'prosopon revoke')
+    revoker_mgr = PairingManager(tmp_path)
+    revoker_mgr.revoke_all()
+
+    # Live server instance immediately detects disk update and rejects token
+    assert server_mgr.validate_token(token) is False
+
+

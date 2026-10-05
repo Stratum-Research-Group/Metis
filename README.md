@@ -47,7 +47,7 @@ flowchart TD
 
 ## 2. Component Stacks & Module Documentation
 
-Each of the 11 component stacks in Metis is an independently testable, production-grade module with its own dedicated documentation:
+Each of the 11 component stacks in Metis is an independently testable module with explicit contracts, test suites, and dedicated documentation:
 
 | Module | Architectural Role | Key Technologies & Capabilities | Documentation |
 | :--- | :--- | :--- | :--- |
@@ -151,7 +151,7 @@ Navigate to `http://127.0.0.1:8000` to interact with the system.
 
 For phone access over your local Wi-Fi network:
 ```bash
-prosopon serve --lan --tls --port 8000 --kybernetes-url http://127.0.0.1:8081
+prosopon serve --lan --tls --port 8000 --kybernetes-url http://127.0.0.1:8081/v1
 ```
 Enter the 6-digit terminal pairing PIN on your phone browser (`https://<host-ip>:8000`) for authenticated text and push-to-talk voice.
 
@@ -159,18 +159,16 @@ Enter the 6-digit terminal pairing PIN on your phone browser (`https://<host-ip>
 
 ## 6. Hardware & GPU Partitioning Guide
 
-Metis is designed for efficient execution on heterogeneous local hardware:
+Metis is designed for efficient execution on heterogeneous local hardware with process isolation:
 
-- **Inference & Model Serving (NVIDIA Tesla V100 SXM2 16GB / Volta `sm_70`)**:
-  - Pinned to CUDA 12.2 / 12.4.
-  - Runs `llama-server` (llama.cpp) or vLLM serving Qwen2.5-7B-Instruct (Q4_K_M) and Llama-3.1-8B-Instruct.
-- **Topological Computation & Embeddings (NVIDIA RTX 5060 Ti 16GB / Blackwell `sm_120`)**:
-  - Pinned to PyTorch with CUDA 12.8.
-  - Accelerates LTHCM non-Euclidean geometry, Sinkhorn optimal transport, and sentence embedding inference.
+- **Inference & Model Serving (NVIDIA GeForce RTX 5060 Ti 16GB / Blackwell `sm_120`)**:
+  - Dedicated to low-latency token generation for Llama-3.1-8B-Instruct via `llama-server` or vLLM (`CUDA_VISIBLE_DEVICES=1`).
+- **Embeddings, NLI Verification & Tuning (NVIDIA Tesla V100 SXM2 16GB / Volta `sm_70`)**:
+  - Dedicated to Stoma embeddings, Dokime/Krisis NLI verification, and Paideia tuning using Volta-compatible PyTorch builds (`CUDA_VISIBLE_DEVICES=0`).
 - **Control Plane & Gate Evaluation (CPU Host)**:
   - Kybernetes, Krisis, Phylax, Prosopon, and SQLite budget engine run with minimal CPU and memory overhead (~500MB RAM).
 
-For in-depth hardware setup, environment variables, and driver configurations, see [**docs/HARDWARE_AND_CUDA_GUIDE.md**](docs/HARDWARE_AND_CUDA_GUIDE.md).
+For in-depth hardware setup, environment variables, driver configurations, and dual-driver boundaries, see [**docs/HARDWARE_AND_CUDA_GUIDE.md**](docs/HARDWARE_AND_CUDA_GUIDE.md).
 
 ---
 
@@ -184,4 +182,4 @@ For in-depth hardware setup, environment variables, and driver configurations, s
 
 ## 8. License
 
-Metis and its component stacks are licensed under the [MIT License](LICENSE).
+Licensing, third-party dependency notices, and distribution permissions are managed per component and under owner review.

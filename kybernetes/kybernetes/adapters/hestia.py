@@ -20,7 +20,7 @@ class HestiaAdapter:
     ):
         resolved_url = base_url or os.environ.get("HESTIA_BASE_URL", "http://127.0.0.1:8080/v1")
         self.base_url = resolved_url.rstrip("/")
-        self.default_model = default_model
+        self.default_model = os.environ.get("HESTIA_DEFAULT_MODEL", default_model)
         self.timeout = timeout_seconds
 
     async def check_health(self) -> Dict[str, Any]:
@@ -59,7 +59,7 @@ class HestiaAdapter:
         Stream chat completions from Hestia.
         Yields dicts with 'delta' (str) and final 'usage' (input_tokens, output_tokens).
         """
-        target_model = model or self.default_model
+        target_model = model or os.environ.get("HESTIA_DEFAULT_MODEL") or self.default_model
         payload = {
             "model": target_model,
             "messages": [
@@ -68,6 +68,8 @@ class HestiaAdapter:
             ],
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "repeat_penalty": 1.15,
+            "presence_penalty": 0.1,
             "stream": True,
             "stream_options": {"include_usage": True},
         }
@@ -102,10 +104,27 @@ class HestiaAdapter:
                             }
                         except json.JSONDecodeError:
                             continue
+        except httpx.HTTPStatusError as e:
+            detail = str(e)
+            try:
+                raw_bytes = await e.response.aread()
+                detail_text = raw_bytes.decode(errors="replace")
+                err_json = json.loads(detail_text)
+                if isinstance(err_json, dict) and "detail" in err_json:
+                    detail = err_json["detail"]
+                elif detail_text:
+                    detail = detail_text
+            except Exception:
+                pass
+            yield {
+                "error": f"Hestia error ({e.response.status_code}): {detail}",
+                "delta": f"[Local Hestia: {detail}]",
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+            }
         except Exception as e:
-            # Yield error or mock fallback if local server is unreachable
+            # Yield error or fallback if local server is unreachable
             yield {
                 "error": f"Hestia server error: {e}",
                 "delta": f"[Local Hestia offline: {e}]",
-                "usage": {"prompt_tokens": 10, "completion_tokens": 10},
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0},
             }

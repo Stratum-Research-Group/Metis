@@ -28,6 +28,7 @@ class DianoiaAdapter:
 
     def __init__(self, dianoia_module: Any = None):
         self.dianoia_module = dianoia_module
+        self.is_simulated = (dianoia_module is None)
 
     def deliberate(
         self,

@@ -14,9 +14,30 @@ const API = {
     }
   },
 
+  async ensureAuthToken() {
+    const existing = this.getAuthToken();
+    if (existing) return existing;
+    try {
+      const res = await fetch("/api/auth/local-token", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          this.setAuthToken(data.token);
+          return data.token;
+        }
+      }
+    } catch {
+      // Remote or offline
+    }
+    return "";
+  },
+
   async request(endpoint, options = {}) {
     const headers = options.headers || {};
-    const token = this.getAuthToken();
+    let token = this.getAuthToken();
+    if (!token && !endpoint.startsWith("/api/auth/")) {
+      token = await this.ensureAuthToken();
+    }
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -78,7 +99,7 @@ const API = {
     });
   },
 
-  async synthesizeSpeech(text) {
+    async synthesizeSpeech(text) {
     const res = await fetch("/api/voice/synthesize", {
       method: "POST",
       headers: {
@@ -89,5 +110,41 @@ const API = {
     });
     if (!res.ok) throw new Error("TTS failed");
     return res.blob();
+  },
+
+  /* Unified Dashboard API */
+  async getDashboardOverview() {
+    return this.request("/api/dashboard/overview");
+  },
+
+  async getDashboardModules() {
+    return this.request("/api/dashboard/modules");
+  },
+
+  async getDashboardModuleConfig(moduleId) {
+    return this.request(`/api/dashboard/modules/${encodeURIComponent(moduleId)}/config`);
+  },
+
+  async getDashboardSessions(limit = 50, offset = 0) {
+    return this.request(`/api/dashboard/sessions?limit=${limit}&offset=${offset}`);
+  },
+
+  async getDashboardTraces(limit = 50, offset = 0) {
+    return this.request(`/api/dashboard/traces?limit=${limit}&offset=${offset}`);
+  },
+
+  async getDashboardAuditLog(limit = 50, offset = 0) {
+    return this.request(`/api/dashboard/audit-log?limit=${limit}&offset=${offset}`);
+  },
+
+  async runDashboardProbe(componentId) {
+    return this.request("/api/dashboard/probes/run", {
+      method: "POST",
+      body: JSON.stringify({ component_id: componentId }),
+    });
+  },
+
+  async getDashboardGpuTelemetry() {
+    return this.request("/api/dashboard/gpu-telemetry");
   },
 };

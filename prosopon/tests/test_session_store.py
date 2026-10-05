@@ -41,3 +41,34 @@ def test_session_store_lifecycle(tmp_path):
     deleted = store.delete_session(sess.session_id)
     assert deleted is True
     assert store.get_session(sess.session_id) is None
+
+
+def test_session_id_path_traversal_rejected(tmp_path):
+    store = SessionStore(tmp_path)
+
+    # Path traversal attempts
+    assert store.get_session("../../../etc/passwd") is None
+    assert store.delete_session("../../../etc/passwd") is False
+    assert store.append_message("../../escape", ChatMessage(message_id="m", role="user", content="x")) is None
+
+    with pytest.raises(ValueError, match="Invalid session ID format|Path traversal"):
+        store._resolve_session_path("../evil_session")
+
+    with pytest.raises(ValueError, match="Invalid session ID format|Path traversal"):
+        store._resolve_session_path("session/subpath")
+
+    with pytest.raises(ValueError, match="Invalid session ID format|Path traversal"):
+        store._resolve_session_path("invalid id with spaces")
+
+
+def test_session_store_permissions_and_recovery(tmp_path):
+    import os
+    store = SessionStore(tmp_path)
+    sess = store.create_session("Secure Session")
+
+    file_path = store.storage_dir / f"{sess.session_id}.json"
+    assert file_path.exists()
+    # Check permissions 0600 on file
+    mode = os.stat(file_path).st_mode & 0o777
+    assert mode == 0o600
+

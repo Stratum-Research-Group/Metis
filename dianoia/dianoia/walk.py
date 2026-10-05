@@ -12,7 +12,7 @@ import logging
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import uuid
 
 try:
@@ -347,7 +347,10 @@ class WalkController:
     # ------------------------------------------------------------------
 
     def _seed_candidates(
-        self, query_vec: torch.Tensor
+        self,
+        query_vec: torch.Tensor,
+        as_of: Optional[float] = None,
+        access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Seed the walk from the engine's pre-verification retrieval.
@@ -355,35 +358,53 @@ class WalkController:
         At the pinned commit (8a71605), this calls:
           - engine.stochastic_resonance.resonate_retrieval() (pipeline.py:204-209)
           - Fallback: engine.superposition.retrieve() (pipeline.py:211)
+
+        Filters returned seeds strictly by temporal cutoff (as_of) and access_filter.
         """
+        raw_results = []
         if self.use_stochastic_resonance:
             try:
-                results = self.engine.stochastic_resonance.resonate_retrieval(
+                raw_results = self.engine.stochastic_resonance.resonate_retrieval(
                     query=query_vec,
                     memory_store=self.engine.superposition,
                     top_k=self.top_k,
                 )
-                return results
             except Exception as e:
                 logger.warning(
                     "Stochastic resonance seeding failed, falling back to "
                     "superposition.retrieve: %s",
                     e,
                 )
+                raw_results = self.engine.superposition.retrieve(query_vec, top_k=self.top_k)
+        else:
+            raw_results = self.engine.superposition.retrieve(query_vec, top_k=self.top_k)
 
-        # Fallback: direct superposition retrieval
-        return self.engine.superposition.retrieve(query_vec, top_k=self.top_k)
+        filtered = []
+        for r in raw_results:
+            created = float(r.get("created_epoch", r.get("timestamp", 0.0)))
+            if as_of is not None and created > as_of:
+                continue
+            if access_filter is not None and not access_filter(r):
+                continue
+            filtered.append(r)
+        return filtered
 
     # ------------------------------------------------------------------
     # Graph neighbour access
     # ------------------------------------------------------------------
 
-    def _get_neighbours(self, node_id: str) -> List[Dict[str, Any]]:
+    def _get_neighbours(
+        self,
+        node_id: str,
+        as_of: Optional[float] = None,
+        access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Get graph neighbours for a node from LTHCM's wormhole graph.
 
         Returns a list of dicts with 'node_id' and 'content' keys.
         A node with no edges returns an empty list. No fabricated neighbours.
+        Enforces as_of temporal cutoff and access boundary checks.
         """
         neighbours = []
 
@@ -392,6 +413,11 @@ class WalkController:
         for bridge in bridges:
             target_id = bridge["target"]
             meta = self.engine.wormhole.node_metadata.get(target_id, {})
+            created = float(meta.get("created_epoch", meta.get("timestamp", 0.0)))
+            if as_of is not None and created > as_of:
+                continue
+            if access_filter is not None and not access_filter(meta):
+                continue
             neighbours.append({
                 "node_id": target_id,
                 "content": meta.get("content", "[content unavailable]"),
@@ -402,6 +428,11 @@ class WalkController:
             for successor in self.engine.wormhole.graph.successors(node_id):
                 if not any(n["node_id"] == successor for n in neighbours):
                     meta = self.engine.wormhole.node_metadata.get(successor, {})
+                    created = float(meta.get("created_epoch", meta.get("timestamp", 0.0)))
+                    if as_of is not None and created > as_of:
+                        continue
+                    if access_filter is not None and not access_filter(meta):
+                        continue
                     neighbours.append({
                         "node_id": successor,
                         "content": meta.get("content", "[content unavailable]"),
@@ -510,6 +541,8 @@ class WalkController:
         self,
         question: str,
         conflict_prefix: Optional[str] = None,
+        as_of: Optional[float] = None,
+        access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
     ) -> Dict[str, Any]:
         """
         Execute a single deliberative walk.
@@ -518,6 +551,8 @@ class WalkController:
             question: The user's question.
             conflict_prefix: If set, prepended to the system prompt (for re-walks
                 informed by a conflict report).
+            as_of: Optional POSIX epoch timestamp cutoff; nodes created after are excluded.
+            access_filter: Optional predicate (dict -> bool) returning False for restricted nodes.
 
         Returns:
             Dict with:
@@ -533,7 +568,7 @@ class WalkController:
         query_vec = self.embedder.encode_single(question)
 
         # Seed candidates
-        seed_results = self._seed_candidates(query_vec)
+        seed_results = self._seed_candidates(query_vec, as_of=as_of, access_filter=access_filter)
         seeded_node_ids = [r.get("doc_id", r.get("node_id", "")) for r in seed_results]
 
         if not seed_results:
@@ -568,7 +603,7 @@ class WalkController:
             # Execute step with step-level OOM recovery covering neighbours, prompt, and LLM call
             try:
                 # Get neighbours of current node
-                neighbours = self._get_neighbours(current_node_id)
+                neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
                 valid_ids = [n["node_id"] for n in neighbours]
 
                 # Build the step prompt
@@ -592,7 +627,7 @@ class WalkController:
                     or (torch is not None and isinstance(e, getattr(torch.cuda, "OutOfMemoryError", ())))
                 )
                 if is_oom and self._trigger_fallback(f"Walk step {step + 1} OOM error: {e}"):
-                    neighbours = self._get_neighbours(current_node_id)
+                    neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
                     valid_ids = [n["node_id"] for n in neighbours]
                     step_prompt = STEP_PROMPT_TEMPLATE.format(
                         question=question,
@@ -637,18 +672,25 @@ class WalkController:
                 break
 
             elif parsed.action == "EXPAND" and parsed.target:
-                # Move to target node and push it onto the walk stack
-                current_node_id = parsed.target
-                walk_stack.append(current_node_id)
-                # Get content for the new node
-                meta = self.engine.wormhole.node_metadata.get(current_node_id, {})
-                current_content = meta.get("content", "[content unavailable]")
-                # Record as visited if not already
-                if not any(p["node_id"] == current_node_id for p in visited_passages):
-                    visited_passages.append({
-                        "node_id": current_node_id,
-                        "content": current_content,
-                    })
+                # Revalidate selected action against valid, causally admitted neighbors
+                if parsed.target not in valid_ids:
+                    logger.warning(
+                        "Action EXPAND target '%s' is not in causal/valid neighbor list %s. Refusing expansion.",
+                        parsed.target, valid_ids
+                    )
+                else:
+                    # Move to target node and push it onto the walk stack
+                    current_node_id = parsed.target
+                    walk_stack.append(current_node_id)
+                    # Get content for the new node
+                    meta = self.engine.wormhole.node_metadata.get(current_node_id, {})
+                    current_content = meta.get("content", "[content unavailable]")
+                    # Record as visited if not already
+                    if not any(p["node_id"] == current_node_id for p in visited_passages):
+                        visited_passages.append({
+                            "node_id": current_node_id,
+                            "content": current_content,
+                        })
 
             elif parsed.action == "BACKTRACK":
                 # Pop the current node, returning to the previous node (new top).
@@ -686,7 +728,12 @@ class WalkController:
     # Full pipeline: walk + verify + optional re-walk + log
     # ------------------------------------------------------------------
 
-    def run(self, question: str) -> Dict[str, Any]:
+    def run(
+        self,
+        question: str,
+        as_of: Optional[float] = None,
+        access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    ) -> Dict[str, Any]:
         """
         Execute the full Dianoia v1 pipeline:
             1. Deliberative walk
@@ -696,6 +743,8 @@ class WalkController:
 
         Args:
             question: The user's question.
+            as_of: Optional temporal cutoff.
+            access_filter: Optional access predicate.
 
         Returns:
             Dict with:
@@ -710,7 +759,7 @@ class WalkController:
         walk_id = str(uuid.uuid4())
 
         # --- Step 1: Initial walk ---
-        walk_result = self.walk(question)
+        walk_result = self.walk(question, as_of=as_of, access_filter=access_filter)
 
         # --- Step 2: Answer-time verification ---
         verification = self._verify_answer(
@@ -753,7 +802,12 @@ class WalkController:
                 conflict_report=verification["conflict_detail"] or "Unspecified conflict."
             )
             try:
-                rewalk_result = self.walk(question, conflict_prefix=conflict_prefix)
+                rewalk_result = self.walk(
+                    question,
+                    conflict_prefix=conflict_prefix,
+                    as_of=as_of,
+                    access_filter=access_filter,
+                )
 
                 # Re-verify the new answer
                 re_verification = self._verify_answer(

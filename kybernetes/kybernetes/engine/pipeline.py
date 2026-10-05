@@ -67,7 +67,73 @@ class ExecutionPipeline:
         self.phylax = phylax_adapter
         self.krisis = krisis_adapter
         self.sessions = session_manager
+        self.max_traces: int = 1000
         self._traces: Dict[str, TraceRecord] = {}
+
+    def _record_trace(self, turn_id: str, trace: TraceRecord) -> None:
+        self._traces[turn_id] = trace
+        if len(self._traces) > self.max_traces:
+            oldest_key = next(iter(self._traces))
+            self._traces.pop(oldest_key, None)
+
+    def _record_terminal_state(
+        self,
+        trace_id: str,
+        turn_id: str,
+        session_id: str,
+        plan: Any,
+        components_used: List[str],
+        stage_outcomes: List[StageOutcome],
+        total_lat: float,
+        final_status: TurnOutcomeStatus,
+        zero_edge_fallback: bool,
+        is_turn_simulated: bool,
+        v_report: Optional[KrisisVerificationReport],
+        query: str,
+        response_text: str,
+        emitted_events: List[TurnEvent],
+        budget_usage: Optional[Any] = None,
+    ) -> None:
+        trace = TraceRecord(
+            trace_id=trace_id,
+            turn_id=turn_id,
+            session_id=session_id,
+            route_label=plan.route_label if plan else "unknown",
+            route_tags=plan.route_tags if plan else [],
+            components_used=list(set(components_used)),
+            dependency_versions={
+                "kybernetes": "0.1.0",
+                "hestia": getattr(self.hestia, "default_model", "local"),
+                "lthcm": getattr(self.lthcm, "generation_id", None) or ("simulated_demo" if getattr(self.lthcm, "is_simulated", True) else "live_index"),
+                "dianoia": "live_engine" if not getattr(self.dianoia, "is_simulated", True) else "simulated_adapter",
+                "phylax": "guarded_gateway" if not getattr(self.phylax, "is_simulated", True) else "local_approval_shim",
+                "krisis": "standalone_selector" if not getattr(self.krisis, "is_simulated", True) else "heuristic_half_even",
+            },
+            stage_outcomes=stage_outcomes,
+            total_latency_ms=round(total_lat, 2),
+            final_status=final_status,
+            zero_edge_fallback_used=zero_edge_fallback,
+            budget_usage=budget_usage or {},
+            metadata={
+                "served_model": getattr(self.hestia, "default_model", "unknown"),
+                "verifier_mode": v_report.verifier_mode if v_report else None,
+                "is_simulated": is_turn_simulated,
+                "verifier_status": final_status.value,
+                "verifier_score": v_report.score if v_report else None,
+            },
+        )
+        self._record_trace(turn_id, trace)
+        self.sessions.record_turn_events(
+            session_id,
+            SessionTurn(
+                turn_id=turn_id,
+                query=query,
+                response_text=response_text,
+                events=emitted_events,
+                status=final_status.value,
+            ),
+        )
+        self.sessions.clear_cancellation(turn_id)
 
     def get_trace(self, turn_id: str) -> Optional[TraceRecord]:
         return self._traces.get(turn_id)
@@ -84,6 +150,10 @@ class ExecutionPipeline:
         trace_id = f"trace-{uuid.uuid4().hex[:8]}"
         seq_num = 0
         emitted_events: List[TurnEvent] = []
+        is_turn_simulated = bool(
+            getattr(self.lthcm, "is_simulated", True)
+            or getattr(self.dianoia, "is_simulated", True)
+        )
 
         # 1. Event: STARTED
         e_started = TurnEvent(
@@ -279,8 +349,48 @@ class ExecutionPipeline:
                         yield e_ask
                         seq_num += 1
 
-                        # Await decision and consume approval atomically
-                        user_dec = await self.phylax.wait_for_approval(app_req["approval_id"])
+                        # Await decision or cancellation concurrently
+                        cancel_event = self.sessions.get_cancellation_event(turn_id)
+                        approval_task = asyncio.create_task(self.phylax.wait_for_approval(app_req["approval_id"]))
+                        cancel_task = asyncio.create_task(cancel_event.wait())
+
+                        done, pending = await asyncio.wait(
+                            [approval_task, cancel_task],
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                        for t in pending:
+                            t.cancel()
+
+                        if cancel_task in done or self.sessions.is_turn_cancelled(turn_id):
+                            cancel_msg = "Turn was cancelled while awaiting user approval."
+                            e_comp = TurnEvent(
+                                turn_id=turn_id,
+                                seq_num=seq_num,
+                                event_type=EventType.COMPLETED.value,
+                                payload={"status": "cancelled", "reason": cancel_msg},
+                                status=TurnOutcomeStatus.FAILED.value,
+                            )
+                            emitted_events.append(e_comp)
+                            yield e_comp
+                            self._record_terminal_state(
+                                trace_id=trace_id,
+                                turn_id=turn_id,
+                                session_id=request.session_id,
+                                plan=plan,
+                                components_used=components_used,
+                                stage_outcomes=stage_outcomes,
+                                total_lat=(time.perf_counter() - start_time) * 1000,
+                                final_status=TurnOutcomeStatus.FAILED,
+                                zero_edge_fallback=False,
+                                is_turn_simulated=is_turn_simulated,
+                                v_report=None,
+                                query=request.query,
+                                response_text=cancel_msg,
+                                emitted_events=emitted_events,
+                            )
+                            return
+
+                        user_dec = approval_task.result()
                         e_res = TurnEvent(
                             turn_id=turn_id,
                             seq_num=seq_num,
@@ -322,7 +432,52 @@ class ExecutionPipeline:
                             )
                             emitted_events.append(e_comp)
                             yield e_comp
+                            self._record_terminal_state(
+                                trace_id=trace_id,
+                                turn_id=turn_id,
+                                session_id=request.session_id,
+                                plan=plan,
+                                components_used=components_used,
+                                stage_outcomes=stage_outcomes,
+                                total_lat=denied_lat,
+                                final_status=TurnOutcomeStatus.VERIFIED,
+                                zero_edge_fallback=False,
+                                is_turn_simulated=is_turn_simulated,
+                                v_report=None,
+                                query=request.query,
+                                response_text=denied_msg,
+                                emitted_events=emitted_events,
+                            )
                             return
+
+                if self.sessions.is_turn_cancelled(turn_id):
+                    cancel_msg = "Turn was cancelled before tool execution."
+                    e_comp = TurnEvent(
+                        turn_id=turn_id,
+                        seq_num=seq_num,
+                        event_type=EventType.COMPLETED.value,
+                        payload={"status": "cancelled", "reason": cancel_msg},
+                        status=TurnOutcomeStatus.FAILED.value,
+                    )
+                    emitted_events.append(e_comp)
+                    yield e_comp
+                    self._record_terminal_state(
+                        trace_id=trace_id,
+                        turn_id=turn_id,
+                        session_id=request.session_id,
+                        plan=plan,
+                        components_used=components_used,
+                        stage_outcomes=stage_outcomes,
+                        total_lat=(time.perf_counter() - start_time) * 1000,
+                        final_status=TurnOutcomeStatus.FAILED,
+                        zero_edge_fallback=False,
+                        is_turn_simulated=is_turn_simulated,
+                        v_report=None,
+                        query=request.query,
+                        response_text=cancel_msg,
+                        emitted_events=emitted_events,
+                    )
+                    return
 
                 t_res = self.tool_registry.execute(ToolCallRequest(tool_id=tool_name, arguments=tool_args))
                 tool_output = t_res.data
@@ -406,6 +561,8 @@ class ExecutionPipeline:
                         response_text = f"Processed query '{request.query}' via {plan.route_label} pipeline."
 
                     for word in response_text.split():
+                        if self.sessions.is_turn_cancelled(turn_id):
+                            break
                         await asyncio.sleep(0.01)
                         e_delta = TurnEvent(
                             turn_id=turn_id,
@@ -417,6 +574,35 @@ class ExecutionPipeline:
                         emitted_events.append(e_delta)
                         yield e_delta
                         seq_num += 1
+
+                if self.sessions.is_turn_cancelled(turn_id):
+                    cancel_msg = "Turn was cancelled during synthesis."
+                    e_comp = TurnEvent(
+                        turn_id=turn_id,
+                        seq_num=seq_num,
+                        event_type=EventType.COMPLETED.value,
+                        payload={"status": "cancelled", "reason": cancel_msg},
+                        status=TurnOutcomeStatus.FAILED.value,
+                    )
+                    emitted_events.append(e_comp)
+                    yield e_comp
+                    self._record_terminal_state(
+                        trace_id=trace_id,
+                        turn_id=turn_id,
+                        session_id=request.session_id,
+                        plan=plan,
+                        components_used=components_used,
+                        stage_outcomes=stage_outcomes,
+                        total_lat=(time.perf_counter() - start_time) * 1000,
+                        final_status=TurnOutcomeStatus.FAILED,
+                        zero_edge_fallback=False,
+                        is_turn_simulated=is_turn_simulated,
+                        v_report=None,
+                        query=request.query,
+                        response_text=cancel_msg,
+                        emitted_events=emitted_events,
+                    )
+                    return
 
                     # Ingest simulated usage for offline testing
                     self.budget_engine.ingest_usage(
@@ -517,44 +703,21 @@ class ExecutionPipeline:
         emitted_events.append(e_comp)
         yield e_comp
 
-        # Record TraceRecord for Dokime and audit
-        trace = TraceRecord(
+        # Record TraceRecord for Dokime and audit, and save turn in session manager
+        self._record_terminal_state(
             trace_id=trace_id,
             turn_id=turn_id,
             session_id=request.session_id,
-            route_label=plan.route_label,
-            route_tags=plan.route_tags,
-            components_used=list(set(components_used)),
-            dependency_versions={
-                "kybernetes": "0.1.0",
-                "hestia": "local",
-                "lthcm": "local",
-                "dianoia": "local",
-                "phylax": "local",
-                "krisis": "local",
-            },
+            plan=plan,
+            components_used=components_used,
             stage_outcomes=stage_outcomes,
-            total_latency_ms=round(total_lat, 2),
+            total_lat=total_lat,
             final_status=final_status,
-            zero_edge_fallback_used=zero_edge_fallback,
+            zero_edge_fallback=zero_edge_fallback,
+            is_turn_simulated=is_turn_simulated,
+            v_report=v_report,
+            query=request.query,
+            response_text=response_text,
+            emitted_events=emitted_events,
             budget_usage=reconcile_report.total_actual,
-            metadata={
-                "verifier_mode": v_report.verifier_mode if v_report else None,
-                "is_simulated": is_turn_simulated,
-                "verifier_status": final_status.value,
-                "verifier_score": v_report.score if v_report else None,
-            },
-        )
-        self._traces[turn_id] = trace
-
-        # Save turn to session manager
-        self.sessions.record_turn_events(
-            request.session_id,
-            SessionTurn(
-                turn_id=turn_id,
-                query=request.query,
-                response_text=response_text,
-                events=emitted_events,
-                status=final_status.value,
-            ),
         )

@@ -12,8 +12,8 @@ import yaml
 class PortRange:
     """Inclusive port range for backend processes."""
 
-    start: int = 8081
-    end: int = 8099
+    start: int = 9000
+    end: int = 9019
 
     def __post_init__(self) -> None:
         if not (1024 <= self.start <= self.end <= 65535):

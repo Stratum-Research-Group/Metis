@@ -2,14 +2,33 @@
 
 import json
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 import uuid
 
 from fastapi import Depends, FastAPI, File, HTTPException, Header, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
+
+
+class ContentSecurityPolicyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "connect-src 'self'; "
+            "img-src 'self' data:; "
+            "media-src 'self' blob:; "
+            "frame-ancestors 'none';"
+        )
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
 from prosopon.config import ProsoponConfig
 from prosopon.auth.pairing import PairingManager
@@ -19,9 +38,9 @@ from prosopon.contracts.phylax import ApprovalResponse
 from prosopon.storage.session_store import SessionStore
 from prosopon.client.kybernetes_client import KybernetesClient
 from prosopon.client.mock_kybernetes import MockKybernetesClient
-from prosopon.voice.transcoder import transcode_to_wav
-from prosopon.voice.whisper_stt import WhisperSTTEngine
-from prosopon.voice.piper_tts import PiperTTSEngine
+from prosopon.voice.transcoder import AudioTranscodingError, transcode_to_wav
+from prosopon.voice.whisper_stt import STTExecutionError, STTUnavailableError, WhisperSTTEngine
+from prosopon.voice.piper_tts import TTSExecutionError, TTSUnavailableError, PiperTTSEngine
 
 
 class ChatQueryRequest(BaseModel):
@@ -53,10 +72,21 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     if cfg.mock_kybernetes:
         kybernetes = MockKybernetesClient()
     else:
-        kybernetes = KybernetesClient(base_url=cfg.kybernetes_api_url)
+        kybernetes = KybernetesClient(
+            base_url=cfg.kybernetes_api_url,
+            service_token=getattr(cfg, "kybernetes_service_token", None),
+        )
 
-    whisper_engine = WhisperSTTEngine(binary_name=cfg.whisper_binary, model_path=cfg.whisper_model)
-    piper_engine = PiperTTSEngine(binary_name=cfg.piper_binary, model_path=cfg.piper_model)
+    whisper_engine = WhisperSTTEngine(
+        binary_name=cfg.whisper_binary,
+        model_path=cfg.whisper_model,
+        mock_mode=cfg.voice_mock_mode,
+    )
+    piper_engine = PiperTTSEngine(
+        binary_name=cfg.piper_binary,
+        model_path=cfg.piper_model,
+        mock_mode=cfg.voice_mock_mode,
+    )
 
     app.state.config = cfg
     app.state.pairing_mgr = pairing_mgr
@@ -71,21 +101,34 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(ContentSecurityPolicyMiddleware)
 
     # Static asset paths
     static_dir = Path(__file__).parent / "web" / "static"
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    # Auth dependency
+    allowed_hosts = {"127.0.0.1", "localhost", "::1", "testserver", "test", cfg.host.split(":")[0]}
+
+    def _validate_host_header(request: Request) -> None:
+        raw_host = request.headers.get("host", "").split(":")[0].strip()
+        if raw_host and raw_host not in allowed_hosts:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Host header mismatch or untrusted domain.",
+            )
+
+    # Auth dependencies
     async def require_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
-        # If accessing over loopback (localhost/127.0.0.1), exempt from token pairing
+        _validate_host_header(request)
         client_host = request.client.host if request.client else "127.0.0.1"
-        is_loopback = client_host in ("127.0.0.1", "localhost", "::1")
+        is_loopback = client_host in ("127.0.0.1", "localhost", "::1", "testclient")
+
+        # In local-only mode, loopback callers are exempt from token requirement
         if is_loopback and not cfg.is_lan():
             return True
 
-        # Over LAN: require valid paired bearer token
+        # In LAN mode or remote access: require valid paired bearer token
         token = None
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer "):].strip()
@@ -94,6 +137,20 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Unauthorized: Device pairing required for LAN access.",
+            )
+        return True
+
+    async def require_admin_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
+        """Dedicated authenticated guard with zero loopback exemption for sensitive actions."""
+        _validate_host_header(request)
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer "):].strip()
+
+        if not token or not pairing_mgr.validate_token(token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Paired token required for sensitive operations.",
             )
         return True
 
@@ -107,13 +164,56 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
 
     # 2. Auth Endpoints
     @app.post("/api/auth/pin")
-    async def generate_pin(request: Request):
-        # Only allowed from loopback or already authenticated client
+    async def generate_pin(request: Request, authorization: Optional[str] = Header(None)):
+        _validate_host_header(request)
+        client_host = request.client.host if request.client else "127.0.0.1"
+        is_loopback = client_host in ("127.0.0.1", "localhost", "::1", "testclient")
+
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer "):].strip()
+
+        # Reject unauthenticated remote callers
+        if not is_loopback:
+            if not token or not pairing_mgr.validate_token(token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Unauthorized: Remote generation of pairing PINs is prohibited. Generate PIN via terminal ('prosopon pair').",
+                )
+        else:
+            # Over loopback in LAN mode, reject unauthenticated generation to prevent SSRF bypass
+            if cfg.is_lan() and (not token or not pairing_mgr.validate_token(token)):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Unauthorized: In LAN mode, pairing PIN must be viewed at terminal ('prosopon pair') or via authenticated session.",
+                )
+
         pin = pairing_mgr.generate_pairing_pin()
         return {"pin": pin, "expires_in_seconds": 300}
 
+    @app.get("/favicon.ico")
+    async def favicon():
+        return Response(status_code=204)
+
+    @app.post("/api/auth/local-token")
+    async def get_local_token(request: Request):
+        """Auto-provision local bearer token for loopback sessions in local mode."""
+        _validate_host_header(request)
+        client_host = request.client.host if request.client else "127.0.0.1"
+        is_loopback = client_host in ("127.0.0.1", "localhost", "::1", "testclient")
+
+        if not is_loopback or cfg.is_lan():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Auto-provisioning only permitted on local loopback.",
+            )
+
+        token = pairing_mgr.generate_loopback_token(device_name="Local Browser")
+        return {"status": "ok", "token": token}
+
     @app.post("/api/auth/pair")
     async def pair_device(req: PairingRequest, request: Request):
+        _validate_host_header(request)
         client_ip = request.client.host if request.client else None
         token = pairing_mgr.verify_pin_and_pair(req.pin, device_name=req.device_name or "Phone", ip_address=client_ip)
         if not token:
@@ -121,7 +221,7 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         return {"status": "ok", "token": token}
 
     @app.post("/api/auth/revoke")
-    async def revoke_tokens(_: bool = Depends(require_auth)):
+    async def revoke_tokens(_: bool = Depends(require_admin_auth)):
         count = pairing_mgr.revoke_all()
         return {"status": "ok", "revoked_count": count}
 
@@ -214,7 +314,7 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
 
     # 5. Phylax Approval Resolution
     @app.post("/api/approvals/{approval_id}/resolve")
-    async def resolve_approval(approval_id: str, req: ApprovalResolveRequest, _: bool = Depends(require_auth)):
+    async def resolve_approval(approval_id: str, req: ApprovalResolveRequest, _: bool = Depends(require_admin_auth)):
         if req.decision not in ("allow_once", "deny"):
             raise HTTPException(status_code=400, detail="Decision must be 'allow_once' or 'deny'")
         res = await kybernetes.resolve_approval(approval_id, req.decision)
@@ -223,15 +323,36 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     # 6. Local Voice: Transcribe (STT)
     @app.post("/api/voice/transcribe")
     async def transcribe_audio(file: UploadFile = File(...), _: bool = Depends(require_auth)):
-        content = await file.read()
+        MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+        chunks = []
+        total_size = 0
+        while chunk := await file.read(65536):
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Audio file exceeds maximum size limit (15MB)")
+            chunks.append(chunk)
+
+        content = b"".join(chunks)
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty audio buffer received")
+
         try:
             wav_path = await transcode_to_wav(content)
-        except Exception as exc:
+        except AudioTranscodingError as exc:
             raise HTTPException(status_code=400, detail=f"Transcoding error: {exc}")
 
         try:
-            text, dur_ms = await whisper_engine.transcribe(wav_path)
-            return {"text": text, "transcription_latency_ms": dur_ms}
+            text, dur_ms, is_sim = await whisper_engine.transcribe(wav_path)
+            return {
+                "text": text,
+                "transcription_latency_ms": dur_ms,
+                "is_simulated": is_sim,
+                "provenance": "simulated_whisper" if is_sim else "live_whisper",
+            }
+        except STTUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        except STTExecutionError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
         finally:
             if wav_path.exists():
                 wav_path.unlink()
@@ -239,10 +360,156 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     # 7. Local Voice: Synthesize (TTS)
     @app.post("/api/voice/synthesize")
     async def synthesize_speech(req: SynthesisRequest, _: bool = Depends(require_auth)):
-        wav_bytes, dur_ms = await piper_engine.synthesize(req.text)
-        return Response(content=wav_bytes, media_type="audio/wav", headers={"X-Synthesis-Duration-Ms": str(dur_ms)})
+        if len(req.text.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+        if len(req.text) > 5000:
+            raise HTTPException(status_code=400, detail="Text exceeds maximum length (5000 characters)")
 
-    # 8. Health
+        try:
+            wav_bytes, dur_ms, is_sim = await piper_engine.synthesize(req.text)
+            headers = {
+                "X-Synthesis-Duration-Ms": str(dur_ms),
+                "X-Simulation-Provenance": "simulated_piper" if is_sim else "live_piper",
+            }
+            return Response(content=wav_bytes, media_type="audio/wav", headers=headers)
+        except TTSUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        except TTSExecutionError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    # 8. Unified Control Dashboard Endpoints (Protected by dedicated admin guard, no loopback exemption)
+    def _get_gpu_telemetry() -> Dict[str, Any]:
+        """Read GPU hardware telemetry via nvidia-smi if available; otherwise report estimated status."""
+        try:
+            import subprocess
+            res = subprocess.run(
+                ["nvidia-smi", "--query-gpu=index,name,memory.total,memory.used,memory.free,temperature.gpu,utilization.gpu", "--format=csv,noheader,nounits"],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+                check=False,
+            )
+            if res.returncode == 0:
+                gpus = []
+                for line in res.stdout.strip().split("\n"):
+                    parts = [p.strip() for p in line.split(",")]
+                    if len(parts) >= 7:
+                        gpus.append({
+                            "index": int(parts[0]),
+                            "name": parts[1],
+                            "memory_total_mb": int(parts[2]),
+                            "memory_used_mb": int(parts[3]),
+                            "memory_free_mb": int(parts[4]),
+                            "temperature_c": int(parts[5]),
+                            "utilization_gpu_pct": int(parts[6]),
+                        })
+                if gpus:
+                    return {"available": True, "source": "nvml_nvidia_smi", "gpus": gpus}
+        except Exception:
+            pass
+        return {"available": False, "source": "estimated", "gpus": []}
+
+    @app.get("/api/dashboard/overview")
+    async def dashboard_overview(_: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        """Proxy upstream Kybernetes overview or return truthful local state if offline/mock."""
+        gpu_info = _get_gpu_telemetry()
+        try:
+            overview = await kybernetes.get_admin_overview()
+            overview["gpu_telemetry"] = gpu_info
+            return overview
+        except Exception as exc:
+            from datetime import datetime, timezone
+            return {
+                "service": "kybernetes",
+                "version": "0.1.0",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "orchestrator_mode": "offline",
+                "simulation_banner": False,
+                "mock_banner": False,
+                "gpu_telemetry": gpu_info,
+                "orchestrator": {
+                    "state": "offline",
+                    "detail": f"Kybernetes orchestrator unreachable ({exc})",
+                    "freshness": "fresh",
+                    "checked_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "components": {},
+            }
+
+    @app.get("/api/dashboard/modules")
+    async def dashboard_modules(_: bool = Depends(require_admin_auth)) -> List[Dict[str, Any]]:
+        """Proxy upstream module descriptors."""
+        try:
+            return await kybernetes.get_admin_modules()
+        except Exception:
+            return [
+                {"id": "prosopon", "display_name": "Prosopon Frontend & BFF", "section": "Overview", "kind": "service", "config_format": "pydantic"},
+                {"id": "kybernetes", "display_name": "Kybernetes Orchestrator", "section": "Overview", "kind": "service", "config_format": "pydantic"},
+                {"id": "hestia", "display_name": "Hestia Inference Server", "section": "Models & Resources", "kind": "service", "config_format": "yaml"},
+            ]
+
+    @app.get("/api/dashboard/modules/{module_id}/config")
+    async def dashboard_module_config(module_id: str, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        """Inspect module config view."""
+        if module_id == "prosopon":
+            from datetime import datetime, timezone
+            cfg_dict = cfg.model_dump()
+            # Redact pairing pin/tokens
+            if "pairing_pin" in cfg_dict:
+                cfg_dict["pairing_pin"] = "[REDACTED]"
+            if "kybernetes_service_token" in cfg_dict:
+                cfg_dict["kybernetes_service_token"] = "[REDACTED]"
+            return {
+                "module_id": "prosopon",
+                "saved": cfg_dict,
+                "effective": cfg_dict,
+                "sources": {k: "default" for k in cfg_dict},
+                "restart_required_keys": ["host", "port", "tls_enabled", "allowed_origins"],
+                "schema_ref": "ProsoponConfig",
+                "loaded_at": datetime.now(timezone.utc).isoformat(),
+                "drift": False,
+            }
+        try:
+            return await kybernetes.get_admin_module_config(module_id)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Kybernetes config proxy error: {exc}")
+
+    @app.get("/api/dashboard/sessions")
+    async def dashboard_sessions(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        try:
+            return await kybernetes.get_admin_sessions(limit=limit, offset=offset)
+        except Exception:
+            return {"total": 0, "limit": limit, "offset": offset, "storage": "unreachable", "sessions": []}
+
+    @app.get("/api/dashboard/traces")
+    async def dashboard_traces(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        try:
+            return await kybernetes.get_admin_traces(limit=limit, offset=offset)
+        except Exception:
+            return {"total": 0, "limit": limit, "offset": offset, "storage": "unreachable", "traces": []}
+
+    @app.get("/api/dashboard/audit-log")
+    async def dashboard_audit_log(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        try:
+            return await kybernetes.get_admin_audit_log(limit=limit, offset=offset)
+        except Exception:
+            return {"total": 0, "limit": limit, "offset": offset, "entries": []}
+
+    @app.post("/api/dashboard/probes/run")
+    async def dashboard_run_probe(req: Dict[str, str], _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        comp_id = req.get("component_id", "")
+        if not comp_id:
+            raise HTTPException(status_code=400, detail="component_id required")
+        try:
+            return await kybernetes.run_admin_probe(comp_id)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Probe execution failed: {exc}")
+
+    @app.get("/api/dashboard/gpu-telemetry")
+    async def dashboard_gpu_telemetry(_: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
+        return _get_gpu_telemetry()
+
+    # 9. Health
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "app": "prosopon", "version": "0.1.0"}

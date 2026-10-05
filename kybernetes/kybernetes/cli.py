@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+from typing import Optional
 import sys
 import uuid
 import click
@@ -51,36 +52,21 @@ def doctor():
         h_details = "Service unreachable; start Hestia on port 8080"
 
     # LTHCM / Stoma check
-    has_lthcm_dir = Path("LTHCM").is_dir() or Path("../LTHCM").is_dir() or (lthcm.memory_root and Path(lthcm.memory_root).is_dir())
-    lthcm_status = "READY (SIMULATED)" if not (lthcm.memory_root and Path(lthcm.memory_root).is_dir()) else "READY (INDEX)"
-    lthcm_details = "In-memory demo corpus (4 passages), timestamp bounds active" if lthcm_status == "READY (SIMULATED)" else f"Corpus root: {lthcm.memory_root}"
+    is_real_lthcm = bool(lthcm.memory_root and Path(lthcm.memory_root).is_dir())
+    lthcm_status = "READY (LIVE INDEX)" if is_real_lthcm else "SIMULATED (DEMO CORPUS)"
+    lthcm_details = f"Corpus root: {lthcm.memory_root}" if is_real_lthcm else "In-memory demo corpus (4 passages), timestamp bounds active"
 
     # Dianoia check
-    try:
-        import dianoia as _d
-        dianoia_status = "READY (SIMULATED ADAPTER)"
-        dianoia_details = "dianoia module detected; zero-edge fallback enabled"
-    except ImportError:
-        dianoia_status = "STANDALONE (SIMULATED)"
-        dianoia_details = "Zero-edge fallback enabled (dianoia package not in venv)"
+    dianoia_status = "SIMULATED (ZERO-EDGE FALLBACK)"
+    dianoia_details = "Simulated graph deliberation with zero-edge flat retrieval fallback"
 
     # Phylax check
-    try:
-        import phylax as _p
-        phylax_status = "READY (LOCAL SHIM)"
-        phylax_details = "phylax detected; in-memory approval manager active"
-    except ImportError:
-        phylax_status = "READY (LOCAL SHIM)"
-        phylax_details = "In-memory approval manager active"
+    phylax_status = "SIMULATED (LOCAL SHIM)"
+    phylax_details = "In-memory approval manager active (live GuardedGateway unconfigured)"
 
     # Krisis check
-    try:
-        import krisis as _k
-        krisis_status = "READY (LOCAL ADAPTER)"
-        krisis_details = "krisis detected; half-even scoring & gate evaluation active"
-    except ImportError:
-        krisis_status = "READY (LOCAL ADAPTER)"
-        krisis_details = "Half-even scoring & gate evaluation active"
+    krisis_status = "SIMULATED (LOCAL HEURISTIC)"
+    krisis_details = "Half-even scoring and heuristic citation verification (standalone selector unconfigured)"
 
     table_data = [
         ["Hestia Model Server", h_status, h_details],
@@ -91,17 +77,45 @@ def doctor():
     ]
 
     click.echo(tabulate(table_data, headers=["Subsystem", "Status", "Details"], tablefmt="rounded_grid"))
-    click.echo("\nAll local adapters inspected successfully.\n")
+    click.echo("\nNote: Local adapter status reported. Live production deployment requires verified external endpoints/roots.\n")
 
 
 @cli.command("serve")
 @click.option("--host", default="127.0.0.1", help="Bind host address")
 @click.option("--port", default=8081, help="Bind port number")
 @click.option("--db-path", default="kybernetes_budget.db", help="SQLite database path")
-def serve(host: str, port: int, db_path: str):
-    """Start Kybernetes FastAPI SSE server for Prosopon UI and client connections."""
+@click.option("--memory-root", default=None, help="Path to Stoma/LTHCM memory root directory")
+@click.option("--config", "config_file", default=None, help="Path to YAML configuration file")
+@click.option("--admin-token", default=None, help="Admin bearer token for /v1/admin endpoints")
+@click.option("--service-token", default=None, help="Service bearer token for /v1/chat endpoints")
+def serve(
+    host: str,
+    port: int,
+    db_path: str,
+    memory_root: Optional[str] = None,
+    config_file: Optional[str] = None,
+    admin_token: Optional[str] = None,
+    service_token: Optional[str] = None,
+):
+    """Start Kybernetes FastAPI SSE server and admin control plane."""
     click.echo(f"Starting Kybernetes orchestrator server on http://{host}:{port}")
-    app = create_app(db_path=db_path)
+    from kybernetes.config import load_config
+    cfg = load_config(config_file)
+    if admin_token:
+        cfg.admin_token = admin_token
+    if service_token:
+        cfg.service_token = service_token
+    if memory_root:
+        cfg.memory_root = memory_root
+    if db_path:
+        cfg.db_path = db_path
+
+    app = create_app(
+        db_path=db_path,
+        memory_root=memory_root,
+        service_token=service_token,
+        config=cfg,
+    )
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 

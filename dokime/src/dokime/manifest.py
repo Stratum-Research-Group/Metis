@@ -114,6 +114,7 @@ def create_manifest(
     prompt_template_artifact_path: Path | None = None,
     output_path: Path | None = None,
     repo_root: Path | None = None,
+    model_identities: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build and write the run manifest JSON file."""
     checksums: dict[str, str] = {}
@@ -150,6 +151,7 @@ def create_manifest(
         "git_sha": git_sha_record,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "model_ids": model_ids,
+        "model_identities": model_identities or {},
         "task_ids": task_ids,
         "seed": seed,
         "temperature": temperature,

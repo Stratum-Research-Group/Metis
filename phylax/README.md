@@ -11,8 +11,8 @@ It provides point-of-action capability mediation for files, tools, system proces
 - **Point-of-Action Capability Gateway**: `GuardedGateway`, `GuardedFileAdapter`, `GuardedToolAdapter`, `GuardedSendAdapter`. Permissions are checked and operations executed atomically inside the guarded gateway.
 - **Action-Bound Single-Use Approvals**: Sensitive operations (`ASK` effect) emit single-use cryptographic approval handles. Once approved, execution transitions state atomically from `APPROVED` to `EXECUTED`. Token replay, double-execution, or concurrent reuse are strictly impossible.
 - **Anti-Argument-Swap Verification**: Approvals bind to the exact cryptographic digest of their arguments (`argument_digest = sha256(canonical_json(args))`). Any attempt to alter arguments between owner approval and execution triggers immediate abort with `DENY`.
-- **Fail-Closed Audit Hash Chain**: Append-only cryptographic hash chain where each entry links `record_hash = sha256(prev_hash + record_fields)`. Any failure to flush to the audit log immediately aborts the operation and returns `DENY`.
-- **Symlink & Path Traversal Containment**: File access uses `O_NOFOLLOW` and verified `fstat` checks, preventing symlink race conditions (TOCTOU) and path traversal (`../`) attacks.
+- **Fail-Closed Audit Hash Chain**: Append-only cryptographic hash chain where each entry links `record_hash = sha256(prev_hash + record_fields)`. Authorized execution intent is logged durably before any side effect is invoked; if intent logging fails, execution aborts immediately. If post-execution receipt logging fails, the action is surfaced as `executed/audit-unacknowledged` to strictly prevent unsafe retries.
+- **Symlink & Path Traversal Mitigations**: File access uses `O_NOFOLLOW`, descriptor regular-file verification (`S_ISREG`), dual device/inode (`st_dev`/`st_ino`) validation, unpredictable exclusive temporary files (`O_EXCL`), and atomic renames to mitigate leaf symlink swaps and path traversal (`../`) attacks within configured roots (library-level defense-in-depth, not a kernel namespace sandbox).
 
 ---
 

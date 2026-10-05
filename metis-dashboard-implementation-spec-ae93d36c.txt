@@ -1,0 +1,176 @@
+METIS CONTROL DASHBOARD - IMPLEMENTATION SPEC (proposal, paste-ready)
+Grounded in https://gitlab.com/akarta-315h/metis at HEAD 2b2ee5194694b0ac706115e4d37376f2c7c7912f (short 2b2ee51; 2026-10-05, "docs: comprehensive module and system documentation across all 11 stacks")
+Review method: read-only fresh clone, source read. No tests, models or GPU jobs were run. Nothing was edited.
+Legend: [EXISTS] verified in code at 2b2ee51. [PROPOSAL] does not exist yet. [UNTESTED] read but not executed.
+
+======================================================================
+0. WHAT THIS IS
+======================================================================
+One dashboard to see and manage the whole Metis stack: settings, effective values, live status, per module sections. [PROPOSAL]
+Design rule: ONE place to manage, but each module still OWNS and VALIDATES its own config. The control backend coordinates; it does not flatten everything into one giant config file.
+"Project recommendation" wording from Nick was never clarified (suggested-settings panel vs "which design do you recommend"). This spec does NOT invent a recommendations feature. Section 12 lists it as an open question.
+
+======================================================================
+1. CURRENT STATE (facts at 2b2ee51)
+======================================================================
+1.1 No dashboard, no settings backend, no admin API exists. [EXISTS-verified absence]
+1.2 Each module has its own config in its own shape:
+  - Prosopon: pydantic ProsoponConfig, prosopon/prosopon/config.py (host, port, TLS, kybernetes_api_url, mock_kybernetes default True, pairing, allowed_origins, whisper/piper paths).
+  - Hestia: hestia/hestia.yaml + hestia/models.yaml, ServiceConfig in hestia/src/hestia/config.py (frozen dataclass; listen_host must be loopback; ports, idle timeout, queue limits).
+  - Kybernetes: NO config file. create_app(db_path) in kybernetes/kybernetes/server/app.py builds all adapters with defaults. Only env var found: HESTIA_BASE_URL. CLI option: serve --host --port --db-path.
+  - Stoma: .stoma/config.yaml (stoma/src/stoma/config.py).
+  - Dokime: TOML, dokime/examples/config.example.toml.
+  - Phylax: YAML policy, phylax/policies/demo_policy.yaml.
+  - Krisis: JSON policy + schema, krisis/krisis-policy-0.1.json (status draft).
+1.3 Prosopon already has a shell: FastAPI server (prosopon/prosopon/server.py) with /api/auth/*, /api/sessions, /api/chat/sessions/{id}/stream, /api/approvals/{id}/resolve, /api/voice/*, /api/health. Static SPA: prosopon/prosopon/web/static/ (index.html 115 lines + js/api.js, app.js, ui.js, audio.js, about 670 lines total, vanilla JS, no build step). Auth dependency require_auth: loopback exempt unless LAN; otherwise paired bearer token.
+1.4 Kybernetes HTTP surface is only: GET /v1/health, POST /v1/chat/turn and /v1/chat/stream, POST /v1/approvals/{id}/resolve, POST /v1/chat/turns/{id}/cancel, GET /v1/traces/{id}, GET /v1/budget/report/{task_id}. No config endpoints. No auth on any of them.
+1.5 Hestia HTTP surface: /v1/models, /v1/chat/completions, /v1/embeddings, GET /models (per-model operational status), POST /manage/load, POST /manage/unload, GET /health (hestia/src/hestia/api/app.py).
+1.6 Prosopon /api/health returns a static {"status":"ok"} and does not check upstream.
+
+======================================================================
+2. REVIEW FINDINGS YOU MUST FIX OR RESPECT BEFORE BUILDING
+======================================================================
+Re-verified at 2b2ee51 (not assumed from older review). Numbered so you can tick them off.
+
+F1 [HIGH, status honesty] Kybernetes GET /v1/health hardcodes "ready" for lthcm, dianoia, phylax, krisis (kybernetes/kybernetes/server/app.py, health_check, ~lines 70-85). Only Hestia is actually probed. A dashboard built on this shows green for things that are not live. Still present in the latest HEAD.
+F2 [HIGH, simulation] Kybernetes is wired mostly with simulated adapters in the live server:
+  - create_app() calls LTHCMAdapter() with no memory_root, so is_simulated stays True and it uses a 4-passage in-memory demo corpus (adapters/lthcm.py). `kybernetes serve` has no option to set a memory root, so real LTHCM/Stoma data cannot be pointed at from the CLI. A real-index path exists in the adapter (_load_real_index, sets is_simulated False) but nothing in serve reaches it. [UNTESTED]
+  - DianoiaAdapter.deliberate() (adapters/dianoia.py) always returns is_simulated=True; its dianoia_module constructor argument is never used.
+  - KrisisAdapter is a local heuristic verifier (verifier_mode "heuristic"); is_simulated=True on heuristic paths, False only for deterministic tool output and the no-citation draft.
+  - PhylaxAdapter is constructed with shim=None in create_app.
+  Existing per-turn labelling is good: turn contracts carry is_simulated and verifier_mode (kybernetes/kybernetes/contracts/turn.py; pipeline.py ~lines 456-543). The dashboard should reuse that vocabulary at the component level.
+F3 [MEDIUM, security] Kybernetes CORS is allow_origins=["*"] with allow_credentials=True, and it has no auth (app.py ~lines 55-62). Binding to 127.0.0.1 does NOT authenticate anything: other local processes can reach a loopback service, and depending on browser protections a web page you have open may be able to send requests to it (e.g. cross-origin requests or DNS rebinding); I have not tested exploitability. So admin reads AND writes must require real authentication even on loopback; a loopback exemption is not equivalent auth. Required before any admin endpoint: explicit allowed-origins list (no "*" with credentials), Host header validation, CSRF protection wherever cookie sessions are used (bearer tokens in headers avoid cookie CSRF), and the direct Kybernetes admin API must NOT be reachable except by Prosopon BFF credentials, so users/pages cannot bypass the BFF. Note Prosopon's own require_auth currently exempts loopback (server.py): do not reuse that exemption for /api/dashboard/* admin routes. Prosopon's allowed_origins list (config.py) is a better CORS model than Kybernetes' but still needs Host/CSRF review.
+F4 [MEDIUM, defaults] Prosopon `serve --mock/--no-mock` defaults to MOCK (prosopon/prosopon/cli.py). scripts/run_stack.sh passes --no-mock unless --mock is given. A dashboard must show "Orchestrator: MOCK (local fake)" when mock_kybernetes is true, as its own state.
+F5 [MEDIUM, port clash to check] hestia.yaml backend_port_range is 8081-8099, and Kybernetes default port is 8081. Hestia spawns llama-server backends from that range (hestia/src/hestia/server/__init__.py builds the port pool from it). I did not find or test whether it probes ports for being free. Verify; if not, change one range (e.g. Hestia backends 9000-9019) and make the dashboard flag port conflicts. [UNTESTED]
+F6 [LOW, docs vs repo] Root README says MIT license and links LICENSE, but no LICENSE file exists at the repo root. README prose in several modules describes features ("production-grade", "de-siloed", Kalman EVM loop) that this review did not execute; treat README as intent, code as truth. Doc claims I verified: run_stack.sh exists with ports 8080/8081/8000; kybernetes serve command and flags exist; Prosopon serve flags exist; test files named in the README exist.
+F7 [LOW] Kybernetes budget DB: `serve` default is kybernetes_budget.db (relative path), `chat` and the doctor path use :memory:, and create_app default is :memory:. Surface "persistent vs memory-only" in the dashboard.
+F8 [CONTEXT] Previously reviewed and apparently addressed by recent commits (not re-audited here): Phylax approval expiry and atomic single-use consumption (bc27c4a), Paideia simulated-run labelling (c45da2e), Stoma provenance (3e02dda). PhylaxAdapter in Kybernetes has its own in-memory approvals and expiry check (_is_expired treats missing expiry as expired). Do not claim these are clean; I did not run their tests.
+
+======================================================================
+3. ARCHITECTURE (proposal)
+======================================================================
+3.1 Prosopon = the dashboard UI + its own backend-for-frontend. Reuse its PIN pairing/token machinery and static SPA, but put /api/dashboard/* behind a DEDICATED authenticated dashboard guard with no loopback exemption (the existing require_auth exempts loopback and must not guard admin routes). Add a "Dashboard" route/tab. Keep vanilla JS unless you choose otherwise; no build step needed for v1.
+3.2 Kybernetes = control plane API (new /v1/admin/* routes). Prosopon calls only Kybernetes, as today (versioned /v1 contract). Kybernetes talks to Hestia (existing adapter) and to each module through a small ModuleDescriptor interface (section 4).
+3.3 Authority: all admin routes authenticated even on loopback (see F3). Allowlist model: the client sends only module ids and allowlisted setting keys; it never supplies filesystem paths. Descriptors declare allowed keys and fixed config file locations server-side.
+3.3b Module-owned config: each module exposes (or Kybernetes wraps) three functions: schema(), load_effective(), validate(proposed) -> errors/warnings, apply(proposed). Validation uses the module's EXISTING validators (ProsoponConfig, Hestia ServiceConfig.__post_init__, Phylax policy loader, Krisis JSON schema), never a copy.
+3.4 Phased rollout: read-only status -> read-only settings inspection -> editing. Do NOT ship edit controls before F1-F3 are fixed.
+
+======================================================================
+4. CONTRACTS (proposal)
+======================================================================
+4.1 ModuleDescriptor (one per module, registered in Kybernetes):
+  id, display_name, section, config_path(s), config_format (yaml|toml|json|pydantic|none), schema_ref, restart_required (per field), mutable (bool, default false), probe (async callable).
+4.2 ComponentStatus (returned by every probe). Truthful, 5 states only:
+  state: live | simulated | mock | offline | unknown
+  detail: short string (e.g. "demo corpus, 4 passages")
+  freshness: fresh | stale | unknown (stale after a TTL; never show an old result as current)  version: str|null  checked_at: ISO time  latency_ms: int|null  evidence: str (what was actually checked: HTTP 200 from X, import ok, config path)
+  Probe policy: functional probes are explicit, bounded diagnostics (user-triggered or slow scheduled) with cached results, timeouts and a stored checked_at. Page polling only reads cached status and cheap reachability checks. The dashboard must never load a model or run a model completion automatically on a poll; a Hestia completion probe only on explicit user click and only if the model is already loaded. Without a recent probe the state is unknown/stale, not live.
+  Rule: "live" requires a FUNCTIONAL probe that exercised the real component (e.g. LTHCM: a real retrieval against the loaded index; Krisis: a known-answer verification; Phylax: a deny/approve round trip against a test capability; Hestia: /models plus a tiny completion if you accept the cost). Import success, module injection, or a non-null shim/memory_root is NOT proof of live or of enforcement. Each status must carry simulation provenance (which adapter, which corpus/policy, is_simulated source). Anything not probed is "unknown", never "ready". Reuse is_simulated from adapters as an input, not the proof.
+4.3 ConfigView for a module:
+  saved: values on disk | effective: values the RUNNING module acknowledges via a runtime report/endpoint (not a re-read of the saved file; if the module cannot report, show effective = "unknown") | source per key: default | file | env | cli | override | restart_required per key | schema | config_hash | loaded_at.
+  Show drift when saved != effective (e.g. edited but not restarted).
+4.4 ChangeSet: id, module, base_hash (optimistic lock), patch, validation result, requested_by, requested_at, status per the STEP 8 model: draft | validated | rejected | written | restart_pending | effective_confirmed | partially_applied | failed | rolled_back_on_disk | rollback_effective_confirmed, applied_at, prev_snapshot_id.
+4.5 Redaction: never return secret values; return "set"/"unset". Also redact or hash sensitive local paths and user/home-directory info (key files, model dirs, data_dir) by default; reveal only to authenticated admin if the descriptor marks the key as displayable.
+
+======================================================================
+5. ENDPOINTS (proposal, all under Kybernetes, behind auth)
+======================================================================
+GET  /v1/admin/overview            -> list of ComponentStatus + versions + git commit if known
+GET  /v1/admin/modules             -> descriptors
+GET  /v1/admin/modules/{id}/config -> ConfigView
+POST /v1/admin/modules/{id}/config/validate -> validation result (no side effects)
+POST /v1/admin/modules/{id}/config/apply    -> ChangeSet (requires base_hash; confirm token for sensitive keys)
+GET  /v1/admin/modules/{id}/history -> ChangeSets
+POST /v1/admin/modules/{id}/config/rollback/{changeset_id}
+Prosopon proxies these under /api/dashboard/* behind the dedicated dashboard guard (authenticated for every caller, no loopback exemption), not the existing require_auth.
+Keep existing /v1/health but make it truthful (section 7, step 1).
+
+======================================================================
+6. DASHBOARD SECTIONS (proposal)
+======================================================================
+1 Overview: ComponentStatus grid; banner if orchestrator is MOCK or any component SIMULATED; ports/conflicts; budget DB persistent or memory.
+2 Models & Resources (Hestia): models from GET /models, load/unload via /manage/*, VRAM use, queue depth, idle timeout. Show only measured values; mark unknown as unknown. Hardware note: two GPUs in your rig; Hestia admission control is per its own config.
+3 Memory & Ingestion (LTHCM, Stoma): which memory root is in use (or "demo corpus"), index size, last ingestion, Stoma jobs/provenance digests. Needs an LTHCM root option in serve (F2).
+4 Reasoning (Dianoia, Kleroterion, Krisis): live vs simulated, walk limits, Krisis policy version/status ("draft"), recent verdicts from traces.
+5 Guardrails (Phylax): policy file + hash, pending approvals (reuse existing approval flow), audit chain status.
+6 Evaluation (Dokime): last runs, gates, config. Read-only first.
+7 Training (Paideia): datasets, runs, adapter registry. Mark SIMULATED runs clearly (Paideia now labels these).
+8 Sessions & Budget (Kybernetes): active turns, GET /v1/traces and /v1/budget/report data, limits.
+Each section: status chip, Saved vs Effective table, source column, restart-needed badge, validate -> apply -> history. v1 can hide "apply" everywhere.
+
+======================================================================
+7. BUILD ORDER (paste each step as one prompt to your coding AI)
+======================================================================
+STEP 1 - Make status truthful (prerequisite, fixes F1)
+  Files: kybernetes/kybernetes/server/app.py, adapters/*.py, tests/test_server_api.py.
+  Replace hardcoded "ready" in /v1/health with ComponentStatus from real probes. LTHCM: simulated unless a memory_root is loaded AND a functional retrieval probe passes. Dianoia: simulated (adapter never calls real Dianoia today); live only after a real integration plus a functional walk probe. Krisis: heuristic = simulated. Phylax: report shim presence as detail only, never as proof of enforcement; live only after an end-to-end gate probe. Keep old keys for backward compat, add "state" and "evidence".
+  Tests: with defaults, none of lthcm/dianoia/krisis/phylax may report live; injected-but-nonfunctional components must not report live; Hestia down -> offline; no component may be "ready" without a probe.
+  Do not touch: pipeline logic, Phylax enforcement, budget math.
+STEP 2 - Config plumbing (fixes the F2 CLI gap)
+  Add optional Kybernetes config (YAML or pydantic via env/CLI): hestia_base_url, memory_root, db_path, allowed_origins. Pass memory_root into LTHCMAdapter in create_app. Default behaviour unchanged.
+  Tests: serve with memory_root loads real index; bad root fails loudly.
+STEP 3 - Lock down Kybernetes (F3)
+  Replace CORS "*" with configured origins; add Host header validation; require a bearer credential on /v1/admin/* for ALL callers including loopback (no local-only exemption); make the credential one only Prosopon's backend holds so the BFF cannot be bypassed; add CSRF protection if any cookie session is introduced. Test: admin routes return 401/403 for unauthenticated loopback AND remote callers, for wrong Origin, and for wrong Host.
+STEP 4 - Descriptors + read-only /v1/admin/overview and /modules/{id}/config
+  Implement ModuleDescriptor and ConfigView for Prosopon, Hestia, Kybernetes first (they are Python-config modules). Add effective-vs-saved and source tracking. No writes.
+  Tests: secrets masked; effective reflects CLI/env; schema served.
+STEP 5 - Prosopon dashboard UI, read-only
+  Add dashboard view in prosopon/prosopon/web/static (new js/dashboard.js), proxy under /api/dashboard/*. Overview + one section per module, status chips, MOCK/SIMULATED banner. Follow existing api.js auth pattern.
+  Tests: prosopon/tests/test_server_api.py: unauthenticated dashboard requests rejected from BOTH loopback and remote, and proxy error handling when Kybernetes is offline (show offline, not blank).
+STEP 6 - Remaining modules read-only (Stoma, Dokime, Phylax, Krisis, Paideia)
+  Descriptors that read their config files and run each module's own validator in dry-run.
+STEP 7 - Validation endpoint
+  /config/validate for every module using existing validators. No apply yet.
+STEP 8 - Apply with safety (only now)
+  Atomic write per file (temp file + rename), base_hash check, snapshot before write, history, rollback, restart_required flag instead of silent hot-reload. Honest status model for ChangeSet: written | validated | restart_pending | effective_confirmed | partially_applied | failed | rolled_back_on_disk | rollback_effective_confirmed. A change spanning several files/modules is NOT atomic across files: on partial failure report exactly which files changed and offer restore from snapshots. "Applied" means file written; "effective" only after the process restarts and acknowledges the new values at runtime. Rollback restores the saved config but is only reported effective after restart confirmation. Explicit confirm for: Prosopon host/LAN/TLS/origins/pairing, Phylax policy, Hestia listen_host, anything widening access. Phylax/Krisis policy edits should show a diff and require the confirm token.
+  Tests: concurrent edit rejected; invalid patch never touches disk; rollback restores hash.
+STEP 9 - Optional: Dokime/Paideia run controls. Heavy jobs need explicit user start and a visible resource warning. Not in v1.
+
+======================================================================
+8. PROPOSED IMPLEMENTATION SAFEGUARDS (my proposals, not repo requirements)
+======================================================================
+- Do not change any module's runtime semantics while adding the dashboard (pipeline, Phylax gating, budget, Krisis scoring).
+- No fake green: unknown or unprobed = "unknown".
+- Client may not pass arbitrary file paths or keys; server-side allowlist only.
+- Reuse existing validators; do not duplicate schemas.
+- No secrets in responses or logs.
+- Bind admin API to loopback by default AND require auth even on loopback; LAN exposure only with pairing + TLS (existing Prosopon mechanism), still authenticated.
+- Keep changes inside this repo and review docs/STACK_BUILD_CONTRACT.md (docs/ folder) yourself for build conventions; I did not verify what it requires for this work.
+- Hardware: dashboard is CPU-only; never trigger model loads from a page view. Load/unload only on explicit click.
+
+======================================================================
+9. ACCEPTANCE CHECKS (when each step is "done")
+======================================================================
+- Fresh start with defaults shows Overview with Orchestrator state, LTHCM = simulated, Dianoia = simulated, Krisis = simulated(heuristic).
+- Stop Hestia -> Models section shows offline within one poll, not stale.
+- Stop Kybernetes -> Prosopon dashboard shows "orchestrator offline", the app does not crash.
+- Edit a non-sensitive Prosopon value -> validate -> apply -> history entry -> rollback restores the old file hash.
+- Sensitive change without confirm token is rejected server-side.
+- Unauthenticated request from loopback to /v1/admin/* is rejected.
+- Effective values shown come from the running module; if it cannot report, UI says unknown.
+
+======================================================================
+10. TESTING NOTES / LIMITS OF THIS REVIEW
+======================================================================
+- I read source at 2b2ee51. I did not run any test suite, install deps, start servers or load models. Claims about runtime behaviour (F5 especially) are reading, not observation.
+- Per-module test suites exist (see README section 5) and should run green before each step; I have not confirmed they do at this commit.
+- README module docs describe more than I verified; I only reconciled the items listed in F6.
+- Not a clean-sweep audit of the repo: focused on what a dashboard depends on.
+
+======================================================================
+11. RECOMMENDED FIRST PROMPT (copy this)
+======================================================================
+"In the Metis monorepo, do STEP 1 of metis-dashboard-implementation-spec.txt only. Make Kybernetes GET /v1/health report truthful per-component state (live/simulated/mock/offline/unknown) with evidence, replacing the hardcoded "ready" values in kybernetes/kybernetes/server/app.py. Keep existing response keys. Add tests in kybernetes/tests/test_server_api.py. Do not change pipeline, Phylax or budget logic. Run the kybernetes tests and report the output."
+
+======================================================================
+12. OPEN QUESTIONS FOR YOU
+======================================================================
+Q1 "Project recommendation": a panel of suggested settings/next steps, or just "which design do you recommend"? Not built here.
+Q2 Should edit controls exist at all in v1, or stay read-only until status is trustworthy?
+Q3 Dashboard in Prosopon (this spec) or a separate small app?
+
+SOURCES (all at https://gitlab.com/akarta-315h/metis , commit 2b2ee51)
+kybernetes/kybernetes/server/app.py ; kybernetes/kybernetes/adapters/{lthcm,dianoia,krisis,phylax,hestia}.py ; kybernetes/kybernetes/cli.py ; kybernetes/kybernetes/contracts/turn.py
+prosopon/prosopon/{server,config,cli}.py ; prosopon/prosopon/web/static/
+hestia/src/hestia/{config.py,api/app.py,server/__init__.py} ; hestia/hestia.yaml
+scripts/run_stack.sh ; README.md

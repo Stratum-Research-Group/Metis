@@ -53,7 +53,7 @@ Request (Candidates, Question Class, Capabilities, Evidence)
 
 ## 2. Policy Manifest & Profiles
 
-Krisis decisions are governed by a cryptographically sealed policy manifest (`krisis-policy-0.1.json`) validated against JSON Schema (`krisis-policy.schema.json`).
+Krisis decisions are governed by a schema-validated policy manifest (`krisis-policy-0.1.json`) strictly validated against JSON Schema (`krisis-policy.schema.json`). (Note: manifests and claim verdicts are schema-validated at runtime; treat draft policies as schema-checked declarations).
 
 ### Active Profiles
 

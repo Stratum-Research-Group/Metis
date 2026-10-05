@@ -1,43 +1,73 @@
 /**
  * Prosopon UI Component Renderers
+ * Safely renders untrusted metadata, citations, and security approval cards using DOM APIs.
  */
 const UI = {
   renderMessage(msg, isStreaming = false) {
     const el = document.createElement("div");
-    el.className = `message ${msg.role}`;
-    el.id = `msg-${msg.message_id}`;
+    el.className = `message ${this.escapeAttr(msg.role || "user")}`;
+    el.id = `msg-${this.escapeAttr(msg.message_id || "")}`;
 
-    let html = `<div class="message-content">${this.escapeHtml(msg.content)}</div>`;
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "message-content";
+    contentDiv.textContent = msg.content || "";
+    el.appendChild(contentDiv);
 
     // Render citations if present
     if (msg.citations && msg.citations.length > 0) {
-      html += `<div class="citations-container">`;
+      const citContainer = document.createElement("div");
+      citContainer.className = "citations-container";
       for (const c of msg.citations) {
-        html += `<span class="citation-badge" title="${this.escapeHtml(c.text)} (${this.escapeHtml(c.source_title)})">${c.citation_id}</span>`;
+        const badge = document.createElement("span");
+        badge.className = "citation-badge";
+        badge.textContent = c.citation_id || "citation";
+        badge.title = `${c.text || ""} (${c.source_title || ""})`;
+        citContainer.appendChild(badge);
       }
-      html += `</div>`;
+      el.appendChild(citContainer);
     }
 
     // Render "Show Work" trace if present
     if (msg.route_summary) {
       const rs = msg.route_summary;
-      html += `
-        <button class="show-work-toggle" onclick="UI.toggleWorkTrace('${msg.message_id}')">Show Work (${rs.route || 'deliberation'})</button>
-        <div id="trace-${msg.message_id}" class="route-trace-panel" style="display: none;">
-          <div><strong>Route:</strong> ${rs.route || 'N/A'}</div>
-          <div><strong>Verifier Status:</strong> ${rs.verifier_status || msg.status || 'N/A'}</div>
-          <div><strong>Latency:</strong> ${rs.latency_ms ? rs.latency_ms.toFixed(1) + ' ms' : 'N/A'}</div>
-          <div><strong>Components:</strong> ${(rs.components_used || []).join(' -> ')}</div>
-        </div>
-      `;
+      const routeName = rs.route || "deliberation";
+
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "show-work-toggle";
+      toggleBtn.textContent = `Show Work (${routeName})`;
+
+      const tracePanel = document.createElement("div");
+      tracePanel.id = `trace-${this.escapeAttr(msg.message_id || "")}`;
+      tracePanel.className = "route-trace-panel";
+      tracePanel.style.display = "none";
+
+      const addRow = (label, value) => {
+        const row = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = `${label}: `;
+        row.appendChild(strong);
+        row.appendChild(document.createTextNode(String(value)));
+        tracePanel.appendChild(row);
+      };
+
+      addRow("Route", rs.route || "N/A");
+      addRow("Verifier Status", rs.verifier_status || msg.status || "N/A");
+      addRow("Latency", rs.latency_ms ? rs.latency_ms.toFixed(1) + " ms" : "N/A");
+      addRow("Components", (rs.components_used || []).join(" -> ") || "N/A");
+
+      toggleBtn.addEventListener("click", () => {
+        tracePanel.style.display = tracePanel.style.display === "none" ? "block" : "none";
+      });
+
+      el.appendChild(toggleBtn);
+      el.appendChild(tracePanel);
     }
 
-    el.innerHTML = html;
     return el;
   },
 
   updateStreamingMessage(msgId, appendedText) {
-    const el = document.getElementById(`msg-${msgId}`);
+    const el = document.getElementById(`msg-${this.escapeAttr(msgId)}`);
     if (el) {
       const contentEl = el.querySelector(".message-content");
       if (contentEl) {
@@ -48,39 +78,69 @@ const UI = {
 
   renderApprovalCard(approval, onResolve) {
     const dock = document.getElementById("approval-dock");
+    if (!dock) return;
     dock.innerHTML = "";
 
     const card = document.createElement("div");
     card.className = "approval-card";
-    card.id = `app-${approval.approval_id}`;
+    card.id = `app-${this.escapeAttr(approval.approval_id || "")}`;
 
-    card.innerHTML = `
-      <h4>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-        Phylax Security Approval Required
-      </h4>
-      <p><strong>Action:</strong> <code>${this.escapeHtml(approval.action)}</code> on <code>${this.escapeHtml(approval.target)}</code></p>
-      <p><small>${this.escapeHtml(approval.policy_rule)}</small></p>
-      <div class="approval-actions">
-        <button id="btn-allow-${approval.approval_id}" class="btn primary-btn">Allow Once</button>
-        <button id="btn-deny-${approval.approval_id}" class="btn secondary-btn">Deny</button>
-      </div>
+    const title = document.createElement("h4");
+    title.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      Phylax Security Approval Required
     `;
+    card.appendChild(title);
 
-    dock.appendChild(card);
+    const desc = document.createElement("p");
+    const strongAction = document.createElement("strong");
+    strongAction.textContent = "Action: ";
+    const codeAction = document.createElement("code");
+    codeAction.textContent = approval.action || "";
+    const strongTarget = document.createElement("span");
+    strongTarget.textContent = " on ";
+    const codeTarget = document.createElement("code");
+    codeTarget.textContent = approval.target || "";
+    desc.appendChild(strongAction);
+    desc.appendChild(codeAction);
+    desc.appendChild(strongTarget);
+    desc.appendChild(codeTarget);
+    card.appendChild(desc);
 
-    document.getElementById(`btn-allow-${approval.approval_id}`).onclick = () => {
+    const ruleP = document.createElement("p");
+    const smallRule = document.createElement("small");
+    smallRule.textContent = approval.policy_rule || "";
+    ruleP.appendChild(smallRule);
+    card.appendChild(ruleP);
+
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "approval-actions";
+
+    const allowBtn = document.createElement("button");
+    allowBtn.className = "btn primary-btn";
+    allowBtn.textContent = "Allow Once";
+    allowBtn.addEventListener("click", () => {
       dock.innerHTML = "";
       onResolve(approval.approval_id, "allow_once");
-    };
-    document.getElementById(`btn-deny-${approval.approval_id}`).onclick = () => {
+    });
+
+    const denyBtn = document.createElement("button");
+    denyBtn.className = "btn secondary-btn";
+    denyBtn.textContent = "Deny";
+    denyBtn.addEventListener("click", () => {
       dock.innerHTML = "";
       onResolve(approval.approval_id, "deny");
-    };
+    });
+
+    actionsDiv.appendChild(allowBtn);
+    actionsDiv.appendChild(denyBtn);
+    card.appendChild(actionsDiv);
+
+    dock.appendChild(card);
   },
 
   toggleWorkTrace(msgId) {
-    const panel = document.getElementById(`trace-${msgId}`);
+    const panel = document.getElementById(`trace-${this.escapeAttr(msgId)}`);
     if (panel) {
       panel.style.display = panel.style.display === "none" ? "block" : "none";
     }
@@ -88,11 +148,16 @@ const UI = {
 
   escapeHtml(str) {
     if (!str) return "";
-    return str
+    return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  },
+
+  escapeAttr(str) {
+    if (!str) return "";
+    return String(str).replace(/[^a-zA-Z0-9_-]/g, "_");
   },
 };

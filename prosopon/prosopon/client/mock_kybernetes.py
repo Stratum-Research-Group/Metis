@@ -21,6 +21,71 @@ class MockKybernetesClient:
     async def health_check(self) -> Dict[str, Any]:
         return {"status": "ok", "mode": "local_mock", "version": "1.0.0"}
 
+    async def get_admin_overview(self, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {
+            "service": "kybernetes",
+            "version": "0.1.0",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "git": {"commit": "mock-dev", "dirty": False},
+            "stack_compatibility": "unchecked",
+            "budget_storage_mode": "in-memory",
+            "orchestrator_mode": "mock",
+            "simulation_banner": True,
+            "mock_banner": True,
+            "components": {
+                "kybernetes": {"state": "mock", "detail": "Mock orchestrator client active", "freshness": "fresh", "checked_at": datetime.now(timezone.utc).isoformat(), "evidence": "In-memory mock", "is_simulated": True},
+                "hestia": {"state": "mock", "detail": "Simulated local model pool (llama-3.1-8b-instruct)", "freshness": "fresh", "checked_at": datetime.now(timezone.utc).isoformat(), "evidence": "Simulated inference", "is_simulated": True},
+                "lthcm": {"state": "simulated", "detail": "In-memory mock corpus", "freshness": "fresh", "checked_at": datetime.now(timezone.utc).isoformat(), "evidence": "Mock adapter", "is_simulated": True},
+                "dianoia": {"state": "simulated", "detail": "Mock thought-graph deliberation", "freshness": "fresh", "checked_at": datetime.now(timezone.utc).isoformat(), "evidence": "Mock deliberation", "is_simulated": True},
+                "phylax": {"state": "simulated", "detail": "Mock approval manager", "freshness": "fresh", "checked_at": datetime.now(timezone.utc).isoformat(), "evidence": "Mock approvals", "is_simulated": True},
+                "krisis": {"state": "simulated", "detail": "Mock verification gates", "freshness": "fresh", "checked_at": datetime.now(timezone.utc).isoformat(), "evidence": "Mock verifier", "is_simulated": True},
+            },
+        }
+
+    async def get_admin_modules(self, admin_token: Optional[str] = None) -> List[Dict[str, Any]]:
+        return [
+            {"id": "kybernetes", "display_name": "Kybernetes Orchestrator", "section": "Overview", "kind": "service", "config_format": "pydantic"},
+            {"id": "hestia", "display_name": "Hestia Inference Server", "section": "Models & Resources", "kind": "service", "config_format": "yaml"},
+            {"id": "prosopon", "display_name": "Prosopon Frontend & BFF", "section": "Overview", "kind": "service", "config_format": "pydantic"},
+            {"id": "lthcm", "display_name": "LTHCM Vector Memory", "section": "Memory & Ingestion", "kind": "library", "config_format": "none"},
+            {"id": "dianoia", "display_name": "Dianoia Deliberation", "section": "Reasoning", "kind": "library", "config_format": "none"},
+            {"id": "krisis", "display_name": "Krisis Verifier", "section": "Reasoning", "kind": "library", "config_format": "json"},
+            {"id": "phylax", "display_name": "Phylax Guardrails", "section": "Guardrails", "kind": "library", "config_format": "yaml"},
+            {"id": "dokime", "display_name": "Dokime Benchmarking", "section": "Evaluation", "kind": "batch_tool", "config_format": "toml"},
+            {"id": "stoma", "display_name": "Stoma Ingestion", "section": "Memory & Ingestion", "kind": "batch_tool", "config_format": "yaml"},
+            {"id": "paideia", "display_name": "Paideia Trainer", "section": "Training", "kind": "batch_tool", "config_format": "none"},
+            {"id": "kleroterion", "display_name": "Kleroterion Consensus", "section": "Reasoning", "kind": "library", "config_format": "none"},
+        ]
+
+    async def get_admin_module_config(self, module_id: str, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {
+            "module_id": module_id,
+            "saved": {"mode": "mock"},
+            "effective": {"mode": "mock"},
+            "sources": {"mode": "mock_default"},
+            "drift": False,
+        }
+
+    async def get_admin_sessions(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {"total": 0, "limit": limit, "offset": offset, "storage": "in-memory mock", "sessions": []}
+
+    async def get_admin_traces(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {"total": 0, "limit": limit, "offset": offset, "storage": "in-memory mock", "traces": []}
+
+    async def get_admin_audit_log(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {"total": 0, "limit": limit, "offset": offset, "entries": []}
+
+    async def run_admin_probe(self, component_id: str, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {
+            "state": "mock",
+            "detail": f"Mock functional probe for {component_id} passed",
+            "freshness": "fresh",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "latency_ms": 5,
+            "evidence": "Mock probe simulator",
+            "is_simulated": True,
+        }
+
     async def submit_turn_stream(
         self,
         session_id: str,

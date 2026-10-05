@@ -1,5 +1,7 @@
 """Audio ingestion, container validation, and 16kHz mono WAV transcoding."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import shutil
@@ -18,19 +20,20 @@ async def transcode_to_wav(
     max_duration_seconds: int = 45,
     max_input_bytes: int = 15 * 1024 * 1024,
 ) -> Path:
-    """
-    Transcode browser audio (WebM/Opus, MP4, OGG) to 16kHz 16-bit mono WAV for whisper.cpp.
-    
+    """Transcode browser audio (WebM/Opus, MP4, OGG) to 16kHz 16-bit mono WAV for whisper.cpp.
+
     Args:
         audio_bytes: Raw binary payload from MediaRecorder.
         max_duration_seconds: Hard safety cap on voice prompt duration.
         max_input_bytes: Hard safety cap on upload size (15 MB).
-        
+
     Returns:
         Path to temporary 16kHz mono WAV file. Caller is responsible for unlinking when done.
     """
     if len(audio_bytes) > max_input_bytes:
-        raise AudioTranscodingError(f"Audio payload ({len(audio_bytes)} bytes) exceeds maximum permitted limit.")
+        raise AudioTranscodingError(
+            f"Audio payload ({len(audio_bytes)} bytes) exceeds maximum permitted limit ({max_input_bytes} bytes)."
+        )
     if len(audio_bytes) == 0:
         raise AudioTranscodingError("Empty audio buffer received.")
 
@@ -38,7 +41,7 @@ async def transcode_to_wav(
     if not ffmpeg_bin:
         raise AudioTranscodingError("ffmpeg is required for audio transcoding but was not found on PATH.")
 
-    # Write input buffer to temp file
+    # Write input buffer to temp file with secure permissions
     with tempfile.NamedTemporaryFile(suffix=".input", delete=False) as in_file:
         in_file.write(audio_bytes)
         in_path = Path(in_file.name)
@@ -49,11 +52,16 @@ async def transcode_to_wav(
     cmd = [
         ffmpeg_bin,
         "-y",
-        "-t", str(max_duration_seconds),
-        "-i", str(in_path),
-        "-ar", "16000",
-        "-ac", "1",
-        "-c:a", "pcm_s16le",
+        "-t",
+        str(max_duration_seconds),
+        "-i",
+        str(in_path),
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-c:a",
+        "pcm_s16le",
         str(out_path),
     ]
 
@@ -63,11 +71,31 @@ async def transcode_to_wav(
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await proc.communicate()
+        try:
+            _, stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=float(max_duration_seconds + 10),
+            )
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            try:
+                proc.kill()
+                await proc.wait()
+            except OSError:
+                pass
+            if out_path.exists():
+                out_path.unlink()
+            raise AudioTranscodingError("ffmpeg transcoding timed out or was cancelled") from exc
+
         if proc.returncode != 0:
+            if out_path.exists():
+                out_path.unlink()
             err_msg = stderr.decode("utf-8", errors="replace").strip()
             raise AudioTranscodingError(f"ffmpeg conversion failed (code {proc.returncode}): {err_msg[:200]}")
         return out_path
+    except BaseException:
+        if out_path.exists():
+            out_path.unlink()
+        raise
     finally:
         if in_path.exists():
             in_path.unlink()

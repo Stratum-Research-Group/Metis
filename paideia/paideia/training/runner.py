@@ -25,6 +25,11 @@ class TrainingPreflightError(Exception):
     pass
 
 
+class TrainingUnavailableError(RuntimeError):
+    """Raised when real training is requested but unimplemented in this release."""
+    pass
+
+
 def get_git_info() -> Dict[str, Any]:
     """Retrieve git HEAD commit and dirty status if inside a git repo."""
     commit = None
@@ -56,6 +61,7 @@ def compute_dir_sha256(directory: Path, exclude_files: Optional[Any] = None) -> 
 
     hasher = hashlib.sha256()
     exclude = set(exclude_files) if exclude_files else set()
+    file_count = 0
 
     for root, dirs, files in os.walk(directory):
         dirs.sort()
@@ -71,6 +77,10 @@ def compute_dir_sha256(directory: Path, exclude_files: Optional[Any] = None) -> 
                         hasher.update(chunk)
             except Exception as e:
                 raise OSError(f"Failed to read file for digest calculation: {fp} ({e})") from e
+            file_count += 1
+
+    if file_count == 0:
+        raise ValueError(f"Directory {directory} has no valid files for digest calculation")
 
     return hasher.hexdigest()
 
@@ -154,6 +164,12 @@ class QLoRATrainingRunner:
         try:
             # 1. Run Preflight
             self.preflight_check()
+
+            if not getattr(self.config, "allow_simulated", True):
+                raise TrainingUnavailableError(
+                    "Real QLoRA training / optimizer updates are unimplemented in this release. "
+                    "Only marker-only simulation runs are supported; set allow_simulated=True."
+                )
 
             # 2. Check if PyTorch / GPU training packages are installed
             try:

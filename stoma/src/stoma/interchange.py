@@ -19,7 +19,7 @@ from lthcm.engine.pipeline import LTHCMEngine
 logger = logging.getLogger(__name__)
 
 
-def verify_dianoia_interchange(index_path: Path) -> Dict[str, Any]:
+def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = True) -> Dict[str, Any]:
     """
     Test direct interchange against Dianoia's actual CLI load and query path.
     1. Check serialization format (pickle) and engine type (LTHCMEngine).
@@ -32,6 +32,20 @@ def verify_dianoia_interchange(index_path: Path) -> Dict[str, Any]:
             "compatible": False,
             "status": "error",
             "message": f"Index file not found: {path}",
+        }
+
+    if not allow_trusted_pickle:
+        return {
+            "compatible": False,
+            "status": "untrusted_pickle_rejected",
+            "message": "Untrusted pickle deserialization refused without explicit authorization.",
+        }
+
+    if path.stat().st_size > 2 * 1024 * 1024 * 1024:
+        return {
+            "compatible": False,
+            "status": "size_exceeded",
+            "message": f"Index file '{path}' exceeds 2GB maximum limit.",
         }
 
     # Step 1: Serialization format check

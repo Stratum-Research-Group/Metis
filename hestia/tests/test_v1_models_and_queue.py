@@ -69,6 +69,9 @@ async def test_get_v1_models_list(mock_registry: ModelRegistry) -> None:
             item = next(m for m in data["data"] if m["id"] == "llama-3.1-8b-instruct")
             assert item["object"] == "model"
             assert item["owned_by"] == "hestia"
+            assert item["gpu_target"] == "rtx-5060-ti"
+            assert item["state"] == "unloaded"
+            assert "artifact_digest" in item
 
 
 @pytest.mark.asyncio
@@ -86,6 +89,9 @@ async def test_get_v1_model_by_id(mock_registry: ModelRegistry) -> None:
             assert data["id"] == "llama-3.1-8b-instruct"
             assert data["object"] == "model"
             assert data["owned_by"] == "hestia"
+            assert data["gpu_target"] == "rtx-5060-ti"
+            assert data["state"] == "unloaded"
+            assert "artifact_digest" in data
 
             # 404 for unknown model
             resp_404 = await client.get("/v1/models/non-existent-model")

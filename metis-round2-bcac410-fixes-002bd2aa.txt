@@ -1,0 +1,249 @@
+METIS REVIEW - ROUND 2
+Commit: bcac41070cf2f292d1683ac9db643268a67912cc
+Reviewed: 2026-10-04, Africa/Johannesburg
+Repository: https://gitlab.com/akarta-315h/metis
+
+VERDICT
+Not clean. The port/model defaults, root workspace source mappings and clearer
+simulation labels improve round 1. The new bootstrap/launcher does not yet run
+as documented, and several paths still report stronger success than they prove.
+
+Scope and evidence
+- Fresh Git checkout; HEAD checked again at closeout, still bcac410.
+- Python 3.12.14, isolated CPU-only review environment, source-path imports.
+- Root smoke: 6 passed.
+- Kybernetes: 48 passed; Prosopon: 22; Hestia: 47 passed, 1 skipped;
+  Phylax: 32; Krisis: 23; Paideia: 24; Dokime: 127; Kleroterion: 43.
+- Total: 472 passed, 1 skipped. Component suites run separately from their own
+  directories. A combined collection first failed on duplicate test filenames
+  and Kleroterion import paths; separate runs removed that review-harness issue.
+- These runs do NOT validate the documented workspace setup. They use manually
+  installed light dependencies and PYTHONPATH, not the root-installed packages.
+- No torch/CUDA, model downloads, model inference, training, heavy benchmarks,
+  or live GPU tests. Stoma suite could not collect without torch. LTHCM and
+  Dianoia full suites were not run. This is an integration/setup/training-contract
+  review plus the eight bounded component suites, not a full-stack clean sweep.
+- Source tracked files were not edited. Disposable environments and CPU probes
+  only. No evaluation of GPU-wheel advice or actual two-card compatibility.
+
+IMPLEMENTATION BRIEF
+Address the numbered defects below. Preserve core algorithms, resource limits,
+policy gates and negative tests. Do not make tests pass by returning canned
+success, detecting mocks, suppressing errors or loosening verification. Keep
+mock/demo mode explicit and separate from production mode. These are proposed
+review boundaries, not new constraints Nick has personally issued.
+
+1. HIGH - Root bootstrap and CI do not install the runnable stack or test tools
+   Files: pyproject.toml:7,9-26; scripts/setup_workspace.sh:34,38,42;
+          .gitlab-ci.yml:18-21; README.md Getting Started.
+   Root dependencies=[] and workspace membership does not itself select every
+   package for installation. In a fresh checkout, `uv sync --python 3.12`
+   resolved the lock but installed zero distributions. Listing that venv was
+   empty. Doctor and pytest could not spawn; on this host they produced
+   Permission denied, consistent with same-named source directories on PATH
+   rather than installed console scripts.
+   `uv run --package kybernetes ...` selects runtime dependencies, but pytest
+   remains in an optional dev extra, not a selected root test dependency.
+   Fix: explicitly select the intended packages and test extras/dependency group
+   in bootstrap, CI and README. Choose/document a light control-plane setup
+   versus ingestion/training environments, rather than enabling all GPU/bench
+   extras to get pytest. Keep lockfile-backed installation reproducible.
+   Regression: on a fresh empty venv, run the exact README/bootstrap/CI commands.
+   Assert installed console entrypoints and pytest exist and smoke tests run
+   without undeclared globally installed packages. Do not just test resolution.
+
+2. HIGH - Launcher uses invalid commands and the wrong Hestia working directory
+   Files: scripts/run_stack.sh:49,67,70,75,92,94;
+          hestia/src/hestia/cli/__init__.py:151-174;
+          hestia/src/hestia/api/app.py:82-94;
+          prosopon/prosopon/cli.py:20-35.
+   Reproduced directly against these CLIs:
+   - Hestia `serve --port 8080`: Error: No such option '--port'.
+   - Prosopon `run --port 8000`: Error: No such command 'run'.
+   Hestia serve reads hestia.yaml and create_app defaults to models.yaml relative
+   to cwd. The launcher runs from the monorepo root, but both files are under
+   hestia/, so merely dropping --port does not solve startup.
+   Fix: use supported CLI commands/config paths, or add explicit supported
+   options with tests. Prosopon's command is serve. Ensure the configured port
+   and both Hestia paths reach the actual server. Do not swallow startup failure
+   and then advertise the UI as running. Honor custom ports in upstream clients,
+   not just listener arguments: their defaults still point to 8080/8081.
+   Regression: bounded subprocess startup from monorepo root with no GGUF load;
+   verify child process liveness, real HTTP health, selected config/model file
+   paths and custom-port propagation. A mocked command log alone is insufficient.
+
+3. HIGH - Fixing the command would still launch a mock-only Prosopon UI
+   Files: scripts/run_stack.sh:92,94; prosopon/prosopon/cli.py:25,34;
+          prosopon/prosopon/server.py:53-56; prosopon/prosopon/config.py:17-24.
+   Prosopon serve defaults to mock=True. create_app selects MockKybernetesClient
+   outright, even when a real orchestrator is available. There is no automatic
+   attempt to connect to Kybernetes before this choice.
+   Fix: the full-stack launcher must explicitly select real upstream mode and
+   pass the chosen Kybernetes URL. Keep a separate clearly labelled mock launch
+   command. Failure of the real upstream must not silently become mock success.
+   Regression: use a local test upstream with a unique response. Launch real
+   mode and prove the UI request reaches that upstream; test unavailable mode.
+
+4. HIGH - Final status discards the verifier's verdict
+   Files: kybernetes/kybernetes/engine/pipeline.py:434-445,453-485,507,521;
+          tests/test_stack_smoke.py: final status assertion.
+   The VERIFY stage records v_report.status, but final_status is recalculated
+   solely from whether citations/tool_output exist. A rejecting verifier
+   returning INSUFFICIENT_EVIDENCE with score=0 still produced completed.status
+   'verified' and show_work.verifier_status 'verified' in a CPU probe.
+   Fix: final status must follow the actual verification result and typed stage
+   failures/unavailability. Preserve the verdict consistently in SSE, trace,
+   session and UI. Citations existing is not proof of correctness. Mock/demo
+   evidence must not be promoted to real factual verification merely by presence.
+   Regression: inject conflicting, insufficient, unavailable and successful
+   verifier results into the same cited turn; assert every output retains the
+   actual verdict. Revise the smoke expectation if it currently blesses demo
+   evidence as factual verification; retain negative coverage rather than delete it.
+
+5. HIGH - Heuristic Krisis adapter accepts unresolved or unsupported citations
+   File: kybernetes/kybernetes/adapters/krisis.py:60-81.
+   Repro: with a retrieved Metis citation, response 'The moon is cheese [999].'
+   returns VERIFIED, unsupported_claims=0. The condition at 63 only rejects when
+   no known marker AND no '[' occurs, so any bracket bypasses it. Even a valid
+   marker establishes reference syntax, not that the answer's claim is supported.
+   Fix: reject unknown/unresolved markers, validate claims against selected
+   evidence through the intended real verification boundary, and expose heuristic
+   checks as heuristic/unverified when claim support has not been checked.
+   Propagate is_simulated and verifier mode into final events/trace/UI; the
+   pipeline currently records only status and score from this report.
+   Regression: [999], malformed markers, no citations, known marker attached to
+   unrelated claims, contradictions and genuinely supported claims. No retrieval
+   score or marker match should stand in for semantic claim verification.
+
+6. HIGH - Demo retrieval can falsely advertise real-index provenance
+   File: kybernetes/kybernetes/adapters/lthcm.py:15-20,58-98.
+   The adapter sets is_simulated=False when memory_root merely exists, but
+   retrieve always reads _local_corpus. Repro with a new empty temp directory:
+   it returns pass_metis_arch_01 with is_simulated=False.
+   Fix: keep simulation true until a validated real index/backend is actually
+   loaded and used; missing/empty/invalid paths must not make demo data real.
+   Production mode should fail explicitly when required memory is unavailable.
+   Regression: empty directory, ordinary file, incompatible index, absent path,
+   demo mode and a real snapshot with a unique ingested fact. Verify returned
+   passage/source IDs, generation identity and simulation status.
+
+7. HIGH - Stoma monorepo validation fabricates locked checkout provenance
+   File: stoma/src/stoma/config.py:181-184,224-256,280-286.
+   In monorepo mode it initializes gitlink/checkout results to old constant pins,
+   skips real source validation, and only invokes the readers if they are
+   unittest.mock.Mock/MagicMock. Comparing constants to their own literals does
+   not verify sibling source. A direct config-module probe on bcac410 returned
+   LTHCM checkout 336f4af... and Dianoia checkout da7ce83..., though these are
+   ordinary vendored directories in the bcac410 monorepo, not those checkouts.
+   Fix: define honest vendored provenance, e.g. actual monorepo revision plus
+   verified component tree/content digests in a release manifest. Retain proper
+   gitlink/checkout validation for actual submodule deployments. Remove all
+   production branching on test-mock types. Do not label constants as measured
+   checkout SHAs, and fail closed when the chosen integrity check cannot run.
+   Regression: alter a sibling source in a disposable copy, replace the directory,
+   remove its provenance, and verify rejection with ordinary real functions.
+   Test both dependencies, both layouts and actual origin checks. Existing mocked
+   tests passing is not proof that the production integrity check exists.
+
+8. HIGH - Dianoia writer output fails Paideia's walk schema
+   Files: dianoia/dianoia/log.py:34,84-95;
+          paideia/paideia/contracts/dianoia_schema.py:34;
+          paideia/paideia/data/walk_loader.py:75-80.
+   Repro: feed build_walk_record(...) output directly to
+   DianoiaWalkRecord.model_validate. Error:
+   schema_version: Input should be a valid string
+   [type=string_type, input_value=1, input_type=int].
+   The real producer emits integer 1; Paideia fixtures use string '1.0.0'.
+   Loader catches this and counts schema violations, producing no training
+   examples from these logs rather than surfacing a valid producer contract.
+   Fix: choose/version a shared schema and explicitly migrate supported old
+   records. Do not apply broad coercion that accepts arbitrary unknown versions.
+   Regression: producer -> JSONL -> real loader, not only hand-written fixtures;
+   cover version 1, canonical current version, unsupported versions and audit
+   counts. Preserve malformed-record rejection.
+
+9. HIGH - Corrective re-walks with continuing conflicts become gold training data
+   Files: paideia/paideia/contracts/dianoia_schema.py:56-69;
+          paideia/paideia/data/walk_loader.py:89-93,124;
+          dianoia/dianoia/walk.py:758-771.
+   Dianoia can emit conflicts_found=True, rewalked=True if re-verification still
+   finds a conflict. Paideia rejects conflicts only when rewalked is false.
+   Repro with a valid nonempty path/answer and that pair: gold predicate=True.
+   Loader can select it as the last successful attempt and label its steps
+   verified_trajectory_gold. A re-walk occurring is not a conflict being resolved.
+   Fix: require the final verification outcome to actually clear conflicts;
+   distinguish failed/unavailable verification and corrective attempt metadata.
+   Do not treat absence of a contradiction signal as universal proof of truth.
+   Regression: unresolved re-conflict, resolved re-walk, failed re-walk, inactive
+   verifier and clean original attempt. Audit rejected reasons explicitly.
+
+10. HIGH - Phylax shim approvals are neither expired nor consumed
+    File: kybernetes/kybernetes/adapters/phylax.py:38-79.
+    expiry_utc is stored but never checked. wait_for_approval leaves the event
+    and decision reusable, while resolve_approval can overwrite it repeatedly.
+    CPU probe: set expiry to year 2000; resolve allow_once returned True; two
+    successive waits both returned allow_once. This violates the advertised
+    five-minute expiry and one-use behavior.
+    Fix: use an action-bound state machine with expiry checked at resolution and
+    consumption, atomic one-use consumption and terminal decisions. Wire the
+    intended guarded gateway at execution, not only a route-plan boolean.
+    Current pipeline tool gate also uses hard-coded write_file/target metadata
+    (pipeline.py:239-248) rather than the exact tool arguments executed later.
+    Regression: expiry, double resolution, replay, concurrent consumers, changed
+    target/arguments, timeout, deny and valid single execution. Do not broaden
+    permissions or disable checks to get an integration smoke test passing.
+
+11. HIGH - Paideia still reports completed training without training
+    File: paideia/paideia/training/runner.py:149-178.
+    Reconciled prior finding: unchanged. The path writes adapter_config.json,
+    marks COMPLETED and sets epochs_completed=config.epochs. There are no model
+    loading, optimizer steps or trained adapter weights in this execution path.
+    Fix: either implement a separately tested real backend or fail explicitly as
+    unsupported. If retained for smoke tests, mark simulated/not-trained and
+    block promotion/export as trained weights. Do not invent an epoch count or
+    completed training claim from config values. No GPU run requested here.
+    Regression: a mocked backend receipt can validate lifecycle; only a real
+    bounded training test can validate changed weights. Marker-only output must
+    never satisfy a trained-adapter acceptance gate.
+
+12. MEDIUM - Adapter export hashes placeholders and changes its own hashed tree
+    Files: paideia/paideia/export/registry.py:29-37,55-57;
+           paideia/paideia/training/runner.py:46-58.
+    base_model_digest hashes the model name, not weights/revision; tokenizer and
+    template digests hash fixed placeholder strings. Export hashes adapter_dir
+    before writing hestia_registry_entry.json into that directory. Repro with a
+    temp config file: returned adapter_digest != compute_dir_sha256(dir) after
+    export. Re-export also includes the previous registry file in the hash.
+    Fix: hash resolved, versioned artifacts; do not label names/placeholders as
+    verified content identity. Define adapter hash scope explicitly (e.g. exclude
+    registry metadata or place metadata outside the hashed payload). Include
+    stable relative paths with sorted traversal, and fail on unreadable files
+    rather than silently skipping them.
+    Regression: stable repeated export, distinct file layouts/content, artifact
+    mutation detection, unreadable file failure and model/tokenizer/template
+    identity changes. Verify export digest against the documented payload scope.
+
+ROUND-1 RECONCILIATION
+- Default ports now align: Hestia 8080, Kybernetes 8081, Prosopon 8000.
+- Kybernetes Hestia URL now 8080/v1 and model llama-3.1-8b-instruct.
+- dianoia now declares lthcm; root uv.sources covers lthcm/dianoia.
+- README local component links and workspace instructions added; root launcher,
+  setup script, CI and smoke tests exist. Presence does not mean runnable (#1-3).
+- Doctor now names simulated/local adapters, a partial fix. HTTP health still
+  hard-codes ready for LTHCM/Dianoia/Phylax/Krisis (server/app.py:80-83), and doctor
+  claims half-even scoring/gates that this local Krisis adapter does not implement
+  (cli.py:79-83). Report capabilities actually exercised, not installed names.
+- Default Kybernetes server still instantiates demo/simulated/local adapters
+  (server/app.py:31-35). Root smoke uses mock Hestia and demo retrieval, not a
+  Stoma-ingested unique fact flowing through the real sibling components.
+- Full decision-state logging remains absent for walk-policy learning; the GRPO
+  spec remains proposed work. No GRPO implementation inferred from this review.
+
+ACCEPTANCE ORDER
+Fix bootstrap and launcher, then prove a real Prosopon -> Kybernetes -> Hestia
+request without silently selecting mocks. Correct provenance/verifier/approval
+failure behavior before calling any result verified. Add a unique-fact real
+snapshot test through the real ingestion/retrieval boundary. Keep offline smoke
+as smoke. Repair producer/consumer training contracts and training/export status
+before attempting GRPO or claiming trained adapters. Re-run at the next HEAD and
+state exactly what was tested and what remains hardware-dependent.

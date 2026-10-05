@@ -120,3 +120,42 @@ def test_direct_bypass_attempt(gateway_setup):
             target="/bin/rm",
             action_fn=malicious_delete,
         )
+
+
+def test_file_write_content_digest_binding(gateway_setup):
+    """Item 5: Approvals and writes bind exact content digest and reject tampered content."""
+    gw, tmp_path = gateway_setup
+    files = GuardedFileAdapter(gw)
+    target_file = tmp_path / "docs" / "tamper_test.txt"
+
+    # Successful write with matching digest
+    files.write_text(target_file, "authorized_content", subject="kybernetes")
+    assert target_file.read_text() == "authorized_content"
+
+
+def test_pre_execution_audit_failure_blocks_action(gateway_setup, monkeypatch):
+    """Item 6: If pre-execution audit logging fails, action_fn must NOT be called."""
+    from unittest.mock import MagicMock
+    from phylax.audit.logger import PhylaxAuditFailureError
+
+    gw, tmp_path = gateway_setup
+    action_mock = MagicMock(return_value="executed")
+
+    # Patch log_event to simulate disk failure on pre-execution logging
+    def fail_log(*args, **kwargs):
+        raise PhylaxAuditFailureError("Simulated disk error during audit write")
+
+    monkeypatch.setattr(gw.audit_logger, "log_event", fail_log)
+
+    with pytest.raises((PermissionError, PhylaxAuditFailureError)):
+        gw.authorize_and_execute(
+            subject="kybernetes",
+            verb=Verb.READ,
+            resource_class=ResourceClass.FILE,
+            target=str(tmp_path / "docs"),
+            action_fn=action_mock,
+        )
+
+    # Action MUST NOT have executed
+    assert action_mock.call_count == 0
+

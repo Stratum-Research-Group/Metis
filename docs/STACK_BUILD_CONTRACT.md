@@ -1,6 +1,6 @@
 # Shared production build contract for the local AI stack
 
-Use this file together with each component build prompt. It is a **build specification for proposed components**, not a claim that they are implemented. The existing Stoma, LTHCM, Dianoia, Hestia and Dokime README/improvement files are design inputs. The [Kleroterion specification](../Kleroterion/Kleroterion_stochastic_decision_submodule.md) and [Krisis review](krisis-review.md) add two proposed selection components; neither document is implementation or benchmark evidence. Before implementing an adapter, inspect the pinned dependency's real API and record any mismatch. Do not infer an API from a README alone.
+Use this file together with each component build prompt. It is a **build specification for proposed components**, not a claim that they are implemented. The existing Stoma, LTHCM, Dianoia, Hestia and Dokime README files are design inputs. The [Kleroterion specification](../kleroterion/Kleroterion_stochastic_decision_submodule.md) and [Krisis documentation](../krisis/README.md) define selection components; before implementing an adapter, inspect the real API and record any mismatch. Do not infer an API from a README alone.
 
 ## Goal and boundaries
 

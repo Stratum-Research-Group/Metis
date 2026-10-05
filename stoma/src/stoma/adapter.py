@@ -327,14 +327,35 @@ class StomaLTHCMAdapter:
         index_path: Path,
         embedder: StomaEmbedder,
         manifest: Optional[ProvenanceManifest] = None,
+        expected_index_hash: Optional[str] = None,
+        allow_trusted_pickle: bool = True,
     ) -> StomaLTHCMAdapter:
         """
         Load a persisted engine and validate d_model and num_facets before serving.
         Validates generation-wide ID equality if manifest is provided.
+        Fails closed before loading if untrusted pickle is forbidden or if expected_index_hash mismatches.
         """
+        if not allow_trusted_pickle:
+            raise PermissionError("Untrusted pickle deserialization is prohibited without explicit authorization.")
+
         index_path = Path(index_path).resolve()
         if not index_path.is_file():
             raise FileNotFoundError(f"Index file not found: {index_path}")
+
+        if index_path.stat().st_size > 2 * 1024 * 1024 * 1024:
+            raise ValueError(f"Index file exceeds maximum allowed size: {index_path}")
+
+        if expected_index_hash:
+            import hashlib
+            hasher = hashlib.sha256()
+            with open(index_path, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    hasher.update(chunk)
+            actual_h = hasher.hexdigest()
+            if actual_h != expected_index_hash:
+                raise ValueError(
+                    f"Index file SHA-256 digest ({actual_h}) does not match expected hash ({expected_index_hash}); refusing to deserialize."
+                )
 
         with open(index_path, "rb") as f:
             engine = pickle.load(f)

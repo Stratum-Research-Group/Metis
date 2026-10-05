@@ -105,3 +105,46 @@ async def test_pairing_auth_flow(app_instance):
         )
         assert rev_resp.status_code == 200
         assert rev_resp.json()["revoked_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_remote_unauthenticated_pin_rejected(tmp_path):
+    """Item 2: Remote LAN clients cannot obtain PIN unauthenticated."""
+    cfg = ProsoponConfig(
+        host="0.0.0.0",  # LAN mode
+        data_dir=tmp_path,
+        mock_kybernetes=True,
+    )
+    app = create_app(cfg)
+    # Simulate a remote client with IP 192.168.1.150
+    transport = ASGITransport(app=app, client=("192.168.1.150", 54321))
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/api/auth/pin")
+        assert resp.status_code == 401
+        assert "Remote generation of pairing PINs is prohibited" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_host_header_validation(app_instance):
+    """Item 3: DNS rebinding and untrusted Host header rejected with 403."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Attack request with spoofed Host header
+        resp = await client.get("/api/sessions", headers={"Host": "malicious-attacker.com"})
+        assert resp.status_code == 403
+        assert "Host header mismatch" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_zero_loopback_exemption_for_approvals(app_instance):
+    """Item 3: Approval resolution has zero loopback exemption and requires explicit token."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Unauthenticated request from loopback client
+        resp = await client.post(
+            "/api/approvals/appr-12345/resolve",
+            json={"decision": "allow_once"},
+        )
+        assert resp.status_code == 401
+        assert "Paired token required" in resp.json()["detail"]
+

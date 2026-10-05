@@ -146,7 +146,7 @@ class GuardedGateway:
                 self.audit_logger.log_event(auth_rec, None, args)
                 raise PermissionError(f"Phylax authorization denied: {msg}")
 
-            # Approval consumed successfully, proceed to execute
+            # Approval consumed successfully, construct authorization record
             auth_rec = AuthorizationRecord(
                 decision_id=f"dec-{uuid.uuid4().hex[:12]}",
                 timestamp_utc=datetime.now(timezone.utc).isoformat(),
@@ -161,6 +161,8 @@ class GuardedGateway:
                 trace_id=trace_id,
                 approval_id=approval_id,
             )
+            # Fail-closed: durably log authorized execution intent before executing side effect
+            self.audit_logger.log_event(auth_rec, None, args)
         else:
             # Standard authorization check
             auth_rec = self.decide(
@@ -208,9 +210,17 @@ class GuardedGateway:
                 execution_digest=exec_digest,
             )
             # Log receipt to audit
-            self.audit_logger.log_event(auth_rec, receipt, args)
+            try:
+                self.audit_logger.log_event(auth_rec, receipt, args)
+            except PhylaxAuditFailureError as audit_err:
+                raise PhylaxAuditFailureError(
+                    f"Action '{norm_verb.value}' on '{target}' was EXECUTED successfully, but post-execution "
+                    f"receipt audit logging failed (executed/audit-unacknowledged). DO NOT RETRY side effect: {audit_err}"
+                ) from audit_err
             return result, receipt
 
+        except PhylaxAuditFailureError:
+            raise
         except Exception as exc:
             receipt = ExecutionReceipt(
                 receipt_id=receipt_id,
@@ -221,5 +231,11 @@ class GuardedGateway:
                 bytes_processed=None,
                 execution_digest=None,
             )
-            self.audit_logger.log_event(auth_rec, receipt, args)
+            try:
+                self.audit_logger.log_event(auth_rec, receipt, args)
+            except PhylaxAuditFailureError as audit_err:
+                raise PhylaxAuditFailureError(
+                    f"Action '{norm_verb.value}' on '{target}' FAILED during execution ({exc}), and post-execution "
+                    f"failure audit logging also failed: {audit_err}"
+                ) from audit_err
             raise

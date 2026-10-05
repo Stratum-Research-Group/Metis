@@ -49,32 +49,62 @@ def export_hestia_adapter_registry(
     if not manifest_file.exists() and (adapter_dir.parent / "manifest.json").exists():
         manifest_file = adapter_dir.parent / "manifest.json"
 
-    if manifest_file.exists():
-        try:
-            with open(manifest_file, "r", encoding="utf-8") as mf:
-                m_data = json.load(mf)
-                if m_data.get("is_simulated") is True or m_data.get("status") in ("SIMULATED", "NOT_TRAINED"):
-                    if not allow_simulated:
-                        raise ValueError(
-                            f"Acceptance gate failure: adapter in {adapter_dir} was produced by a simulated run without real training weights. "
-                            "Refusing to export as production trained adapter."
-                        )
-        except (json.JSONDecodeError, OSError):
-            pass
+    if not manifest_file.exists():
+        raise ValueError(
+            f"Acceptance gate failure: missing required manifest.json in {adapter_dir}. "
+            "Cannot verify adapter provenance or training completion."
+        )
+
+    try:
+        with open(manifest_file, "r", encoding="utf-8") as mf:
+            m_data = json.load(mf)
+    except Exception as exc:
+        raise ValueError(
+            f"Acceptance gate failure: corrupt or unreadable manifest in {manifest_file}: {exc}"
+        ) from exc
+
+    is_sim = m_data.get("is_simulated") is True or m_data.get("status") in ("SIMULATED", "NOT_TRAINED")
+    if is_sim and not allow_simulated:
+        raise ValueError(
+            f"Acceptance gate failure: adapter in {adapter_dir} was produced by a simulated run without real training weights. "
+            "Refusing to export as production trained adapter."
+        )
+
+    # Check for expected trained weights
+    weight_file_names = {
+        "adapter_model.safetensors",
+        "adapter_model.bin",
+        "adapter.gguf",
+        "pytorch_model.bin",
+        "model.safetensors",
+    }
+    found_weights = [f.name for f in adapter_dir.iterdir() if f.is_file() and f.name in weight_file_names]
+    if not found_weights and not (is_sim and allow_simulated):
+        raise ValueError(
+            f"Acceptance gate failure: adapter directory {adapter_dir} contains no trained weight files. "
+            f"Expected at least one of {sorted(weight_file_names)}."
+        )
+
+    # Verify evaluation evidence
+    if not evaluation_run_id or evaluation_run_id.strip() in ("", "none", "unknown"):
+        raise ValueError("Acceptance gate failure: verified evaluation_run_id required for adapter export")
+
+    if is_sim and allow_simulated:
+        compatible_backend = f"simulation_non_release:{compatible_backend}"
 
     # Hash adapter payload files excluding registry entry and manifest
     adapter_digest = compute_dir_sha256(adapter_dir, exclude_files=EXCLUDED_REGISTRY_FILES)
     if not adapter_digest:
         raise ValueError(f"Adapter directory {adapter_dir} has no valid files for digest calculation")
 
-    # Base model digest: resolve from file path, explicit digest, or content-addressable model identity
+    # Base model digest: resolve from file path, explicit digest, or explicitly labeled unresolved alias
     if base_model_path and Path(base_model_path).exists():
         p = Path(base_model_path)
         b_digest = compute_dir_sha256(p) if p.is_dir() else hashlib.sha256(p.read_bytes()).hexdigest()
     elif base_model_digest:
         b_digest = base_model_digest
     else:
-        b_digest = hashlib.sha256(f"model_identity:{base_model_name}".encode("utf-8")).hexdigest()
+        b_digest = f"unresolved_alias:{base_model_name}"
 
     # Tokenizer digest
     if tokenizer_path and Path(tokenizer_path).exists():
@@ -83,7 +113,7 @@ def export_hestia_adapter_registry(
     elif tokenizer_digest:
         t_digest = tokenizer_digest
     else:
-        t_digest = hashlib.sha256(f"tokenizer_identity:{base_model_name}".encode("utf-8")).hexdigest()
+        t_digest = f"unresolved_alias:{base_model_name}"
 
     # Template digest
     if template_path and Path(template_path).exists():
@@ -92,7 +122,7 @@ def export_hestia_adapter_registry(
     elif template_digest:
         tmpl_digest = template_digest
     else:
-        tmpl_digest = hashlib.sha256(f"chat_template_identity:{task}".encode("utf-8")).hexdigest()
+        tmpl_digest = f"unresolved_alias:{task}"
 
     entry = HestiaAdapterRegistryEntry(
         schema_version="1.0.0",

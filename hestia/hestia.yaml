@@ -13,8 +13,8 @@ llamacpp_binary: /usr/local/bin/llama-server
 # Port range for spawned llama.cpp backend processes.
 # Each loaded model gets the next free port in this range.
 backend_port_range:
-  start: 8081
-  end: 8099
+  start: 9000
+  end: 9019
 
 # Seconds of inactivity before a model is automatically unloaded to free VRAM.
 idle_timeout_seconds: 600

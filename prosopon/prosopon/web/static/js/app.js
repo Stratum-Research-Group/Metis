@@ -21,6 +21,12 @@ class App {
     this.promptInput = document.getElementById("prompt-input");
     this.btnSend = document.getElementById("btn-send");
     this.btnPtt = document.getElementById("btn-ptt");
+
+    // Views
+    this.tabBtnChat = document.getElementById("tab-btn-chat");
+    this.tabBtnDashboard = document.getElementById("tab-btn-dashboard");
+    this.chatWorkspace = document.getElementById("chat-workspace");
+    this.dashboardWorkspace = document.getElementById("dashboard-workspace");
     
     // Modals
     this.transcriptModal = document.getElementById("transcript-modal");
@@ -39,6 +45,12 @@ class App {
     this.btnToggleSidebar.onclick = () => this.toggleSidebar();
     this.sidebarOverlay.onclick = () => this.closeSidebar();
     this.btnNewSession.onclick = () => this.createNewSession();
+
+    // View Switching
+    if (this.tabBtnChat && this.tabBtnDashboard) {
+      this.tabBtnChat.onclick = () => this.switchView("chat");
+      this.tabBtnDashboard.onclick = () => this.switchView("dashboard");
+    }
 
     this.chatForm.onsubmit = (e) => {
       e.preventDefault();
@@ -70,6 +82,10 @@ class App {
   }
 
   async bootstrap() {
+    await API.ensureAuthToken();
+    if (window.Dashboard) {
+      window.Dashboard.init();
+    }
     try {
       const sessions = await API.listSessions();
       if (sessions.length > 0) {
@@ -80,6 +96,26 @@ class App {
       this.renderSessionList(sessions);
     } catch (err) {
       console.warn("Bootstrap pairing check:", err);
+    }
+  }
+
+  switchView(viewName) {
+    if (viewName === "dashboard") {
+      this.tabBtnChat.classList.remove("active");
+      this.tabBtnChat.setAttribute("aria-selected", "false");
+      this.tabBtnDashboard.classList.add("active");
+      this.tabBtnDashboard.setAttribute("aria-selected", "true");
+      this.chatWorkspace.classList.add("hidden");
+      this.dashboardWorkspace.classList.remove("hidden");
+      window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: "dashboard" } }));
+    } else {
+      this.tabBtnDashboard.classList.remove("active");
+      this.tabBtnDashboard.setAttribute("aria-selected", "false");
+      this.tabBtnChat.classList.add("active");
+      this.tabBtnChat.setAttribute("aria-selected", "true");
+      this.dashboardWorkspace.classList.add("hidden");
+      this.chatWorkspace.classList.remove("hidden");
+      window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: "chat" } }));
     }
   }
 

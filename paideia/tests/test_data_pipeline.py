@@ -90,3 +90,65 @@ def test_dataset_card_generation(tmp_path):
     content = out_file.read_text()
     assert "LTHCM-HotpotQA-Router" in content
     assert "8a71605379ee32059e714feb3648cf74f4b42dc6" in content
+
+
+def test_gold_trajectory_verification_gates():
+    from paideia.contracts.dianoia_schema import DianoiaStep, DianoiaVerification, DianoiaWalkRecord
+
+    step = DianoiaStep(node="n1", action="ANSWER", raw_output="ans", reason="ok")
+
+    # 1. Unverified record is rejected
+    rec_unverified = DianoiaWalkRecord(
+        walk_id="w-1",
+        question="Q?",
+        model="m",
+        final_answer="A",
+        path=[step],
+        verification=DianoiaVerification(verified=False),
+    )
+    assert rec_unverified.is_defensible_gold_trajectory() is False
+
+    # 2. Simulated record is rejected
+    rec_sim = DianoiaWalkRecord(
+        walk_id="w-2",
+        question="Q?",
+        model="m",
+        final_answer="A",
+        path=[step],
+        verification=DianoiaVerification(verified=True, simulated=True, provenance="mock"),
+    )
+    assert rec_sim.is_defensible_gold_trajectory() is False
+
+    # 3. Contradiction / conflicts found is rejected
+    rec_conflict = DianoiaWalkRecord(
+        walk_id="w-3",
+        question="Q?",
+        model="m",
+        final_answer="A",
+        path=[step],
+        verification=DianoiaVerification(verified=True, conflicts_found=True, provenance="sheaf"),
+    )
+    assert rec_conflict.is_defensible_gold_trajectory() is False
+
+    # 4. Incorrect outcome is rejected
+    rec_incorrect = DianoiaWalkRecord(
+        walk_id="w-4",
+        question="Q?",
+        model="m",
+        final_answer="A",
+        path=[step],
+        verification=DianoiaVerification(verified=True, conflicts_found=False, is_correct=False, provenance="sheaf"),
+    )
+    assert rec_incorrect.is_defensible_gold_trajectory() is False
+
+    # 5. Verified non-simulated without conflicts is accepted
+    rec_gold = DianoiaWalkRecord(
+        walk_id="w-5",
+        question="Q?",
+        model="m",
+        final_answer="A",
+        path=[step],
+        verification=DianoiaVerification(verified=True, conflicts_found=False, is_correct=True, provenance="ground_truth_eval"),
+    )
+    assert rec_gold.is_defensible_gold_trajectory() is True
+

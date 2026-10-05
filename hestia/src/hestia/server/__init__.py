@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING
 
 from hestia.backend import BackendProcess, BackendStartError
+from hestia.device_lock import GpuDeviceLease, acquire_device_lease
 from hestia.registry import ModelEntry, ModelState
 from hestia.vram import get_free_vram_mb, get_total_vram_mb
 
@@ -67,6 +68,14 @@ class ServerManager:
         self._model_semaphores: dict[str, asyncio.Semaphore] = {}
         self._model_queue_depths: dict[str, int] = {}
 
+        # device -> active GPU device lease
+        self._device_leases: dict[str, GpuDeviceLease] = {}
+        # device -> count of loaded models using this device
+        self._device_model_counts: dict[str, int] = {}
+
+        # Global admission lock for atomic VRAM fit checks, evictions, and startups
+        self._admission_lock: asyncio.Lock = asyncio.Lock()
+
         # Background task handles
         self._idle_checker_task: asyncio.Task[None] | None = None
         self._health_checker_task: asyncio.Task[None] | None = None
@@ -94,11 +103,15 @@ class ServerManager:
 
         for model_name in list(self._processes.keys()):
             try:
-                await asyncio.wait_for(self._unload_model(model_name, force=True), timeout=5.0)
+                await asyncio.wait_for(self._unload_model(model_name, force=True), timeout=35.0)
             except Exception as e:
                 logger.warning("Error unloading model %s during shutdown: %s", model_name, e)
 
-        logger.info("Server manager shut down cleanly")
+        if self._processes:
+            unresolved = list(self._processes.keys())
+            logger.error("Unresolved live model processes after shutdown: %s", unresolved)
+        else:
+            logger.info("Server manager shut down cleanly")
 
     # ── Model Loading ─────────────────────────────────────────
 
@@ -179,15 +192,17 @@ class ServerManager:
             asyncio.Semaphore(self._config.max_concurrent_requests_per_model),
         )
 
+        slot_acquired = False
         try:
             await asyncio.wait_for(sem.acquire(), timeout=timeout)
+            slot_acquired = True
         except TimeoutError as exc:
+            raise QueueTimeoutError(model_name, timeout) from exc
+        finally:
             prev_depth = self._model_queue_depths.get(model_name, 1)
             self._model_queue_depths[model_name] = max(0, prev_depth - 1)
-            raise QueueTimeoutError(model_name, timeout) from exc
-
-        prev_depth = self._model_queue_depths.get(model_name, 1)
-        self._model_queue_depths[model_name] = max(0, prev_depth - 1)
+            if not slot_acquired and sem.locked():
+                pass
 
     def release_admission(self, model_name: str) -> None:
         """Release a concurrency execution slot."""
@@ -199,36 +214,62 @@ class ServerManager:
 
     async def _load_model(self, model: ModelEntry) -> BackendProcess:
         """Load a model, evicting idle models if necessary to fit."""
-        # Check VRAM budget
-        if not await self._try_fit(model):
-            raise InsufficientVramError(model.name, model.vram_estimate_mb)
+        async with self._admission_lock:
+            # Check VRAM budget
+            if not await self._try_fit(model):
+                raise InsufficientVramError(model.name, model.vram_estimate_mb)
 
-        port = self._allocate_port(model.name)
-        if port is None:
-            raise NoFreePortError(model.name)
+            # Acquire or reference exclusive GPU device lease for this device target
+            device = model.gpu_target
+            if device not in self._device_leases:
+                lease = acquire_device_lease(device=device, owner="hestia")
+                if lease is None:
+                    raise GpuDeviceConflictError(model.name, device)
+                self._device_leases[device] = lease
+            self._device_model_counts[device] = self._device_model_counts.get(device, 0) + 1
 
-        model.state = ModelState.LOADING
-        try:
-            process = await self._backend.start(model, port)
-        except BackendStartError:
-            model.state = ModelState.UNLOADED
-            self._release_port(port)
-            raise
+            port = self._allocate_port(model.name)
+            if port is None:
+                cnt = self._device_model_counts.get(device, 1) - 1
+                if cnt <= 0:
+                    self._device_model_counts.pop(device, None)
+                    l = self._device_leases.pop(device, None)
+                    if l:
+                        l.release()
+                else:
+                    self._device_model_counts[device] = cnt
+                raise NoFreePortError(model.name)
 
-        model.state = ModelState.LOADED
-        model.backend_port = port
-        model.pid = process.pid
-        self._processes[model.name] = process
-        self._restart_counts[model.name] = 0
-        self._touch(model.name)
+            model.state = ModelState.LOADING
+            try:
+                process = await self._backend.start(model, port)
+            except BaseException:
+                model.state = ModelState.UNLOADED
+                self._release_port(port)
+                cnt = self._device_model_counts.get(device, 1) - 1
+                if cnt <= 0:
+                    self._device_model_counts.pop(device, None)
+                    l = self._device_leases.pop(device, None)
+                    if l:
+                        l.release()
+                else:
+                    self._device_model_counts[device] = cnt
+                raise
+            model.state = ModelState.LOADED
+            model.backend_port = port
+            model.pid = process.pid
+            self._processes[model.name] = process
+            self._restart_counts[model.name] = 0
+            self._touch(model.name)
 
-        logger.info(
-            "Model %s loaded on port %d (VRAM: ~%d MB)",
-            model.name,
-            port,
-            model.vram_estimate_mb,
-        )
-        return process
+            logger.info(
+                "Model %s loaded on port %d (VRAM: ~%d MB, device: %s)",
+                model.name,
+                port,
+                model.vram_estimate_mb,
+                model.gpu_target,
+            )
+            return process
 
     async def _unload_model(
         self,
@@ -286,15 +327,27 @@ class ServerManager:
                     )
                     return False
 
-            process = self._processes.pop(model_name, None)
+            process = self._processes.get(model_name)
             if process:
-                await self._backend.stop(process)
-                self._release_port(process.port)
+                try:
+                    await self._backend.stop(process)
+                finally:
+                    self._processes.pop(model_name, None)
+                    self._release_port(process.port)
 
             if model:
                 model.state = ModelState.UNLOADED
                 model.backend_port = None
                 model.pid = None
+                device = model.gpu_target
+                cnt = self._device_model_counts.get(device, 1) - 1
+                if cnt <= 0:
+                    self._device_model_counts.pop(device, None)
+                    l = self._device_leases.pop(device, None)
+                    if l:
+                        l.release()
+                else:
+                    self._device_model_counts[device] = cnt
 
             self._last_activity.pop(model_name, None)
             self._inflight.pop(model_name, None)
@@ -347,10 +400,31 @@ class ServerManager:
         """Update last activity timestamp."""
         self._last_activity[model_name] = time.monotonic()
 
+    def _is_port_available(self, port: int) -> bool:
+        """Probe if a port is actually available to bind on the host OS."""
+        import socket
+        host = self._config.listen_host
+        if host == "localhost":
+            host = "127.0.0.1"
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((host, port))
+                return True
+        except OSError:
+            return False
+
     def _allocate_port(self, model_name: str) -> int | None:
         """Allocate the next free port from the configured range."""
         for port, owner in self._port_allocations.items():
             if owner is None:
+                if not self._is_port_available(port):
+                    logger.warning(
+                        "Port %d is free in Hestia map but occupied on host OS, skipping",
+                        port,
+                    )
+                    continue
                 self._port_allocations[port] = model_name
                 return port
         return None
@@ -560,6 +634,15 @@ class NoFreePortError(Exception):
 class GpuQueryError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
+
+
+class GpuDeviceConflictError(Exception):
+    def __init__(self, name: str, device: str) -> None:
+        super().__init__(
+            f"Cannot load '{name}': GPU device '{device}' is locked by another process (e.g. training)"
+        )
+        self.model_name = name
+        self.device = device
 
 
 class ServerOverloadedError(Exception):

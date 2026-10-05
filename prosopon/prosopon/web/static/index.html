@@ -10,9 +10,15 @@
   <div id="app" class="app-container">
     <!-- Top Navigation Bar -->
     <header class="top-nav">
-      <button id="btn-toggle-sidebar" class="icon-btn" aria-label="Toggle sessions menu">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-      </button>
+      <div class="nav-left">
+        <button id="btn-toggle-sidebar" class="icon-btn" aria-label="Toggle sessions menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <div class="view-switcher" role="tablist">
+          <button id="tab-btn-chat" class="view-tab-btn active" role="tab" aria-selected="true">Chat</button>
+          <button id="tab-btn-dashboard" class="view-tab-btn" role="tab" aria-selected="false">Control Dashboard</button>
+        </div>
+      </div>
       <div class="nav-title">
         <h1 id="session-title">New Conversation</h1>
         <span id="connection-status" class="status-badge connected">Local</span>
@@ -40,7 +46,7 @@
     <div id="sidebar-overlay" class="overlay"></div>
 
     <!-- Main Chat Workspace -->
-    <main class="chat-workspace">
+    <main id="chat-workspace" class="chat-workspace">
       <div id="message-container" class="message-container" role="log" aria-live="polite">
         <!-- Messages rendered dynamically -->
       </div>
@@ -80,6 +86,11 @@
       </footer>
     </main>
 
+    <!-- Unified Control Dashboard Workspace -->
+    <section id="dashboard-workspace" class="dashboard-workspace hidden" role="region" aria-label="Control Dashboard">
+      <!-- Rendered dynamically by dashboard.js -->
+    </section>
+
     <!-- Transcript Confirmation Modal (Voice confirmation before execution) -->
     <div id="transcript-modal" class="modal">
       <div class="modal-card">
@@ -110,6 +121,7 @@
   <script src="/static/js/api.js"></script>
   <script src="/static/js/audio.js"></script>
   <script src="/static/js/ui.js"></script>
+  <script src="/static/js/dashboard.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

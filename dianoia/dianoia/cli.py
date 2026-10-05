@@ -153,16 +153,31 @@ def _save_index(engine: "LTHCMEngine", path: str):
     print(f"Index saved to {path}")
 
 
-def _load_index(path: str) -> "LTHCMEngine":
+def _load_index(path: str, allow_trusted_pickle: bool = True) -> "LTHCMEngine":
     """
     Load a pre-built LTHCMEngine index from disk.
 
-    Fails gracefully on corrupt or mismatched index files.
+    Fails gracefully on corrupt, mismatched, or unauthorized untrusted index files.
     """
+    if not allow_trusted_pickle and not os.environ.get("DIANOIA_ALLOW_TRUSTED_PICKLE"):
+        print(
+            f"Error: untrusted pickle index loading refused for '{path}'. "
+            "Pass --allow-trusted-pickle or set DIANOIA_ALLOW_TRUSTED_PICKLE=1 to authorize.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     index_path = Path(path)
     if not index_path.is_file():
         print(f"Error: index file '{path}' not found.", file=sys.stderr)
         sys.exit(1)
+
+    try:
+        if index_path.stat().st_size > 2 * 1024 * 1024 * 1024:
+            print(f"Error: index file '{path}' exceeds 2GB maximum limit.", file=sys.stderr)
+            sys.exit(1)
+    except Exception:
+        pass
 
     try:
         with open(path, "rb") as f:
@@ -344,6 +359,12 @@ def main():
         action="store_true",
         help="Enable verbose logging.",
     )
+    parser.add_argument(
+        "--allow-trusted-pickle",
+        action="store_true",
+        default=False,
+        help="Explicitly permit loading index using local trusted pickle archive.",
+    )
 
     args = parser.parse_args()
     _setup_logging(args.verbose)
@@ -371,7 +392,7 @@ def main():
         if args.save_index:
             _save_index(engine, args.save_index)
     else:
-        engine = _load_index(args.index)
+        engine = _load_index(args.index, allow_trusted_pickle=args.allow_trusted_pickle)
 
     # Initialize the walk controller
     controller = WalkController(

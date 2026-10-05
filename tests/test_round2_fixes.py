@@ -572,6 +572,7 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
     adapter_dir.mkdir(parents=True, exist_ok=True)
     (adapter_dir / "adapter_model.safetensors").write_bytes(b"initial_weight_matrix_content")
     (adapter_dir / "adapter_config.json").write_text('{"rank": 8, "alpha": 16}')
+    (adapter_dir / "manifest.json").write_text('{"is_simulated": false, "status": "COMPLETED"}')
 
     # 1. First export
     entry1 = export_hestia_adapter_registry(

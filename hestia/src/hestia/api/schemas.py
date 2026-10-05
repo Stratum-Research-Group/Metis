@@ -74,6 +74,9 @@ class ModelObject(BaseModel):
     type: str | None = None
     context_size: int | None = None
     quantization: str | None = None
+    artifact_digest: str | None = Field(default=None, description="SHA-256 digest of served model artifact")
+    gpu_target: str | None = Field(default=None, description="Target GPU backend / device tier")
+    state: str | None = Field(default="registered", description="Model runtime state e.g. loaded, registered, unloading")
 
 
 class ModelListResponse(BaseModel):

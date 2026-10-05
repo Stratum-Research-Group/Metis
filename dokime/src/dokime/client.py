@@ -71,6 +71,10 @@ class HestiaClient:
                             "name": m.get("name") or m.get("id") or "",
                             "type": m.get("type", "chat"),
                             "state": m.get("state", "unknown"),
+                            "artifact_digest": m.get("artifact_digest"),
+                            "gpu_target": m.get("gpu_target"),
+                            "quantization": m.get("quantization"),
+                            "context_size": m.get("context_size"),
                         })
                     else:
                         result.append({"name": str(m), "type": "chat", "state": "unknown"})
@@ -92,6 +96,10 @@ class HestiaClient:
                             "name": item.get("id") or item.get("name") or "",
                             "type": item.get("type", "chat"),
                             "state": item.get("state", "unknown"),
+                            "artifact_digest": item.get("artifact_digest"),
+                            "gpu_target": item.get("gpu_target"),
+                            "quantization": item.get("quantization"),
+                            "context_size": item.get("context_size"),
                         })
                     else:
                         result.append({"name": str(item), "type": "chat", "state": "unknown"})

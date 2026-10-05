@@ -55,3 +55,40 @@ def test_missing_cal_ll_causes_feature_invalid():
     )
     assert score is None
     assert err == "FEATURE_INVALID"
+
+
+def test_snapshot_recheck_rebuild_required():
+    """Item 9: A changed snapshot with rebuild budget remaining returns REBUILD_REQUIRED."""
+    from krisis.engine.selector import KrisisSelector
+    from krisis.contracts.request import KrisisRequest, Capabilities
+    from krisis.contracts.candidate import Candidate, Claim, GateResults
+    from krisis.contracts.enums import DecisionStatus, Reason
+
+    selector = KrisisSelector("krisis-policy-0.1.json")
+    req = KrisisRequest(
+        question_class="closed_form_number",
+        requires_grounding=True,
+        capabilities=Capabilities(verifier_active=True, logprobs=False),
+        selection_snapshot="snap_v1",
+        recheck_snapshot="snap_v2",
+        evidence_changed=True,
+        rebuilds_remaining=1,
+        remaining_rebuild_budget=True,
+        candidates=[
+            Candidate(
+                id="c1",
+                gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
+                claims=[Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.900000")],
+            )
+        ],
+    )
+    decision = selector.evaluate(req)
+    assert decision.status == DecisionStatus.REBUILD_REQUIRED.value
+    assert decision.reason == Reason.STALE.value
+
+    # When budget is exhausted, it must abstain with STALE
+    req_exhausted = req.model_copy(update={"rebuilds_remaining": 0, "remaining_rebuild_budget": False})
+    decision_exhausted = selector.evaluate(req_exhausted)
+    assert decision_exhausted.status == DecisionStatus.ABSTAINED.value
+    assert decision_exhausted.reason == Reason.STALE.value
+

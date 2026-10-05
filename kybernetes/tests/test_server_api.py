@@ -68,3 +68,58 @@ async def test_api_approval_not_found(app):
             json={"approval_id": "nonexistent", "decision": "deny"},
         )
         assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_service_token_auth():
+    """Item 3: Authenticate the control boundary on Kybernetes internal routes."""
+    secured_app = create_app(db_path=":memory:", service_token="secret-service-token-123")
+    transport = ASGITransport(app=secured_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Health is public
+        h_resp = await client.get("/v1/health")
+        assert h_resp.status_code == 200
+
+        # Unauthenticated request to /v1/chat/turns/{turn_id}/cancel rejected
+        unauth_resp = await client.post("/v1/chat/turns/turn-1/cancel")
+        assert unauth_resp.status_code == 401
+        assert "Valid Kybernetes service token required" in unauth_resp.json()["detail"]
+
+        # Authenticated request succeeds
+        auth_resp = await client.post(
+            "/v1/chat/turns/turn-1/cancel",
+            headers={"Authorization": "Bearer secret-service-token-123"},
+        )
+        assert auth_resp.status_code == 200
+        assert auth_resp.json()["cancelled"] is True
+
+
+@pytest.mark.asyncio
+async def test_cors_restriction():
+    """Item 3: Restrict CORS origins from wildcard '*'."""
+    app_with_origins = create_app(
+        db_path=":memory:",
+        allowed_origins=["http://127.0.0.1:8000"],
+    )
+    transport = ASGITransport(app=app_with_origins)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Allowed origin
+        resp_allowed = await client.options(
+            "/v1/health",
+            headers={
+                "Origin": "http://127.0.0.1:8000",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert resp_allowed.headers.get("access-control-allow-origin") == "http://127.0.0.1:8000"
+
+        # Disallowed origin
+        resp_disallowed = await client.options(
+            "/v1/health",
+            headers={
+                "Origin": "http://evil-attacker.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert resp_disallowed.headers.get("access-control-allow-origin") != "http://evil-attacker.com"
+

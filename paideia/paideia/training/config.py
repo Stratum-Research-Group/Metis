@@ -38,3 +38,7 @@ class TrainingConfig(BaseModel):
         default="auto",
         description="Backend: auto selects unsloth if compatible and installed, else standard peft",
     )
+    allow_simulated: bool = Field(
+        default=True,
+        description="Whether marker-only simulated checkpointing is permitted. If False, raises TrainingUnavailableError.",
+    )

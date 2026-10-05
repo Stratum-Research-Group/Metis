@@ -38,20 +38,6 @@ def serve(host: str, port: int, lan: bool, tls: bool, mock: bool, kybernetes_url
         data_dir=Path(data_dir),
     )
 
-
-@cli.command("run", hidden=True)
-@click.option("--host", default="127.0.0.1", help="Bind address")
-@click.option("--port", default=8000, type=int, help="Port to listen on")
-@click.option("--lan", is_flag=True, help="Enable LAN mode")
-@click.option("--tls", is_flag=True, help="Enable HTTPS")
-@click.option("--mock/--no-mock", default=True, help="Use mock Kybernetes")
-@click.option("--kybernetes-url", default=None, help="Base URL for Kybernetes API")
-@click.option("--data-dir", default="./data", help="Directory for persistent data")
-@click.pass_context
-def run(ctx: click.Context, **kwargs):
-    """Run alias for serve."""
-    ctx.invoke(serve, **kwargs)
-
     cert_path = None
     key_path = None
     if tls:
@@ -68,7 +54,7 @@ def run(ctx: click.Context, **kwargs):
     click.echo(f"  Mode: {'LAN (Phone Ready)' if lan else 'Local Loopback'}")
     click.echo(f"  URL: {proto}://{bind_host}:{port}")
     if lan:
-        mgr = PairingManager(cfg.data_dir)
+        mgr = getattr(app.state, "pairing_mgr", None) or PairingManager(cfg.data_dir)
         pin = mgr.generate_pairing_pin()
         click.echo(f"  Single-Owner Phone Pairing PIN: {pin} (valid 5 min)")
     click.echo(f"=======================================================\n")
@@ -81,6 +67,20 @@ def run(ctx: click.Context, **kwargs):
         ssl_keyfile=str(key_path) if key_path else None,
         log_level="info",
     )
+
+
+@cli.command("run", hidden=True)
+@click.option("--host", default="127.0.0.1", help="Bind address")
+@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--lan", is_flag=True, help="Enable LAN mode")
+@click.option("--tls", is_flag=True, help="Enable HTTPS")
+@click.option("--mock/--no-mock", default=True, help="Use mock Kybernetes")
+@click.option("--kybernetes-url", default=None, help="Base URL for Kybernetes API")
+@click.option("--data-dir", default="./data", help="Directory for persistent data")
+@click.pass_context
+def run(ctx: click.Context, **kwargs):
+    """Run alias for serve."""
+    ctx.forward(serve)
 
 
 @cli.command()

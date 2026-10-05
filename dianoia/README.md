@@ -218,7 +218,7 @@ When answer verification detects a contradiction between the synthesized answer 
 3. **Log Linkage**: Both records in the pair share the same `walk_id` (a UUIDv4 string), enabling downstream analysis and policy training pipelines to join the failing attempt with the corrective re-walk. Normal walks without contradictions emit a single record with its own unique `walk_id`.
 
 #### Paideia Gold Defensible Trajectory Criteria
-Downstream training harnesses ([Paideia](file:///home/akarta/Projects/Metis/paideia)) consume these walk logs to train learned walk policies. Trajectories are filtered strictly according to defensibility criteria:
+Downstream training harnesses ([Paideia](../paideia/README.md)) consume these walk logs to train learned walk policies. Trajectories are filtered strictly according to defensibility criteria:
 - **Parse-Failed Trajectories**: Trajectories containing parse failures or truncated steps are excluded from supervised policy training sets.
 - **Unresolved Contradictions**: Trajectories where verification found conflicts and either no re-walk occurred or the re-walk failed to resolve the contradiction are excluded from gold datasets.
 - **Resolved Re-Walks**: Re-walk records that successfully eliminated evidence contradictions are paired via `walk_id` with their initial trajectory, forming high-value contrastive and corrective supervisory pairs.
