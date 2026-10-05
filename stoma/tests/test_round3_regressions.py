@@ -345,35 +345,44 @@ def test_r3_item3_offline_cache_miss_names_setup_step():
 # Item 4: Fail closed on unverifiable dependency SHA
 # ===========================================================================
 
-def test_r3_item4_submodule_gitlink_and_checkout_sha_verification():
+def test_r3_item4_submodule_gitlink_and_checkout_sha_verification(tmp_path):
     """
     Verify verify_runtime_dependencies() reports observed gitlinks and checkouts separately,
     and fails closed on altered gitlink, wrong checkout, or unreadable state.
     """
-    res = verify_runtime_dependencies()
-    assert "lthcm_gitlink_sha" in res
-    assert "lthcm_checkout_sha" in res
-    assert "dianoia_gitlink_sha" in res
-    assert "dianoia_checkout_sha" in res
-    assert res["lthcm_gitlink_sha"] == LOCKED_LTHCM_COMMIT
-    assert res["lthcm_checkout_sha"] == LOCKED_LTHCM_COMMIT
-    assert res["dianoia_gitlink_sha"] == LOCKED_DIANOIA_COMMIT
-    assert res["dianoia_checkout_sha"] == LOCKED_DIANOIA_COMMIT
+    sub_root = tmp_path / "sub_stoma"
+    (sub_root / "deps" / "LTHCM").mkdir(parents=True)
+    (sub_root / "deps" / "dianoia").mkdir(parents=True)
+
+    with patch("stoma.config._read_top_level_gitlink", return_value=LOCKED_LTHCM_COMMIT), \
+         patch("stoma.config._read_submodule_commit", return_value=LOCKED_LTHCM_COMMIT):
+        res = verify_runtime_dependencies(stoma_root=sub_root)
+        assert res["layout"] == "submodule"
+        assert "lthcm_gitlink_sha" in res
+        assert "lthcm_checkout_sha" in res
+        assert "dianoia_gitlink_sha" in res
+        assert "dianoia_checkout_sha" in res
+        assert res["lthcm_gitlink_sha"] == LOCKED_LTHCM_COMMIT
+        assert res["lthcm_checkout_sha"] == LOCKED_LTHCM_COMMIT
+        assert res["dianoia_gitlink_sha"] == LOCKED_DIANOIA_COMMIT
+        assert res["dianoia_checkout_sha"] == LOCKED_DIANOIA_COMMIT
 
     # 1. Altered gitlink fails closed
     with patch("stoma.config._read_top_level_gitlink", return_value="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"):
         with pytest.raises(DependencyOriginError, match="Submodule commit violation: LTHCM gitlink"):
-            verify_runtime_dependencies()
+            verify_runtime_dependencies(stoma_root=sub_root)
 
     # 2. Unreadable gitlink fails closed
     with patch("stoma.config._read_top_level_gitlink", return_value=None):
         with pytest.raises(DependencyOriginError, match="Cannot verify top-level gitlink SHA"):
-            verify_runtime_dependencies()
+            verify_runtime_dependencies(stoma_root=sub_root)
 
     # 3. Wrong checkout fails closed
-    with patch("stoma.config._read_submodule_commit", return_value="badc0ffeebadc0ffeebadc0ffeebadc0ffee1234"):
+    with patch("stoma.config._read_top_level_gitlink", return_value=LOCKED_LTHCM_COMMIT), \
+         patch("stoma.config._read_submodule_commit", return_value="badc0ffeebadc0ffeebadc0ffeebadc0ffee1234"):
         with pytest.raises(DependencyOriginError, match="Submodule commit violation: LTHCM is at"):
-            verify_runtime_dependencies()
+            verify_runtime_dependencies(stoma_root=sub_root)
+
 
 
 # ===========================================================================

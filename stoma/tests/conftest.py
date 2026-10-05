@@ -8,13 +8,17 @@ from pathlib import Path
 import pytest
 
 from stoma.config import StomaConfig
-from stoma.embedder import StomaEmbedder
-from stoma.plugins import PluginRegistry
+try:
+    from stoma.embedder import StomaEmbedder
+except (ImportError, ModuleNotFoundError):
+    StomaEmbedder = None
 
 
 @pytest.fixture(scope="session")
 def shared_embedder():
     """Shared StomaEmbedder instance across test session to avoid repeated model loading."""
+    if StomaEmbedder is None:
+        pytest.skip("StomaEmbedder requires torch and sentence_transformers")
     return StomaEmbedder(model_name="all-MiniLM-L6-v2")
 
 

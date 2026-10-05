@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "layout": "monorepo_vendored",
+  "dependencies": {
+    "LTHCM": {
+      "target_subdirs": [
+        "lthcm",
+        "pyproject.toml"
+      ],
+      "required_paths": [
+        "lthcm/__init__.py",
+        "pyproject.toml"
+      ],
+      "content_sha256": "cd97c3dcf998b545341d362bc693276e7155cc05fc4d6b264082363120881c00"
+    },
+    "dianoia": {
+      "target_subdirs": [
+        "dianoia",
+        "pyproject.toml"
+      ],
+      "required_paths": [
+        "dianoia/__init__.py",
+        "pyproject.toml"
+      ],
+      "content_sha256": "b83713648e9c582e8369be65e54c71d06110eac83bad5ab624ccc657f24f0d0c"
+    }
+  }
+}

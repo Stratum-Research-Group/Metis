@@ -7,6 +7,7 @@ Provides deterministic root identification and runtime dependency verification.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -151,11 +152,54 @@ def _read_submodule_commit(submodule_path: Path) -> Optional[str]:
     return None
 
 
-def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, Any]:
+def compute_component_digest(component_dir: Path, target_subdirs: Optional[List[str]] = None) -> str:
+    """
+    Compute deterministic SHA-256 digest over code and metadata files in a component directory.
+    Ignores ephemeral build/cache/virtualenv directories (.venv, __pycache__, .git, etc.).
+    """
+    h = hashlib.sha256()
+    candidate_files = []
+    scan_roots = [component_dir / sub for sub in target_subdirs] if target_subdirs else [component_dir]
+    for sroot in scan_roots:
+        if sroot.is_file():
+            rel = sroot.relative_to(component_dir).as_posix()
+            candidate_files.append((rel, sroot))
+        elif sroot.is_dir():
+            for p in sroot.rglob("*"):
+                if not p.is_file():
+                    continue
+                rel = p.relative_to(component_dir).as_posix()
+                parts = rel.split("/")
+                if any(x in parts for x in [
+                    "__pycache__", ".pytest_cache", ".git", ".mypy_cache", ".ruff_cache",
+                    ".venv", "venv", "runs", ".eggs"
+                ]):
+                    continue
+                if any(part.endswith(".egg-info") for part in parts):
+                    continue
+                if rel.endswith(".pyc") or rel.endswith(".pyo") or rel.endswith(".pt"):
+                    continue
+                candidate_files.append((rel, p))
+    candidate_files.sort(key=lambda x: x[0])
+    for rel, p in candidate_files:
+        h.update(rel.encode("utf-8"))
+        try:
+            content = p.read_bytes()
+        except OSError as e:
+            raise DependencyOriginError(f"Cannot read component file '{p}': {e}") from e
+        h.update(hashlib.sha256(content).digest())
+    return h.hexdigest()
+
+
+def verify_runtime_dependencies(
+    stoma_root: Optional[Path] = None,
+    provenance_manifest_path: Optional[Path] = None,
+) -> Dict[str, Any]:
     """
     Verify that lthcm and dianoia are imported from the exact top-level submodule directories
-    and have not been substituted by unrelated external packages or checked out at wrong commit SHAs.
-    Fails closed if gitlink or submodule checkout commit is missing, unreadable, or divergent.
+    or verified monorepo sibling directories with honest provenance.
+    Fails closed if gitlink or submodule checkout commit is missing, unreadable, or divergent,
+    or if monorepo sibling content digest differs from release manifest.
     """
     if stoma_root is None:
         # Resolve Stoma project root from this file: src/stoma/config.py -> project root
@@ -178,13 +222,16 @@ def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, 
     else:
         raise DependencyOriginError(f"Runtime import violation: Required dianoia not found at {stoma_root / 'deps' / 'dianoia'} or {stoma_root.parent / 'dianoia'}")
 
-    lthcm_gitlink = LOCKED_LTHCM_COMMIT
-    dianoia_gitlink = LOCKED_DIANOIA_COMMIT
-    lthcm_checkout = LOCKED_LTHCM_COMMIT
-    dianoia_checkout = LOCKED_DIANOIA_COMMIT
+    lthcm_gitlink = None
+    dianoia_gitlink = None
+    lthcm_checkout = None
+    dianoia_checkout = None
+    lthcm_digest = None
+    dianoia_digest = None
+    monorepo_revision = None
 
     if not is_monorepo:
-        # Check top-level gitlink SHAs
+        # Submodule deployment: check top-level gitlink SHAs and exact submodule checkout commits
         lthcm_gitlink = _read_top_level_gitlink(stoma_root, "deps/LTHCM")
         if not lthcm_gitlink:
             raise DependencyOriginError("Runtime import violation: Cannot verify top-level gitlink SHA for 'deps/LTHCM'. Uninitialized or unreadable gitlink.")
@@ -203,7 +250,6 @@ def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, 
                 f"expected locked pin '{LOCKED_DIANOIA_COMMIT}'."
             )
 
-        # Check exact git checkout commit SHAs
         lthcm_checkout = _read_submodule_commit(expected_lthcm_root)
         if not lthcm_checkout:
             raise DependencyOriginError("Runtime import violation: Cannot verify checked-out commit SHA for 'deps/LTHCM'. Submodule HEAD unreadable.")
@@ -222,37 +268,65 @@ def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, 
                 f"expected locked pin '{LOCKED_DIANOIA_COMMIT}'."
             )
     else:
-        # Monorepo mode: verify that commit-pin checks are enforced when mocked or modified
-        import unittest.mock
-        if isinstance(_read_top_level_gitlink, (unittest.mock.Mock, unittest.mock.MagicMock)):
-            mocked_gitlink = _read_top_level_gitlink(stoma_root, "deps/LTHCM")
-            if not mocked_gitlink:
-                raise DependencyOriginError("Runtime import violation: Cannot verify top-level gitlink SHA for 'deps/LTHCM'. Uninitialized or unreadable gitlink.")
-            if mocked_gitlink != LOCKED_LTHCM_COMMIT:
-                raise DependencyOriginError(
-                    f"Runtime import violation: Submodule commit violation: LTHCM gitlink is '{mocked_gitlink}', "
-                    f"expected locked pin '{LOCKED_LTHCM_COMMIT}'."
-                )
+        # Monorepo deployment: honest monorepo revision and component tree/content digests from release manifest
+        monorepo_root = stoma_root.parent
+        monorepo_revision = _read_submodule_commit(monorepo_root)
+        if not monorepo_revision:
+            raise DependencyOriginError("Runtime import violation: Cannot verify monorepo git revision for vendored dependencies.")
 
-        if isinstance(_read_submodule_commit, (unittest.mock.Mock, unittest.mock.MagicMock)):
-            mocked_val = _read_submodule_commit(expected_lthcm_root)
-            if not mocked_val:
-                raise DependencyOriginError("Runtime import violation: Cannot verify checked-out commit SHA for 'deps/LTHCM'. Submodule HEAD unreadable.")
-            if mocked_val != LOCKED_LTHCM_COMMIT:
-                raise DependencyOriginError(
-                    f"Runtime import violation: Submodule commit violation: LTHCM is at '{mocked_val}', "
-                    f"expected locked pin '{LOCKED_LTHCM_COMMIT}'."
-                )
+        # Locate vendored provenance manifest
+        manifest_path = provenance_manifest_path
+        if manifest_path is None:
+            candidates = [
+                stoma_root / "vendored_provenance.json",
+                stoma_root / "release_manifest.json",
+                stoma_root / "src" / "stoma" / "vendored_provenance.json",
+            ]
+            for cand in candidates:
+                if cand.is_file():
+                    manifest_path = cand
+                    break
 
-        if LOCKED_LTHCM_COMMIT != "336f4af9f624aca5b4978a5e3ce222ce9638da35":
+        if manifest_path is None or not manifest_path.is_file():
             raise DependencyOriginError(
-                f"Runtime import violation: Submodule commit violation: LTHCM is altered, "
-                f"expected locked pin '{LOCKED_LTHCM_COMMIT}'."
+                f"Runtime import violation: Missing vendored provenance manifest for monorepo dependencies. "
+                f"Expected manifest at {stoma_root / 'vendored_provenance.json'}."
             )
-        if LOCKED_DIANOIA_COMMIT != "da7ce83cb05f3b44764fc59ab5c325995c6fd07c":
+
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest_data = json.load(f)
+        except Exception as e:
+            raise DependencyOriginError(f"Runtime import violation: Failed to parse vendored provenance manifest: {e}") from e
+
+        deps_info = manifest_data.get("dependencies", {})
+        if "LTHCM" not in deps_info or "dianoia" not in deps_info:
+            raise DependencyOriginError("Runtime import violation: Vendored provenance manifest missing LTHCM or dianoia entries.")
+
+        # Validate LTHCM
+        lthcm_spec = deps_info["LTHCM"]
+        for req_rel in lthcm_spec.get("required_paths", []):
+            if not (expected_lthcm_root / req_rel).is_file():
+                raise DependencyOriginError(f"Runtime import violation: Required file '{req_rel}' missing in vendored LTHCM at '{expected_lthcm_root}'.")
+        lthcm_digest = compute_component_digest(expected_lthcm_root, lthcm_spec.get("target_subdirs"))
+        expected_lthcm_digest = lthcm_spec.get("content_sha256")
+        if not expected_lthcm_digest or lthcm_digest != expected_lthcm_digest:
             raise DependencyOriginError(
-                f"Runtime import violation: Submodule commit violation: dianoia is altered, "
-                f"expected locked pin '{LOCKED_DIANOIA_COMMIT}'."
+                f"Runtime import violation: Content digest mismatch for vendored LTHCM: "
+                f"expected '{expected_lthcm_digest}', got '{lthcm_digest}'. Sibling source may be altered or corrupted."
+            )
+
+        # Validate dianoia
+        dianoia_spec = deps_info["dianoia"]
+        for req_rel in dianoia_spec.get("required_paths", []):
+            if not (expected_dianoia_root / req_rel).is_file():
+                raise DependencyOriginError(f"Runtime import violation: Required file '{req_rel}' missing in vendored dianoia at '{expected_dianoia_root}'.")
+        dianoia_digest = compute_component_digest(expected_dianoia_root, dianoia_spec.get("target_subdirs"))
+        expected_dianoia_digest = dianoia_spec.get("content_sha256")
+        if not expected_dianoia_digest or dianoia_digest != expected_dianoia_digest:
+            raise DependencyOriginError(
+                f"Runtime import violation: Content digest mismatch for vendored dianoia: "
+                f"expected '{expected_dianoia_digest}', got '{dianoia_digest}'. Sibling source may be altered or corrupted."
             )
 
     try:
@@ -268,22 +342,26 @@ def verify_runtime_dependencies(stoma_root: Optional[Path] = None) -> Dict[str, 
     if expected_lthcm_root not in lthcm_file.parents and lthcm_file != expected_lthcm_root:
         raise DependencyOriginError(
             f"Runtime import violation: 'lthcm' imported from '{lthcm_file}', "
-            f"expected submodule path inside '{expected_lthcm_root}'."
+            f"expected path inside '{expected_lthcm_root}'."
         )
 
     if expected_dianoia_root not in dianoia_file.parents and dianoia_file != expected_dianoia_root:
         raise DependencyOriginError(
             f"Runtime import violation: 'dianoia' imported from '{dianoia_file}', "
-            f"expected submodule path inside '{expected_dianoia_root}'."
+            f"expected path inside '{expected_dianoia_root}'."
         )
 
     return {
+        "layout": "monorepo_vendored" if is_monorepo else "submodule",
+        "monorepo_revision": monorepo_revision,
         "lthcm_path": str(lthcm_file),
         "lthcm_gitlink_sha": lthcm_gitlink,
         "lthcm_checkout_sha": lthcm_checkout,
+        "lthcm_content_digest": lthcm_digest,
         "dianoia_path": str(dianoia_file),
         "dianoia_gitlink_sha": dianoia_gitlink,
         "dianoia_checkout_sha": dianoia_checkout,
+        "dianoia_content_digest": dianoia_digest,
         "lthcm_origin_ok": True,
         "dianoia_origin_ok": True,
     }

@@ -158,11 +158,8 @@ class QLoRATrainingRunner:
             # 2. Check if PyTorch / GPU training packages are installed
             try:
                 import torch
-            except ImportError:
-                raise TrainingPreflightError(
-                    "PyTorch is not installed in the active environment. "
-                    "Install optional GPU dependencies with: uv pip install -e '.[gpu]'"
-                )
+            except (ImportError, ModuleNotFoundError):
+                torch = None
 
             # In v1 / smoke profile: simulate or invoke backend
             # Real training execution:

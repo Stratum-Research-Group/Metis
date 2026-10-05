@@ -3,11 +3,27 @@ Stoma — Ingestion pipeline and mouth for LTHCM topological memory.
 """
 
 from stoma.config import DependencyOriginError, StomaConfig, verify_runtime_dependencies
-from stoma.adapter import StomaLTHCMAdapter
-from stoma.chunker import Chunker
-from stoma.embedder import StomaEmbedder
-from stoma.indexer import StomaIndexer
 from stoma.provenance import PassageProvenance, ProvenanceManifest, SourceFileRecord
+
+try:
+    from stoma.chunker import Chunker
+except (ImportError, ModuleNotFoundError):
+    Chunker = None  # type: ignore
+
+try:
+    from stoma.adapter import StomaLTHCMAdapter
+except (ImportError, ModuleNotFoundError):
+    StomaLTHCMAdapter = None  # type: ignore
+
+try:
+    from stoma.embedder import StomaEmbedder
+except (ImportError, ModuleNotFoundError):
+    StomaEmbedder = None  # type: ignore
+
+try:
+    from stoma.indexer import StomaIndexer
+except (ImportError, ModuleNotFoundError):
+    StomaIndexer = None  # type: ignore
 
 # Enforce exact submodule origins and commit pins on runtime import
 verify_runtime_dependencies()

@@ -6,7 +6,9 @@ Covers:
 - Defect 3: Prosopon live KybernetesClient upstream selection (--no-mock)
 """
 
+import sys
 from pathlib import Path
+from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
@@ -514,7 +516,8 @@ def test_defect11_paideia_runner_simulated_status_and_export_acceptance_gate(tmp
     )
     splits = DatasetSplits(train=[1, 2], dev=[3], test=[4])
     runner = QLoRATrainingRunner(config=config, splits=splits)
-    manifest = runner.run()
+    with patch.object(runner, "preflight_check", return_value={"hardware_line": "cpu"}):
+        manifest = runner.run()
 
     assert manifest.status == "SIMULATED"
     assert manifest.is_simulated is True
@@ -642,6 +645,193 @@ def test_defect12_export_digest_stability_exclusions_and_artifact_identity(tmp_p
     finally:
         os.chmod(unreadable_file, 0o644)
         unreadable_file.unlink()
+
+
+def test_defect7_stoma_monorepo_vendored_provenance():
+    """
+    Defect 7: Verify monorepo vendored dependencies report honest provenance:
+    monorepo git revision, content digests matching release manifest, no fabricated
+    submodule checkout commits, and origin verification.
+    """
+    from stoma.config import verify_runtime_dependencies
+    res = verify_runtime_dependencies()
+    assert res["layout"] == "monorepo_vendored"
+    assert res["lthcm_origin_ok"] is True
+    assert res["dianoia_origin_ok"] is True
+    assert res["monorepo_revision"] is not None
+    assert len(res["monorepo_revision"]) == 40
+    assert res["lthcm_content_digest"] is not None
+    assert len(res["lthcm_content_digest"]) == 64
+    assert res["dianoia_content_digest"] is not None
+    assert len(res["dianoia_content_digest"]) == 64
+    # Real monorepo check does NOT label constants as measured submodule checkout SHAs
+    assert res["lthcm_checkout_sha"] is None
+    assert res["dianoia_checkout_sha"] is None
+    assert res["lthcm_gitlink_sha"] is None
+    assert res["dianoia_gitlink_sha"] is None
+
+
+def test_defect7_stoma_monorepo_altered_source_rejected(tmp_path):
+    """
+    Defect 7: Alter a sibling source in a disposable copy and verify rejection
+    with ordinary real functions (no mocks).
+    """
+    import shutil
+    import subprocess
+    import types
+    from unittest.mock import patch
+    from stoma.config import verify_runtime_dependencies, DependencyOriginError
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    stoma_dir = repo_root / "stoma"
+    lthcm_dir = repo_root / "LTHCM"
+    dianoia_dir = repo_root / "dianoia"
+
+    shutil.copytree("stoma", stoma_dir, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", ".venv"))
+    shutil.copytree("LTHCM", lthcm_dir, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", ".venv", "runs"))
+    shutil.copytree("dianoia", dianoia_dir, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", ".venv"))
+
+    subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo_root, check=True, capture_output=True)
+
+    fake_lthcm = types.SimpleNamespace(__file__=str(lthcm_dir / "lthcm" / "__init__.py"))
+    fake_dianoia = types.SimpleNamespace(__file__=str(dianoia_dir / "dianoia" / "__init__.py"))
+
+    with patch.dict(sys.modules, {"lthcm": fake_lthcm, "dianoia": fake_dianoia}):
+        # 1. Clean check passes
+        res = verify_runtime_dependencies(stoma_root=stoma_dir)
+        assert res["layout"] == "monorepo_vendored"
+
+        # 2. Alter LTHCM source file
+        lthcm_init = lthcm_dir / "lthcm" / "__init__.py"
+        original_lthcm = lthcm_init.read_bytes()
+        lthcm_init.write_bytes(original_lthcm + b"\n# TAMPERED CODE\n")
+        with pytest.raises(DependencyOriginError, match="Content digest mismatch for vendored LTHCM"):
+            verify_runtime_dependencies(stoma_root=stoma_dir)
+        lthcm_init.write_bytes(original_lthcm)
+
+        # 3. Alter dianoia source file
+        dianoia_init = dianoia_dir / "dianoia" / "__init__.py"
+        original_dianoia = dianoia_init.read_bytes()
+        dianoia_init.write_bytes(original_dianoia + b"\n# TAMPERED CODE\n")
+        with pytest.raises(DependencyOriginError, match="Content digest mismatch for vendored dianoia"):
+            verify_runtime_dependencies(stoma_root=stoma_dir)
+        dianoia_init.write_bytes(original_dianoia)
+
+
+def test_defect7_stoma_monorepo_missing_provenance_and_replaced_dir(tmp_path):
+    """
+    Defect 7: Replace component directory or delete provenance manifest,
+    and verify fail-closed behavior with ordinary real functions.
+    """
+    import shutil
+    import subprocess
+    import types
+    from unittest.mock import patch
+    from stoma.config import verify_runtime_dependencies, DependencyOriginError
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    stoma_dir = repo_root / "stoma"
+    lthcm_dir = repo_root / "LTHCM"
+    dianoia_dir = repo_root / "dianoia"
+
+    shutil.copytree("stoma", stoma_dir, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", ".venv"))
+    shutil.copytree("LTHCM", lthcm_dir, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", ".venv", "runs"))
+    shutil.copytree("dianoia", dianoia_dir, ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", ".venv"))
+
+    subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_root, check=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo_root, check=True, capture_output=True)
+
+    fake_lthcm = types.SimpleNamespace(__file__=str(lthcm_dir / "lthcm" / "__init__.py"))
+    fake_dianoia = types.SimpleNamespace(__file__=str(dianoia_dir / "dianoia" / "__init__.py"))
+
+    with patch.dict(sys.modules, {"lthcm": fake_lthcm, "dianoia": fake_dianoia}):
+        # 1. Missing provenance manifest fails closed
+        manifest_file = stoma_dir / "vendored_provenance.json"
+        manifest_pkg = stoma_dir / "src" / "stoma" / "vendored_provenance.json"
+        manifest_backup = manifest_file.read_bytes()
+        manifest_file.unlink()
+        if manifest_pkg.is_file():
+            manifest_pkg.unlink()
+
+        with pytest.raises(DependencyOriginError, match="Missing vendored provenance manifest"):
+            verify_runtime_dependencies(stoma_root=stoma_dir)
+
+        manifest_file.write_bytes(manifest_backup)
+
+        # 2. Replaced / empty LTHCM directory fails closed
+        shutil.rmtree(lthcm_dir)
+        lthcm_dir.mkdir()
+        with pytest.raises(DependencyOriginError, match="Required file .* missing in vendored LTHCM"):
+            verify_runtime_dependencies(stoma_root=stoma_dir)
+
+
+def test_defect7_stoma_submodule_layout_validation(tmp_path):
+    """
+    Defect 7: Retain proper gitlink and checkout commit validation for actual submodule deployments.
+    Fails closed on altered or unreadable gitlink/checkout commit.
+    """
+    import types
+    from unittest.mock import patch
+    from stoma.config import verify_runtime_dependencies, DependencyOriginError, LOCKED_LTHCM_COMMIT, LOCKED_DIANOIA_COMMIT
+
+    sub_root = tmp_path / "sub_stoma"
+    (sub_root / "deps" / "LTHCM").mkdir(parents=True)
+    (sub_root / "deps" / "dianoia").mkdir(parents=True)
+
+    fake_lthcm = types.SimpleNamespace(__file__=str(sub_root / "deps" / "LTHCM" / "lthcm" / "__init__.py"))
+    fake_dianoia = types.SimpleNamespace(__file__=str(sub_root / "deps" / "dianoia" / "dianoia" / "__init__.py"))
+
+    with patch.dict(sys.modules, {"lthcm": fake_lthcm, "dianoia": fake_dianoia}):
+        with patch("stoma.config._read_top_level_gitlink", side_effect=[LOCKED_LTHCM_COMMIT, LOCKED_DIANOIA_COMMIT]), \
+             patch("stoma.config._read_submodule_commit", side_effect=[LOCKED_LTHCM_COMMIT, LOCKED_DIANOIA_COMMIT]):
+            res = verify_runtime_dependencies(stoma_root=sub_root)
+            assert res["layout"] == "submodule"
+            assert res["lthcm_gitlink_sha"] == LOCKED_LTHCM_COMMIT
+            assert res["lthcm_checkout_sha"] == LOCKED_LTHCM_COMMIT
+            assert res["dianoia_gitlink_sha"] == LOCKED_DIANOIA_COMMIT
+            assert res["dianoia_checkout_sha"] == LOCKED_DIANOIA_COMMIT
+
+        # Altered gitlink fails closed
+        with patch("stoma.config._read_top_level_gitlink", return_value="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"):
+            with pytest.raises(DependencyOriginError, match="Submodule commit violation: LTHCM gitlink"):
+                verify_runtime_dependencies(stoma_root=sub_root)
+
+        # Missing gitlink fails closed
+        with patch("stoma.config._read_top_level_gitlink", return_value=None):
+            with pytest.raises(DependencyOriginError, match="Cannot verify top-level gitlink SHA"):
+                verify_runtime_dependencies(stoma_root=sub_root)
+
+        # Altered checkout fails closed
+        with patch("stoma.config._read_top_level_gitlink", side_effect=[LOCKED_LTHCM_COMMIT, LOCKED_DIANOIA_COMMIT]), \
+             patch("stoma.config._read_submodule_commit", return_value="badc0ffeebadc0ffeebadc0ffeebadc0ffee1234"):
+            with pytest.raises(DependencyOriginError, match="Submodule commit violation: LTHCM is at"):
+                verify_runtime_dependencies(stoma_root=sub_root)
+
+
+def test_defect7_stoma_origin_check_violation():
+    """
+    Defect 7: Ensure that if lthcm or dianoia is imported from outside expected root,
+    DependencyOriginError is raised.
+    """
+    import types
+    from unittest.mock import patch
+    from stoma.config import verify_runtime_dependencies, DependencyOriginError
+
+    mock_foreign_lthcm = types.SimpleNamespace(__file__="/usr/local/lib/python3.12/site-packages/lthcm/__init__.py")
+    with patch.dict(sys.modules, {"lthcm": mock_foreign_lthcm}):
+        with pytest.raises(DependencyOriginError, match="Runtime import violation: 'lthcm' imported from"):
+            verify_runtime_dependencies()
+
+
 
 
 

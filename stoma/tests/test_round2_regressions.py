@@ -400,7 +400,7 @@ def test_r2_f3_long_token_boundary_chunks_encode_losslessly(shared_embedder):
 # Finding 4: Enforce Exact Imported Submodule SHAs
 # ===========================================================================
 
-def test_r2_f4_exact_sha_verification_fails_on_altered_commit():
+def test_r2_f4_exact_sha_verification_fails_on_altered_commit(tmp_path):
     """
     Assert that verify_runtime_dependencies() fails loudly with DependencyOriginError
     prefixed with 'Runtime import violation:' if gitlink or checked-out commit differs.
@@ -410,14 +410,18 @@ def test_r2_f4_exact_sha_verification_fails_on_altered_commit():
     assert clean_res["lthcm_origin_ok"] is True
     assert clean_res["dianoia_origin_ok"] is True
 
-    # Altered commit SHA should raise DependencyOriginError
-    with patch("stoma.config.LOCKED_LTHCM_COMMIT", "1111111111111111111111111111111111111111"):
-        with pytest.raises(DependencyOriginError, match="Runtime import violation: Submodule commit violation: LTHCM"):
-            verify_runtime_dependencies()
+    # Submodule layout with altered commit SHA should raise DependencyOriginError
+    sub_root = tmp_path / "sub_stoma"
+    (sub_root / "deps" / "LTHCM").mkdir(parents=True)
+    (sub_root / "deps" / "dianoia").mkdir(parents=True)
 
-    with patch("stoma.config.LOCKED_DIANOIA_COMMIT", "2222222222222222222222222222222222222222"):
+    with patch("stoma.config._read_top_level_gitlink", return_value="1111111111111111111111111111111111111111"):
+        with pytest.raises(DependencyOriginError, match="Runtime import violation: Submodule commit violation: LTHCM"):
+            verify_runtime_dependencies(stoma_root=sub_root)
+
+    with patch("stoma.config._read_top_level_gitlink", side_effect=[LOCKED_LTHCM_COMMIT, "2222222222222222222222222222222222222222"]):
         with pytest.raises(DependencyOriginError, match="Runtime import violation: Submodule commit violation: dianoia"):
-            verify_runtime_dependencies()
+            verify_runtime_dependencies(stoma_root=sub_root)
 
 
 def test_r2_f4_cli_fails_loudly_on_altered_submodule(temp_workspace):
