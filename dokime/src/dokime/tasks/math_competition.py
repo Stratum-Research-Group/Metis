@@ -64,8 +64,8 @@ class AIMECompetitionMathTask:
 
         return (
             f"Problem: {query.prompt}\n\n"
-            f"Please solve this mathematics problem step-by-step. "
-            f"State your final answer as an exact number inside \\boxed{{answer}}."
+            f"Solve this mathematics problem step-by-step without repeating sentences. "
+            f"Verify each calculation, then state your final answer as an exact integer inside \\boxed{{...}}."
         )
 
     def _strip_thought_traces(self, response: str) -> str:

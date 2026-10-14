@@ -71,7 +71,7 @@ class MultipleChoiceTask:
             f"Question: {query.prompt}\n\n"
             f"Choices:\n"
             f"{choices_text}\n\n"
-            f"Provide your step-by-step reasoning, then state your final answer in the format 'Final Answer: [Letter]'."
+            f"Analyze the choices step-by-step without repeating statements. State your final answer in the format 'Final Answer: [Letter]'."
         )
 
     def _strip_thought_traces(self, response: str) -> str:
