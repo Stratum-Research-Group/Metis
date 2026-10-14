@@ -335,8 +335,14 @@ def verify_runtime_dependencies(
     except ImportError as e:
         raise DependencyOriginError(f"Failed to import core dependency: {e}") from e
 
-    lthcm_file = Path(lthcm.__file__).resolve()
-    dianoia_file = Path(dianoia.__file__).resolve()
+    lthcm_raw = getattr(lthcm, "__file__", None) or (lthcm.__path__[0] if hasattr(lthcm, "__path__") else None)
+    dianoia_raw = getattr(dianoia, "__file__", None) or (dianoia.__path__[0] if hasattr(dianoia, "__path__") else None)
+    if not lthcm_raw or not dianoia_raw:
+        raise DependencyOriginError("Could not resolve filesystem path for imported core dependency lthcm or dianoia.")
+
+    lthcm_file = Path(lthcm_raw).resolve()
+    dianoia_file = Path(dianoia_raw).resolve()
+
 
     # Check origin
     if expected_lthcm_root not in lthcm_file.parents and lthcm_file != expected_lthcm_root:

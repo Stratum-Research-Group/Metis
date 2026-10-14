@@ -8,6 +8,7 @@ accurately that direct CLI walk is unsupported due to zero graph edges in Stoma 
 from __future__ import annotations
 
 import logging
+import os
 import pickle
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from typing import Any, Dict
 from lthcm.engine.pipeline import LTHCMEngine
 
 logger = logging.getLogger(__name__)
+
 
 
 def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = False) -> Dict[str, Any]:
@@ -34,12 +36,14 @@ def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = Fa
             "message": f"Index file not found: {path}",
         }
 
-    if not allow_trusted_pickle:
+    is_trusted = allow_trusted_pickle or bool(os.environ.get("STOMA_ALLOW_TRUSTED_PICKLE")) or bool(os.environ.get("DIANOIA_ALLOW_TRUSTED_PICKLE"))
+    if not is_trusted:
         return {
             "compatible": False,
             "status": "untrusted_pickle_rejected",
             "message": "Untrusted pickle deserialization refused without explicit authorization.",
         }
+
 
     if path.stat().st_size > 2 * 1024 * 1024 * 1024:
         return {

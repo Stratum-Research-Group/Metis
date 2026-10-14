@@ -473,6 +473,7 @@ class StomaIndexer:
                     index_path=self.config.index_path,
                     embedder=self.embedder,
                     manifest=manifest,
+                    allow_trusted_pickle=True,
                 )
                 # Save as generation 1
                 self.manifest = manifest
@@ -570,6 +571,8 @@ class StomaIndexer:
                 index_path=idx_path,
                 embedder=self.embedder,
                 manifest=manifest,
+                expected_index_hash=expected_index_hash,
+                allow_trusted_pickle=True,
             )
             adapter.validate_generation_integrity()
 

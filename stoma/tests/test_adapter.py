@@ -64,7 +64,11 @@ def test_adapter_pickle_serialization(shared_embedder, temp_workspace):
     adapter.save(save_path)
     assert save_path.is_file()
 
-    loaded_adapter = StomaLTHCMAdapter.load(save_path, embedder=shared_embedder)
+    with pytest.raises(PermissionError, match="Untrusted pickle deserialization is prohibited"):
+        StomaLTHCMAdapter.load(save_path, embedder=shared_embedder, allow_trusted_pickle=False)
+
+    loaded_adapter = StomaLTHCMAdapter.load(save_path, embedder=shared_embedder, allow_trusted_pickle=True)
     assert isinstance(loaded_adapter.engine, LTHCMEngine)
     assert loaded_adapter.engine.d_model == shared_embedder.d_model
     assert loaded_adapter.engine.num_facets == 1
+

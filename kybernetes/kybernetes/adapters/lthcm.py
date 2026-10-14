@@ -144,6 +144,19 @@ class LTHCMAdapter:
         if isinstance(passages_data, dict):
             for pid, pdata in passages_data.items():
                 text_content = pdata.get("text", pdata.get("chunk_text", ""))
+                if not text_content and "rel_path" in pdata:
+                    root_p = Path(pdata.get("root_path", root_str))
+                    src_file = root_p / pdata["rel_path"]
+                    if src_file.is_file() and "location" in pdata:
+                        loc = pdata["location"]
+                        s_line = loc.get("start_line", loc.get("line_start", 1))
+                        e_line = loc.get("end_line", loc.get("line_end", s_line))
+                        try:
+                            with open(src_file, "r", encoding="utf-8", errors="replace") as sf:
+                                lines = sf.readlines()
+                                text_content = "".join(lines[s_line - 1 : e_line]).strip()
+                        except Exception:
+                            pass
                 created = pdata.get("ingested_at", pdata.get("created_epoch"))
                 loaded.append({
                     "passage_id": pid,
@@ -156,6 +169,19 @@ class LTHCMAdapter:
         elif isinstance(passages_data, list):
             for item in passages_data:
                 text_content = item.get("text", item.get("chunk_text", ""))
+                if not text_content and "rel_path" in item:
+                    root_p = Path(item.get("root_path", root_str))
+                    src_file = root_p / item["rel_path"]
+                    if src_file.is_file() and "location" in item:
+                        loc = item["location"]
+                        s_line = loc.get("start_line", loc.get("line_start", 1))
+                        e_line = loc.get("end_line", loc.get("line_end", s_line))
+                        try:
+                            with open(src_file, "r", encoding="utf-8", errors="replace") as sf:
+                                lines = sf.readlines()
+                                text_content = "".join(lines[s_line - 1 : e_line]).strip()
+                        except Exception:
+                            pass
                 created = item.get("ingested_at", item.get("created_epoch"))
                 loaded.append({
                     "passage_id": item.get("passage_id", f"p_{len(loaded)}"),
@@ -165,6 +191,7 @@ class LTHCMAdapter:
                     "keywords": item.get("keywords", text_content.lower().split()),
                     "created_epoch": float(created) if created is not None else None,
                 })
+
 
         if not loaded or any(not p["text"].strip() for p in loaded):
             raise ValueError(f"Corrupted passage records without text in memory root: {root_str}")

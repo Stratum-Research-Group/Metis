@@ -53,8 +53,11 @@ Thumbs.db
 *.log
 logs/
 *.db
+
+.stoma/
 data/
 !dokime/src/dokime/tasks/data/
+
 
 
 

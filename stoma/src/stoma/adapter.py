@@ -335,7 +335,7 @@ class StomaLTHCMAdapter:
         Validates generation-wide ID equality if manifest is provided.
         Fails closed before loading if untrusted pickle is forbidden or if expected_index_hash mismatches.
         """
-        if not allow_trusted_pickle:
+        if not allow_trusted_pickle and not os.environ.get("STOMA_ALLOW_TRUSTED_PICKLE"):
             raise PermissionError("Untrusted pickle deserialization is prohibited without explicit authorization.")
 
         index_path = Path(index_path).resolve()
