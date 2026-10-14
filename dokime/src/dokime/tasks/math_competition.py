@@ -11,7 +11,7 @@ from dokime.tasks.protocol import Query
 
 
 class AIMECompetitionMathTask:
-    """AIME and high-school Olympiad competition mathematics benchmark task."""
+    """AIME and high-school Olympiad competition mathematics benchmark task (Set 1)."""
 
     task_id: str = "aime_math"
 
@@ -85,7 +85,6 @@ class AIMECompetitionMathTask:
         boxed_matches = re.findall(r"\\boxed\{([^{}]+)\}", clean)
         if boxed_matches:
             val = boxed_matches[-1].strip()
-            # Clean common formatting
             val = re.sub(r"\\text\{([^}]+)\}", r"\1", val)
             val = re.sub(r"[\$,\s]", "", val)
             num_m = re.search(r"-?\d+(?:\.\d+)?", val)
@@ -111,7 +110,7 @@ class AIMECompetitionMathTask:
         if ans_matches:
             return ans_matches[-1].group(1).strip()
 
-        # 4. Fallback: inspect the final lines for the trailing integer
+        # 4. Fallback: inspect the final lines for trailing integer
         lines = [line.strip() for line in clean.splitlines() if line.strip()]
         if lines:
             for line in reversed(lines[-3:]):
@@ -127,7 +126,6 @@ class AIMECompetitionMathTask:
         if pred is None:
             return 0.0
 
-        # Try floating point equality first
         try:
             if abs(float(pred) - float(query.expected)) < 1e-6:
                 return 1.0
@@ -135,3 +133,14 @@ class AIMECompetitionMathTask:
             pass
 
         return 1.0 if str(pred).strip() == str(query.expected).strip() else 0.0
+
+
+class AIMECompetitionMathV2Task(AIMECompetitionMathTask):
+    """AIME and high-school Olympiad competition mathematics benchmark task (Set 2 - Fresh Unseen)."""
+
+    task_id: str = "aime_math_v2"
+
+    def __init__(self, dataset_path: Path | None = None) -> None:
+        if dataset_path is None:
+            dataset_path = Path(__file__).parent / "data" / "aime_math_v2.json"
+        super().__init__(dataset_path=dataset_path)

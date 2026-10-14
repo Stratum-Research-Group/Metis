@@ -1,0 +1,122 @@
+[
+  {
+    "id": "epist_001",
+    "prompt": "Given the premises: 'All Australian swans are black' and 'Socrates owns a bird in Athens that is white', does it follow logically by modus tollens that Socrates's bird is not an Australian swan?",
+    "choices": {
+      "A": "Yes, because if it were an Australian swan it would be black, but it is white, so it cannot be an Australian swan",
+      "B": "No, because modus tollens cannot be applied to universal categorical propositions",
+      "C": "No, because the existence of white birds invalidates the first premise",
+      "D": "Yes, but only under the assumption that Socrates is an Athenian resident"
+    },
+    "expected": "A",
+    "metadata": {"type": "Epistemic Syllogism", "domain": "Formal Deduction"}
+  },
+  {
+    "id": "epist_002",
+    "prompt": "A famous algebraic sequence claims to prove that 1 = 2:\n1. Let a = b.\n2. a^2 = a*b\n3. a^2 - b^2 = a*b - b^2\n4. (a - b)*(a + b) = b*(a - b)\n5. a + b = b\n6. b + b = b => 2*b = b\n7. 2 = 1.\nWhere is the exact mathematical fallacy located in this sequence?",
+    "choices": {
+      "A": "Step 3: Subtracting b^2 from both sides changes the equation's truth value",
+      "B": "Step 4: The difference of squares factorization is algebraic error",
+      "C": "Step 5: Dividing both sides by (a - b) divides by zero since a = b",
+      "D": "Step 6: Substituting b for a violates the identity principle"
+    },
+    "expected": "C",
+    "metadata": {"type": "Mathematical Fallacy", "domain": "Algebra"}
+  },
+  {
+    "id": "epist_003",
+    "prompt": "Why does quantum entanglement between spacelike-separated particles NOT violate special relativity's prohibition against superluminal signaling?",
+    "choices": {
+      "A": "The local reduced density matrix of each subsystem is completely independent of the measurement basis chosen at the remote subsystem",
+      "B": "Entanglement information travels backward in time via tachyonic gauge bosons, conserving causality",
+      "C": "Quantum mechanics overrides special relativity only in non-inertial frames",
+      "D": "The wave function collapse propagates strictly at the speed of light in vacuum"
+    },
+    "expected": "A",
+    "metadata": {"type": "Scientific Trap", "domain": "Quantum Physics"}
+  },
+  {
+    "id": "epist_004",
+    "prompt": "Evaluate the syllogism: 'No reptiles have fur. All snakes are reptiles. Therefore, some snakes have fur.' What formal logical flaw is present?",
+    "choices": {
+      "A": "Fallacy of illicit minor",
+      "B": "Direct contradiction with the universal negative premise (No reptiles have fur)",
+      "C": "Fallacy of the undistributed middle",
+      "D": "Affirming the consequent"
+    },
+    "expected": "B",
+    "metadata": {"type": "Formal Fallacy", "domain": "Categorical Logic"}
+  },
+  {
+    "id": "epist_005",
+    "prompt": "A query states: 'Since Thomas Jefferson was the primary author of the United States Constitution in Philadelphia during the summer of 1787, what was his central compromise with James Madison?' What is the fatal historical flaw embedded in this premise?",
+    "choices": {
+      "A": "Thomas Jefferson was in Paris serving as minister to France in 1787 and did not attend the Constitutional Convention or author the Constitution",
+      "B": "James Madison boycotted the 1787 convention due to disagreements over federalism",
+      "C": "The Constitutional Convention occurred in New York City, not Philadelphia",
+      "D": "The Constitution was authored in 1776 rather than 1787"
+    },
+    "expected": "A",
+    "metadata": {"type": "False Presupposition", "domain": "Historical Facts"}
+  },
+  {
+    "id": "epist_006",
+    "prompt": "A text claims: 'Because the speed of light in vacuum is c, when light enters water (n = 1.33), individual photons physically slow down to c / 1.33 because their effective mass increases.' What is the true physical description of light propagation in a dielectric medium?",
+    "choices": {
+      "A": "Individual photons always travel at c; the slower macroscopic phase velocity c/n arises from the coherent superposition of the incident wave and secondary waves reradiated by atomic dipoles",
+      "B": "Photons acquire inertial mass through the Higgs mechanism in dense media, reducing their velocity",
+      "C": "The statement is correct; photons decelerate and gain relativistic mass proportional to n",
+      "D": "Photons undergo total internal reflection inside the atoms, elongating their path length"
+    },
+    "expected": "A",
+    "metadata": {"type": "Physical Mechanism Trap", "domain": "Electrodynamics"}
+  },
+  {
+    "id": "epist_007",
+    "prompt": "Analyze this argument: 'Every single component inside this high-performance computing node consumes less than 10 watts of power. Therefore, this entire computing node consumes less than 10 watts of power.' Which informal fallacy has been committed?",
+    "choices": {
+      "A": "Fallacy of Division",
+      "B": "Fallacy of Composition",
+      "C": "Post hoc ergo propter hoc",
+      "D": "Argumentum ad ignorantiam"
+    },
+    "expected": "B",
+    "metadata": {"type": "Informal Fallacy", "domain": "Logical Reasoning"}
+  },
+  {
+    "id": "epist_008",
+    "prompt": "Is the following assertion true or false? 'An algorithm with worst-case time complexity O(N^2) will always take longer to execute on a concrete dataset of size N = 1,000 than an algorithm with worst-case time complexity O(N log N).'",
+    "choices": {
+      "A": "True, because N^2 asymptotically dominates N log N for all positive integers",
+      "B": "False, because Big-O notation suppresses constant factors and lower-order terms which can make the O(N^2) algorithm faster for finite N",
+      "C": "True, because 1,000^2 is 1,000,000 operations whereas 1,000 log2(1,000) is approximately 10,000 operations",
+      "D": "False, but only if the machine runs on a distributed multi-threaded cluster"
+    },
+    "expected": "B",
+    "metadata": {"type": "Asymptotic Trap", "domain": "Computer Science"}
+  },
+  {
+    "id": "epist_009",
+    "prompt": "Consider the deduction: 'If an operating system process holds a mutex, it cannot be interrupted by the scheduler. Process P was not interrupted by the scheduler. Therefore, Process P holds a mutex.' What formal deductive error is present here?",
+    "choices": {
+      "A": "Denying the antecedent",
+      "B": "Affirming the consequent",
+      "C": "Valid application of Modus Ponens",
+      "D": "Circular reasoning"
+    },
+    "expected": "B",
+    "metadata": {"type": "Formal Deductive Error", "domain": "Systems Logic"}
+  },
+  {
+    "id": "epist_010",
+    "prompt": "A query asks: 'Explain why the Moon does not fall toward Earth despite Earth's strong gravitational attraction pulling on it.' What fundamental physical misconception is embedded in this question?",
+    "choices": {
+      "A": "The Moon actually IS continuously falling toward Earth under gravity, but its high tangential velocity causes its falling trajectory to match Earth's curvature, keeping it in orbit",
+      "B": "Earth's gravitational field does not reach lunar orbital distance",
+      "C": "A centrifugal anti-gravity force balances gravity, canceling all downward acceleration",
+      "D": "The Sun's gravitational pull exactly cancels the Earth's pull on the Moon"
+    },
+    "expected": "A",
+    "metadata": {"type": "Premise Inversion", "domain": "Orbital Mechanics"}
+  }
+]

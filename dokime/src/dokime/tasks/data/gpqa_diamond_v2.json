@@ -1,0 +1,182 @@
+[
+  {
+    "id": "gpqa2_001",
+    "prompt": "In the CHSH formulation of Bell's theorem, what is the maximum theoretical quantum correlation value (Tsirelson's bound) achievable by any entangled quantum state under optimal measurement settings?",
+    "choices": {
+      "A": "4.0",
+      "B": "2 * sqrt(2)",
+      "C": "2.0",
+      "D": "sqrt(2)"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Quantum Information", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa2_002",
+    "prompt": "According to the Van 't Hoff relation d(ln K)/dT = Delta H / (R * T^2), how does the equilibrium constant K of an endothermic chemical reaction (Delta H > 0) behave as absolute temperature T increases?",
+    "choices": {
+      "A": "K decreases monotonically",
+      "B": "K remains strictly invariant because Delta G = 0 at equilibrium",
+      "C": "K increases monotonically",
+      "D": "K approaches zero exponentially"
+    },
+    "expected": "C",
+    "metadata": {"domain": "Thermodynamics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_003",
+    "prompt": "In an idealized standard alpha-helix of a globular protein, hydrogen bonding occurs between the backbone carbonyl oxygen (C=O) of amino acid residue i and the backbone amide nitrogen hydrogen (N-H) of residue:",
+    "choices": {
+      "A": "i + 4",
+      "B": "i + 3",
+      "C": "i + 5",
+      "D": "i + 2"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Biochemistry", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_004",
+    "prompt": "In the microscopic BCS (Bardeen-Cooper-Schrieffer) theory of conventional low-temperature superconductivity, what physical mechanism mediates the attractive pairing potential between electrons that gives rise to Cooper pairs?",
+    "choices": {
+      "A": "Direct unscreened Coulomb attraction",
+      "B": "Exchange of virtual acoustic lattice phonons",
+      "C": "Antiferromagnetic spin fluctuation paramagnons",
+      "D": "Gluon exchange fields"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Condensed Matter Physics", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa2_005",
+    "prompt": "When enantiomerically pure (R)-2-bromobutane undergoes an S_N2 nucleophilic substitution reaction with sodium cyanide (NaCN) in dimethyl sulfoxide (DMSO), what is the absolute stereochemical configuration of the resulting 2-methylbutanenitrile product?",
+    "choices": {
+      "A": "Racemic mixture (equimolar R and S)",
+      "B": "Retention of configuration yielding (R)-stereochemistry",
+      "C": "A meso diastereomer",
+      "D": "Complete Walden inversion yielding (S)-stereochemistry"
+    },
+    "expected": "D",
+    "metadata": {"domain": "Organic Chemistry", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_006",
+    "prompt": "A covalently closed circular plasmid double-stranded DNA molecule has a linking number Lk = 200 and a helical twist Tw = 205. What is the value of the writhe Wr, and what topological state does this describe?",
+    "choices": {
+      "A": "Wr = -5; negatively supercoiled",
+      "B": "Wr = +5; positively supercoiled",
+      "C": "Wr = 0; completely relaxed",
+      "D": "Wr = -405; toroidally relaxed"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Molecular Biology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_007",
+    "prompt": "For a classical 1D particle described by the Lagrangian L(q, q_dot) = (1/2)*m*q_dot^2 - V(q), what is the canonical generalized momentum p conjugate to generalized coordinate q?",
+    "choices": {
+      "A": "p = -dV/dq",
+      "B": "p = m * q_dot",
+      "C": "p = (1/2) * m * q_dot",
+      "D": "p = m * q * q_dot"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Classical Mechanics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_008",
+    "prompt": "According to the Rayleigh criterion for a circular aperture of diameter D observing electromagnetic radiation of wavelength lambda, what is the minimum angular resolution theta between two barely resolvable point sources?",
+    "choices": {
+      "A": "theta = 0.61 * D / lambda",
+      "B": "theta = lambda / (2 * D)",
+      "C": "theta = 1.22 * lambda / D",
+      "D": "theta = 2.44 * lambda / D"
+    },
+    "expected": "C",
+    "metadata": {"domain": "Optics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_009",
+    "prompt": "In GPCR signal transduction through the G_q/11 alpha subunit, which membrane-associated enzyme is directly activated to hydrolyze phosphatidylinositol 4,5-bisphosphate (PIP_2) into second messengers IP_3 and DAG?",
+    "choices": {
+      "A": "Adenylyl cyclase",
+      "B": "Protein kinase A (PKA)",
+      "C": "Cyclic nucleotide phosphodiesterase",
+      "D": "Phospholipase C-beta (PLC-beta)"
+    },
+    "expected": "D",
+    "metadata": {"domain": "Cell Biology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_010",
+    "prompt": "For a radioactive isotope with decay constant lambda and mean lifetime tau = 1 / lambda, what is the exact mathematical expression for its radioactive half-life t_1/2?",
+    "choices": {
+      "A": "t_1/2 = tau * ln(2)",
+      "B": "t_1/2 = tau / ln(2)",
+      "C": "t_1/2 = 2 * tau",
+      "D": "t_1/2 = tau^2"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Nuclear Physics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_011",
+    "prompt": "In germinal center B cell affinity maturation, which specific enzyme initiates both somatic hypermutation and class-switch recombination by targeted deamination of cytidine to uracil in immunoglobulin variable and switch regions?",
+    "choices": {
+      "A": "Terminal deoxynucleotidyl transferase (TdT)",
+      "B": "Activation-induced cytidine deaminase (AID)",
+      "C": "RAG1/RAG2 endonuclease complex",
+      "D": "DNA polymerase mu"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Immunology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_012",
+    "prompt": "What is the exact Schwarzschild event horizon radius R_s for a static, non-rotating, spherically symmetric black hole of mass M in general relativity?",
+    "choices": {
+      "A": "R_s = G * M / (2 * c^2)",
+      "B": "R_s = G * M / c^2",
+      "C": "R_s = 2 * G * M / c^2",
+      "D": "R_s = 4 * pi * G * M / c^2"
+    },
+    "expected": "C",
+    "metadata": {"domain": "General Relativity", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_013",
+    "prompt": "Which combination of electromagnetic field vectors is a strictly invariant Lorentz scalar under proper orthochronous Lorentz transformations between arbitrary inertial reference frames?",
+    "choices": {
+      "A": "E^2 - c^2 * B^2",
+      "B": "E^2 + c^2 * B^2",
+      "C": "|E x B|",
+      "D": "E + c * B"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Classical Electrodynamics", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa2_014",
+    "prompt": "For an allosteric enzyme displaying positive homotropic cooperativity in substrate binding, what condition must the Hill coefficient n_H satisfy?",
+    "choices": {
+      "A": "n_H = 1",
+      "B": "0 < n_H < 1",
+      "C": "n_H > 1",
+      "D": "n_H = 0"
+    },
+    "expected": "C",
+    "metadata": {"domain": "Enzymology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa2_015",
+    "prompt": "In an ideal intrinsic semiconductor at thermal equilibrium where the effective densities of states in the conduction band (N_c) and valence band (N_v) are identical, where is the Fermi energy level E_F located relative to the conduction band edge E_c and valence band edge E_v?",
+    "choices": {
+      "A": "Coincident with the top of the valence band E_v",
+      "B": "Exactly midway between the band edges: E_F = (E_c + E_v) / 2",
+      "C": "Coincident with the bottom of the conduction band E_c",
+      "D": "25 meV below the conduction band edge"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Solid State Physics", "difficulty": "Graduate"}
+  }
+]

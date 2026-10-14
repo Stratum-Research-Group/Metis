@@ -15,3 +15,15 @@ class ZebraHardLogicTask(MultipleChoiceTask):
         if dataset_path is None:
             dataset_path = Path(__file__).parent / "data" / "zebra_hard_logic.json"
         super().__init__(dataset_path=dataset_path)
+
+
+class ZebraHardLogicV2Task(MultipleChoiceTask):
+    """Set 2: Fresh unseen zebra logic and constraint deduction puzzles."""
+
+    task_id: str = "zebra_hard_logic_v2"
+
+    def __init__(self, dataset_path: Path | None = None) -> None:
+        if dataset_path is None:
+            dataset_path = Path(__file__).parent / "data" / "zebra_hard_logic_v2.json"
+        super().__init__(dataset_path=dataset_path)
+

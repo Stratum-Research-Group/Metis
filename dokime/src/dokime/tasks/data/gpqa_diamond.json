@@ -1,0 +1,182 @@
+[
+  {
+    "id": "gpqa_001",
+    "prompt": "Consider a spin-1/2 particle placed in a constant, uniform magnetic field B = B_0 z-hat. At time t = 0, the particle is in the normalized eigenstate of S_x with eigenvalue +hbar/2: |psi(0)> = (|up> + |down>) / sqrt(2). Under the standard Hamiltonian H = -gamma B_0 S_z, what is the expectation value <S_x(t)> at any subsequent time t? (Let omega_0 = gamma B_0).",
+    "choices": {
+      "A": "(hbar / 2) * cos(omega_0 * t)",
+      "B": "(hbar / 2) * sin(omega_0 * t)",
+      "C": "0",
+      "D": "hbar / 2"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Quantum Mechanics", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa_002",
+    "prompt": "During eukaryotic translation termination, which specific release factor directly recognizes all three standard stop codons (UAA, UAG, and UGA) in mRNA?",
+    "choices": {
+      "A": "eRF3",
+      "B": "eRF1",
+      "C": "RF1",
+      "D": "EF-Tu"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Molecular Biology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_003",
+    "prompt": "According to the Woodward-Hoffmann conservation of orbital symmetry rules, through what pathway does the thermal electrocyclic ring closure of a conjugated 6-pi electron triene (such as (2E,4Z,6E)-octa-2,4,6-triene) proceed, and what is the relative stereochemical relationship of the methyl substituents in the resulting cyclohexadiene?",
+    "choices": {
+      "A": "Conrotatory pathway, yielding a trans-disubstituted product",
+      "B": "Conrotatory pathway, yielding a cis-disubstituted product",
+      "C": "Disrotatory pathway, yielding a cis-disubstituted product",
+      "D": "Disrotatory pathway, yielding a trans-disubstituted product"
+    },
+    "expected": "C",
+    "metadata": {"domain": "Organic Chemistry", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa_004",
+    "prompt": "For a classical ideal gas composed of N non-interacting ultra-relativistic particles with single-particle dispersion relation E = c * p in three spatial dimensions at absolute temperature T, what is the total internal thermal energy U of the system according to classical statistical mechanics?",
+    "choices": {
+      "A": "(3/2) * N * k_B * T",
+      "B": "(5/2) * N * k_B * T",
+      "C": "N * k_B * T",
+      "D": "3 * N * k_B * T"
+    },
+    "expected": "D",
+    "metadata": {"domain": "Statistical Mechanics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_005",
+    "prompt": "In mitochondrial genetics, what is the specific biological term for the cellular state in which a single cell contains a mixed population of both pathogenic mutant mitochondrial DNA and normal wild-type mitochondrial DNA molecules?",
+    "choices": {
+      "A": "Heteroplasmy",
+      "B": "Homoplasmy",
+      "C": "Epistasis",
+      "D": "Incomplete penetrance"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Genetics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_006",
+    "prompt": "Which fundamental physical interaction maximally violates both Parity (P) and Charge Conjugation (C) symmetry and is mediated by massive spin-1 vector gauge bosons?",
+    "choices": {
+      "A": "Strong interaction",
+      "B": "Weak interaction",
+      "C": "Electromagnetic interaction",
+      "D": "Higgs Yukawa coupling"
+    },
+    "expected": "B",
+    "metadata": {"domain": "High Energy Physics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_007",
+    "prompt": "In classical Michaelis-Menten enzyme kinetics, how does the addition of a reversible competitive inhibitor affect the observed maximum velocity (V_max) and apparent Michaelis constant (K_m)?",
+    "choices": {
+      "A": "V_max decreases; apparent K_m remains unchanged",
+      "B": "V_max decreases; apparent K_m decreases",
+      "C": "V_max remains unchanged; apparent K_m increases",
+      "D": "Both V_max and apparent K_m increase proportionally"
+    },
+    "expected": "C",
+    "metadata": {"domain": "Biochemistry", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_008",
+    "prompt": "In an isotropic non-magnetic dielectric medium, what fundamental symmetry reason prevents second-harmonic generation (SHG) from occurring in bulk centrosymmetric materials within the electric dipole approximation?",
+    "choices": {
+      "A": "Photon momentum conservation forbids frequency doubling in crystals",
+      "B": "The second-order nonlinear susceptibility tensor chi^(2) vanishes identically under spatial inversion symmetry",
+      "C": "The Kramers-Kronig relation forces the imaginary refractive index to diverge at 2*omega",
+      "D": "The Poynting vector is zero for even-order harmonic waves"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Nonlinear Optics", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa_009",
+    "prompt": "Which eukaryotic multi-protein protease complex is responsible for the ATP-dependent degradation of proteins tagged with canonical Lys48-linked polyubiquitin chains?",
+    "choices": {
+      "A": "Spliceosome",
+      "B": "Lysosomal cathepsins",
+      "C": "Autophagosome",
+      "D": "26S Proteasome"
+    },
+    "expected": "D",
+    "metadata": {"domain": "Cell Biology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_010",
+    "prompt": "For an ideal gas vapor in equilibrium with its condensed liquid phase where the vapor molar volume is much greater than that of the liquid (V_vapor >> V_liquid), what is the slope of the curve when plotting natural logarithm of equilibrium vapor pressure ln(P) versus inverse absolute temperature (1/T)?",
+    "choices": {
+      "A": "-Delta H_vap / R",
+      "B": "+Delta H_vap / R",
+      "C": "-Delta S_vap / R",
+      "D": "-R / Delta H_vap"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Thermodynamics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_011",
+    "prompt": "In the band theory of 1D crystalline solids with lattice constant a, what are the wavevector boundaries defining the first Brillouin zone in reciprocal space?",
+    "choices": {
+      "A": "k = -2*pi/a and k = +2*pi/a",
+      "B": "k = -pi/a and k = +pi/a",
+      "C": "k = -pi/(2*a) and k = +pi/(2*a)",
+      "D": "k = 0 and k = pi/a"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Solid State Physics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_012",
+    "prompt": "In an octahedral coordination complex governed by crystal field theory, the five degenerate d-orbitals of the central transition metal ion split into which two symmetry-designated subgroups?",
+    "choices": {
+      "A": "Lower energy e_g (triply degenerate) and higher energy t_2g (doubly degenerate)",
+      "B": "Lower energy a_1g and higher energy t_1u",
+      "C": "Lower energy t_2g (triply degenerate) and higher energy e_g (doubly degenerate)",
+      "D": "Two non-degenerate levels and three doubly-degenerate levels"
+    },
+    "expected": "C",
+    "metadata": {"domain": "Inorganic Chemistry", "difficulty": "PhD"}
+  },
+  {
+    "id": "gpqa_013",
+    "prompt": "During the action potential of a mammalian neuron, which specific ion channel is primarily responsible for the rapid membrane repolarization phase immediately following peak depolarization?",
+    "choices": {
+      "A": "Voltage-gated potassium (K+) channels",
+      "B": "Voltage-gated sodium (Na+) channels",
+      "C": "Ligand-gated chloride (Cl-) channels",
+      "D": "Voltage-gated calcium (Ca2+) channels"
+    },
+    "expected": "A",
+    "metadata": {"domain": "Neurobiology", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_014",
+    "prompt": "In a Carnot cycle operating between a hot reservoir at absolute temperature T_H and a cold reservoir at absolute temperature T_C, what is the maximum theoretical thermodynamic efficiency eta?",
+    "choices": {
+      "A": "1 - (T_H / T_C)",
+      "B": "(T_H - T_C) / T_C",
+      "C": "T_C / T_H",
+      "D": "1 - (T_C / T_H)"
+    },
+    "expected": "D",
+    "metadata": {"domain": "Thermodynamics", "difficulty": "Graduate"}
+  },
+  {
+    "id": "gpqa_015",
+    "prompt": "What is the theoretical maximum mass of an ideal non-rotating white dwarf star supported by relativistic degenerate electron pressure (the Chandrasekhar mass limit)?",
+    "choices": {
+      "A": "Approximately 3.0 solar masses",
+      "B": "Approximately 1.4 solar masses",
+      "C": "Approximately 0.5 solar masses",
+      "D": "Approximately 5.2 solar masses"
+    },
+    "expected": "B",
+    "metadata": {"domain": "Astrophysics", "difficulty": "Graduate"}
+  }
+]

@@ -86,3 +86,20 @@ def test_epistemic_adversarial_task():
     )
     assert task.extract_prediction(q1, resp) == "A"
     assert task.score(q1, resp) == 1.0
+
+
+def test_v2_tasks_loading_and_scoring():
+    for task_name, expected_count in [
+        ("gpqa_diamond_v2", 15),
+        ("aime_math_v2", 10),
+        ("zebra_hard_logic_v2", 10),
+        ("epistemic_adversarial_v2", 10),
+    ]:
+        task = get_task(task_name)
+        queries = task.load()
+        assert len(queries) == expected_count, f"{task_name} count mismatch"
+        for q in queries:
+            assert q.id
+            assert q.prompt
+            assert q.expected
+

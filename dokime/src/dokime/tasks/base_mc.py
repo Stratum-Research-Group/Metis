@@ -165,6 +165,18 @@ class MultipleChoiceTask:
                 if cand:
                     return cand
 
+        # 4b. Explicit assertion: "Choice X is correct" or "Option X is the correct answer"
+        pat_choice_is_correct = re.compile(
+            r"(?:(?:thus|therefore|hence|so)\s*,?\s*)?(?:choice|option)\s*([A-Za-z])\s+is\s+(?:the\s+)?correct",
+            re.IGNORECASE,
+        )
+        choice_matches = list(pat_choice_is_correct.finditer(clean))
+        if choice_matches:
+            for m in reversed(choice_matches):
+                cand = m.group(1).upper()
+                if cand in query.choices:
+                    return cand
+
         # 5. Look in the final line for any isolated choice letter
         lines = [line.strip() for line in clean.splitlines() if line.strip()]
         if lines:

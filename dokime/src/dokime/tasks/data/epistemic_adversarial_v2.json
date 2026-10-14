@@ -1,0 +1,122 @@
+[
+  {
+    "id": "epist2_001",
+    "prompt": "An algebraic argument claims that the sum of all powers of 2 equals -1 by evaluating the geometric series formula: 1 + 2 + 4 + 8 + ... = 1 / (1 - 2) = -1. What is the precise mathematical flaw in this assertion?",
+    "choices": {
+      "A": "The common ratio r = 2 lies outside the open unit disk (|r| < 1), rendering the infinite series divergent in the real numbers",
+      "B": "The formula 1/(1-r) only applies to complex numbers with non-zero imaginary parts",
+      "C": "The sum actually equals -1/12 under Ramanujan summation",
+      "D": "The initial term a_0 was set to 1 instead of 2"
+    },
+    "expected": "A",
+    "metadata": {"type": "Analytic Continuation Trap", "domain": "Real Analysis"}
+  },
+  {
+    "id": "epist2_002",
+    "prompt": "A statement claims: 'Astronauts float inside the International Space Station because at an altitude of 400 km, Earth's gravitational pull has dropped to essentially zero.' What is the true physical reality of low Earth orbit?",
+    "choices": {
+      "A": "Earth's magnetic dipole levitates the station via Meissner diamagnetism",
+      "B": "Earth's gravity at 400 km is still approximately 90% of surface gravity; weightlessness results from continuous orbital free-fall",
+      "C": "The statement is correct; gravitational fields do not penetrate past 100 km",
+      "D": "Centrifugal anti-gravity particles counteract Earth's gravitational force"
+    },
+    "expected": "B",
+    "metadata": {"type": "Physical Misconception", "domain": "Orbital Mechanics"}
+  },
+  {
+    "id": "epist2_003",
+    "prompt": "A history query asks: 'During the famous 1879 telephone debate in Boston between Alexander Graham Bell and Albert Einstein, what was Einstein's principal critique of Bell's electromagnetic transmitter?' What is the central historical flaw in this question's premise?",
+    "choices": {
+      "A": "Alexander Graham Bell was dead by 1879",
+      "B": "The debate took place in New York City rather than Boston",
+      "C": "Albert Einstein was born in 1879 and was an infant during that year; no such debate ever occurred",
+      "D": "The telephone was patented by Thomas Edison, not Alexander Graham Bell"
+    },
+    "expected": "C",
+    "metadata": {"type": "Chronological Presupposition", "domain": "History of Science"}
+  },
+  {
+    "id": "epist2_004",
+    "prompt": "An evolutionary claim asserts: 'Ancestral giraffes acquired longer necks by stretching to browse high tree canopies, and this somatic elongation was directly transmitted to their offspring's genomes.' What fundamental genetic principle refutes this claim?",
+    "choices": {
+      "A": "The Central Dogma and Weismann barrier prevent acquired somatic structural changes from altering inherited germline DNA sequences",
+      "B": "Acacia trees did not exist during the Miocene epoch",
+      "C": "Neck length is governed exclusively by maternal mitochondrial tRNA mutations",
+      "D": "Vertebrates cannot synthesize collagen in elongated cervical vertebrae"
+    },
+    "expected": "A",
+    "metadata": {"type": "Teleological Fallacy", "domain": "Evolutionary Genetics"}
+  },
+  {
+    "id": "epist2_005",
+    "prompt": "Analyze the deductive logic: 'If a database query utilizes a B-tree index, its execution latency is strictly under 10 milliseconds. Query Q had an execution latency of 4 milliseconds. Therefore, Query Q definitely utilized a B-tree index.' What formal deductive error is committed?",
+    "choices": {
+      "A": "Denying the antecedent",
+      "B": "Valid application of Modus Ponens",
+      "C": "Affirming the consequent",
+      "D": "Illicit conversion of universal affirmative"
+    },
+    "expected": "C",
+    "metadata": {"type": "Formal Fallacy", "domain": "Deductive Logic"}
+  },
+  {
+    "id": "epist2_006",
+    "prompt": "An argument states: 'Living cells assemble highly ordered macromolecules from chaotic small molecules without increasing internal entropy, thereby violating the Second Law of Thermodynamics.' Why is this argument thermodynamically invalid?",
+    "choices": {
+      "A": "Living cells are open thermodynamic systems that export entropy to their surroundings, maintaining net positive universe entropy generation",
+      "B": "The Second Law of Thermodynamics only applies to closed mechanical steam cycles",
+      "C": "Macromolecules possess higher thermodynamic entropy than free amino acids",
+      "D": "Enzymes reverse thermodynamic arrow of time at physiological temperatures"
+    },
+    "expected": "A",
+    "metadata": {"type": "Thermodynamic Trap", "domain": "Statistical Thermodynamics"}
+  },
+  {
+    "id": "epist2_007",
+    "prompt": "A fair, unbiased coin has landed on Heads 10 consecutive times. A gambler bets heavily on Tails for the 11th toss, arguing that Tails is 'due' to restore the 50/50 balance. What error has the gambler committed?",
+    "choices": {
+      "A": "The Law of Truly Large Numbers",
+      "B": "The Gambler's Fallacy (assuming past independent coin tosses influence future independent probabilities)",
+      "C": "Regression to the mean implies the 11th toss is guaranteed to be Tails",
+      "D": "The coin must be biased if it landed on Heads 10 times"
+    },
+    "expected": "B",
+    "metadata": {"type": "Probabilistic Fallacy", "domain": "Probability Theory"}
+  },
+  {
+    "id": "epist2_008",
+    "prompt": "A technology article asserts: 'Quantum computers solve NP-complete optimization problems instantaneously because an N-qubit register tests all 2^N solution states in parallel.' What is the rigorous theoretical computer science reality?",
+    "choices": {
+      "A": "Quantum parallelism alone does not yield exponential speedups for NP-complete problems; measurement collapses superpositions, and BQP is not believed to contain NP-complete",
+      "B": "Quantum computers cannot execute any algorithm faster than classical Turing machines",
+      "C": "Qubits cannot represent boolean discrete logic states",
+      "D": "Shor's algorithm already solved the Traveling Salesperson Problem in polynomial time"
+    },
+    "expected": "A",
+    "metadata": {"type": "Complexity Theory Trap", "domain": "Quantum Computing"}
+  },
+  {
+    "id": "epist2_009",
+    "prompt": "Evaluate this debate tactic: 'Researcher X published a proof that transformer KV-cache memory scales linearly with sequence length. However, Researcher X was once reprimanded for academic tardiness, so his proof regarding KV-cache scaling must be rejected.' What fallacy is this?",
+    "choices": {
+      "A": "Straw Man Fallacy",
+      "B": "Begging the Question",
+      "C": "Ad Hominem (attacking the person's character rather than the mathematical validity of the proof)",
+      "D": "False Analogy"
+    },
+    "expected": "C",
+    "metadata": {"type": "Informal Fallacy", "domain": "Dialectical Logic"}
+  },
+  {
+    "id": "epist2_010",
+    "prompt": "The popular 'Equal Transit Time' theory claims: 'Air moving over the curved upper surface of a wing must reach the trailing edge at the exact same instant as air passing underneath, forcing upper air to travel faster and create Bernoulli lift.' What is the aerodynamic flaw in this explanation?",
+    "choices": {
+      "A": "Equal transit time is physically untrue; upper air travels much faster than required by transit equality and reaches the trailing edge significantly ahead of lower air",
+      "B": "Air over the upper surface actually travels slower than air below",
+      "C": "Bernoulli's equation cannot be applied to subsonic gases",
+      "D": "Airplane wings only create lift through Newton's third law, not pressure differences"
+    },
+    "expected": "A",
+    "metadata": {"type": "Aerodynamic Misconception", "domain": "Fluid Dynamics"}
+  }
+]

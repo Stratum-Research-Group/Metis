@@ -54,6 +54,9 @@ Thumbs.db
 logs/
 *.db
 data/
+!dokime/src/dokime/tasks/data/
+
+
 
 # Diagnostic artifacts
 geometry-run*/

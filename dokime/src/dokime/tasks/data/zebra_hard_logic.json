@@ -1,0 +1,122 @@
+[
+  {
+    "id": "zebra_001",
+    "prompt": "Five distinct houses stand in a row from left to right (positions 1, 2, 3, 4, 5). The Norwegian lives in House 1. The Norwegian lives next to the blue house. Milk is drunk in the middle house (House 3). The green house is immediately to the left of the white house, and coffee is drunk in the green house. What color is House 2?",
+    "choices": {
+      "A": "Red",
+      "B": "Blue",
+      "C": "Green",
+      "D": "Yellow"
+    },
+    "expected": "B",
+    "metadata": {"type": "Constraint Satisfaction", "domain": "Spatial Reasoning"}
+  },
+  {
+    "id": "zebra_002",
+    "prompt": "On an island of Knights (who always tell the truth) and Knaves (who always lie), you meet two inhabitants, Alex and Blair. Alex says: 'At least one of us is a Knave.' Blair says nothing. What are Alex and Blair?",
+    "choices": {
+      "A": "Both are Knaves",
+      "B": "Alex is a Knave and Blair is a Knight",
+      "C": "Alex is a Knight and Blair is a Knave",
+      "D": "Both are Knights"
+    },
+    "expected": "C",
+    "metadata": {"type": "Knights & Knaves", "domain": "Formal Logic"}
+  },
+  {
+    "id": "zebra_003",
+    "prompt": "Four runners—Alice, Bob, Charlie, and David—finished a race with no ties. Charlie finished ahead of Alice. Bob did not finish last. David finished immediately after Charlie. Alice finished ahead of Bob. What was the exact finishing order from 1st to 4th?",
+    "choices": {
+      "A": "Charlie, David, Alice, Bob",
+      "B": "Charlie, Alice, David, Bob",
+      "C": "David, Charlie, Alice, Bob",
+      "D": "Bob, Charlie, David, Alice"
+    },
+    "expected": "A",
+    "metadata": {"type": "Linear Ordering", "domain": "Combinatorial Logic"}
+  },
+  {
+    "id": "zebra_004",
+    "prompt": "Three boxes are labeled 'Apples', 'Oranges', and 'Apples and Oranges'. Every single box is known to be incorrectly labeled. You are allowed to draw exactly one fruit from exactly one box without looking inside. From which box must you draw to determine the true contents of all three boxes?",
+    "choices": {
+      "A": "The box labeled 'Apples'",
+      "B": "The box labeled 'Oranges'",
+      "C": "The box labeled 'Apples and Oranges'",
+      "D": "It is mathematically impossible with only one draw"
+    },
+    "expected": "C",
+    "metadata": {"type": "Information Logic", "domain": "Constraint Deduction"}
+  },
+  {
+    "id": "zebra_005",
+    "prompt": "Consider three prisoners: P1, P2, and P3, standing in a line all facing forward such that P3 can see P2 and P1, P2 can see P1, and P1 can see no one. There are 3 black hats and 2 white hats. The warden places a hat on each prisoner and hides the remaining two. The warden asks P3 if he knows his hat color; P3 says 'No'. Then P2 is asked; P2 says 'No'. What can P1 deduce with absolute certainty about his own hat color?",
+    "choices": {
+      "A": "P1 must be wearing a white hat",
+      "B": "P1 must be wearing a black hat",
+      "C": "P1 could be wearing either color with equal probability",
+      "D": "P1 cannot deduce his hat color without knowing P2's color"
+    },
+    "expected": "B",
+    "metadata": {"type": "Epistemic State Logic", "domain": "Common Knowledge"}
+  },
+  {
+    "id": "zebra_006",
+    "prompt": "Four suspect individuals (A, B, C, D) are interrogated. Exactly one of them committed the theft. A says: 'B did it.' B says: 'D did it.' C says: 'I did not do it.' D says: 'B lied when he said I did it.' If exactly one of the four statements is TRUE, who committed the theft?",
+    "choices": {
+      "A": "Suspect A",
+      "B": "Suspect B",
+      "C": "Suspect C",
+      "D": "Suspect D"
+    },
+    "expected": "C",
+    "metadata": {"type": "Truth-teller Contradiction", "domain": "Boolean Satisfiability"}
+  },
+  {
+    "id": "zebra_007",
+    "prompt": "A schedule of 5 tasks (V, W, X, Y, Z) must be executed sequentially on a single thread. The following dependencies exist: Task W must precede Task Y; Task X must immediately follow Task V; Task Z must precede Task V; Task Y cannot be the final task. Which task must execute in the 4th position?",
+    "choices": {
+      "A": "Task W",
+      "B": "Task X",
+      "C": "Task Y",
+      "D": "Task Z"
+    },
+    "expected": "C",
+    "metadata": {"type": "Topological Scheduling", "domain": "Constraint Logic"}
+  },
+  {
+    "id": "zebra_008",
+    "prompt": "In a family, each child has at least 3 brothers and at least 2 sisters. What is the minimum possible total number of children in this family?",
+    "choices": {
+      "A": "5 children",
+      "B": "6 children",
+      "C": "7 children",
+      "D": "8 children"
+    },
+    "expected": "C",
+    "metadata": {"type": "Numerical Pigeonhole", "domain": "Combinatorics"}
+  },
+  {
+    "id": "zebra_009",
+    "prompt": "You are given 9 identical-looking gold coins, exactly one of which is counterfeit and weighs slightly less than the other 8 genuine coins. Using a two-pan balance scale without weights, what is the minimum number of weighings guaranteed to identify the counterfeit coin in the worst case?",
+    "choices": {
+      "A": "1 weighing",
+      "B": "2 weighings",
+      "C": "3 weighings",
+      "D": "4 weighings"
+    },
+    "expected": "B",
+    "metadata": {"type": "Information Theory", "domain": "Ternary Search"}
+  },
+  {
+    "id": "zebra_010",
+    "prompt": "Three people (X, Y, Z) wear shirts colored Red, Green, or Blue, each wearing a different color. X says: 'I am not wearing Red.' Y says: 'I am wearing Green.' Z says: 'I am not wearing Blue.' If exactly one person is telling the truth, what color shirt is Z wearing?",
+    "choices": {
+      "A": "Red",
+      "B": "Green",
+      "C": "Blue",
+      "D": "Cannot be determined"
+    },
+    "expected": "C",
+    "metadata": {"type": "Constraint Satisfaction", "domain": "Deduction"}
+  }
+]

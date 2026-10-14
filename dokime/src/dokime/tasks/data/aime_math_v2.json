@@ -1,0 +1,62 @@
+[
+  {
+    "id": "aime2_001",
+    "prompt": "Find the number of ordered pairs of positive integers (m, n) such that m <= n and 1/m + 1/n = 1/20.",
+    "expected": "8",
+    "metadata": {"competition": "AIME", "domain": "Number Theory"}
+  },
+  {
+    "id": "aime2_002",
+    "prompt": "The polynomial Q(x) = x^3 - 12*x^2 + 44*x - c has three real roots that form an arithmetic progression. Find the value of c.",
+    "expected": "48",
+    "metadata": {"competition": "AIME", "domain": "Algebra"}
+  },
+  {
+    "id": "aime2_003",
+    "prompt": "Find the remainder when 3^2024 is divided by 13.",
+    "expected": "9",
+    "metadata": {"competition": "AIME", "domain": "Modular Arithmetic"}
+  },
+  {
+    "id": "aime2_004",
+    "prompt": "How many positive integers less than or equal to 1000 are divisible by neither 3 nor 5?",
+    "expected": "533",
+    "metadata": {"competition": "AIME", "domain": "Combinatorics"}
+  },
+  {
+    "id": "aime2_005",
+    "prompt": "Find the sum of all distinct real solutions x to the equation |x^2 - 8*x + 12| = 3.",
+    "expected": "16",
+    "metadata": {"competition": "AIME", "domain": "Algebra"}
+  },
+  {
+    "id": "aime2_006",
+    "prompt": "In a right-angled triangle with leg lengths 9 and 12, let r be the inradius. Compute the value of r^2.",
+    "expected": "9",
+    "metadata": {"competition": "AIME", "domain": "Geometry"}
+  },
+  {
+    "id": "aime2_007",
+    "prompt": "Compute the sum of the infinite series S = sum_{n=1}^infty n / (4^n). Express S as a fraction in simplest form p/q where p and q are coprime positive integers, and compute the value of p + q.",
+    "expected": "13",
+    "metadata": {"competition": "AIME", "domain": "Calculus / Series"}
+  },
+  {
+    "id": "aime2_008",
+    "prompt": "Find the smallest positive integer n such that n! ends in at least 28 zeros in base 10.",
+    "expected": "120",
+    "metadata": {"competition": "AIME", "domain": "Number Theory"}
+  },
+  {
+    "id": "aime2_009",
+    "prompt": "How many positive integer divisors does M = (2^4) * (3^3) * (5^2) have that are divisible by 12?",
+    "expected": "27",
+    "metadata": {"competition": "AIME", "domain": "Number Theory"}
+  },
+  {
+    "id": "aime2_010",
+    "prompt": "In a round-robin tournament with 6 teams, each team plays every other team exactly once with no ties. If every team won a distinct number of games, what is the sum of the squares of the numbers of games won by each team?",
+    "expected": "55",
+    "metadata": {"competition": "AIME", "domain": "Combinatorics"}
+  }
+]

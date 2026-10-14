@@ -1,0 +1,122 @@
+[
+  {
+    "id": "zebra2_001",
+    "prompt": "Three scientists (Dr. Adams, Dr. Baker, Dr. Clark) occupy three consecutive offices 101, 102, and 103 along a hallway. Dr. Adams does not occupy an end office. The physicist occupies office 101. Dr. Baker is a chemist. What is Dr. Clark's profession?",
+    "choices": {
+      "A": "Chemist",
+      "B": "Physicist",
+      "C": "Biologist",
+      "D": "Mathematician"
+    },
+    "expected": "B",
+    "metadata": {"type": "Constraint Satisfaction", "domain": "Deduction"}
+  },
+  {
+    "id": "zebra2_002",
+    "prompt": "On an island of Knights (who always tell the truth) and Knaves (who always lie), you meet two inhabitants, Liam and Noah. Liam says: 'Noah is a Knave or I am a Knave.' What is Liam?",
+    "choices": {
+      "A": "Liam is a Knave",
+      "B": "Liam is a Knight",
+      "C": "Noah is a Knight",
+      "D": "Liam's identity is mathematically impossible"
+    },
+    "expected": "B",
+    "metadata": {"type": "Knights & Knaves", "domain": "Formal Logic"}
+  },
+  {
+    "id": "zebra2_003",
+    "prompt": "Four flights (F1, F2, F3, F4) take off sequentially with no simultaneous departures. Flight F2 departs before Flight F4. Flight F1 departs after Flight F3. Flight F4 departs before Flight F3. Which flight departs last?",
+    "choices": {
+      "A": "Flight F4",
+      "B": "Flight F2",
+      "C": "Flight F1",
+      "D": "Flight F3"
+    },
+    "expected": "C",
+    "metadata": {"type": "Linear Ordering", "domain": "Temporal Logic"}
+  },
+  {
+    "id": "zebra2_004",
+    "prompt": "You are given a 5-liter jug and a 3-liter jug, with an unlimited water supply and no markings on the jugs. What is the minimum number of measurement operations (filling, emptying, or transferring between jugs) required to measure out exactly 4 liters into the 5-liter jug?",
+    "choices": {
+      "A": "4 operations",
+      "B": "8 operations",
+      "C": "2 operations",
+      "D": "6 operations"
+    },
+    "expected": "D",
+    "metadata": {"type": "State Space Search", "domain": "Water Jug Problem"}
+  },
+  {
+    "id": "zebra2_005",
+    "prompt": "Three urns contain marbles: one contains only White marbles, one contains only Black marbles, and one contains an equal mix of White and Black marbles. Every single urn label is known to be incorrect. You draw one single marble from the urn labeled 'Mixed' and observe that it is Black. Which urn is guaranteed to contain only White marbles?",
+    "choices": {
+      "A": "The urn labeled 'Black'",
+      "B": "The urn labeled 'White'",
+      "C": "The urn labeled 'Mixed'",
+      "D": "It is mathematically impossible to know with one draw"
+    },
+    "expected": "A",
+    "metadata": {"type": "Information Deduction", "domain": "Constraint Logic"}
+  },
+  {
+    "id": "zebra2_006",
+    "prompt": "Exactly one of four suspects (P, Q, R, S) broke a database server. P says: 'Q broke it.' Q says: 'S broke it.' R says: 'I did not break it.' S says: 'Q is lying.' If exactly THREE of these four statements are TRUE and ONE statement is FALSE, who broke the database server?",
+    "choices": {
+      "A": "Suspect S",
+      "B": "Suspect Q",
+      "C": "Suspect P",
+      "D": "Suspect R"
+    },
+    "expected": "B",
+    "metadata": {"type": "Truth-teller Contradiction", "domain": "Boolean Satisfiability"}
+  },
+  {
+    "id": "zebra2_007",
+    "prompt": "Five textbooks (Biology, Chemistry, History, Math, Physics) are arranged on a single shelf from position 1 (left) to position 5 (right). Physics is placed at position 1. Math is at position 3. History is placed immediately adjacent to Math. Chemistry is placed immediately to the right of Biology. Which book is placed at position 5?",
+    "choices": {
+      "A": "History",
+      "B": "Biology",
+      "C": "Chemistry",
+      "D": "Math"
+    },
+    "expected": "C",
+    "metadata": {"type": "Spatial Constraint", "domain": "Linear Ordering"}
+  },
+  {
+    "id": "zebra2_008",
+    "prompt": "Four siblings (Emma, Jack, Noah, Sophia) have distinct ages: Emma is older than Jack; Sophia is younger than Jack; Noah is older than Emma. Who is the second oldest sibling?",
+    "choices": {
+      "A": "Noah",
+      "B": "Jack",
+      "C": "Sophia",
+      "D": "Emma"
+    },
+    "expected": "D",
+    "metadata": {"type": "Strict Partial Order", "domain": "Deduction"}
+  },
+  {
+    "id": "zebra2_009",
+    "prompt": "You have 12 identical-looking coins, exactly one of which is counterfeit and has a different weight (either heavier or lighter than genuine coins). Using a two-pan balance scale without weights, what is the minimum number of weighings guaranteed to locate the counterfeit coin and determine whether it is heavy or light in the worst case?",
+    "choices": {
+      "A": "3 weighings",
+      "B": "4 weighings",
+      "C": "2 weighings",
+      "D": "5 weighings"
+    },
+    "expected": "A",
+    "metadata": {"type": "Information Theory", "domain": "Ternary Search"}
+  },
+  {
+    "id": "zebra2_010",
+    "prompt": "Four diplomats (A, B, C, D) sit around a circular table with 4 evenly spaced seats facing inward. Diplomat A sits directly opposite Diplomat C. Diplomat B sits to the immediate right of Diplomat A. Looking from Diplomat C's perspective facing inward, who sits to Diplomat C's immediate left?",
+    "choices": {
+      "A": "Diplomat D",
+      "B": "Diplomat B",
+      "C": "Diplomat A",
+      "D": "Cannot be uniquely determined"
+    },
+    "expected": "B",
+    "metadata": {"type": "Circular Geometry", "domain": "Spatial Reasoning"}
+  }
+]

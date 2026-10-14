@@ -1,0 +1,62 @@
+[
+  {
+    "id": "aime_001",
+    "prompt": "Find the number of ordered pairs of positive integers (a, b) such that a <= b and 1/a + 1/b = 1/12.",
+    "expected": "8",
+    "metadata": {"competition": "AIME", "domain": "Number Theory"}
+  },
+  {
+    "id": "aime_002",
+    "prompt": "The polynomial P(x) = x^3 - 9*x^2 + 24*x - k has three real roots that form an arithmetic progression. Find the value of k.",
+    "expected": "18",
+    "metadata": {"competition": "AIME", "domain": "Algebra"}
+  },
+  {
+    "id": "aime_003",
+    "prompt": "Find the remainder when 2^2024 is divided by 17.",
+    "expected": "1",
+    "metadata": {"competition": "AIME", "domain": "Modular Arithmetic"}
+  },
+  {
+    "id": "aime_004",
+    "prompt": "Find the number of non-empty subsets of the set {1, 2, 3, 4, 5, 6, 7, 8, 9, 10} that contain at least one odd number.",
+    "expected": "992",
+    "metadata": {"competition": "AIME", "domain": "Combinatorics"}
+  },
+  {
+    "id": "aime_005",
+    "prompt": "What is the sum of all distinct real solutions x to the equation |x^2 - 6*x + 5| = 3?",
+    "expected": "12",
+    "metadata": {"competition": "AIME", "domain": "Algebra"}
+  },
+  {
+    "id": "aime_006",
+    "prompt": "In a triangle with side lengths 13, 14, and 15, let r be the inradius. Find the value of r^2.",
+    "expected": "16",
+    "metadata": {"competition": "AIME", "domain": "Geometry"}
+  },
+  {
+    "id": "aime_007",
+    "prompt": "Compute the infinite sum S = sum_{n=1}^infty n / (3^n). If S is expressed in simplest fractional form as p/q where p and q are coprime positive integers, compute the value of p + q.",
+    "expected": "7",
+    "metadata": {"competition": "AIME", "domain": "Calculus / Series"}
+  },
+  {
+    "id": "aime_008",
+    "prompt": "Find the smallest positive integer n such that n! ends in at least 50 zeros in base 10.",
+    "expected": "205",
+    "metadata": {"competition": "AIME", "domain": "Number Theory"}
+  },
+  {
+    "id": "aime_009",
+    "prompt": "How many positive integer divisors does N = (2^5) * (3^4) * (5^3) * (7^2) have that are divisible by 60?",
+    "expected": "144",
+    "metadata": {"competition": "AIME", "domain": "Number Theory"}
+  },
+  {
+    "id": "aime_010",
+    "prompt": "In a round-robin tournament with 8 teams, each team plays every other team exactly once with no ties. If every team won a distinct number of games, what is the sum of the squares of the numbers of games won by each team?",
+    "expected": "140",
+    "metadata": {"competition": "AIME", "domain": "Combinatorics"}
+  }
+]
