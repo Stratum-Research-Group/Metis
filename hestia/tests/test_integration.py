@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -38,8 +37,10 @@ def _integration_ready() -> bool:
         return False
     try:
         cfg = ServiceConfig.from_yaml(config_file)
-        binary_path = Path(cfg.llamacpp_binary)
-        if not binary_path.exists() and not shutil.which(cfg.llamacpp_binary):
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        binary_path = LlamaCppBackend.discover_binary(cfg.llamacpp_binary)
+        if not binary_path.is_file():
             return False
 
         reg = ModelRegistry()

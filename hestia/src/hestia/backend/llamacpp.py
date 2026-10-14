@@ -25,26 +25,87 @@ _HEALTH_POLL_INTERVAL = 1.0
 class LlamaCppBackend(Backend):
     """Manages llama.cpp server (llama-server) processes."""
 
+    @classmethod
+    def discover_binary(cls, binary_path: str | None = None) -> Path:
+        """Resolve the llama-server binary path using configured and fallback search locations."""
+        if binary_path:
+            resolved = Path(binary_path)
+            if resolved.is_file():
+                return resolved
+
+        env_bin = os.environ.get("HESTIA_LLAMACPP_BINARY")
+        if env_bin and Path(env_bin).is_file():
+            return Path(env_bin)
+
+        which_bin = shutil.which("llama-server")
+        if which_bin and Path(which_bin).is_file():
+            return Path(which_bin)
+
+        for candidate in (
+            Path("/usr/local/bin/llama-server"),
+            Path.home() / ".unsloth/llama.cpp/llama-server",
+            Path("/usr/bin/llama-server"),
+            Path("/usr/lib/ollama/llama-server"),
+        ):
+            if candidate.is_file():
+                return candidate
+
+        return Path(binary_path or "/usr/local/bin/llama-server")
+
+    @staticmethod
+    def resolve_cuda_visible_devices(
+        gpu_target: str,
+        gpu_count: int | None = None,
+    ) -> str:
+        """Resolve a model's gpu_target into a valid CUDA_VISIBLE_DEVICES string.
+
+        Supports dual-GPU default assignment (V100 on 0, RTX 5060 Ti on 1) with
+        automatic dynamic fallback to GPU 0 for RTX 5060 Ti when only a single
+        GPU is installed.
+        """
+        target_clean = gpu_target.strip().lower()
+        known_gpu_map = {
+            "v100": "0",
+            "tesla-v100": "0",
+            "tesla_v100": "0",
+            "rtx-5060-ti": "1",
+            "rtx-5060ti": "1",
+            "rtx5060ti": "1",
+            "0": "0",
+            "1": "1",
+            "cuda:0": "0",
+            "cuda:1": "1",
+        }
+        if target_clean in ("rtx-5060-ti", "rtx-5060ti", "rtx5060ti"):
+            if gpu_count is None:
+                from hestia.vram import get_gpu_count
+
+                gpu_count = get_gpu_count()
+            if gpu_count == 1:
+                return "0"
+            return "1"
+
+        if target_clean in known_gpu_map:
+            return known_gpu_map[target_clean]
+
+        if (
+            target_clean.startswith("gpu-")
+            or target_clean.isdigit()
+            or target_clean.startswith("cuda:")
+        ):
+            return gpu_target.strip()
+
+        raise ValueError(
+            f"Unknown or invalid gpu_target '{gpu_target}'. "
+            f"Expected one of {sorted(known_gpu_map.keys())} or numeric GPU index / GPU UUID."
+        )
+
     def __init__(
         self,
         binary_path: str = "/usr/local/bin/llama-server",
         log_dir: str = "logs",
     ) -> None:
-        resolved = Path(binary_path)
-        if not resolved.is_file():
-            env_bin = os.environ.get("HESTIA_LLAMACPP_BINARY")
-            if env_bin and Path(env_bin).is_file():
-                resolved = Path(env_bin)
-            else:
-                which_bin = shutil.which("llama-server")
-                if which_bin and Path(which_bin).is_file():
-                    resolved = Path(which_bin)
-                elif Path("/usr/lib/ollama/llama-server").is_file():
-                    resolved = Path("/usr/lib/ollama/llama-server")
-                elif Path("/usr/bin/llama-server").is_file():
-                    resolved = Path("/usr/bin/llama-server")
-
-        self._binary = resolved
+        self._binary = self.discover_binary(binary_path)
         self._log_dir = Path(log_dir)
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
         self._log_files: dict[str, io.BufferedWriter] = {}
@@ -77,12 +138,14 @@ class LlamaCppBackend(Backend):
         if not Path(model.gguf_path).is_file():
             raise BackendStartError(
                 model.name,
-                f"Model weights not found at '{model.gguf_path}'. Please configure a valid GGUF path in models.yaml.",
+                f"Model weights not found at '{model.gguf_path}'. "
+                "Please configure a valid GGUF path in models.yaml.",
             )
         if not self._binary.is_file():
             raise BackendStartError(
                 model.name,
-                f"llama-server binary not found at '{self._binary}'. Please install llama.cpp or set HESTIA_LLAMACPP_BINARY.",
+                f"llama-server binary not found at '{self._binary}'. "
+                "Please install llama.cpp or set HESTIA_LLAMACPP_BINARY.",
             )
 
         args = self.build_launch_args(model, port)
@@ -95,30 +158,11 @@ class LlamaCppBackend(Backend):
         env = os.environ.copy()
         env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         if model.gpu_target:
-            target_clean = model.gpu_target.strip().lower()
-            KNOWN_GPU_MAP = {
-                "v100": "0",
-                "tesla-v100": "0",
-                "tesla_v100": "0",
-                "rtx-5060-ti": "1",
-                "rtx-5060ti": "1",
-                "rtx5060ti": "1",
-                "0": "0",
-                "1": "1",
-                "cuda:0": "0",
-                "cuda:1": "1",
-            }
-            if target_clean in KNOWN_GPU_MAP:
-                env["CUDA_VISIBLE_DEVICES"] = KNOWN_GPU_MAP[target_clean]
-            elif target_clean.startswith("gpu-") or target_clean.isdigit() or target_clean.startswith("cuda:"):
-                env["CUDA_VISIBLE_DEVICES"] = model.gpu_target.strip()
-            else:
+            try:
+                env["CUDA_VISIBLE_DEVICES"] = self.resolve_cuda_visible_devices(model.gpu_target)
+            except ValueError as exc:
                 log_file.close()
-                raise BackendStartError(
-                    model.name,
-                    f"Unknown or invalid gpu_target '{model.gpu_target}'. "
-                    f"Expected one of {sorted(KNOWN_GPU_MAP.keys())} or numeric GPU index / GPU UUID.",
-                )
+                raise BackendStartError(model.name, str(exc)) from exc
 
         try:
             proc = subprocess.Popen(

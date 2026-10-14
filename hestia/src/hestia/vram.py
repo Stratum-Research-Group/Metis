@@ -125,3 +125,45 @@ def get_gpu_name(gpu_index: int = 0) -> str:
         return name if isinstance(name, str) else name.decode()
     except Exception:
         return "unknown"
+
+
+def get_gpu_count() -> int:
+    """Query total count of available NVIDIA GPUs.
+
+    Falls back to nvidia-smi CLI if pynvml is unavailable.
+    Returns 0 if no GPU or driver is detected.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            import pynvml
+
+        pynvml.nvmlInit()
+        count = int(pynvml.nvmlDeviceGetCount())
+        pynvml.nvmlShutdown()
+        return count
+    except Exception:
+        logger.debug("pynvml failed, trying nvidia-smi fallback for GPU count")
+
+    nvidia_smi = shutil.which("nvidia-smi")
+    if not nvidia_smi:
+        return 0
+
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [nvidia_smi, "--query-gpu=count", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            lines = [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+            if lines:
+                return int(lines[0])
+    except (subprocess.TimeoutExpired, ValueError):
+        pass
+
+    return 0
+

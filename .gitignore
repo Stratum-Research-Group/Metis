@@ -54,3 +54,8 @@ Thumbs.db
 logs/
 *.db
 data/
+
+# Diagnostic artifacts
+geometry-run*/
+passages.jsonl
+

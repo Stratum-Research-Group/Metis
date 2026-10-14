@@ -693,3 +693,80 @@ class TestBatch3Remediations:
             if lock_file.exists():
                 lock_file.unlink()
 
+
+class TestLlamaCppBinaryDiscoveryAndDeviceResolution:
+    """Test llama-server binary auto-discovery and CUDA device resolution."""
+
+    def test_discover_binary_explicit_existing(self, tmp_path) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        bin_file = tmp_path / "custom-llama-server"
+        bin_file.touch(mode=0o755)
+        discovered = LlamaCppBackend.discover_binary(str(bin_file))
+        assert discovered == bin_file
+
+    def test_discover_binary_env_override(self, tmp_path, monkeypatch) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        bin_file = tmp_path / "env-llama-server"
+        bin_file.touch(mode=0o755)
+        monkeypatch.setenv("HESTIA_LLAMACPP_BINARY", str(bin_file))
+        discovered = LlamaCppBackend.discover_binary("/nonexistent/llama-server")
+        assert discovered == bin_file
+
+    def test_discover_binary_fallback_candidates(self, tmp_path, monkeypatch) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        monkeypatch.delenv("HESTIA_LLAMACPP_BINARY", raising=False)
+        monkeypatch.setattr("shutil.which", lambda _: None)
+
+        unsloth_bin = tmp_path / ".unsloth/llama.cpp/llama-server"
+        unsloth_bin.parent.mkdir(parents=True, exist_ok=True)
+        unsloth_bin.touch(mode=0o755)
+
+        import pathlib
+
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        orig_is_file = pathlib.Path.is_file
+
+        def _mock_is_file(p: pathlib.Path) -> bool:
+            if str(p) == str(unsloth_bin):
+                return True
+            if str(p).startswith("/usr"):
+                return False
+            return orig_is_file(p)
+
+        monkeypatch.setattr("pathlib.Path.is_file", _mock_is_file)
+        discovered = LlamaCppBackend.discover_binary("/nonexistent/llama-server")
+        assert discovered == unsloth_bin
+
+    def test_resolve_cuda_visible_devices_dual_gpu(self) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        assert LlamaCppBackend.resolve_cuda_visible_devices("rtx-5060-ti", gpu_count=2) == "1"
+        assert LlamaCppBackend.resolve_cuda_visible_devices("v100", gpu_count=2) == "0"
+        assert LlamaCppBackend.resolve_cuda_visible_devices("0", gpu_count=2) == "0"
+        assert LlamaCppBackend.resolve_cuda_visible_devices("1", gpu_count=2) == "1"
+
+    def test_resolve_cuda_visible_devices_single_gpu_fallback(self) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        assert LlamaCppBackend.resolve_cuda_visible_devices("rtx-5060-ti", gpu_count=1) == "0"
+        assert LlamaCppBackend.resolve_cuda_visible_devices("rtx-5060ti", gpu_count=1) == "0"
+        assert LlamaCppBackend.resolve_cuda_visible_devices("rtx5060ti", gpu_count=1) == "0"
+        assert LlamaCppBackend.resolve_cuda_visible_devices("v100", gpu_count=1) == "0"
+
+    def test_resolve_cuda_visible_devices_passthrough_uuid_or_raw(self) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        uuid = "GPU-b9975b9e-53af-6116-7138-8b1c96fd75e6"
+        assert LlamaCppBackend.resolve_cuda_visible_devices(uuid, gpu_count=1) == uuid
+        assert LlamaCppBackend.resolve_cuda_visible_devices("cuda:0", gpu_count=1) == "0"
+
+    def test_resolve_cuda_visible_devices_invalid_raises(self) -> None:
+        from hestia.backend.llamacpp import LlamaCppBackend
+
+        with pytest.raises(ValueError, match="Unknown or invalid gpu_target"):
+            LlamaCppBackend.resolve_cuda_visible_devices("radeon-rx-7900")
+
+

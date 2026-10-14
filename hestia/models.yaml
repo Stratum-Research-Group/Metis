@@ -42,3 +42,18 @@ models:
     gpu_target: rtx-5060-ti
     sampling: {}
 
+  # ── Qwen 2.5 14B Instruct (Ollama linked model) ──
+  - name: qwen2.5-14b-instruct
+    type: chat
+    gguf_path: /home/akarta/.ollama/models/.studio_links/2a9a1708be/qwen2.5-14b.gguf
+    quantization: Q4_K_M
+    context_size: 8192
+    vram_estimate_mb: 9500
+    gpu_target: rtx-5060-ti
+    sampling:
+      temperature: 0.7
+      top_p: 0.9
+      top_k: 40
+      repeat_penalty: 1.1
+
+

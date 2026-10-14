@@ -188,3 +188,40 @@ class TestNvidiaSmiTotalFallback:
         mock_run.return_value = mock_res
 
         assert _nvidia_smi_total_fallback(0) == 0
+
+
+class TestGpuCount:
+    """Test get_gpu_count with nvml and nvidia-smi fallbacks."""
+
+    def test_get_gpu_count_nvml(self) -> None:
+        from unittest.mock import MagicMock
+
+        from hestia.vram import get_gpu_count
+
+        mock_nvml = MagicMock()
+        mock_nvml.nvmlDeviceGetCount.return_value = 2
+        with patch.dict("sys.modules", {"pynvml": mock_nvml}):
+            assert get_gpu_count() == 2
+
+    @patch("shutil.which", return_value="/usr/bin/nvidia-smi")
+    @patch("subprocess.run")
+    def test_get_gpu_count_nvidia_smi(self, mock_run, mock_which) -> None:
+        from unittest.mock import MagicMock
+
+        from hestia.vram import get_gpu_count
+
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "1\n"
+        mock_run.return_value = mock_res
+
+        with patch.dict("sys.modules", {"pynvml": None}):
+            assert get_gpu_count() == 1
+
+    @patch("shutil.which", return_value=None)
+    def test_get_gpu_count_none(self, mock_which) -> None:
+        from hestia.vram import get_gpu_count
+
+        with patch.dict("sys.modules", {"pynvml": None}):
+            assert get_gpu_count() == 0
+
