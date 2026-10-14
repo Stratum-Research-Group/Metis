@@ -769,4 +769,36 @@ class TestLlamaCppBinaryDiscoveryAndDeviceResolution:
         with pytest.raises(ValueError, match="Unknown or invalid gpu_target"):
             LlamaCppBackend.resolve_cuda_visible_devices("radeon-rx-7900")
 
+    def test_build_launch_args_flags(self) -> None:
+        from pathlib import Path
+
+        from hestia.backend.llamacpp import LlamaCppBackend
+        from hestia.registry import ModelEntry, ModelType
+
+        backend = LlamaCppBackend(binary_path="/dummy/llama-server")
+        chat_model = ModelEntry(
+            name="chat-test",
+            model_type=ModelType.CHAT,
+            gguf_path=Path("/dummy/model.gguf"),
+            quantization="Q4_K_M",
+            context_size=4096,
+            vram_estimate_mb=5000,
+        )
+        chat_args = backend.build_launch_args(chat_model, 9050)
+        assert "--skip-chat-parsing" in chat_args
+        assert "--embedding" not in chat_args
+
+        embed_model = ModelEntry(
+            name="embed-test",
+            model_type=ModelType.EMBEDDING,
+            gguf_path=Path("/dummy/embed.gguf"),
+            quantization="Q8_0",
+            context_size=2048,
+            vram_estimate_mb=1000,
+        )
+        embed_args = backend.build_launch_args(embed_model, 9050)
+        assert "--embedding" in embed_args
+        assert "--skip-chat-parsing" not in embed_args
+
+
 

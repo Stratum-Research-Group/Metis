@@ -130,6 +130,8 @@ class LlamaCppBackend(Backend):
         # Enable embedding endpoint for embedding-type models
         if model.model_type == ModelType.EMBEDDING:
             args.append("--embedding")
+        elif model.model_type == ModelType.CHAT:
+            args.append("--skip-chat-parsing")
 
         return args
 
