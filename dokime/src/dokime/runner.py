@@ -152,6 +152,7 @@ def run_evaluation(
                         result_record["error"] = error_msg
 
                     jsonl_file.write(json.dumps(result_record) + "\n")
+                    jsonl_file.flush()
                     results_count += 1
 
     # Item 1 & 7: Compute summary and write summary.json BEFORE finalizing manifest.json

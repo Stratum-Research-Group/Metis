@@ -7,11 +7,19 @@ import inspect
 from typing import Any
 
 from dokime.tasks.arc import ArcEasy25Task
+from dokime.tasks.epistemic import EpistemicAdversarialTask
+from dokime.tasks.gpqa import GPQADiamondTask
+from dokime.tasks.math_competition import AIMECompetitionMathTask
 from dokime.tasks.protocol import Task
+from dokime.tasks.zebra import ZebraHardLogicTask
 
 # Built-in tasks fallback
 BUILTIN_TASKS: dict[str, type[Task] | Task] = {
     "arc_easy_25": ArcEasy25Task,
+    "gpqa_diamond": GPQADiamondTask,
+    "aime_math": AIMECompetitionMathTask,
+    "zebra_hard_logic": ZebraHardLogicTask,
+    "epistemic_adversarial": EpistemicAdversarialTask,
 }
 
 

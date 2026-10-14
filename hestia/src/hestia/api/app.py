@@ -337,13 +337,11 @@ def _build_router():
                     return await _proxy_request(process.base_url, body, path="/v1/chat/completions")
                 finally:
                     await _safe_request_finished(manager, model_name)
+                    await _safe_release_admission(manager, model_name)
         except Exception:
             # If an error occurred before returning the streaming response generator
             await _safe_release_admission(manager, model_name)
             raise
-
-        # For non-streaming requests, release admission here
-        await _safe_release_admission(manager, model_name)
 
     @router.post("/v1/embeddings")
     async def embeddings(request: Request) -> JSONResponse:

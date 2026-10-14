@@ -8,7 +8,7 @@ listen_host: 127.0.0.1
 listen_port: 8080
 
 # Path to the llama-server binary (llama.cpp)
-llamacpp_binary: /usr/local/bin/llama-server
+llamacpp_binary: /home/akarta/.unsloth/llama.cpp/llama-server
 
 # Port range for spawned llama.cpp backend processes.
 # Each loaded model gets the next free port in this range.
