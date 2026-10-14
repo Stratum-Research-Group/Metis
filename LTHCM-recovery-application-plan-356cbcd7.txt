@@ -1,0 +1,83 @@
+LTHCM - DAMAGE-TRAINED RECOVERY WITHOUT REWRITING EVIDENCE
+Application plan v1 | 9 October 2026
+
+1. Verdict and evidence boundary
+
+Build the corruption benchmark first. A recurrent graph refiner is a testable research proposal, not a proven improvement or a new memory substrate. The useful question is whether the permitted evidence graph can return to a useful query-conditioned state after damage, without making up evidence.
+
+Read-only source snapshot: default-branch HEAD
+336f4af9f624aca5b4978a5e3ce222ce9638da35.
+No code edited, tests run, benchmarks run, or model weights loaded. Source inspection establishes code paths, not runtime correctness. All numbered file references below refer to this snapshot.
+
+LTHCM already has graph refinement. lthcm/core/spectral_wormhole.py:135-157 defines a two-layer Chebyshev GCN refiner with query-bridge gating. lthcm/engine/pipeline.py:78 constructs it, and :164-184 exposes retrieval flags including spectral refinement. Calling a new wrapper the first graph refiner would be wrong.
+
+The live pipeline configures cross-encoder/nli-deberta-v3-xsmall at lthcm/engine/pipeline.py:65-69. The older unwired-NLI concern is not this HEAD's configuration. However, lthcm/core/sheaf.py:153-163 catches loading exceptions and can return None. Configuration is not proof that NLI runs. Benchmark records must include actual availability and used_nli, not merely the requested flag.
+
+2. Goal region and invariants
+
+Proposed goal: the query receives enough relevant, source-backed, time-valid, permitted evidence to support an answer, or a clear insufficient-evidence result. Contradictions are identified, not silently blended into consensus. The correct answer may change when decisive evidence changes.
+
+Keep immutable: original text, source IDs and hashes, provenance, source timestamps, deletion status, policy version, and the authoritative permission decision. Derived links must point to real retained sources and carry an evidence basis. No generated text becomes a recovered source. A semantic score cannot override a permission check. This permission envelope is a proposed external integration contract, not a claim that the inspected LTHCM pipeline implements access control.
+
+Important existing boundary: lthcm/engine/pipeline.py:330-335 falls back to raw candidates when causal filtering yields none. For an experiment requiring strict temporal validity, an external eligibility gate must reject disallowed candidates even if the existing fallback supplies them. Test this explicitly. This is an adapter requirement, not a code change made here.
+
+3. What may adapt
+
+Use an external, optional wrapper around a disposable shadow graph. Leave the pinned LTHCM component unchanged. A small shared local update rule may adjust derived edge proposals, bounded edge weights and ranking scores. Condition updates on the query, source availability, time and an externally supplied eligibility mask.
+
+Separate three things: canonical sources; derived shadow state; the validator that accepts or rejects output. Each update records the previous state, rule version and rejected proposals. New links require a source-backed relation check. A model may suggest a bridge; it cannot certify that the bridge is true.
+
+This is NCA-inspired only if local shared updates are iterated and trained for persistence/recovery under damage. An ordinary recurrent GNN with a new name is still an ordinary recurrent GNN.
+
+4. Damage model and stop rule
+
+In-budget damage: missing derived edges, noisy derived scores, distractor links, stale cached candidates, duplicate derived nodes and interrupted shadow updates. Include combinations and unseen severity levels.
+
+Out-of-budget conditions: missing canonical documents with no retrievable source, revoked access, invalid provenance, unavailable required validator or incompatible source/index versions. A damaged index can be rebuilt from surviving sources; lost source information cannot be inferred back into existence.
+
+Proposed stop rule: stop at a fixed update count, latency or memory budget; stop on invalid proposals, cycles, non-finite state or failure to improve the development-set stopping signal. Keep the last independently valid state, not the state with highest self-reported confidence. On failure return a degraded result or abstention. Never relax eligibility to make recovery look successful.
+
+5. Build first
+
+5.1 Freeze a small source corpus, its version, query set and canonical eligibility rules. Split by document/topic families so related documents do not leak between training and test.
+5.2 Save a clean retrieval run and the exact candidate IDs. Derive edges from source text, not answer labels. The existing entity builder is a grounded baseline: lthcm/core/wormhole_builder.py:73-133 extracts entities and adds bounded shared-entity links.
+5.3 Build a deterministic damage injector with a logged seed. Run clean and damaged retrieval before writing a learned controller.
+5.4 Implement the wrapper and immutable-source checks. Do not add training until this harness catches prohibited writes and missing-source failures.
+
+6. Falsifiable comparison at equal budget
+
+Compare: unchanged current pipeline; deterministic rebuild plus rerank; existing spectral refiner; an ordinary message-passing GNN; and the proposed damage-trained recurrent wrapper. Add a wrapper with recurrence disabled and one trained without damage to isolate the claimed mechanism.
+
+Use identical source eligibility, candidate pool, embedding/checker versions, top-k, hardware and wall-clock ceilings. Count all retrieval, NLI and update calls. Report training cost separately. If deterministic rebuilding exceeds the latency ceiling, show both its full-rebuild cost and its best bounded variant; do not give one system extra evidence for free.
+
+Measure evidence recall@k, complete multi-hop support coverage, unsupported-link precision/error rate, contradiction handling, downstream answer correctness/abstention, p50/p95 latency, peak memory and recovery steps. Report clean-data performance separately from recovery performance. Bootstrap over independent query families, not individual correlated graph edges.
+
+Held-out tests: remove bridges never removed during training; add high-similarity false shortcuts; swap a decisive source fact; make every permitted supporting source unavailable; revoke a source mid-loop; and provide only temporally invalid candidates. Use answer labels for evaluation, never edge generation or stopping.
+
+7. Rejection criteria
+
+Reject deployment if any forbidden source survives the final gate, any deleted text is reconstructed, any provenance field changes, or an invalid link is accepted as evidence. Those are hard failures, not average metrics.
+
+Reject the learned extension if it fails to beat the strongest budget-matched deterministic/existing-refiner baseline on held-out support recovery without worsening clean accuracy, unsupported links or the agreed latency ceiling. Pre-register numerical margins on development data, then freeze them. No successful held-out trial has been run here.
+
+8. What Levin/NCA adds, and what it does not
+
+The lens adds a recovery objective, damage during training, local iterative updates and testing persistence after recovery. Ordinary engineering supplies versioned sources, eligibility, rebuilding, validation and bounded execution. Existing spectral message passing is already relevant machinery. The lens does not prove retrieval truth, replace NLI, establish permissions or prove a Platonic explanation.
+
+9. Risks and decisions for Nick
+
+Choose the first corpus and a useful latency/memory budget. Decide whether the first prototype only reranks existing edges or may propose new source-validated bridges; reranking is the safer first experiment. Set the minimum gain needed to justify training and maintenance. Keep this separate from a Metis recovery controller: the controller chooses allowed recovery actions; this wrapper refines derived retrieval state.
+
+Main risks: benchmark leakage, preserving a wrong answer as an attractor, false bridges, expensive repeated NLI calls, unavailable checker weights, and synthetic damage that does not resemble actual failures. Failures may require better ingestion or deterministic rebuilding rather than another neural component.
+
+10. Sources
+
+Repository, verified through a fresh read-only git clone:
+https://gitlab.com/akarta-315h/LTHCM
+Snapshot hash is in section 1. File/line references are local source positions at that exact commit. The public commit web page returned 403 to the page reader; git source access succeeded.
+
+Mordvintsev, Randazzo, Niklasson and Levin, Growing Neural Cellular Automata (2020): damage-trained regeneration and persistent local updates in a grid experiment, not proof of graph-memory recovery.
+https://distill.pub/2020/growing-ca/
+
+Levin, The Computational Boundary of a Self (2019): conceptual framing around homeostatic goals and scale. Its biological argument is inspiration, not a software guarantee.
+https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2019.02688/full
