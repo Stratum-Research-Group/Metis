@@ -143,18 +143,18 @@ These affect what the dashboard can truthfully show:
 
 ## 4. Revised build order
 
-| Step | Content | New vs spec |
-|---|---|---|
-| **0** | Fix health compliance. Build the probe registry and cache (G4) and add `state` / `evidence` / `checked_at` / `freshness`. Never derive `live` from a non-null dependency. Strip paths from unauthenticated health (G8). Add the false-live test. | 🆕 (finishes spec Step 1) |
-| 1 | Kybernetes config file covering `hestia_base_url`, `memory_root`, `db_path`, `allowed_origins` and `admin_token_file`. | spec Step 2 + G13 |
-| 2 | Lockdown: admin token required (refuse to start without it), separate admin and chat tokens, Host validation, admin audit log, auth-matrix tests. | spec Step 3 + G6/G7 |
-| 3 | Descriptors with `kind`, `/v1/admin/overview`, the list endpoints, and runtime-config reports for Kybernetes, Hestia and Prosopon. | spec Step 4 + G1/G2/G3 |
-| 4 | Prosopon read-only UI: strict guard, CSP, rendering with `textContent`, per-section timeouts, ETag polling, loopback by default, no-load-on-poll test. | spec Step 5 + G10/G12/G14 |
-| 5 | The remaining modules, read-only. Batch tools show last-run evidence. Phylax and Krisis policy is read-only with a diff view. | spec Step 6 + G2/G13 |
-| 6 | Manual functional probes with fixtures that don't touch real state. | 🆕 G5 |
-| 7 | Validate endpoint, using each module's existing validators. | spec Step 7 |
-| 8 | Guarded apply, history and rollback, with the ChangeSet status model. Load/unload becomes a confirmed, audited action. | spec Step 8 + G7 |
-| 9 | Optional Dokime and Paideia run controls. | spec Step 9 |
+| Step | Content | New vs spec | Implementation Status |
+|---|---|---|---|
+| **0** | Fix health compliance. Build the probe registry and cache (G4) and add `state` / `evidence` / `checked_at` / `freshness`. Never derive `live` from a non-null dependency. Strip paths from unauthenticated health (G8). Add the false-live test. | 🆕 (finishes spec Step 1) | ✅ Completed & Verified |
+| **1** | Kybernetes config file covering `hestia_base_url`, `memory_root`, `db_path`, `allowed_origins` and `admin_token_file`. | spec Step 2 + G13 | ✅ Completed & Verified |
+| **2** | Lockdown: admin token required (refuse to start without it), separate admin and chat tokens, Host validation, admin audit log, auth-matrix tests. | spec Step 3 + G6/G7 | ✅ Completed & Verified |
+| **3** | Descriptors with `kind`, `/v1/admin/overview`, the list endpoints, and runtime-config reports for Kybernetes, Hestia and Prosopon. | spec Step 4 + G1/G2/G3 | ✅ Completed & Verified |
+| **4** | Prosopon read-only UI: strict guard, CSP, rendering with `textContent`, per-section timeouts, ETag polling, loopback by default, no-load-on-poll test. | spec Step 5 + G10/G12/G14 | ✅ Completed & Verified |
+| **5** | The remaining modules, read-only. Batch tools show last-run evidence. Phylax and Krisis policy is read-only with a diff view. | spec Step 6 + G2/G13 | ✅ Completed & Verified |
+| **6** | Manual functional probes with fixtures that don't touch real state. | 🆕 G5 | ✅ Completed & Verified |
+| **7** | Validate endpoint, using each module's existing validators. | spec Step 7 | ✅ Completed & Verified |
+| **8** | Guarded apply, history and rollback, with the ChangeSet status model. Load/unload becomes a confirmed, audited action. | spec Step 8 + G7 | ✅ Completed & Verified |
+| **9** | Optional Dokime and Paideia run controls. | spec Step 9 | ✅ Completed & Verified |
 
 ---
 
