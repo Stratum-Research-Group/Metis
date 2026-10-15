@@ -3,106 +3,160 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Prosopon — Local Interface</title>
+  <title>Prosopon — Sovereign Local Interface</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body class="dark-theme theme-obsidian">
-  <div id="app" class="app-container">
-    <!-- Top Navigation Bar -->
-    <header class="top-nav">
-      <div class="nav-left">
-        <button id="btn-toggle-sidebar" class="icon-btn" aria-label="Toggle sessions menu">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-        </button>
-        <div class="view-switcher" role="tablist">
-          <button id="tab-btn-chat" class="view-tab-btn active" role="tab" aria-selected="true">Chat</button>
-          <button id="tab-btn-dashboard" class="view-tab-btn" role="tab" aria-selected="false">Control Dashboard</button>
-        </div>
-      </div>
-      <div class="nav-title">
-        <h1 id="session-title">New Conversation</h1>
-        <span id="connection-status" class="status-badge connected">Local</span>
-      </div>
-      <div class="nav-right">
-        <div class="theme-select-wrap">
-          <select id="theme-select" class="theme-select" aria-label="Select Interface Theme">
-            <option value="theme-obsidian">Obsidian Cyber</option>
-            <option value="theme-linear">Linear Minimalist</option>
-            <option value="theme-amber">Amber Cyberdeck</option>
-            <option value="theme-nordic">Nordic Frost</option>
-          </select>
-        </div>
-        <button id="btn-pairing-info" class="icon-btn" aria-label="Device pairing info">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </button>
-      </div>
-    </header>
-
-    <!-- Sidebar / Session Drawer -->
-    <aside id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <h2>Sessions</h2>
-        <button id="btn-new-session" class="btn primary-btn">+ New Chat</button>
-      </div>
-      <ul id="session-list" class="session-list" role="list">
-        <!-- Rendered dynamically -->
-      </ul>
-      <div class="sidebar-footer">
-        <div id="auth-status-panel" class="auth-panel">
-          <small id="auth-state-text">Loopback Mode</small>
-        </div>
-      </div>
-    </aside>
-    <div id="sidebar-overlay" class="overlay"></div>
-
-    <!-- Main Chat Workspace -->
-    <main id="chat-workspace" class="chat-workspace">
-      <div id="message-container" class="message-container" role="log" aria-live="polite">
-        <!-- Messages rendered dynamically -->
-      </div>
-
-      <!-- Live Phylax Approval Card Container -->
-      <div id="approval-dock" class="approval-dock"></div>
-
-      <!-- Bottom Action Bar / Composer -->
-      <footer class="composer-bar">
-        <!-- Push-to-Talk Mic Button -->
-        <button id="btn-ptt" class="ptt-btn" aria-label="Push to talk (Hold to speak)">
-          <svg class="mic-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
+  <div id="app" class="app-container with-activity-bar">
+    <!-- Antigravity / VS Code Activity Bar (Far Left) -->
+    <nav id="activity-bar" class="activity-bar" aria-label="Activity Bar">
+      <div class="activity-top">
+        <button id="act-btn-chat" class="activity-btn active" data-view="chat" aria-label="Metis Agent (Chat & Reasoning)" title="Metis Agent (Chat & Reasoning)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </button>
+        <button id="act-btn-editor" class="activity-btn" data-view="editor" aria-label="Explorer & Diff Review" title="Explorer & Diff Review">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+        </button>
+        <button id="act-btn-dashboard" class="activity-btn" data-view="dashboard" aria-label="Control Dashboard & Telemetry" title="Control Dashboard & Telemetry">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="9"/>
+            <rect x="14" y="3" width="7" height="5"/>
+            <rect x="14" y="12" width="7" height="9"/>
+            <rect x="3" y="16" width="7" height="5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="activity-bottom">
+        <button id="act-btn-settings" class="activity-btn" data-view="settings" aria-label="Settings" title="Metis Settings (VS Code Style)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
 
-        <form id="chat-form" class="composer-form">
-          <label for="prompt-input" class="sr-only">Your message</label>
-          <input 
-            type="text" 
-            id="prompt-input" 
-            class="prompt-input" 
-            placeholder="Ask Metis or hold mic..." 
-            autocomplete="off"
-            required
-          />
-          <button type="submit" id="btn-send" class="icon-btn send-btn" aria-label="Send message">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
+    <!-- Main Workspace Frame -->
+    <div class="workspace-frame">
+      <!-- Top Navigation Bar / Breadcrumbs -->
+      <header class="top-nav">
+        <div class="nav-left">
+          <button id="btn-toggle-sidebar" class="icon-btn" aria-label="Toggle sessions menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
           </button>
-        </form>
-      </footer>
-    </main>
+          <div class="view-switcher" role="tablist">
+            <button id="tab-btn-chat" class="view-tab-btn active" role="tab" aria-selected="true">Agent</button>
+            <button id="tab-btn-editor" class="view-tab-btn" role="tab" aria-selected="false">Workbench</button>
+            <button id="tab-btn-dashboard" class="view-tab-btn" role="tab" aria-selected="false">Control Center</button>
+            <button id="tab-btn-settings" class="view-tab-btn" role="tab" aria-selected="false">Settings</button>
+          </div>
+        </div>
+        <div class="nav-title">
+          <h1 id="session-title">New Conversation</h1>
+          <span id="agent-state-pill" class="agent-state-pill state-idle" title="Agent Semantic State (Herdr Protocol)">
+            <span class="state-dot"></span>
+            <span class="state-text">IDLE</span>
+          </span>
+          <span id="connection-status" class="status-badge connected">Local Loopback</span>
+        </div>
+        <div class="nav-right">
+          <div class="theme-select-wrap">
+            <select id="theme-select" class="theme-select" aria-label="Select Interface Theme">
+              <option value="theme-obsidian">Obsidian Cyber</option>
+              <option value="theme-linear">Linear Minimalist</option>
+              <option value="theme-amber">Amber Cyberdeck</option>
+              <option value="theme-nordic">Nordic Frost</option>
+            </select>
+          </div>
+          <button id="btn-pairing-info" class="icon-btn" aria-label="Device pairing info" title="Security & Device Pairing">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
+        </div>
+      </header>
 
-    <!-- Unified Control Dashboard Workspace -->
-    <section id="dashboard-workspace" class="dashboard-workspace hidden" role="region" aria-label="Control Dashboard">
-      <!-- Rendered dynamically by dashboard.js -->
-    </section>
+      <div class="workspace-content-row">
+        <!-- Sidebar / Session Drawer -->
+        <aside id="sidebar" class="sidebar">
+          <div class="sidebar-header">
+            <h2>Sessions</h2>
+            <button id="btn-new-session" class="btn primary-btn">+ New Chat</button>
+          </div>
+          <ul id="session-list" class="session-list" role="list">
+            <!-- Rendered dynamically -->
+          </ul>
+          <div class="sidebar-footer">
+            <div id="auth-status-panel" class="auth-panel">
+              <small id="auth-state-text">Loopback Mode</small>
+            </div>
+          </div>
+        </aside>
+        <div id="sidebar-overlay" class="overlay"></div>
+
+        <!-- 1. Main Chat Workspace -->
+        <main id="chat-workspace" class="chat-workspace">
+          <div id="message-container" class="message-container" role="log" aria-live="polite">
+            <!-- Messages rendered dynamically -->
+          </div>
+
+          <!-- Live Phylax Approval Card Container -->
+          <div id="approval-dock" class="approval-dock"></div>
+
+          <!-- Bottom Action Bar / Composer -->
+          <footer class="composer-bar">
+            <!-- Push-to-Talk Mic Button -->
+            <button id="btn-ptt" class="ptt-btn" aria-label="Push to talk (Hold to speak)">
+              <svg class="mic-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+
+            <form id="chat-form" class="composer-form">
+              <label for="prompt-input" class="sr-only">Your message</label>
+              <input 
+                type="text" 
+                id="prompt-input" 
+                class="prompt-input" 
+                placeholder="Ask Metis or hold mic..." 
+                autocomplete="off"
+                required
+              />
+              <button type="submit" id="btn-send" class="icon-btn send-btn" aria-label="Send message">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </form>
+          </footer>
+        </main>
+
+        <!-- 2. Code Workbench & Diff Review Workspace -->
+        <section id="editor-workspace" class="editor-workspace hidden" role="region" aria-label="Code Workbench & Diff Review">
+          <!-- Rendered dynamically by workbench.js -->
+        </section>
+
+        <!-- 3. Unified Control Dashboard Workspace -->
+        <section id="dashboard-workspace" class="dashboard-workspace hidden" role="region" aria-label="Control Dashboard">
+          <!-- Rendered dynamically by dashboard.js -->
+        </section>
+
+        <!-- 4. Antigravity & VS Code Settings Workspace -->
+        <section id="settings-workspace" class="settings-workspace hidden" role="region" aria-label="Metis Settings">
+          <!-- Rendered dynamically by settings.js -->
+        </section>
+      </div>
+    </div>
 
     <!-- Transcript Confirmation Modal (Voice confirmation before execution) -->
     <div id="transcript-modal" class="modal">
@@ -135,6 +189,8 @@
   <script src="/static/js/audio.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/settings.js"></script>
+  <script src="/static/js/workbench.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

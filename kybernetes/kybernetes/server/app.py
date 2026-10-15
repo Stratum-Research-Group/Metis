@@ -258,6 +258,33 @@ def create_app(
 
         return EventSourceResponse(event_generator())
 
+    @app.get("/v1/chat/sessions/{session_id}/turns/{turn_id}/events")
+    @app.get("/v1/chat/sessions/{session_id}/turns/{turn_id}/reconnect")
+    async def reconnect_turn_stream(
+        session_id: str,
+        turn_id: str,
+        after_seq: int = -1,
+        last_event_id: Optional[str] = Header(None, alias="Last-Event-ID"),
+        _: bool = Depends(require_service_auth),
+    ) -> EventSourceResponse:
+        """
+        Reconnect to an active or completed turn stream (Herdr / OpenCode persistent daemon).
+        Replays missed historical events and continues streaming if the turn is in-flight.
+        """
+        effective_after = after_seq
+        if last_event_id and last_event_id.isdigit():
+            effective_after = max(effective_after, int(last_event_id))
+
+        async def reconnect_generator() -> AsyncIterator[Dict[str, str]]:
+            async for turn_event in session_manager.subscribe_turn_events(turn_id, after_seq=effective_after):
+                yield {
+                    "id": str(turn_event.seq_num),
+                    "data": turn_event.model_dump_json(),
+                    "event": "message",
+                }
+
+        return EventSourceResponse(reconnect_generator())
+
     @app.post("/v1/approvals/{approval_id}/resolve")
     async def resolve_approval(approval_id: str, res: ApprovalResolution, _: bool = Depends(require_service_auth)) -> Dict[str, Any]:
         """Resolve pending Phylax capability approval."""

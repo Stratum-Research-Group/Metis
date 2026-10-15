@@ -18,6 +18,7 @@ from kybernetes.budget.models import (
     UsageMeasurement,
 )
 from kybernetes.contracts.enums import (
+    AgentSemanticState,
     BudgetUnit,
     CheckpointAction,
     EventType,
@@ -151,6 +152,11 @@ class ExecutionPipeline:
         trace_id = f"trace-{uuid.uuid4().hex[:8]}"
         seq_num = 0
         emitted_events: List[TurnEvent] = []
+
+        def _record_event(ev: TurnEvent) -> None:
+            emitted_events.append(ev)
+            self.sessions.append_turn_event(turn_id, ev)
+
         is_turn_simulated = bool(
             getattr(self.lthcm, "is_simulated", True)
             or getattr(self.dianoia, "is_simulated", True)
@@ -164,7 +170,7 @@ class ExecutionPipeline:
             payload={"session_id": request.session_id, "query": request.query},
             status=TurnOutcomeStatus.DRAFT.value,
         )
-        emitted_events.append(e_started)
+        _record_event(e_started)
         yield e_started
         seq_num += 1
 
@@ -186,8 +192,23 @@ class ExecutionPipeline:
             },
             status=TurnOutcomeStatus.DRAFT.value,
         )
-        emitted_events.append(e_plan)
+        _record_event(e_plan)
         yield e_plan
+        seq_num += 1
+
+        # Emit initial PLANNING state (Herdr FSM)
+        e_state_planning = TurnEvent(
+            turn_id=turn_id,
+            seq_num=seq_num,
+            event_type=EventType.STATE_CHANGED.value,
+            payload={
+                "to_state": AgentSemanticState.PLANNING.value,
+                "reason": f"Plan selected ({plan.route_label}). Beginning stage execution.",
+            },
+            status=TurnOutcomeStatus.DRAFT.value,
+        )
+        _record_event(e_state_planning)
+        yield e_state_planning
         seq_num += 1
 
         # Context state across pipeline stages
@@ -240,7 +261,7 @@ class ExecutionPipeline:
                     payload={"reason": "Turn was cancelled by user"},
                     status=TurnOutcomeStatus.ABSTAINED.value,
                 )
-                emitted_events.append(e_cancel)
+                _record_event(e_cancel)
                 yield e_cancel
                 return
 
@@ -256,7 +277,7 @@ class ExecutionPipeline:
                         payload={"error": f"Execution halted by budget guardrail: {decision.reason}"},
                         status=TurnOutcomeStatus.FAILED.value,
                     )
-                    emitted_events.append(e_fail)
+                    _record_event(e_fail)
                     yield e_fail
                     return
                 stage_lat = (time.perf_counter() - stage_start) * 1000
@@ -274,7 +295,7 @@ class ExecutionPipeline:
                         payload={"citations": [c.model_dump() for c in citations]},
                         status=TurnOutcomeStatus.DRAFT.value,
                     )
-                    emitted_events.append(e_ev)
+                    _record_event(e_ev)
                     yield e_ev
                     seq_num += 1
 
@@ -341,6 +362,21 @@ class ExecutionPipeline:
                 )
                 if not permitted and (needs_interactive or app_req):
                     if app_req:
+                        e_state_block = TurnEvent(
+                            turn_id=turn_id,
+                            seq_num=seq_num,
+                            event_type=EventType.STATE_CHANGED.value,
+                            payload={
+                                "to_state": AgentSemanticState.AWAITING_APPROVAL.value,
+                                "reason": f"Phylax gating approval required for: {capability} -> {target}",
+                                "approval_id": app_req.get("approval_id"),
+                            },
+                            status=TurnOutcomeStatus.DRAFT.value,
+                        )
+                        _record_event(e_state_block)
+                        yield e_state_block
+                        seq_num += 1
+
                         e_ask = TurnEvent(
                             turn_id=turn_id,
                             seq_num=seq_num,
@@ -348,7 +384,7 @@ class ExecutionPipeline:
                             payload={"approval": app_req},
                             status=TurnOutcomeStatus.DRAFT.value,
                         )
-                        emitted_events.append(e_ask)
+                        _record_event(e_ask)
                         yield e_ask
                         seq_num += 1
 
@@ -373,7 +409,7 @@ class ExecutionPipeline:
                                 payload={"status": "cancelled", "reason": cancel_msg},
                                 status=TurnOutcomeStatus.FAILED.value,
                             )
-                            emitted_events.append(e_comp)
+                            _record_event(e_comp)
                             yield e_comp
                             self._record_terminal_state(
                                 trace_id=trace_id,
@@ -401,7 +437,7 @@ class ExecutionPipeline:
                             payload={"approval_id": app_req["approval_id"], "decision": user_dec},
                             status=TurnOutcomeStatus.DRAFT.value,
                         )
-                        emitted_events.append(e_res)
+                        _record_event(e_res)
                         yield e_res
                         seq_num += 1
 
@@ -414,7 +450,7 @@ class ExecutionPipeline:
                                 payload={"text": denied_msg},
                                 status=TurnOutcomeStatus.DENIED.value,
                             )
-                            emitted_events.append(e_delta)
+                            _record_event(e_delta)
                             yield e_delta
                             seq_num += 1
 
@@ -433,7 +469,7 @@ class ExecutionPipeline:
                                 },
                                 status=TurnOutcomeStatus.DENIED.value,
                             )
-                            emitted_events.append(e_comp)
+                            _record_event(e_comp)
                             yield e_comp
                             self._record_terminal_state(
                                 trace_id=trace_id,
@@ -462,7 +498,7 @@ class ExecutionPipeline:
                         payload={"status": "cancelled", "reason": cancel_msg},
                         status=TurnOutcomeStatus.FAILED.value,
                     )
-                    emitted_events.append(e_comp)
+                    _record_event(e_comp)
                     yield e_comp
                     self._record_terminal_state(
                         trace_id=trace_id,
@@ -517,8 +553,14 @@ class ExecutionPipeline:
 
                 # Check if Hestia is live; if not, generate grounded synthetic response
                 h_health = await self.hestia.check_health()
+                succeeded = False
                 if h_health.get("available"):
                     async for chunk in self.hestia.stream_chat(prompt=prompt):
+                        if chunk.get("error"):
+                            # Hestia returned error (e.g. 401 Unauthorized or model error); fall back
+                            response_text = ""
+                            succeeded = False
+                            break
                         delta = chunk.get("delta", "")
                         if delta:
                             response_text += delta
@@ -529,9 +571,10 @@ class ExecutionPipeline:
                                 payload={"text": delta},
                                 status=TurnOutcomeStatus.DRAFT.value,
                             )
-                            emitted_events.append(e_delta)
+                            _record_event(e_delta)
                             yield e_delta
                             seq_num += 1
+                            succeeded = True
                         usage = chunk.get("usage")
                         if usage:
                             # Ingest actual Hestia usage
@@ -553,7 +596,7 @@ class ExecutionPipeline:
                                     ],
                                 )
                             )
-                else:
+                if not succeeded:
                     # Deterministic local fallback generator matching evidence
                     if tool_output:
                         res_val = tool_output.get("result", tool_output)
@@ -575,7 +618,7 @@ class ExecutionPipeline:
                             payload={"text": word + " "},
                             status=TurnOutcomeStatus.DRAFT.value,
                         )
-                        emitted_events.append(e_delta)
+                        _record_event(e_delta)
                         yield e_delta
                         seq_num += 1
 
@@ -588,7 +631,7 @@ class ExecutionPipeline:
                         payload={"status": "cancelled", "reason": cancel_msg},
                         status=TurnOutcomeStatus.FAILED.value,
                     )
-                    emitted_events.append(e_comp)
+                    _record_event(e_comp)
                     yield e_comp
                     self._record_terminal_state(
                         trace_id=trace_id,
@@ -685,6 +728,20 @@ class ExecutionPipeline:
             zero_edge_fallback_used=zero_edge_fallback,
         )
 
+        e_state_done = TurnEvent(
+            turn_id=turn_id,
+            seq_num=seq_num,
+            event_type=EventType.STATE_CHANGED.value,
+            payload={
+                "to_state": AgentSemanticState.COMPLETED.value if final_status == TurnOutcomeStatus.VERIFIED else AgentSemanticState.IDLE.value,
+                "reason": "Turn execution finished",
+            },
+            status=final_status.value,
+        )
+        _record_event(e_state_done)
+        yield e_state_done
+        seq_num += 1
+
         e_comp = TurnEvent(
             turn_id=turn_id,
             seq_num=seq_num,
@@ -704,7 +761,7 @@ class ExecutionPipeline:
             },
             status=final_status.value,
         )
-        emitted_events.append(e_comp)
+        _record_event(e_comp)
         yield e_comp
 
         # Record TraceRecord for Dokime and audit, and save turn in session manager

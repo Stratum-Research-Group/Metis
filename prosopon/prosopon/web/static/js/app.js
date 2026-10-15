@@ -22,11 +22,21 @@ class App {
     this.btnSend = document.getElementById("btn-send");
     this.btnPtt = document.getElementById("btn-ptt");
 
-    // Views
+    // Views & Workspaces
     this.tabBtnChat = document.getElementById("tab-btn-chat");
+    this.tabBtnEditor = document.getElementById("tab-btn-editor");
     this.tabBtnDashboard = document.getElementById("tab-btn-dashboard");
+    this.tabBtnSettings = document.getElementById("tab-btn-settings");
+
+    this.actBtnChat = document.getElementById("act-btn-chat");
+    this.actBtnEditor = document.getElementById("act-btn-editor");
+    this.actBtnDashboard = document.getElementById("act-btn-dashboard");
+    this.actBtnSettings = document.getElementById("act-btn-settings");
+
     this.chatWorkspace = document.getElementById("chat-workspace");
+    this.editorWorkspace = document.getElementById("editor-workspace");
     this.dashboardWorkspace = document.getElementById("dashboard-workspace");
+    this.settingsWorkspace = document.getElementById("settings-workspace");
     
     // Modals
     this.transcriptModal = document.getElementById("transcript-modal");
@@ -57,11 +67,18 @@ class App {
       };
     }
 
-    // View Switching
-    if (this.tabBtnChat && this.tabBtnDashboard) {
-      this.tabBtnChat.onclick = () => this.switchView("chat");
-      this.tabBtnDashboard.onclick = () => this.switchView("dashboard");
-    }
+    // Top View Switcher buttons
+    const navViews = [
+      { top: this.tabBtnChat, act: this.actBtnChat, id: "chat" },
+      { top: this.tabBtnEditor, act: this.actBtnEditor, id: "editor" },
+      { top: this.tabBtnDashboard, act: this.actBtnDashboard, id: "dashboard" },
+      { top: this.tabBtnSettings, act: this.actBtnSettings, id: "settings" },
+    ];
+
+    navViews.forEach((v) => {
+      if (v.top) v.top.onclick = () => this.switchView(v.id);
+      if (v.act) v.act.onclick = () => this.switchView(v.id);
+    });
 
     this.chatForm.onsubmit = (e) => {
       e.preventDefault();
@@ -97,6 +114,12 @@ class App {
     if (window.Dashboard) {
       window.Dashboard.init();
     }
+    if (window.MetisSettings) {
+      window.MetisSettings.init();
+    }
+    if (window.MetisWorkbench) {
+      window.MetisWorkbench.init();
+    }
     try {
       const sessions = await API.listSessions();
       if (sessions.length > 0) {
@@ -111,24 +134,38 @@ class App {
   }
 
   switchView(viewName) {
-    if (viewName === "dashboard") {
-      this.tabBtnChat.classList.remove("active");
-      this.tabBtnChat.setAttribute("aria-selected", "false");
-      this.tabBtnDashboard.classList.add("active");
-      this.tabBtnDashboard.setAttribute("aria-selected", "true");
-      this.chatWorkspace.classList.add("hidden");
-      this.dashboardWorkspace.classList.remove("hidden");
-      window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: "dashboard" } }));
-    } else {
-      this.tabBtnDashboard.classList.remove("active");
-      this.tabBtnDashboard.setAttribute("aria-selected", "false");
-      this.tabBtnChat.classList.add("active");
-      this.tabBtnChat.setAttribute("aria-selected", "true");
-      this.dashboardWorkspace.classList.add("hidden");
-      this.chatWorkspace.classList.remove("hidden");
-      window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: "chat" } }));
+    const views = [
+      { id: "chat", top: this.tabBtnChat, act: this.actBtnChat, ws: this.chatWorkspace },
+      { id: "editor", top: this.tabBtnEditor, act: this.actBtnEditor, ws: this.editorWorkspace },
+      { id: "dashboard", top: this.tabBtnDashboard, act: this.actBtnDashboard, ws: this.dashboardWorkspace },
+      { id: "settings", top: this.tabBtnSettings, act: this.actBtnSettings, ws: this.settingsWorkspace },
+    ];
+
+    views.forEach((v) => {
+      const isTarget = v.id === viewName;
+      if (v.top) {
+        v.top.classList.toggle("active", isTarget);
+        v.top.setAttribute("aria-selected", isTarget ? "true" : "false");
+      }
+      if (v.act) {
+        v.act.classList.toggle("active", isTarget);
+      }
+      if (v.ws) {
+        v.ws.classList.toggle("hidden", !isTarget);
+      }
+    });
+
+    if (viewName === "dashboard" && window.Dashboard) {
+      window.Dashboard.refresh();
+    } else if (viewName === "settings" && window.MetisSettings) {
+      window.MetisSettings.render();
+    } else if (viewName === "editor" && window.MetisWorkbench) {
+      window.MetisWorkbench.render();
     }
+
+    window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: viewName } }));
   }
+
 
   setTheme(themeName) {
     document.body.classList.remove("theme-obsidian", "theme-linear", "theme-amber", "theme-nordic");
@@ -255,14 +292,21 @@ class App {
   }
 
   handleStreamEvent(msgId, event) {
-    if (event.event_type === "delta" && event.payload.text) {
+    if (event.event_type === "state_changed") {
+      const state = event.payload.to_state || event.payload.state || "planning";
+      this.setAgentState(state, event.payload.reason || "");
+    } else if (event.event_type === "delta" && event.payload.text) {
       UI.updateStreamingMessage(msgId, event.payload.text);
       this.scrollToBottom();
     } else if (event.event_type === "ask_approval") {
+      this.setAgentState("awaiting_approval", event.payload.approval?.action || "Phylax security gate approval required");
       UI.renderApprovalCard(event.payload.approval, async (approvalId, decision) => {
         await API.resolveApproval(approvalId, decision);
+        this.setAgentState("planning", "Approval resolved, continuing...");
       });
     } else if (event.event_type === "completed") {
+      this.setAgentState("completed", "Task finished and verified");
+      setTimeout(() => this.setAgentState("idle", "Ready"), 3000);
       // Reload session to populate final citations and work trace
       API.getSession(this.currentSessionId).then((session) => {
         const lastMsg = session.messages[session.messages.length - 1];
@@ -273,6 +317,65 @@ class App {
           }
         }
       });
+    } else if (event.event_type === "failed") {
+      this.setAgentState("failed", event.payload.error || "Turn failed");
+    }
+  }
+
+  setAgentState(state, reason = "") {
+    const pill = document.getElementById("agent-state-pill");
+    if (!pill) return;
+    const dot = pill.querySelector(".state-dot");
+    const text = pill.querySelector(".state-text");
+
+    const normalized = state.toLowerCase();
+    pill.className = `agent-state-pill state-${normalized}`;
+    if (text) {
+      text.textContent = normalized.replace("_", " ").toUpperCase();
+    }
+    if (reason) {
+      pill.title = `Agent State: ${normalized.toUpperCase()} — ${reason}`;
+    }
+
+    if (normalized === "awaiting_approval") {
+      this.triggerApprovalNotification(reason || "Phylax approval token required to proceed.");
+    }
+  }
+
+  triggerApprovalNotification(body) {
+    // 1. Synthesize subtle audio chime via native Web Audio API (no external asset needed)
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+      }
+    } catch (_) {}
+
+    // 2. Desktop notification via Web Notifications API
+    if ("Notification" in window) {
+      if (Notification.permission === "granted") {
+        new Notification("Metis: Phylax Approval Required", {
+          body: body,
+          icon: "/static/favicon.ico",
+        });
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((perm) => {
+          if (perm === "granted") {
+            new Notification("Metis: Phylax Approval Required", { body });
+          }
+        });
+      }
     }
   }
 

@@ -49,9 +49,25 @@ class EventType(str, Enum):
     EVIDENCE = "evidence"
     ASK_APPROVAL = "ask_approval"
     APPROVAL_RESOLVED = "approval_resolved"
+    STATE_CHANGED = "state_changed"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class AgentSemanticState(str, Enum):
+    """
+    Semantic operational state of an agent (inspired by Herdr agent multiplexer FSM).
+    Enables external surfaces (Prosopon, VS Code Activity Bar) to immediately differentiate
+    internal deliberation from security/approval blocks or verification gates.
+    """
+    IDLE = "idle"
+    PLANNING = "planning"
+    MUTATING = "mutating"
+    AWAITING_APPROVAL = "awaiting_approval"
+    VERIFYING = "verifying"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class ToolSideEffectClass(str, Enum):

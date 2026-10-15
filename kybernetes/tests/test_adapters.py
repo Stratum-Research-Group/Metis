@@ -145,3 +145,22 @@ def test_dokime_cohort_priors():
     assert priors is not None
     assert priors["sample_count"] == 1
     assert priors["mean_input_tokens"] == 200.0
+
+
+def test_phylax_adapter_live_policy_evaluation():
+    from pathlib import Path
+    policy_path = Path("phylax/policies/default_policy.yaml").resolve()
+    if not policy_path.exists():
+        policy_path = (Path(__file__).parents[3] / "phylax" / "policies" / "default_policy.yaml").resolve()
+
+    if policy_path.exists():
+        phylax = PhylaxAdapter(policy_path=str(policy_path))
+        assert phylax.is_simulated is False
+        # read_file_range is explicitly allowed in default_policy.yaml
+        permitted, _ = phylax.is_action_permitted("execute", "read_file_range", {})
+        assert permitted is True
+
+        # edit_file_block requires ask approval
+        permitted, app_req = phylax.is_action_permitted("execute", "edit_file_block", {})
+        assert permitted is False
+        assert app_req is not None

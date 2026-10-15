@@ -1,18 +1,26 @@
 """Tool registry providing declarative schema validation, capability checks, and execution sandboxing."""
 
+from pathlib import Path
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
+
 
 from kybernetes.contracts.enums import ToolSideEffectClass
 from kybernetes.contracts.tool_spec import ToolCallRequest, ToolDefinition, ToolResult
 from kybernetes.tools.calculator import SafeCalculator
+from kybernetes.tools.code_mode import SafeCodeMode
+from kybernetes.tools.edit_file_block import SafeEditBlock
 from kybernetes.tools.file_search import SafeFileSearch
+from kybernetes.tools.read_file_range import SafeReadRange
+from kybernetes.tools.sandboxed_bash import SafeSandboxedBash
+from kybernetes.tools.write_file import SafeWriteFile
 
 
 class ToolRegistry:
     """Central registry of vetted, declarative tools for Kybernetes orchestrator."""
 
-    def __init__(self):
+    def __init__(self, allowed_roots: Optional[List[Path]] = None):
+        self.allowed_roots = [r.resolve() for r in (allowed_roots or [Path.cwd()])]
         self._tools: Dict[str, ToolDefinition] = {}
         self._handlers: Dict[str, Callable[..., Any]] = {}
         self._register_default_tools()
@@ -24,7 +32,7 @@ class ToolRegistry:
             lambda args: {"result": calc.evaluate(args.get("expression", ""))},
         )
 
-        fsearch = SafeFileSearch()
+        fsearch = SafeFileSearch(allowed_roots=self.allowed_roots)
         self.register(
             fsearch.get_definition(),
             lambda args: fsearch.search(
@@ -33,6 +41,57 @@ class ToolRegistry:
                 max_results=int(args.get("max_results", 20)),
             ),
         )
+
+        rrange = SafeReadRange(allowed_roots=self.allowed_roots)
+        self.register(
+            rrange.get_definition(),
+            lambda args: rrange.read_range(
+                path=args.get("path", ""),
+                start_line=int(args.get("start_line", 1)),
+                end_line=int(args.get("end_line", 200)),
+            ),
+        )
+
+        eblock = SafeEditBlock(allowed_roots=self.allowed_roots)
+        self.register(
+            eblock.get_definition(),
+            lambda args: eblock.edit_block(
+                path=args.get("path", ""),
+                search_block=args.get("search_block", ""),
+                replace_block=args.get("replace_block", ""),
+            ),
+        )
+
+        wfile = SafeWriteFile(allowed_roots=self.allowed_roots)
+        self.register(
+            wfile.get_definition(),
+            lambda args: wfile.write(
+                path=args.get("path", ""),
+                content=args.get("content", ""),
+                overwrite=bool(args.get("overwrite", False)),
+            ),
+        )
+
+        sbash = SafeSandboxedBash(allowed_roots=self.allowed_roots)
+        self.register(
+            sbash.get_definition(),
+            lambda args: sbash.execute(
+                command=args.get("command", ""),
+                cwd=args.get("cwd"),
+                timeout_seconds=args.get("timeout_seconds"),
+            ),
+        )
+
+        cmode = SafeCodeMode(allowed_roots=self.allowed_roots)
+        self.register(
+            cmode.get_definition(),
+            lambda args: cmode.execute(
+                script=args.get("script", ""),
+                timeout_seconds=float(args.get("timeout_seconds", 5.0)),
+            ),
+        )
+
+
 
     def register(self, definition: ToolDefinition, handler: Callable[[Dict[str, Any]], Any]) -> None:
         """Register a vetted tool with schema and handler."""

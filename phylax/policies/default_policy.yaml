@@ -88,7 +88,70 @@ rules:
     priority: 20
     ask_ttl_seconds: 300
 
-  # 6. Critical tool executions require explicit owner approval
+  # 6. Coding Agent Tools: read allowed, mutating/shell require approval
+  - id: "allow_coding_reads"
+    description: "Allow Kybernetes to execute safe read and search tools"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "read_file_range"
+    effect: "allow"
+    priority: 15
+
+  - id: "allow_file_search"
+    description: "Allow Kybernetes to execute file search"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "file_search"
+    effect: "allow"
+    priority: 15
+
+  - id: "allow_code_mode"
+    description: "Allow Kybernetes to execute sandboxed Python Code Mode for multi-file workspace inspection"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "run_code_mode"
+    effect: "allow"
+    priority: 15
+
+  - id: "ask_coding_mutations"
+    description: "Require human approval for code edits, file writes, and shell execution"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "edit_file_block"
+    effect: "ask"
+    priority: 15
+    ask_ttl_seconds: 180
+
+  - id: "ask_write_file"
+    description: "Require human approval for file writes"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "write_file"
+    effect: "ask"
+    priority: 15
+    ask_ttl_seconds: 180
+
+  - id: "ask_sandboxed_bash"
+    description: "Require human approval for sandboxed bash execution"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "sandboxed_bash"
+    effect: "ask"
+    priority: 15
+    ask_ttl_seconds: 180
+
   - id: "ask_dangerous_tools"
     description: "Require human owner approval for destructive or shell tools"
     subject: "kybernetes"
@@ -99,6 +162,7 @@ rules:
     effect: "ask"
     priority: 20
     ask_ttl_seconds: 180
+
 
   # 7. Final Mandatory Default Deny
   - id: "default_deny_all"

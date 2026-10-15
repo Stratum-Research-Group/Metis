@@ -79,6 +79,7 @@ fi
 
 # Step 2: Launch Hestia Model Server
 echo -e "\n[Step 2/4] Starting Hestia Model Server on port ${HESTIA_PORT}..."
+export HESTIA_SERVICE_TOKEN="${HESTIA_SERVICE_TOKEN:-$(openssl rand -hex 16 2>/dev/null || echo 'metis-local-hestia-token')}"
 HESTIA_CMD=("serve" "--port" "${HESTIA_PORT}" "--config" "hestia/hestia.yaml" "--models" "hestia/models.yaml")
 if [ -x "hestia/.venv/bin/hestia" ]; then
     hestia/.venv/bin/hestia "${HESTIA_CMD[@]}" &

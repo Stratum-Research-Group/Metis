@@ -14,11 +14,36 @@ class PhylaxAdapter:
     Brokers permission requests, one-use approval digests, and budget policy enforcement.
     """
 
-    def __init__(self, shim: Any = None):
+    def __init__(self, shim: Any = None, policy_path: Optional[str] = None):
         self.shim = shim
-        self.is_simulated = (shim is None)
         self._approvals: Dict[str, Dict[str, Any]] = {}
         self._approval_events: Dict[str, asyncio.Event] = {}
+
+        if self.shim is None and policy_path:
+            try:
+                from pathlib import Path
+                from phylax.adapters.kybernetes import KybernetesShim
+                from phylax.approvals.manager import ApprovalManager
+                from phylax.audit.logger import AuditLogger
+                from phylax.engine.manager import PolicyManager
+                from phylax.gateway.gateway import GuardedGateway
+
+                policy_file = Path(policy_path).resolve()
+                if policy_file.exists():
+                    workspace_root = policy_file.parents[1] if policy_file.parent.name == "policies" else policy_file.parent
+                    audit_file = workspace_root / ".phylax" / "audit.jsonl"
+                    audit_file.parent.mkdir(parents=True, exist_ok=True)
+                    approval_file = workspace_root / ".phylax" / "approvals.json"
+
+                    policy_mgr = PolicyManager(policy_file, workspace_root=workspace_root)
+                    audit_logger = AuditLogger(audit_file)
+                    approval_mgr = ApprovalManager(approval_file)
+                    gateway = GuardedGateway(policy_mgr, audit_logger, approval_mgr)
+                    self.shim = KybernetesShim(gateway)
+            except Exception:
+                pass
+
+        self.is_simulated = (self.shim is None)
 
     @property
     def _pending_approvals(self) -> Dict[str, Dict[str, Any]]:
@@ -52,6 +77,49 @@ class PhylaxAdapter:
         Check whether an action is pre-authorized or requires an interactive user approval.
         Returns: (is_allowed_immediately, approval_request_dict_if_needed)
         """
+        if self.shim and hasattr(self.shim, "gateway"):
+            try:
+                from phylax.contracts.enums import Effect
+                verb = "read" if capability in ("read_file", "search_files") else (
+                    "write" if capability in ("write_file", "edit_file_block") else (
+                        "send" if capability == "send" else "execute"
+                    )
+                )
+                res_class = "file" if verb in ("read", "write") else (
+                    "network" if verb == "send" else "tool"
+                )
+                auth_rec = self.shim.gateway.decide(
+                    subject="kybernetes",
+                    verb=verb,
+                    resource_class=res_class,
+                    target=target,
+                    arguments=arguments,
+                )
+                if auth_rec.effect == Effect.ALLOW:
+                    return True, None
+                elif auth_rec.effect == Effect.DENY:
+                    return False, None
+                elif auth_rec.effect == Effect.ASK:
+                    approval_id = auth_rec.approval_id or f"app-{uuid.uuid4().hex[:8]}"
+                    now = datetime.now(timezone.utc)
+                    req = {
+                        "approval_id": approval_id,
+                        "action": capability.upper(),
+                        "target": target,
+                        "argument_summary": arguments,
+                        "policy_rule": f"PhylaxPolicy: Matched rule '{auth_rec.matched_rule_id}' requiring explicit single-use approval.",
+                        "expiry_utc": (now + timedelta(minutes=5)).isoformat(),
+                        "expiry_timestamp": (now + timedelta(minutes=5)).timestamp(),
+                        "status": "pending",
+                        "decision": None,
+                        "consumed": False,
+                    }
+                    self._approvals[approval_id] = req
+                    self._approval_events[approval_id] = asyncio.Event()
+                    return False, req
+            except Exception:
+                pass
+
         # Read-only actions and safe calculations do not require interactive prompt
         if capability in ("compute", "read_file") and not any(kw in target.lower() for kw in ["secret", "passwd", "shadow", "key"]):
             return True, None
