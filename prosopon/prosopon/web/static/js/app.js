@@ -39,12 +39,23 @@ class App {
     this.btnSubmitPairing = document.getElementById("btn-submit-pairing");
     this.btnClosePairing = document.getElementById("btn-close-pairing");
     this.btnPairingInfo = document.getElementById("btn-pairing-info");
+    this.themeSelect = document.getElementById("theme-select");
   }
 
   attachEventListeners() {
     this.btnToggleSidebar.onclick = () => this.toggleSidebar();
     this.sidebarOverlay.onclick = () => this.closeSidebar();
     this.btnNewSession.onclick = () => this.createNewSession();
+
+    // Theme Switching
+    if (this.themeSelect) {
+      const savedTheme = localStorage.getItem("metis_theme") || "theme-obsidian";
+      this.setTheme(savedTheme);
+      this.themeSelect.value = savedTheme;
+      this.themeSelect.onchange = (e) => {
+        this.setTheme(e.target.value);
+      };
+    }
 
     // View Switching
     if (this.tabBtnChat && this.tabBtnDashboard) {
@@ -117,6 +128,12 @@ class App {
       this.chatWorkspace.classList.remove("hidden");
       window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: "chat" } }));
     }
+  }
+
+  setTheme(themeName) {
+    document.body.classList.remove("theme-obsidian", "theme-linear", "theme-amber", "theme-nordic");
+    document.body.classList.add(themeName);
+    localStorage.setItem("metis_theme", themeName);
   }
 
   toggleSidebar() {

@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Prosopon — Local Interface</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body class="dark-theme">
+<body class="dark-theme theme-obsidian">
   <div id="app" class="app-container">
     <!-- Top Navigation Bar -->
     <header class="top-nav">
@@ -23,9 +26,19 @@
         <h1 id="session-title">New Conversation</h1>
         <span id="connection-status" class="status-badge connected">Local</span>
       </div>
-      <button id="btn-pairing-info" class="icon-btn" aria-label="Device pairing info">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      </button>
+      <div class="nav-right">
+        <div class="theme-select-wrap">
+          <select id="theme-select" class="theme-select" aria-label="Select Interface Theme">
+            <option value="theme-obsidian">Obsidian Cyber</option>
+            <option value="theme-linear">Linear Minimalist</option>
+            <option value="theme-amber">Amber Cyberdeck</option>
+            <option value="theme-nordic">Nordic Frost</option>
+          </select>
+        </div>
+        <button id="btn-pairing-info" class="icon-btn" aria-label="Device pairing info">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </button>
+      </div>
     </header>
 
     <!-- Sidebar / Session Drawer -->

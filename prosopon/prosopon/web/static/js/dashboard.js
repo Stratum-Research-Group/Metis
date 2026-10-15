@@ -543,6 +543,7 @@ const Dashboard = {
 
   /* 5. GUARDRAILS */
   renderGuardrailsSection(area) {
+    // 1. Phylax Zero-Trust Firewall
     const card = document.createElement("div");
     card.className = "dash-card";
     
@@ -563,6 +564,28 @@ const Dashboard = {
 
     card.appendChild(list);
     area.appendChild(card);
+
+    // 2. Krisis Epistemic & Heuristic Verifier
+    const krisisCard = document.createElement("div");
+    krisisCard.className = "dash-card";
+    
+    const kHead = document.createElement("div");
+    kHead.className = "dash-card-header";
+    const kH2 = document.createElement("h2");
+    kH2.textContent = "Krisis Output Verification & Epistemic Guard";
+    kHead.appendChild(kH2);
+    krisisCard.appendChild(kHead);
+
+    const kList = document.createElement("div");
+    kList.className = "dash-stat-list";
+
+    kList.appendChild(this.createStatRow("Verification Strategy", "Dual Gate: Epistemic Boundary + Grounded Claim Verification"));
+    kList.appendChild(this.createStatRow("Epistemic Gate", "Simulated Heuristic Rule-Based Verifier"));
+    kList.appendChild(this.createStatRow("Confidence Score Threshold", "0.85 (Enforced on generated turns)"));
+    kList.appendChild(this.createStatRow("Refusal Overrides", "Active (Blocks unsafe or hallucinated output)"));
+
+    krisisCard.appendChild(kList);
+    area.appendChild(krisisCard);
   },
 
   /* 6. EVAL & TRAINING */
@@ -890,13 +913,29 @@ const Dashboard = {
 
   /* 7. SESSIONS & AUDIT LOG */
   async renderSessionsAuditSection(area) {
+    // 1. Chat Sessions & Turn Traces
+    const sessCard = document.createElement("div");
+    sessCard.className = "dash-card";
+    const sessHead = document.createElement("div");
+    sessHead.className = "dash-card-header";
+    const sessH2 = document.createElement("h2");
+    sessH2.textContent = "Metis Active Chat Sessions & Traces";
+    sessHead.appendChild(sessH2);
+    sessCard.appendChild(sessHead);
+
+    const sessBox = document.createElement("div");
+    sessBox.textContent = "Loading active chat sessions...";
+    sessCard.appendChild(sessBox);
+    area.appendChild(sessCard);
+
+    // 2. Append-Only Admin Security Audit Log
     const card = document.createElement("div");
     card.className = "dash-card";
     
     const head = document.createElement("div");
     head.className = "dash-card-header";
     const h2 = document.createElement("h2");
-    h2.textContent = "Admin Audit Log & Turn Traces";
+    h2.textContent = "Append-Only Admin Security Audit Trail";
     head.appendChild(h2);
     card.appendChild(head);
 
@@ -906,9 +945,65 @@ const Dashboard = {
     area.appendChild(card);
 
     try {
-      const audit = await API.getDashboardAuditLog(20, 0);
-      auditBox.textContent = "";
+      const [sessData, audit] = await Promise.all([
+        API.getDashboardSessions(20, 0).catch(() => ({ sessions: [], total: 0 })),
+        API.getDashboardAuditLog(20, 0).catch(() => ({ entries: [], total: 0 })),
+      ]);
 
+      // Render Sessions
+      sessBox.textContent = "";
+      const sessions = sessData.sessions || [];
+      if (sessions.length > 0) {
+        const table = document.createElement("table");
+        table.className = "dash-table";
+        const thead = document.createElement("thead");
+        const trH = document.createElement("tr");
+        ["Session ID", "Name", "Created", "Updated", "Turns"].forEach((t) => {
+          const th = document.createElement("th");
+          th.textContent = t;
+          trH.appendChild(th);
+        });
+        thead.appendChild(trH);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        sessions.forEach((s) => {
+          const tr = document.createElement("tr");
+          const tdId = document.createElement("td");
+          tdId.className = "font-mono text-xs";
+          tdId.textContent = s.session_id ? s.session_id.slice(0, 12) + "..." : "n/a";
+          tr.appendChild(tdId);
+
+          const tdName = document.createElement("td");
+          tdName.className = "font-bold text-xs";
+          tdName.textContent = s.name || "Untitled Session";
+          tr.appendChild(tdName);
+
+          const tdC = document.createElement("td");
+          tdC.className = "text-xs text-muted";
+          tdC.textContent = this.formatTimestamp(s.created_at);
+          tr.appendChild(tdC);
+
+          const tdU = document.createElement("td");
+          tdU.className = "text-xs text-muted";
+          tdU.textContent = this.formatTimestamp(s.updated_at);
+          tr.appendChild(tdU);
+
+          const tdTurns = document.createElement("td");
+          tdTurns.className = "font-mono text-xs";
+          tdTurns.textContent = Array.isArray(s.messages) ? s.messages.length : (s.turn_count || 0);
+          tr.appendChild(tdTurns);
+
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        sessBox.appendChild(table);
+      } else {
+        sessBox.textContent = "No active chat sessions found in store.";
+      }
+
+      // Render Audit Log
+      auditBox.textContent = "";
       if (audit.entries && audit.entries.length > 0) {
         const table = document.createElement("table");
         table.className = "dash-table";
@@ -958,7 +1053,7 @@ const Dashboard = {
         auditBox.textContent = "No admin audit events recorded yet.";
       }
     } catch (e) {
-      auditBox.textContent = `Failed to load audit log: ${e.message}`;
+      auditBox.textContent = `Failed to load audit data: ${e.message}`;
     }
   },
 
@@ -1159,7 +1254,33 @@ const Dashboard = {
       }
     });
 
+    const diffBtn = document.createElement("button");
+    diffBtn.className = "dash-button";
+    diffBtn.textContent = "🔍 View Unified Diff";
+
+    diffBtn.addEventListener("click", () => {
+      feedbackBox.textContent = "";
+      let savedStr = "";
+      const currentPre = displayBox.querySelector("pre");
+      try {
+        const savedObj = JSON.parse(currentPre ? currentPre.textContent : "{}");
+        const original = (savedObj && savedObj.saved && Object.keys(savedObj.saved).length > 0)
+          ? savedObj.saved
+          : (savedObj.effective || {});
+        savedStr = JSON.stringify(original, null, 2);
+      } catch {
+        savedStr = currentPre ? currentPre.textContent : "";
+      }
+      let propStr = textarea.value;
+      try {
+        propStr = JSON.stringify(JSON.parse(textarea.value), null, 2);
+      } catch {}
+      const diffEl = this.computeUnifiedDiff(savedStr, propStr, `${select.value}.saved.json`, `${select.value}.proposed.json`);
+      feedbackBox.appendChild(diffEl);
+    });
+
     btnRow.appendChild(valBtn);
+    btnRow.appendChild(diffBtn);
     btnRow.appendChild(applyBtn);
     validatorSection.appendChild(btnRow);
     validatorSection.appendChild(feedbackBox);
@@ -1264,6 +1385,63 @@ const Dashboard = {
     }
   },
 
+  computeUnifiedDiff(oldStr, newStr, oldHeader = "saved", newHeader = "proposed") {
+    const oldLines = (oldStr || "").trim().split("\n");
+    const newLines = (newStr || "").trim().split("\n");
+
+    const diffContainer = document.createElement("div");
+    diffContainer.className = "dash-diff-container";
+
+    const header = document.createElement("div");
+    header.className = "dash-diff-header";
+    header.textContent = `--- ${oldHeader}   +++ ${newHeader}`;
+    diffContainer.appendChild(header);
+
+    // Compute LCS matrix for diff
+    const dp = Array(oldLines.length + 1).fill(null).map(() => Array(newLines.length + 1).fill(0));
+    for (let x = 0; x < oldLines.length; x++) {
+      for (let y = 0; y < newLines.length; y++) {
+        if (oldLines[x] === newLines[y]) {
+          dp[x + 1][y + 1] = dp[x][y] + 1;
+        } else {
+          dp[x + 1][y + 1] = Math.max(dp[x + 1][y], dp[x][y + 1]);
+        }
+      }
+    }
+
+    const diffLines = [];
+    let x = oldLines.length, y = newLines.length;
+    while (x > 0 || y > 0) {
+      if (x > 0 && y > 0 && oldLines[x - 1] === newLines[y - 1]) {
+        diffLines.unshift({ type: "ctx", text: "  " + oldLines[x - 1] });
+        x--; y--;
+      } else if (y > 0 && (x === 0 || dp[x][y - 1] >= dp[x - 1][y])) {
+        diffLines.unshift({ type: "add", text: "+ " + newLines[y - 1] });
+        y--;
+      } else if (x > 0 && (y === 0 || dp[x][y - 1] < dp[x - 1][y])) {
+        diffLines.unshift({ type: "del", text: "- " + oldLines[x - 1] });
+        x--;
+      }
+    }
+
+    if (diffLines.every((l) => l.type === "ctx")) {
+      const line = document.createElement("div");
+      line.className = "dash-diff-line ctx";
+      line.textContent = "(No changes between saved and proposed configuration)";
+      diffContainer.appendChild(line);
+      return diffContainer;
+    }
+
+    diffLines.forEach((l) => {
+      const line = document.createElement("div");
+      line.className = `dash-diff-line ${l.type}`;
+      line.textContent = l.text;
+      diffContainer.appendChild(line);
+    });
+
+    return diffContainer;
+  },
+
   /* UI Helper Components */
   createMetricCard(title, mainText, subText) {
     const card = document.createElement("div");
@@ -1322,3 +1500,4 @@ const Dashboard = {
 };
 
 window.Dashboard = Dashboard;
+

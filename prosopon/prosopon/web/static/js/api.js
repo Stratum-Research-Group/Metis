@@ -47,6 +47,14 @@ const API = {
 
     const res = await fetch(endpoint, { ...options, headers });
     if (res.status === 401) {
+      this.setAuthToken("");
+      if (!options._retried && !endpoint.startsWith("/api/auth/")) {
+        const fresh = await this.ensureAuthToken();
+        if (fresh) {
+          const retryOpts = { ...options, _retried: true };
+          return this.request(endpoint, retryOpts);
+        }
+      }
       window.dispatchEvent(new CustomEvent("prosopon:unauthorized"));
       throw new Error("Unauthorized: Device pairing required");
     }
