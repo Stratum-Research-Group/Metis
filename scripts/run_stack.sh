@@ -79,7 +79,7 @@ fi
 
 # Step 2: Launch Hestia Model Server
 echo -e "\n[Step 2/4] Starting Hestia Model Server on port ${HESTIA_PORT}..."
-export HESTIA_SERVICE_TOKEN="${HESTIA_SERVICE_TOKEN:-$(openssl rand -hex 16 2>/dev/null || echo 'metis-local-hestia-token')}"
+export HESTIA_SERVICE_TOKEN="${HESTIA_SERVICE_TOKEN:-metis-sovereign}"
 HESTIA_CMD=("serve" "--port" "${HESTIA_PORT}" "--config" "hestia/hestia.yaml" "--models" "hestia/models.yaml")
 if [ -x "hestia/.venv/bin/hestia" ]; then
     hestia/.venv/bin/hestia "${HESTIA_CMD[@]}" &
@@ -99,8 +99,8 @@ wait_for_url "http://127.0.0.1:${HESTIA_PORT}/v1/models" "Hestia" 5 || true
 echo -e "\n[Step 3/4] Starting Kybernetes Orchestrator on port ${KYBERNETES_PORT}..."
 export HESTIA_BASE_URL="http://127.0.0.1:${HESTIA_PORT}/v1"
 export HESTIA_DEFAULT_MODEL="${HESTIA_DEFAULT_MODEL:-gemma-4-26b-a4b-abliterated}"
-export KYBERNETES_ADMIN_TOKEN="${KYBERNETES_ADMIN_TOKEN:-$(openssl rand -hex 16 2>/dev/null || echo 'metis-local-admin-token')}"
-export KYBERNETES_SERVICE_TOKEN="${KYBERNETES_SERVICE_TOKEN:-$(openssl rand -hex 16 2>/dev/null || echo 'metis-local-service-token')}"
+export KYBERNETES_ADMIN_TOKEN="${KYBERNETES_ADMIN_TOKEN:-metis-local-admin-token}"
+export KYBERNETES_SERVICE_TOKEN="${KYBERNETES_SERVICE_TOKEN:-metis-local-service-token}"
 KYB_CMD=("serve" "--host" "127.0.0.1" "--port" "${KYBERNETES_PORT}")
 if [ -d ".stoma" ]; then
     echo "[Metis] Wiring live Stoma memory root (.stoma) into Kybernetes."
