@@ -78,9 +78,12 @@ elif command -v uv >/dev/null 2>&1; then
 fi
 
 # Step 2: Launch Hestia Model Server
-echo -e "\n[Step 2/4] Starting Hestia Model Server on port ${HESTIA_PORT}..."
+HESTIA_HOST="${HESTIA_HOST:-127.0.0.1}"
+HESTIA_CONFIG="${HESTIA_CONFIG:-hestia/hestia.yaml}"
+HESTIA_MODELS="${HESTIA_MODELS:-hestia/models.yaml}"
+echo -e "\n[Step 2/4] Starting Hestia Model Server on ${HESTIA_HOST}:${HESTIA_PORT}..."
 export HESTIA_SERVICE_TOKEN="${HESTIA_SERVICE_TOKEN:-metis-sovereign}"
-HESTIA_CMD=("serve" "--port" "${HESTIA_PORT}" "--config" "hestia/hestia.yaml" "--models" "hestia/models.yaml")
+HESTIA_CMD=("serve" "--host" "${HESTIA_HOST}" "--port" "${HESTIA_PORT}" "--config" "${HESTIA_CONFIG}" "--models" "${HESTIA_MODELS}")
 if [ -x "hestia/.venv/bin/hestia" ]; then
     hestia/.venv/bin/hestia "${HESTIA_CMD[@]}" &
     PIDS+=($!)
@@ -93,18 +96,30 @@ elif command -v uv >/dev/null 2>&1; then
 else
     echo "Hestia binary not found. Skipping live inference server."
 fi
-wait_for_url "http://127.0.0.1:${HESTIA_PORT}/v1/models" "Hestia" 5 || true
+wait_for_url "http://${HESTIA_HOST}:${HESTIA_PORT}/v1/models" "Hestia" 5 || true
 
 # Step 3: Launch Kybernetes Orchestrator
-echo -e "\n[Step 3/4] Starting Kybernetes Orchestrator on port ${KYBERNETES_PORT}..."
-export HESTIA_BASE_URL="http://127.0.0.1:${HESTIA_PORT}/v1"
+KYBERNETES_HOST="${KYBERNETES_HOST:-127.0.0.1}"
+KYBERNETES_DB_PATH="${KYBERNETES_DB_PATH:-kybernetes_budget.db}"
+KYBERNETES_MEMORY_ROOT="${KYBERNETES_MEMORY_ROOT:-.stoma}"
+echo -e "\n[Step 3/4] Starting Kybernetes Orchestrator on ${KYBERNETES_HOST}:${KYBERNETES_PORT}..."
+export HESTIA_BASE_URL="http://${HESTIA_HOST}:${HESTIA_PORT}/v1"
 export HESTIA_DEFAULT_MODEL="${HESTIA_DEFAULT_MODEL:-gemma-4-26b-a4b-abliterated}"
 export KYBERNETES_ADMIN_TOKEN="${KYBERNETES_ADMIN_TOKEN:-metis-local-admin-token}"
 export KYBERNETES_SERVICE_TOKEN="${KYBERNETES_SERVICE_TOKEN:-metis-local-service-token}"
-KYB_CMD=("serve" "--host" "127.0.0.1" "--port" "${KYBERNETES_PORT}")
-if [ -d ".stoma" ]; then
-    echo "[Metis] Wiring live Stoma memory root (.stoma) into Kybernetes."
-    KYB_CMD+=("--memory-root" ".stoma")
+KYB_CMD=("serve" "--host" "${KYBERNETES_HOST}" "--port" "${KYBERNETES_PORT}" "--db-path" "${KYBERNETES_DB_PATH}")
+if [ -n "${KYBERNETES_CONFIG:-}" ] && [ -f "$KYBERNETES_CONFIG" ]; then
+    KYB_CMD+=("--config" "$KYBERNETES_CONFIG")
+fi
+if [ -n "${KYBERNETES_ADMIN_TOKEN:-}" ]; then
+    KYB_CMD+=("--admin-token" "$KYBERNETES_ADMIN_TOKEN")
+fi
+if [ -n "${KYBERNETES_SERVICE_TOKEN:-}" ]; then
+    KYB_CMD+=("--service-token" "$KYBERNETES_SERVICE_TOKEN")
+fi
+if [ -d "${KYBERNETES_MEMORY_ROOT}" ]; then
+    echo "[Metis] Wiring live Stoma memory root (${KYBERNETES_MEMORY_ROOT}) into Kybernetes."
+    KYB_CMD+=("--memory-root" "${KYBERNETES_MEMORY_ROOT}")
 fi
 if [ -x "kybernetes/.venv/bin/kybernetes" ]; then
     kybernetes/.venv/bin/kybernetes "${KYB_CMD[@]}" &
@@ -116,23 +131,37 @@ elif command -v uv >/dev/null 2>&1; then
     uv run kybernetes "${KYB_CMD[@]}" &
     PIDS+=($!)
 fi
-if ! wait_for_url "http://127.0.0.1:${KYBERNETES_PORT}/v1/health" "Kybernetes" 10; then
+if ! wait_for_url "http://${KYBERNETES_HOST}:${KYBERNETES_PORT}/v1/health" "Kybernetes" 10; then
     echo "[ERROR] Kybernetes orchestrator failed to start on :${KYBERNETES_PORT}."
     exit 1
 fi
 
 # Step 4: Launch Prosopon UI
+PROSOPON_HOST="${PROSOPON_HOST:-127.0.0.1}"
 echo -e "\n[Step 4/4] Starting Prosopon Web Interface on port ${PROSOPON_PORT}..."
-PROS_OPTS=("serve" "--port" "${PROSOPON_PORT}" "--kybernetes-url" "http://127.0.0.1:${KYBERNETES_PORT}/v1")
+PROS_OPTS=("serve" "--host" "${PROSOPON_HOST}" "--port" "${PROSOPON_PORT}" "--kybernetes-url" "http://${KYBERNETES_HOST}:${KYBERNETES_PORT}/v1")
+if [ "${PROSOPON_LAN:-false}" = "true" ]; then
+    echo "[Metis] Enabling LAN 0.0.0.0 binding with mobile device pairing."
+    PROS_OPTS+=("--lan")
+fi
+if [ "${PROSOPON_TLS:-false}" = "true" ]; then
+    echo "[Metis] Enabling self-signed TLS for microphone access."
+    PROS_OPTS+=("--tls")
+fi
+if [ -n "${PROSOPON_DATA_DIR:-}" ]; then
+    PROS_OPTS+=("--data-dir" "${PROSOPON_DATA_DIR}")
+fi
 if [ "$MOCK_MODE" = "true" ]; then
     echo "[Metis] Running Prosopon in MOCK mode (--mock)."
     PROS_OPTS+=("--mock")
 else
-    echo "[Metis] Connecting Prosopon to live Kybernetes upstream at http://127.0.0.1:${KYBERNETES_PORT}/v1 (--no-mock)."
+    echo "[Metis] Connecting Prosopon to live Kybernetes upstream at http://${KYBERNETES_HOST}:${KYBERNETES_PORT}/v1 (--no-mock)."
     PROS_OPTS+=("--no-mock")
 fi
 
-echo "[Metis] Open http://127.0.0.1:${PROSOPON_PORT} in your browser."
+proto="http"
+[ "${PROSOPON_TLS:-false}" = "true" ] && proto="https"
+echo "[Metis] Open ${proto}://${PROSOPON_HOST}:${PROSOPON_PORT} in your browser."
 if [ -x "prosopon/.venv/bin/prosopon" ]; then
     prosopon/.venv/bin/prosopon "${PROS_OPTS[@]}"
 elif [ -x ".venv/bin/prosopon" ]; then
@@ -143,3 +172,4 @@ else
     echo "Prosopon not found. Waiting for background processes."
     wait
 fi
+
