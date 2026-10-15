@@ -101,6 +101,10 @@ export HESTIA_DEFAULT_MODEL="${HESTIA_DEFAULT_MODEL:-gemma-4-26b-a4b-abliterated
 export KYBERNETES_ADMIN_TOKEN="${KYBERNETES_ADMIN_TOKEN:-$(openssl rand -hex 16 2>/dev/null || echo 'metis-local-admin-token')}"
 export KYBERNETES_SERVICE_TOKEN="${KYBERNETES_SERVICE_TOKEN:-$(openssl rand -hex 16 2>/dev/null || echo 'metis-local-service-token')}"
 KYB_CMD=("serve" "--host" "127.0.0.1" "--port" "${KYBERNETES_PORT}")
+if [ -d ".stoma" ]; then
+    echo "[Metis] Wiring live Stoma memory root (.stoma) into Kybernetes."
+    KYB_CMD+=("--memory-root" ".stoma")
+fi
 if [ -x "kybernetes/.venv/bin/kybernetes" ]; then
     kybernetes/.venv/bin/kybernetes "${KYB_CMD[@]}" &
     PIDS+=($!)

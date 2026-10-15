@@ -174,3 +174,327 @@ async def test_host_header_validation():
         resp_bad = await client.get("/v1/health", headers={"Host": "attacker.com"})
         assert resp_bad.status_code == 400
         assert "Invalid Host header" in resp_bad.text
+
+
+@pytest.mark.asyncio
+async def test_admin_config_validate_endpoints():
+    """Verify POST /v1/admin/modules/{id}/config/validate runs module native validators without side effects."""
+    admin_token = "secret-token-validation-check"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # 1. Unauthenticated request -> 401
+        resp_unauth = await client.post(
+            "/v1/admin/modules/kybernetes/config/validate",
+            json={"proposed": {"port": 8081}},
+        )
+        assert resp_unauth.status_code == 401
+
+        # 2. Unknown module -> 404
+        resp_404 = await client.post(
+            "/v1/admin/modules/nonexistent_mod/config/validate",
+            headers=headers,
+            json={"proposed": {}},
+        )
+        assert resp_404.status_code == 404
+
+        # 3. Valid Kybernetes config
+        resp_kyb_ok = await client.post(
+            "/v1/admin/modules/kybernetes/config/validate",
+            headers=headers,
+            json={"proposed": {"hestia_base_url": "http://127.0.0.1:8080/v1", "db_path": "test.db"}},
+        )
+        assert resp_kyb_ok.status_code == 200
+        res = resp_kyb_ok.json()
+        assert res["valid"] is True
+        assert res["module_id"] == "kybernetes"
+        assert res["restart_required"] is True
+
+        # 4. Invalid Kybernetes config (unknown field or invalid type)
+        resp_kyb_bad = await client.post(
+            "/v1/admin/modules/kybernetes/config/validate",
+            headers=headers,
+            json={"proposed": {"allowed_origins": 12345}},
+        )
+        assert resp_kyb_bad.status_code == 200
+        res = resp_kyb_bad.json()
+        assert res["valid"] is False
+        assert len(res["errors"]) > 0
+
+        # 5. Hestia valid config
+        resp_hestia_ok = await client.post(
+            "/v1/admin/modules/hestia/config/validate",
+            headers=headers,
+            json={"proposed": {"listen_host": "127.0.0.1", "listen_port": 8080}},
+        )
+        assert resp_hestia_ok.status_code == 200
+        assert resp_hestia_ok.json()["valid"] is True
+
+        # 6. Hestia invalid config: listen_host must be loopback!
+        resp_hestia_bad = await client.post(
+            "/v1/admin/modules/hestia/config/validate",
+            headers=headers,
+            json={"proposed": {"listen_host": "192.168.1.50"}},
+        )
+        assert resp_hestia_bad.status_code == 200
+        res_h_bad = resp_hestia_bad.json()
+        assert res_h_bad["valid"] is False
+        assert any("listen_host must be a loopback" in e for e in res_h_bad["errors"])
+
+        # 7. Stoma invalid config: chunk_overlap >= max_chunk
+        resp_stoma_bad = await client.post(
+            "/v1/admin/modules/stoma/config/validate",
+            headers=headers,
+            json={"proposed": {"max_chunk_tokens": 100, "chunk_overlap_tokens": 150}},
+        )
+        assert resp_stoma_bad.status_code == 200
+        res_s_bad = resp_stoma_bad.json()
+        assert res_s_bad["valid"] is False
+        assert any("chunk_overlap_tokens" in e for e in res_s_bad["errors"])
+
+        # 8. Library module without config (lthcm)
+        resp_lthcm = await client.post(
+            "/v1/admin/modules/lthcm/config/validate",
+            headers=headers,
+            json={"proposed": {"some_key": "val"}},
+        )
+        assert resp_lthcm.status_code == 200
+        res_lib = resp_lthcm.json()
+        assert res_lib["valid"] is False
+        assert any("library without an editable configuration" in e for e in res_lib["errors"])
+
+
+@pytest.mark.asyncio
+async def test_admin_apply_optimistic_concurrency_rejected():
+    """Verify concurrent edits with stale/mismatched base_hash are rejected with 409 Conflict."""
+    admin_token = "secret-token-lock-check"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        resp = await client.post(
+            "/v1/admin/modules/hestia/config/apply",
+            headers=headers,
+            json={
+                "base_hash": "stale_hash_from_old_read",
+                "patch": {"listen_host": "127.0.0.1", "listen_port": 8080},
+            },
+        )
+        assert resp.status_code == 409
+        assert "Concurrent modification detected" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_admin_apply_invalid_patch_never_touches_disk(tmp_path, monkeypatch):
+    """Verify that an invalid patch fails validation and disk files remain completely untouched."""
+    admin_token = "secret-token-invalid-patch"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    test_file = tmp_path / "hestia.yaml"
+    initial_content = "listen_host: 127.0.0.1\nlisten_port: 8080\n"
+    test_file.write_text(initial_content)
+
+    from kybernetes.admin.descriptors import MODULE_REGISTRY
+    monkeypatch.setattr(MODULE_REGISTRY["hestia"], "config_path", str(test_file))
+
+    # Retrieve current config and hash
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        cfg_resp = await client.get("/v1/admin/modules/hestia/config", headers=headers)
+        base_hash = cfg_resp.json()["config_hash"]
+
+        # Submit invalid patch (listen_host must be loopback)
+        resp_bad = await client.post(
+            "/v1/admin/modules/hestia/config/apply",
+            headers=headers,
+            json={
+                "base_hash": base_hash,
+                "patch": {"listen_host": "192.168.1.100", "listen_port": 8080},
+                "confirm_token": "CONFIRM",
+            },
+        )
+        assert resp_bad.status_code == 422
+        assert "Validation failed" in resp_bad.json()["detail"]
+
+        # Assert disk file was NOT modified
+        assert test_file.read_text() == initial_content
+
+
+@pytest.mark.asyncio
+async def test_admin_apply_sensitive_confirmation_gating(tmp_path, monkeypatch):
+    """Verify sensitive configuration modifications require explicit confirmation and provide diff."""
+    admin_token = "secret-token-confirm-check"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    test_file = tmp_path / "hestia.yaml"
+    initial_content = "listen_host: 127.0.0.1\nlisten_port: 8080\n"
+    test_file.write_text(initial_content)
+
+    from kybernetes.admin.descriptors import MODULE_REGISTRY
+    monkeypatch.setattr(MODULE_REGISTRY["hestia"], "config_path", str(test_file))
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        cfg_resp = await client.get("/v1/admin/modules/hestia/config", headers=headers)
+        base_hash = cfg_resp.json()["config_hash"]
+
+        # 1. Sensitive change without confirmation -> 400 with diff requirement
+        resp_unconfirmed = await client.post(
+            "/v1/admin/modules/hestia/config/apply",
+            headers=headers,
+            json={
+                "base_hash": base_hash,
+                "patch": {"listen_host": "127.0.0.1", "listen_port": 8090},
+            },
+        )
+        assert resp_unconfirmed.status_code == 400
+        assert "Explicit confirmation required" in resp_unconfirmed.json()["detail"]
+
+        # 2. Resubmit with confirm_token='CONFIRM' -> succeeds
+        resp_confirmed = await client.post(
+            "/v1/admin/modules/hestia/config/apply",
+            headers=headers,
+            json={
+                "base_hash": base_hash,
+                "patch": {"listen_host": "127.0.0.1", "listen_port": 8090},
+                "confirm_token": "CONFIRM",
+            },
+        )
+        assert resp_confirmed.status_code == 200
+        cs = resp_confirmed.json()
+        assert cs["status"] == "restart_pending"
+        assert cs["restart_required"] is True
+        assert cs["diff"] is not None
+        assert "+listen_port: 8090" in cs["diff"]
+
+
+@pytest.mark.asyncio
+async def test_admin_apply_and_rollback_restores_hash(tmp_path, monkeypatch):
+    """Verify applying a valid ChangeSet and rolling back accurately restores original on-disk content and hash."""
+    admin_token = "secret-token-rollback-check"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    test_file = tmp_path / "kybernetes.yaml"
+    test_file.write_text("hestia_base_url: http://127.0.0.1:8080/v1\ndb_path: ':memory:'\n")
+
+    from kybernetes.admin.descriptors import MODULE_REGISTRY
+    monkeypatch.setattr(MODULE_REGISTRY["kybernetes"], "config_path", str(test_file))
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # Step 1: Read initial state and hash
+        resp_init = await client.get("/v1/admin/modules/kybernetes/config", headers=headers)
+        h0 = resp_init.json()["config_hash"]
+
+        # Step 2: Apply valid update
+        resp_apply = await client.post(
+            "/v1/admin/modules/kybernetes/config/apply",
+            headers=headers,
+            json={
+                "base_hash": h0,
+                "patch": {
+                    "hestia_base_url": "http://127.0.0.1:8080/v1",
+                    "db_path": "metis_test.db",
+                },
+            },
+        )
+        assert resp_apply.status_code == 200
+        applied_cs = resp_apply.json()
+        assert applied_cs["status"] == "restart_pending"
+        cs_id = applied_cs["id"]
+
+        # Verify hash changed on disk
+        resp_updated = await client.get("/v1/admin/modules/kybernetes/config", headers=headers)
+        h1 = resp_updated.json()["config_hash"]
+        assert h1 != h0
+
+        # Step 3: Check history endpoint contains the changeset
+        resp_history = await client.get("/v1/admin/modules/kybernetes/history", headers=headers)
+        assert resp_history.status_code == 200
+        history = resp_history.json()
+        assert any(entry["id"] == cs_id for entry in history)
+
+        # Step 4: Execute rollback
+        resp_rollback = await client.post(
+            f"/v1/admin/modules/kybernetes/config/rollback/{cs_id}",
+            headers=headers,
+        )
+        assert resp_rollback.status_code == 200
+        rb_cs = resp_rollback.json()
+        assert rb_cs["status"] == "rolled_back_on_disk"
+
+        # Step 5: Verify restored hash matches h0 exactly
+        resp_restored = await client.get("/v1/admin/modules/kybernetes/config", headers=headers)
+        h_restored = resp_restored.json()["config_hash"]
+        assert h_restored == h0
+
+
+@pytest.mark.asyncio
+async def test_admin_model_load_unload_audited():
+    """Verify model load and unload actions are recorded in the append-only audit log."""
+    admin_token = "secret-token-model-audit"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # Trigger model load (Hestia may be offline in unit test, but action MUST be audited)
+        await client.post(
+            "/v1/admin/models/load",
+            headers=headers,
+            json={"model": "llama-3.1-8b-instruct", "confirm": True},
+        )
+
+        # Check audit log
+        audit_resp = await client.get("/v1/admin/audit-log", headers=headers)
+        assert audit_resp.status_code == 200
+        entries = audit_resp.json()["entries"]
+        assert any(e["action"] == "model_load" and "llama-3.1-8b-instruct" in e["target"] for e in entries)
+
+
+@pytest.mark.asyncio
+async def test_overview_polling_triggers_zero_model_loads(monkeypatch):
+    """Verify that repeated polling of the overview endpoint triggers zero model loads or completions."""
+    admin_token = "secret-token-polling-safety"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    # Instrument httpx.AsyncClient.post to intercept any outgoing network calls
+    call_counts = {"load": 0, "completions": 0}
+    import httpx
+
+    original_post = httpx.AsyncClient.post
+
+    async def fake_post(self, url, *args, **kwargs):
+        url_str = str(url)
+        if "/manage/load" in url_str:
+            call_counts["load"] += 1
+        elif "/v1/chat/completions" in url_str:
+            call_counts["completions"] += 1
+        return await original_post(self, url, *args, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        for _ in range(100):
+            resp = await client.get("/v1/admin/overview", headers=headers)
+            assert resp.status_code == 200
+
+    # Invariant: Polling is strictly read-only against cached telemetry; never triggers model loading
+    assert call_counts["load"] == 0
+    assert call_counts["completions"] == 0
+

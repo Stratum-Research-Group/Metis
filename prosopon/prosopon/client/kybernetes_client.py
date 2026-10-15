@@ -120,6 +120,21 @@ class KybernetesClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def validate_admin_module_config(
+        self, module_id: str, proposed: Dict[str, Any], admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Validate proposed module configuration against upstream module validator."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/modules/{module_id}/config/validate",
+                json={"proposed": proposed},
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def get_admin_sessions(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
         """Fetch orchestrator sessions."""
         token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
@@ -158,4 +173,102 @@ class KybernetesClient:
                 headers=headers,
             )
             resp.raise_for_status()
+            return resp.json()
+
+    async def apply_admin_module_config(
+        self,
+        module_id: str,
+        base_hash: str,
+        patch: Dict[str, Any],
+        confirm_token: Optional[str] = None,
+        admin_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Apply proposed module configuration via upstream control plane."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/modules/{module_id}/config/apply",
+                json={"base_hash": base_hash, "patch": patch, "confirm_token": confirm_token},
+                headers=headers,
+            )
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=resp.status_code, detail=detail)
+            return resp.json()
+
+    async def get_admin_module_history(
+        self, module_id: str, admin_token: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Fetch change history for a given module."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{self.base_url}/admin/modules/{module_id}/history",
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def rollback_admin_module_config(
+        self, module_id: str, changeset_id: str, admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Rollback configuration to snapshot preceding a specific ChangeSet."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/modules/{module_id}/config/rollback/{changeset_id}",
+                headers=headers,
+            )
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=resp.status_code, detail=detail)
+            return resp.json()
+
+    async def load_model(
+        self, model: str, confirm: bool = True, admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Trigger audited model load via Kybernetes."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/models/load",
+                json={"model": model, "confirm": confirm},
+                headers=headers,
+            )
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=resp.status_code, detail=detail)
+            return resp.json()
+
+    async def unload_model(
+        self, model: str, confirm: bool = True, admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Trigger audited model unload via Kybernetes."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/models/unload",
+                json={"model": model, "confirm": confirm},
+                headers=headers,
+            )
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=resp.status_code, detail=detail)
             return resp.json()

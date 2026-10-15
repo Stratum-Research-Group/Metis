@@ -508,6 +508,37 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Kybernetes config proxy error: {exc}")
 
+    @app.post("/api/dashboard/modules/{module_id}/config/validate")
+    async def dashboard_module_config_validate(
+        module_id: str,
+        req: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Validate proposed module configuration via native module validator."""
+        proposed = req.get("proposed", {})
+        if module_id == "prosopon":
+            try:
+                ProsoponConfig(**proposed)
+                return {
+                    "module_id": "prosopon",
+                    "valid": True,
+                    "errors": [],
+                    "warnings": [],
+                    "restart_required": True,
+                }
+            except Exception as exc:
+                return {
+                    "module_id": "prosopon",
+                    "valid": False,
+                    "errors": [f"ProsoponConfig validation error: {exc}"],
+                    "warnings": [],
+                    "restart_required": True,
+                }
+        try:
+            return await kybernetes.validate_admin_module_config(module_id, proposed)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Kybernetes config validation proxy error: {exc}")
+
     @app.get("/api/dashboard/sessions")
     async def dashboard_sessions(limit: int = 50, offset: int = 0, _: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
         try:
@@ -542,6 +573,89 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     @app.get("/api/dashboard/gpu-telemetry")
     async def dashboard_gpu_telemetry(_: bool = Depends(require_admin_auth)) -> Dict[str, Any]:
         return _get_gpu_telemetry()
+
+    @app.post("/api/dashboard/modules/{module_id}/config/apply")
+    async def dashboard_module_config_apply(
+        module_id: str,
+        req: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Apply proposed module configuration with optimistic lock."""
+        base_hash = req.get("base_hash", "")
+        patch = req.get("patch", {})
+        confirm_token = req.get("confirm_token")
+        try:
+            return await kybernetes.apply_admin_module_config(
+                module_id=module_id,
+                base_hash=base_hash,
+                patch=patch,
+                confirm_token=confirm_token,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Kybernetes config apply error: {exc}")
+
+    @app.get("/api/dashboard/modules/{module_id}/history")
+    async def dashboard_module_history(
+        module_id: str,
+        _: bool = Depends(require_admin_auth),
+    ) -> List[Dict[str, Any]]:
+        """Fetch ChangeSet history for a given module."""
+        try:
+            return await kybernetes.get_admin_module_history(module_id)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Kybernetes history proxy error: {exc}")
+
+    @app.post("/api/dashboard/modules/{module_id}/config/rollback/{changeset_id}")
+    async def dashboard_module_config_rollback(
+        module_id: str,
+        changeset_id: str,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Rollback module configuration to pre-changeset snapshot."""
+        try:
+            return await kybernetes.rollback_admin_module_config(module_id, changeset_id)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Kybernetes rollback proxy error: {exc}")
+
+    @app.post("/api/dashboard/models/load")
+    async def dashboard_model_load(
+        req: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Audited model load action."""
+        model = req.get("model", "")
+        confirm = req.get("confirm", True)
+        if not model:
+            raise HTTPException(status_code=400, detail="'model' field required")
+        try:
+            return await kybernetes.load_model(model=model, confirm=confirm)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Model load failed: {exc}")
+
+    @app.post("/api/dashboard/models/unload")
+    async def dashboard_model_unload(
+        req: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Audited model unload action."""
+        model = req.get("model", "")
+        confirm = req.get("confirm", True)
+        if not model:
+            raise HTTPException(status_code=400, detail="'model' field required")
+        try:
+            return await kybernetes.unload_model(model=model, confirm=confirm)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Model unload failed: {exc}")
 
     # 9. Health
     @app.get("/api/health")

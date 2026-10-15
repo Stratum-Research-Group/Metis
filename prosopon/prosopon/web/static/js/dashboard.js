@@ -388,11 +388,51 @@ const Dashboard = {
       info.appendChild(sub);
       row.appendChild(info);
 
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "0.5rem";
+      actions.style.alignItems = "center";
+
       const statusBadge = document.createElement("span");
       statusBadge.className = `dash-badge ${m.state === "loaded" ? "state-live" : "state-simulated"}`;
       statusBadge.textContent = m.state.toUpperCase();
-      row.appendChild(statusBadge);
+      actions.appendChild(statusBadge);
 
+      const loadBtn = document.createElement("button");
+      loadBtn.className = "dash-probe-btn";
+      loadBtn.textContent = "Load";
+      loadBtn.onclick = async () => {
+        loadBtn.disabled = true;
+        loadBtn.textContent = "Loading...";
+        try {
+          await API.loadDashboardModel(m.id);
+          this.renderModelsSection(area);
+        } catch (e) {
+          alert(`Model load failed: ${e.message}`);
+          loadBtn.disabled = false;
+          loadBtn.textContent = "Load";
+        }
+      };
+      actions.appendChild(loadBtn);
+
+      const unloadBtn = document.createElement("button");
+      unloadBtn.className = "dash-probe-btn";
+      unloadBtn.textContent = "Unload";
+      unloadBtn.onclick = async () => {
+        unloadBtn.disabled = true;
+        unloadBtn.textContent = "Unloading...";
+        try {
+          await API.unloadDashboardModel(m.id);
+          this.renderModelsSection(area);
+        } catch (e) {
+          alert(`Model unload failed: ${e.message}`);
+          unloadBtn.disabled = false;
+          unloadBtn.textContent = "Unload";
+        }
+      };
+      actions.appendChild(unloadBtn);
+
+      row.appendChild(actions);
       modelBox.appendChild(row);
     });
 
@@ -642,6 +682,10 @@ const Dashboard = {
       { id: "kybernetes", display_name: "Kybernetes Orchestrator" },
       { id: "prosopon", display_name: "Prosopon Frontend & BFF" },
       { id: "hestia", display_name: "Hestia Inference Server" },
+      { id: "stoma", display_name: "Stoma Ingestion Pipeline" },
+      { id: "phylax", display_name: "Phylax Capability Guard" },
+      { id: "krisis", display_name: "Krisis Response Verifier" },
+      { id: "dokime", display_name: "Dokime Evaluation Suite" },
     ];
 
     modules.forEach((m) => {
@@ -654,28 +698,270 @@ const Dashboard = {
     const displayBox = document.createElement("div");
     displayBox.className = "dash-config-box";
 
+    // Validator controls
+    const validatorSection = document.createElement("div");
+    validatorSection.className = "dash-validator-box";
+    validatorSection.style.marginTop = "1rem";
+    validatorSection.style.borderTop = "1px solid var(--border-color, #333)";
+    validatorSection.style.paddingTop = "1rem";
+
+    const valHeader = document.createElement("h3");
+    valHeader.textContent = "Configuration Dry-Run Validator (No Side Effects)";
+    validatorSection.appendChild(valHeader);
+
+    const valHelp = document.createElement("p");
+    valHelp.style.fontSize = "0.85rem";
+    valHelp.style.opacity = "0.8";
+    valHelp.textContent = "Propose configuration changes below and run the module's native validator without touching disk or active memory.";
+    validatorSection.appendChild(valHelp);
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "dash-textarea";
+    textarea.style.width = "100%";
+    textarea.style.height = "160px";
+    textarea.style.fontFamily = "monospace";
+    textarea.style.fontSize = "0.85rem";
+    textarea.placeholder = "Enter JSON proposed configuration...";
+    validatorSection.appendChild(textarea);
+
+    const btnRow = document.createElement("div");
+    btnRow.style.marginTop = "0.5rem";
+    btnRow.style.display = "flex";
+    btnRow.style.gap = "0.5rem";
+    btnRow.style.alignItems = "center";
+
+    const valBtn = document.createElement("button");
+    valBtn.className = "dash-btn dash-btn-primary";
+    valBtn.textContent = "Run Native Validator";
+
+    const feedbackBox = document.createElement("div");
+    feedbackBox.className = "dash-validation-feedback";
+    feedbackBox.style.marginTop = "0.75rem";
+
+    valBtn.addEventListener("click", async () => {
+      feedbackBox.textContent = "Running module native validator...";
+      feedbackBox.style.color = "inherit";
+      try {
+        let parsed;
+        try {
+          parsed = JSON.parse(textarea.value);
+        } catch (jsonErr) {
+          feedbackBox.textContent = `Invalid JSON syntax: ${jsonErr.message}`;
+          feedbackBox.style.color = "#ff6b6b";
+          return;
+        }
+
+        const res = await API.validateDashboardModuleConfig(select.value, parsed);
+        feedbackBox.textContent = "";
+
+        const badge = document.createElement("span");
+        badge.className = `dash-badge ${res.valid ? "state-live" : "state-offline"}`;
+        badge.textContent = res.valid ? "VALID" : "INVALID";
+        feedbackBox.appendChild(badge);
+
+        if (res.restart_required) {
+          const rBadge = document.createElement("span");
+          rBadge.className = "dash-badge";
+          rBadge.style.marginLeft = "0.5rem";
+          rBadge.textContent = "RESTART REQUIRED ON APPLY";
+          feedbackBox.appendChild(rBadge);
+        }
+
+        if (res.errors && res.errors.length > 0) {
+          const errList = document.createElement("ul");
+          errList.style.color = "#ff6b6b";
+          errList.style.marginTop = "0.5rem";
+          res.errors.forEach((err) => {
+            const li = document.createElement("li");
+            li.textContent = err;
+            errList.appendChild(li);
+          });
+          feedbackBox.appendChild(errList);
+        }
+
+        if (res.warnings && res.warnings.length > 0) {
+          const warnList = document.createElement("ul");
+          warnList.style.color = "#fcc419";
+          warnList.style.marginTop = "0.5rem";
+          res.warnings.forEach((w) => {
+            const li = document.createElement("li");
+            li.textContent = w;
+            warnList.appendChild(li);
+          });
+          feedbackBox.appendChild(warnList);
+        }
+
+        if (res.valid && (!res.warnings || res.warnings.length === 0)) {
+          const okMsg = document.createElement("div");
+          okMsg.style.marginTop = "0.5rem";
+          okMsg.style.color = "#51cf66";
+          okMsg.textContent = "Configuration satisfies all constraints and invariants.";
+          feedbackBox.appendChild(okMsg);
+        }
+      } catch (err) {
+        feedbackBox.textContent = `Validation failed to execute: ${err.message}`;
+        feedbackBox.style.color = "#ff6b6b";
+      }
+    });
+
+    let currentConfigHash = "";
+
+    const applyBtn = document.createElement("button");
+    applyBtn.className = "dash-probe-btn";
+    applyBtn.style.backgroundColor = "#2b8a3e";
+    applyBtn.style.color = "#fff";
+    applyBtn.textContent = "Apply Changes";
+
+    applyBtn.addEventListener("click", async () => {
+      feedbackBox.textContent = "Applying configuration changes...";
+      feedbackBox.style.color = "#ced4da";
+      let patch = {};
+      try {
+        patch = JSON.parse(textarea.value);
+      } catch (e) {
+        feedbackBox.textContent = `JSON Syntax Error: ${e.message}`;
+        feedbackBox.style.color = "#ff6b6b";
+        return;
+      }
+
+      try {
+        const res = await API.applyDashboardModuleConfig(select.value, currentConfigHash, patch);
+        feedbackBox.innerHTML = "";
+        const okMsg = document.createElement("div");
+        okMsg.style.color = "#51cf66";
+        okMsg.textContent = `ChangeSet ${res.id} applied: ${res.status}. ${res.restart_required ? "Process restart pending." : ""}`;
+        feedbackBox.appendChild(okMsg);
+        loadConfigFor(select.value);
+        loadHistoryFor(select.value);
+      } catch (err) {
+        let msg = err.message;
+        if (msg.includes("Explicit confirmation required")) {
+          const confirmToken = prompt(`${msg}\n\nType 'CONFIRM' to execute sensitive changes:`);
+          if (confirmToken === "CONFIRM") {
+            try {
+              const res2 = await API.applyDashboardModuleConfig(select.value, currentConfigHash, patch, "CONFIRM");
+              feedbackBox.innerHTML = "";
+              const okMsg = document.createElement("div");
+              okMsg.style.color = "#51cf66";
+              okMsg.textContent = `ChangeSet ${res2.id} applied with confirmation: ${res2.status}.`;
+              feedbackBox.appendChild(okMsg);
+              loadConfigFor(select.value);
+              loadHistoryFor(select.value);
+              return;
+            } catch (err2) {
+              msg = err2.message;
+            }
+          } else {
+            msg = "Action cancelled: confirmation token was not provided.";
+          }
+        }
+        feedbackBox.textContent = `Apply failed: ${msg}`;
+        feedbackBox.style.color = "#ff6b6b";
+      }
+    });
+
+    btnRow.appendChild(valBtn);
+    btnRow.appendChild(applyBtn);
+    validatorSection.appendChild(btnRow);
+    validatorSection.appendChild(feedbackBox);
+
+    // History and Rollback Section
+    const historySection = document.createElement("div");
+    historySection.style.marginTop = "1.5rem";
+    const histHead = document.createElement("h3");
+    histHead.textContent = "Change History & Snapshots";
+    historySection.appendChild(histHead);
+
+    const histList = document.createElement("div");
+    histList.style.marginTop = "0.5rem";
+    historySection.appendChild(histList);
+
+    const loadHistoryFor = async (modId) => {
+      histList.textContent = "Loading history...";
+      try {
+        const history = await API.getDashboardModuleHistory(modId);
+        histList.textContent = "";
+        if (!history || history.length === 0) {
+          histList.textContent = "No past ChangeSets recorded.";
+          return;
+        }
+        history.forEach((cs) => {
+          const item = document.createElement("div");
+          item.className = "dash-row";
+          item.style.alignItems = "center";
+          item.style.justifyContent = "space-between";
+          item.style.padding = "0.5rem";
+          item.style.borderBottom = "1px solid rgba(255,255,255,0.08)";
+
+          const left = document.createElement("div");
+          const title = document.createElement("strong");
+          title.textContent = cs.id;
+          const meta = document.createElement("div");
+          meta.className = "text-xs text-muted";
+          meta.textContent = `${cs.requested_at} by ${cs.requested_by} | Status: ${cs.status}`;
+          left.appendChild(title);
+          left.appendChild(meta);
+          item.appendChild(left);
+
+          if (cs.prev_snapshot_id && cs.status !== "rolled_back_on_disk") {
+            const rbBtn = document.createElement("button");
+            rbBtn.className = "dash-probe-btn";
+            rbBtn.textContent = "Rollback";
+            rbBtn.onclick = async () => {
+              if (confirm(`Rollback to snapshot before ${cs.id}?`)) {
+                try {
+                  await API.rollbackDashboardModuleConfig(modId, cs.id);
+                  loadConfigFor(modId);
+                  loadHistoryFor(modId);
+                } catch (e) {
+                  alert(`Rollback failed: ${e.message}`);
+                }
+              }
+            };
+            item.appendChild(rbBtn);
+          }
+          histList.appendChild(item);
+        });
+      } catch (e) {
+        histList.textContent = `History load error: ${e.message}`;
+      }
+    };
+
     const loadConfigFor = async (modId) => {
       displayBox.textContent = "Loading configuration...";
+      feedbackBox.textContent = "";
       try {
         const cfg = await API.getDashboardModuleConfig(modId);
         displayBox.textContent = "";
+        currentConfigHash = cfg.config_hash || "";
 
         const pre = document.createElement("pre");
         pre.className = "dash-code-block";
         pre.textContent = JSON.stringify(cfg, null, 2);
         displayBox.appendChild(pre);
+
+        const initialVal = (cfg && cfg.saved && Object.keys(cfg.saved).length > 0) ? cfg.saved : (cfg.effective || {});
+        textarea.value = JSON.stringify(initialVal, null, 2);
       } catch (e) {
         displayBox.textContent = `Config inspection error: ${e.message}`;
+        textarea.value = "{}";
+        currentConfigHash = "";
       }
     };
 
-    select.addEventListener("change", (e) => loadConfigFor(e.target.value));
+    select.addEventListener("change", (e) => {
+      loadConfigFor(e.target.value);
+      loadHistoryFor(e.target.value);
+    });
     card.appendChild(select);
     card.appendChild(displayBox);
+    card.appendChild(validatorSection);
+    card.appendChild(historySection);
     area.appendChild(card);
 
     if (select.value) {
       loadConfigFor(select.value);
+      loadHistoryFor(select.value);
     }
   },
 

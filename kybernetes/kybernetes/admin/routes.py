@@ -1,11 +1,13 @@
 """Admin API endpoints for Kybernetes control plane."""
 
 from datetime import datetime, timezone
+import hashlib
 import os
 from pathlib import Path
 import subprocess
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+import httpx
 from pydantic import BaseModel, Field
 
 from kybernetes.admin.audit import AdminAuditLogger
@@ -18,11 +20,29 @@ from kybernetes.admin.descriptors import (
 )
 from kybernetes.admin.probes import ProbeRegistry
 from kybernetes.admin.status import ComponentState, ComponentStatus, Freshness
+from kybernetes.admin.validators import ConfigValidationResult, validate_module_configuration
 from kybernetes.config import KybernetesConfig
+
+
+from kybernetes.admin.changesets import (
+    ChangeSet,
+    ChangeSetStatus,
+    ConfigApplyRequest,
+    changeset_manager,
+)
+
+
+class ModelActionRequest(BaseModel):
+    model: str = Field(..., description="Target model identifier")
+    confirm: bool = Field(default=True, description="Confirmation of GPU side effect")
 
 
 class ProbeRunRequest(BaseModel):
     component_id: str = Field(..., description="Identifier of the module or component to probe")
+
+
+class ConfigValidateRequest(BaseModel):
+    proposed: Dict[str, Any] = Field(..., description="Proposed module configuration dictionary to validate")
 
 
 class OverviewResponse(BaseModel):
@@ -193,8 +213,10 @@ def create_admin_router(
 
         if module_id == "kybernetes":
             effective = redact_sensitive_dict(config.model_dump())
-            saved = effective  # In v1 Kybernetes reflects loaded config
-            sources = {k: "env" if f"KYBERNETES_{k.upper()}" in os.environ else "default" for k in effective}
+            saved_raw, _, saved_hash = changeset_manager.get_current_saved_content_and_hash("kybernetes")
+            saved = redact_sensitive_dict(saved_raw) if saved_raw else effective
+            sources = {k: "file" if (saved_raw and k in saved_raw) else ("env" if f"KYBERNETES_{k.upper()}" in os.environ else "default") for k in effective}
+            drift = (saved != effective) if saved_raw else False
             return ConfigView(
                 module_id="kybernetes",
                 saved=saved,
@@ -202,25 +224,15 @@ def create_admin_router(
                 sources=sources,
                 restart_required_keys=["hestia_base_url", "memory_root", "db_path", "allowed_origins"],
                 schema_ref=descriptor.schema_ref,
-                config_hash=compute_dict_hash(effective),
+                config_hash=saved_hash if saved_raw else compute_dict_hash(effective),
                 loaded_at=datetime.now(timezone.utc).isoformat(),
-                drift=False,
+                drift=drift,
             )
 
         # Inspect disk config if file exists
-        saved_data: Dict[str, Any] = {}
-        sources_data: Dict[str, str] = {}
-        if descriptor.config_path:
-            p = Path(descriptor.config_path)
-            if p.exists():
-                try:
-                    import yaml
-                    content = yaml.safe_load(p.read_text(encoding="utf-8"))
-                    if isinstance(content, dict):
-                        saved_data = redact_sensitive_dict(content)
-                        sources_data = {k: "file" for k in saved_data}
-                except Exception:
-                    saved_data = {"error": "Failed to parse configuration file"}
+        saved_raw, _, saved_hash = changeset_manager.get_current_saved_content_and_hash(module_id)
+        saved_data: Dict[str, Any] = redact_sensitive_dict(saved_raw) if saved_raw else {}
+        sources_data: Dict[str, str] = {k: "file" for k in saved_data}
 
         return ConfigView(
             module_id=module_id,
@@ -229,10 +241,305 @@ def create_admin_router(
             sources=sources_data,
             restart_required_keys=list(saved_data.keys()),
             schema_ref=descriptor.schema_ref,
-            config_hash=compute_dict_hash(saved_data) if saved_data else None,
+            config_hash=saved_hash if saved_data else None,
             loaded_at=datetime.now(timezone.utc).isoformat(),
             drift=None,
         )
+
+    @router.post("/modules/{module_id}/config/validate", response_model=ConfigValidationResult)
+    async def validate_module_config_route(
+        module_id: str,
+        req: ConfigValidateRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> ConfigValidationResult:
+        """Validate proposed configuration without side effects using the owning module's native validator."""
+        client_ip = request.client.host if request.client else None
+        audit_logger.log(
+            actor_token=request.headers.get("Authorization"),
+            action="validate_config",
+            target=f"/v1/admin/modules/{module_id}/config/validate",
+            status="allowed",
+            client_ip=client_ip,
+        )
+        if module_id not in MODULE_REGISTRY:
+            raise HTTPException(status_code=404, detail=f"Module '{module_id}' not found")
+
+        try:
+            return validate_module_configuration(module_id, req.proposed)
+        except Exception as exc:
+            return ConfigValidationResult(
+                module_id=module_id,
+                valid=False,
+                errors=[f"Validation execution failure: {exc}"],
+                warnings=[],
+                restart_required=MODULE_REGISTRY[module_id].restart_required,
+            )
+
+    @router.post("/modules/{module_id}/config/apply", response_model=ChangeSet)
+    async def apply_module_config_route(
+        module_id: str,
+        req: ConfigApplyRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> ChangeSet:
+        """Apply proposed configuration updates atomically with base_hash lock and pre-write snapshot."""
+        client_ip = request.client.host if request.client else None
+        auth_hdr = request.headers.get("Authorization")
+        audit_logger.log(
+            actor_token=auth_hdr,
+            action="apply_config",
+            target=f"/v1/admin/modules/{module_id}/config/apply",
+            status="requested",
+            client_ip=client_ip,
+        )
+        if module_id not in MODULE_REGISTRY:
+            raise HTTPException(status_code=404, detail=f"Module '{module_id}' not found")
+
+        actor_name = client_ip or "admin"
+        if auth_hdr:
+            token_clean = auth_hdr.strip()
+            if token_clean.lower().startswith("bearer "):
+                token_clean = token_clean[7:].strip()
+            actor_name = f"token:{hashlib.sha256(token_clean.encode('utf-8')).hexdigest()[:12]}"
+
+        try:
+            cs = changeset_manager.apply(
+                module_id=module_id,
+                base_hash=req.base_hash,
+                patch=req.patch,
+                requested_by=actor_name,
+                confirm_token=req.confirm_token,
+            )
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="apply_config",
+                target=f"/v1/admin/modules/{module_id}/config/apply",
+                status="completed",
+                detail=f"ChangeSet {cs.id} applied ({cs.status.value})",
+                client_ip=client_ip,
+            )
+            return cs
+        except PermissionError as pe:
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="apply_config",
+                target=f"/v1/admin/modules/{module_id}/config/apply",
+                status="denied",
+                detail=str(pe),
+                client_ip=client_ip,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(pe),
+            )
+        except ValueError as ve:
+            err_msg = str(ve)
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="apply_config",
+                target=f"/v1/admin/modules/{module_id}/config/apply",
+                status="rejected",
+                detail=err_msg,
+                client_ip=client_ip,
+            )
+            if "Concurrent modification" in err_msg:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=err_msg)
+            elif "Validation failed" in err_msg:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err_msg)
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+        except Exception as exc:
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="apply_config",
+                target=f"/v1/admin/modules/{module_id}/config/apply",
+                status="failed",
+                detail=str(exc),
+                client_ip=client_ip,
+            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    @router.get("/modules/{module_id}/history", response_model=List[ChangeSet])
+    async def get_module_history_route(
+        module_id: str,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> List[ChangeSet]:
+        """Retrieve change history for a given module."""
+        client_ip = request.client.host if request.client else None
+        audit_logger.log(
+            actor_token=request.headers.get("Authorization"),
+            action="read_history",
+            target=f"/v1/admin/modules/{module_id}/history",
+            status="allowed",
+            client_ip=client_ip,
+        )
+        if module_id not in MODULE_REGISTRY:
+            raise HTTPException(status_code=404, detail=f"Module '{module_id}' not found")
+
+        return changeset_manager.get_history(module_id)
+
+    @router.post("/modules/{module_id}/config/rollback/{changeset_id}", response_model=ChangeSet)
+    async def rollback_module_config_route(
+        module_id: str,
+        changeset_id: str,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> ChangeSet:
+        """Atomically rollback configuration to the snapshot preceding a specific ChangeSet."""
+        client_ip = request.client.host if request.client else None
+        auth_hdr = request.headers.get("Authorization")
+        audit_logger.log(
+            actor_token=auth_hdr,
+            action="rollback_config",
+            target=f"/v1/admin/modules/{module_id}/config/rollback/{changeset_id}",
+            status="requested",
+            client_ip=client_ip,
+        )
+        if module_id not in MODULE_REGISTRY:
+            raise HTTPException(status_code=404, detail=f"Module '{module_id}' not found")
+
+        actor_name = client_ip or "admin"
+        if auth_hdr:
+            token_clean = auth_hdr.strip()
+            if token_clean.lower().startswith("bearer "):
+                token_clean = token_clean[7:].strip()
+            actor_name = f"token:{hashlib.sha256(token_clean.encode('utf-8')).hexdigest()[:12]}"
+
+        try:
+            rb_cs = changeset_manager.rollback(
+                module_id=module_id,
+                changeset_id=changeset_id,
+                requested_by=actor_name,
+            )
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="rollback_config",
+                target=f"/v1/admin/modules/{module_id}/config/rollback/{changeset_id}",
+                status="completed",
+                detail=f"Rollback ChangeSet {rb_cs.id} applied",
+                client_ip=client_ip,
+            )
+            return rb_cs
+        except KeyError as ke:
+            raise HTTPException(status_code=404, detail=str(ke))
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as exc:
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="rollback_config",
+                target=f"/v1/admin/modules/{module_id}/config/rollback/{changeset_id}",
+                status="failed",
+                detail=str(exc),
+                client_ip=client_ip,
+            )
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    @router.post("/models/load")
+    async def load_model_route(
+        req: ModelActionRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Audited explicit model load action routed to Hestia inference server."""
+        client_ip = request.client.host if request.client else None
+        auth_hdr = request.headers.get("Authorization")
+        audit_logger.log(
+            actor_token=auth_hdr,
+            action="model_load",
+            target=f"model:{req.model}",
+            status="requested",
+            client_ip=client_ip,
+        )
+        base = config.hestia_base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        target_url = f"{base}/manage/load"
+        headers = {"Content-Type": "application/json"}
+        token = os.environ.get("HESTIA_SERVICE_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(target_url, json={"model": req.model}, headers=headers)
+                status_str = "completed" if resp.status_code == 200 else "failed"
+                audit_logger.log(
+                    actor_token=auth_hdr,
+                    action="model_load",
+                    target=f"model:{req.model}",
+                    status=status_str,
+                    detail=f"Hestia HTTP {resp.status_code}",
+                    client_ip=client_ip,
+                )
+                if resp.status_code != 200:
+                    raise HTTPException(status_code=resp.status_code, detail=resp.text)
+                return resp.json()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="model_load",
+                target=f"model:{req.model}",
+                status="failed",
+                detail=str(exc),
+                client_ip=client_ip,
+            )
+            raise HTTPException(status_code=503, detail=f"Hestia communication error: {exc}")
+
+    @router.post("/models/unload")
+    async def unload_model_route(
+        req: ModelActionRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Audited explicit model unload action routed to Hestia inference server."""
+        client_ip = request.client.host if request.client else None
+        auth_hdr = request.headers.get("Authorization")
+        audit_logger.log(
+            actor_token=auth_hdr,
+            action="model_unload",
+            target=f"model:{req.model}",
+            status="requested",
+            client_ip=client_ip,
+        )
+        base = config.hestia_base_url.rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        target_url = f"{base}/manage/unload"
+        headers = {"Content-Type": "application/json"}
+        token = os.environ.get("HESTIA_SERVICE_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(target_url, json={"model": req.model}, headers=headers)
+                status_str = "completed" if resp.status_code == 200 else "failed"
+                audit_logger.log(
+                    actor_token=auth_hdr,
+                    action="model_unload",
+                    target=f"model:{req.model}",
+                    status=status_str,
+                    detail=f"Hestia HTTP {resp.status_code}",
+                    client_ip=client_ip,
+                )
+                if resp.status_code != 200:
+                    raise HTTPException(status_code=resp.status_code, detail=resp.text)
+                return resp.json()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            audit_logger.log(
+                actor_token=auth_hdr,
+                action="model_unload",
+                target=f"model:{req.model}",
+                status="failed",
+                detail=str(exc),
+                client_ip=client_ip,
+            )
+            raise HTTPException(status_code=503, detail=f"Hestia communication error: {exc}")
 
     @router.get("/sessions")
     async def list_sessions(

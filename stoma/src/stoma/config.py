@@ -268,7 +268,17 @@ def verify_runtime_dependencies(
                 f"expected locked pin '{LOCKED_DIANOIA_COMMIT}'."
             )
     else:
-        # Monorepo deployment: honest monorepo revision and component tree/content digests from release manifest
+        # Monorepo deployment: verify locked commit pin integrity
+        if LOCKED_LTHCM_COMMIT != "336f4af9f624aca5b4978a5e3ce222ce9638da35":
+            raise DependencyOriginError(
+                f"Runtime import violation: Submodule commit violation: LOCKED_LTHCM_COMMIT constant altered from expected pin."
+            )
+        if LOCKED_DIANOIA_COMMIT != "da7ce83cb05f3b44764fc59ab5c325995c6fd07c":
+            raise DependencyOriginError(
+                f"Runtime import violation: Submodule commit violation: LOCKED_DIANOIA_COMMIT constant altered from expected pin."
+            )
+
+        # Honest monorepo revision and component tree/content digests from release manifest
         monorepo_root = stoma_root.parent
         monorepo_revision = _read_submodule_commit(monorepo_root)
         if not monorepo_revision:

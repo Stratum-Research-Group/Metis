@@ -66,6 +66,17 @@ class MockKybernetesClient:
             "drift": False,
         }
 
+    async def validate_admin_module_config(
+        self, module_id: str, proposed: Dict[str, Any], admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        return {
+            "module_id": module_id,
+            "valid": True,
+            "errors": [],
+            "warnings": ["Mock validator invoked"],
+            "restart_required": True,
+        }
+
     async def get_admin_sessions(self, limit: int = 50, offset: int = 0, admin_token: Optional[str] = None) -> Dict[str, Any]:
         return {"total": 0, "limit": limit, "offset": offset, "storage": "in-memory mock", "sessions": []}
 
@@ -251,3 +262,71 @@ class MockKybernetesClient:
 
     async def cancel_turn(self, turn_id: str) -> bool:
         return True
+
+    async def apply_admin_module_config(
+        self,
+        module_id: str,
+        base_hash: str,
+        patch: Dict[str, Any],
+        confirm_token: Optional[str] = None,
+        admin_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return {
+            "id": f"cs-mock-{module_id}-0001",
+            "module": module_id,
+            "base_hash": base_hash,
+            "patch": patch,
+            "requested_by": "mock-admin",
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+            "status": "restart_pending",
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "prev_snapshot_id": f"snap_mock_{module_id}_0001",
+            "files_affected": [f"{module_id}.yaml"],
+            "restart_required": True,
+        }
+
+    async def get_admin_module_history(
+        self, module_id: str, admin_token: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return [
+            {
+                "id": f"cs-mock-{module_id}-0001",
+                "module": module_id,
+                "base_hash": "mock-base-hash",
+                "patch": {"mode": "mock"},
+                "requested_by": "mock-admin",
+                "requested_at": datetime.now(timezone.utc).isoformat(),
+                "status": "restart_pending",
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+                "prev_snapshot_id": f"snap_mock_{module_id}_0001",
+                "files_affected": [f"{module_id}.yaml"],
+                "restart_required": True,
+            }
+        ]
+
+    async def rollback_admin_module_config(
+        self, module_id: str, changeset_id: str, admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        return {
+            "id": f"cs-rollback-mock-{module_id}-0002",
+            "module": module_id,
+            "base_hash": "mock-hash-prev",
+            "patch": {"mode": "mock-restored"},
+            "requested_by": "mock-admin",
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+            "status": "rolled_back_on_disk",
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "prev_snapshot_id": f"snap_mock_rb_{module_id}_0002",
+            "files_affected": [f"{module_id}.yaml"],
+            "restart_required": True,
+        }
+
+    async def load_model(
+        self, model: str, confirm: bool = True, admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        return {"status": "loaded", "model": model, "mode": "mock"}
+
+    async def unload_model(
+        self, model: str, confirm: bool = True, admin_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        return {"status": "unloaded", "model": model, "mode": "mock"}

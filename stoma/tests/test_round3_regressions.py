@@ -352,10 +352,17 @@ def test_r3_item4_submodule_gitlink_and_checkout_sha_verification(tmp_path):
     """
     sub_root = tmp_path / "sub_stoma"
     (sub_root / "deps" / "LTHCM").mkdir(parents=True)
-    (sub_root / "deps" / "dianoia").mkdir(parents=True)
+    sub_lthcm = sub_root / "deps" / "LTHCM" / "lthcm" / "__init__.py"
+    sub_lthcm.parent.mkdir(parents=True, exist_ok=True)
+    sub_lthcm.touch()
+    sub_dianoia = sub_root / "deps" / "dianoia" / "dianoia" / "__init__.py"
+    sub_dianoia.parent.mkdir(parents=True, exist_ok=True)
+    sub_dianoia.touch()
 
-    with patch("stoma.config._read_top_level_gitlink", return_value=LOCKED_LTHCM_COMMIT), \
-         patch("stoma.config._read_submodule_commit", return_value=LOCKED_LTHCM_COMMIT):
+    with patch("stoma.config._read_top_level_gitlink", side_effect=lambda root, rel: LOCKED_LTHCM_COMMIT if "LTHCM" in rel else LOCKED_DIANOIA_COMMIT), \
+         patch("stoma.config._read_submodule_commit", side_effect=lambda p: LOCKED_LTHCM_COMMIT if "LTHCM" in str(p) else LOCKED_DIANOIA_COMMIT), \
+         patch("lthcm.__file__", str(sub_lthcm)), \
+         patch("dianoia.__file__", str(sub_dianoia)):
         res = verify_runtime_dependencies(stoma_root=sub_root)
         assert res["layout"] == "submodule"
         assert "lthcm_gitlink_sha" in res
@@ -378,7 +385,7 @@ def test_r3_item4_submodule_gitlink_and_checkout_sha_verification(tmp_path):
             verify_runtime_dependencies(stoma_root=sub_root)
 
     # 3. Wrong checkout fails closed
-    with patch("stoma.config._read_top_level_gitlink", return_value=LOCKED_LTHCM_COMMIT), \
+    with patch("stoma.config._read_top_level_gitlink", side_effect=lambda root, rel: LOCKED_LTHCM_COMMIT if "LTHCM" in rel else LOCKED_DIANOIA_COMMIT), \
          patch("stoma.config._read_submodule_commit", return_value="badc0ffeebadc0ffeebadc0ffeebadc0ffee1234"):
         with pytest.raises(DependencyOriginError, match="Submodule commit violation: LTHCM is at"):
             verify_runtime_dependencies(stoma_root=sub_root)

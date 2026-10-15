@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = False) -> Dict[str, Any]:
+def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = True) -> Dict[str, Any]:
     """
     Test direct interchange against Dianoia's actual CLI load and query path.
     1. Check serialization format (pickle) and engine type (LTHCMEngine).
@@ -85,7 +85,10 @@ def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = Fa
             edge_count = len(engine.wormhole.graph.edges)
 
     # Step 2: Actual invocation of Dianoia's CLI loader
-    cmd = [sys.executable, "-m", "dianoia.cli", "--index", str(path), "interchange_verification_ping"]
+    cmd = [sys.executable, "-m", "dianoia.cli"]
+    if is_trusted:
+        cmd.append("--allow-trusted-pickle")
+    cmd.extend(["--index", str(path), "interchange_verification_ping"])
     status_override: Optional[str] = None
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20)

@@ -51,7 +51,7 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
         config_format="pydantic",
         schema_ref="KybernetesConfig",
         restart_required=True,
-        mutable=False,
+        mutable=True,
         description="Versioned central orchestrator and control plane coordinating inference, memory, deliberation, and budget.",
     ),
     "hestia": ModuleDescriptor(
@@ -63,7 +63,7 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
         config_format="yaml",
         schema_ref="ServiceConfig",
         restart_required=True,
-        mutable=False,
+        mutable=True,
         description="Local OpenAI-compatible inference server with multi-model pool and VRAM admission control.",
     ),
     "prosopon": ModuleDescriptor(
@@ -75,7 +75,7 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
         config_format="pydantic",
         schema_ref="ProsoponConfig",
         restart_required=True,
-        mutable=False,
+        mutable=True,
         description="User client interface, voice synthesis/transcription gateway, and dashboard presentation layer.",
     ),
     "lthcm": ModuleDescriptor(
@@ -111,7 +111,7 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
         config_format="json",
         schema_ref="krisis-policy-0.1.schema.json",
         restart_required=False,
-        mutable=False,
+        mutable=True,
         description="Independent factuality, citation grounding, and constraint verification engine.",
     ),
     "phylax": ModuleDescriptor(
@@ -123,7 +123,7 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
         config_format="yaml",
         schema_ref="PhylaxPolicy",
         restart_required=False,
-        mutable=False,
+        mutable=True,
         description="Zero-trust capability firewall, policy enforcement gateway, and cryptographic audit log.",
     ),
     "kleroterion": ModuleDescriptor(
@@ -147,7 +147,7 @@ MODULE_REGISTRY: Dict[str, ModuleDescriptor] = {
         config_format="yaml",
         schema_ref="StomaConfig",
         restart_required=False,
-        mutable=False,
+        mutable=True,
         description="Document extraction, chunking, sanitization, and provenance-tracked ingestion tool.",
     ),
     "dokime": ModuleDescriptor(

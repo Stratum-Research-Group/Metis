@@ -147,4 +147,46 @@ const API = {
   async getDashboardGpuTelemetry() {
     return this.request("/api/dashboard/gpu-telemetry");
   },
+
+  async validateDashboardModuleConfig(moduleId, proposed) {
+    return this.request(`/api/dashboard/modules/${encodeURIComponent(moduleId)}/config/validate`, {
+      method: "POST",
+      body: JSON.stringify({ proposed }),
+    });
+  },
+
+  async applyDashboardModuleConfig(moduleId, baseHash, patch, confirmToken = null) {
+    return this.request(`/api/dashboard/modules/${encodeURIComponent(moduleId)}/config/apply`, {
+      method: "POST",
+      body: JSON.stringify({
+        base_hash: baseHash,
+        patch,
+        confirm_token: confirmToken,
+      }),
+    });
+  },
+
+  async getDashboardModuleHistory(moduleId) {
+    return this.request(`/api/dashboard/modules/${encodeURIComponent(moduleId)}/history`);
+  },
+
+  async rollbackDashboardModuleConfig(moduleId, changesetId) {
+    return this.request(`/api/dashboard/modules/${encodeURIComponent(moduleId)}/config/rollback/${encodeURIComponent(changesetId)}`, {
+      method: "POST",
+    });
+  },
+
+  async loadDashboardModel(model, confirm = true) {
+    return this.request("/api/dashboard/models/load", {
+      method: "POST",
+      body: JSON.stringify({ model, confirm }),
+    });
+  },
+
+  async unloadDashboardModel(model, confirm = true) {
+    return this.request("/api/dashboard/models/unload", {
+      method: "POST",
+      body: JSON.stringify({ model, confirm }),
+    });
+  },
 };

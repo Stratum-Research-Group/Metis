@@ -12,6 +12,8 @@ class KybernetesConfig(BaseModel):
     Configuration model for Kybernetes orchestrator server.
     Supports file, environment, and CLI override layers.
     """
+    model_config = {"extra": "forbid"}
+
     hestia_base_url: str = Field(
         default="http://127.0.0.1:8080/v1",
         description="Base URL for local Hestia model server API",

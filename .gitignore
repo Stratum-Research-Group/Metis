@@ -64,4 +64,6 @@ data/
 # Diagnostic artifacts
 geometry-run*/
 passages.jsonl
+.admin_snapshots/
+
 

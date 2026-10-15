@@ -97,3 +97,148 @@ async def test_csp_header_present(tmp_path):
         csp = resp.headers["Content-Security-Policy"]
         assert "default-src 'self'" in csp
         assert "frame-ancestors 'none'" in csp
+
+
+@pytest.mark.asyncio
+async def test_dashboard_config_validate(tmp_path):
+    """Verify /api/dashboard/modules/{id}/config/validate enforces auth and validates properly."""
+    cfg = ProsoponConfig(data_dir=str(tmp_path), mock_kybernetes=True)
+    app = create_app(cfg)
+    pairing_mgr = app.state.pairing_mgr
+    pin = pairing_mgr.generate_pairing_pin()
+    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Admin Console", role="admin")
+    assert token is not None
+    headers = {"Authorization": f"Bearer {token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as client:
+        # 1. Unauthenticated -> 401
+        resp_unauth = await client.post(
+            "/api/dashboard/modules/prosopon/config/validate",
+            json={"proposed": {"host": "127.0.0.1"}},
+        )
+        assert resp_unauth.status_code == 401
+
+        # 2. Valid Prosopon config
+        resp_ok = await client.post(
+            "/api/dashboard/modules/prosopon/config/validate",
+            headers=headers,
+            json={"proposed": {"host": "127.0.0.1", "port": 8000}},
+        )
+        assert resp_ok.status_code == 200
+        data_ok = resp_ok.json()
+        assert data_ok["valid"] is True
+        assert data_ok["module_id"] == "prosopon"
+
+        # 3. Invalid Prosopon config
+        resp_bad = await client.post(
+            "/api/dashboard/modules/prosopon/config/validate",
+            headers=headers,
+            json={"proposed": {"port": "invalid-port"}},
+        )
+        assert resp_bad.status_code == 200
+        data_bad = resp_bad.json()
+        assert data_bad["valid"] is False
+        assert len(data_bad["errors"]) > 0
+
+        # 4. Proxied validation for Kybernetes
+        resp_proxy = await client.post(
+            "/api/dashboard/modules/kybernetes/config/validate",
+            headers=headers,
+            json={"proposed": {"hestia_base_url": "http://127.0.0.1:8080/v1"}},
+        )
+        assert resp_proxy.status_code == 200
+        data_proxy = resp_proxy.json()
+        assert data_proxy["module_id"] == "kybernetes"
+        assert data_proxy["valid"] is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_apply_history_and_rollback(tmp_path):
+    """Verify Prosopon proxies apply, history, and rollback behind dedicated authentication."""
+    cfg = ProsoponConfig(data_dir=str(tmp_path), mock_kybernetes=True)
+    app = create_app(cfg)
+    pairing_mgr = app.state.pairing_mgr
+    pin = pairing_mgr.generate_pairing_pin()
+    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Admin Console", role="admin")
+    assert token is not None
+    headers = {"Authorization": f"Bearer {token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as client:
+        # 1. Unauthenticated apply -> 401
+        resp_unauth = await client.post(
+            "/api/dashboard/modules/hestia/config/apply",
+            json={"base_hash": "mock", "patch": {}},
+        )
+        assert resp_unauth.status_code == 401
+
+        # 2. Authenticated apply -> 200 ChangeSet returned
+        resp_apply = await client.post(
+            "/api/dashboard/modules/hestia/config/apply",
+            headers=headers,
+            json={"base_hash": "mock-base", "patch": {"listen_port": 8080}},
+        )
+        assert resp_apply.status_code == 200
+        cs = resp_apply.json()
+        assert cs["module"] == "hestia"
+        assert cs["status"] in ("written", "restart_pending")
+        cs_id = cs["id"]
+
+        # 3. Retrieve history
+        resp_hist = await client.get(
+            "/api/dashboard/modules/hestia/history",
+            headers=headers,
+        )
+        assert resp_hist.status_code == 200
+        hist = resp_hist.json()
+        assert len(hist) > 0
+
+        # 4. Rollback
+        resp_rb = await client.post(
+            f"/api/dashboard/modules/hestia/config/rollback/{cs_id}",
+            headers=headers,
+        )
+        assert resp_rb.status_code == 200
+        rb_cs = resp_rb.json()
+        assert rb_cs["status"] == "rolled_back_on_disk"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_models_load_unload(tmp_path):
+    """Verify Prosopon proxies model load and unload actions with auth enforcement."""
+    cfg = ProsoponConfig(data_dir=str(tmp_path), mock_kybernetes=True)
+    app = create_app(cfg)
+    pairing_mgr = app.state.pairing_mgr
+    pin = pairing_mgr.generate_pairing_pin()
+    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Admin Console", role="admin")
+    assert token is not None
+    headers = {"Authorization": f"Bearer {token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as client:
+        # 1. Unauthenticated load -> 401
+        resp_unauth = await client.post(
+            "/api/dashboard/models/load",
+            json={"model": "llama-3.1-8b-instruct"},
+        )
+        assert resp_unauth.status_code == 401
+
+        # 2. Authenticated load -> 200
+        resp_load = await client.post(
+            "/api/dashboard/models/load",
+            headers=headers,
+            json={"model": "llama-3.1-8b-instruct", "confirm": True},
+        )
+        assert resp_load.status_code == 200
+        assert resp_load.json()["status"] == "loaded"
+
+        # 3. Authenticated unload -> 200
+        resp_unload = await client.post(
+            "/api/dashboard/models/unload",
+            headers=headers,
+            json={"model": "llama-3.1-8b-instruct", "confirm": True},
+        )
+        assert resp_unload.status_code == 200
+        assert resp_unload.json()["status"] == "unloaded"
+
