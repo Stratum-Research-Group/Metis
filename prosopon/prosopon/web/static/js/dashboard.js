@@ -566,27 +566,326 @@ const Dashboard = {
   },
 
   /* 6. EVAL & TRAINING */
-  renderEvalTrainSection(area) {
-    const card = document.createElement("div");
-    card.className = "dash-card";
-    
-    const head = document.createElement("div");
-    head.className = "dash-card-header";
-    const h2 = document.createElement("h2");
-    h2.textContent = "Dokime Evaluation Suite & Paideia Training";
-    head.appendChild(h2);
-    card.appendChild(head);
+  async renderEvalTrainSection(area) {
+    // 1. Prominent Hardware Resource Warning Banner
+    const warnBanner = document.createElement("div");
+    warnBanner.style.border = "1px solid #eab308";
+    warnBanner.style.background = "rgba(234, 179, 8, 0.1)";
+    warnBanner.style.borderRadius = "8px";
+    warnBanner.style.padding = "14px 18px";
+    warnBanner.style.marginBottom = "20px";
+    warnBanner.style.display = "flex";
+    warnBanner.style.alignItems = "flex-start";
+    warnBanner.style.gap = "12px";
 
-    const list = document.createElement("div");
-    list.className = "dash-stat-list";
+    const warnIcon = document.createElement("span");
+    warnIcon.textContent = "⚠️";
+    warnIcon.style.fontSize = "1.3rem";
+    warnBanner.appendChild(warnIcon);
 
-    list.appendChild(this.createStatRow("Dokime Evaluation Harness", "Continuous benchmark regression suite (Config: TOML)"));
-    list.appendChild(this.createStatRow("Regression Gate Status", "PASS (Simulated baseline runs)"));
-    list.appendChild(this.createStatRow("Paideia LoRA Trainer", "Adapter Registry Compiler (Offline batch tool)"));
-    list.appendChild(this.createStatRow("Training Manifests", "Simulated provenance flags strictly recorded"));
+    const warnText = document.createElement("div");
+    const warnTitle = document.createElement("strong");
+    warnTitle.textContent = "Hardware Resource Warning: Batch Tool Gating";
+    warnTitle.style.display = "block";
+    warnTitle.style.color = "#facc15";
+    warnTitle.style.marginBottom = "4px";
+    warnText.appendChild(warnTitle);
 
-    card.appendChild(list);
-    area.appendChild(card);
+    const warnDesc = document.createElement("span");
+    warnDesc.textContent =
+      "Dokime benchmark matrices and Paideia training harnesses are heavy offline batch jobs that consume high CPU, RAM, and GPU/VRAM bandwidth. They are never run automatically on page load. Triggering an execution requires explicit operator confirmation ('CONFIRM').";
+    warnDesc.style.color = "#e2e8f0";
+    warnDesc.style.fontSize = "0.85rem";
+    warnDesc.style.lineHeight = "1.4";
+    warnText.appendChild(warnDesc);
+
+    warnBanner.appendChild(warnText);
+    area.appendChild(warnBanner);
+
+    // 2. DOKIME BENCHMARK EVALUATION CARD
+    const dokimeCard = document.createElement("div");
+    dokimeCard.className = "dash-card";
+
+    const dokimeHead = document.createElement("div");
+    dokimeHead.className = "dash-card-header";
+    dokimeHead.style.display = "flex";
+    dokimeHead.style.justifyContent = "space-between";
+    dokimeHead.style.alignItems = "center";
+
+    const dokimeH2 = document.createElement("h2");
+    dokimeH2.textContent = "Dokime Benchmark Harness & Statistical Gates";
+    dokimeHead.appendChild(dokimeH2);
+
+    const dokimeBtn = document.createElement("button");
+    dokimeBtn.className = "dash-button";
+    dokimeBtn.textContent = "▶ Run Evaluation (Dokime)";
+    dokimeBtn.style.padding = "6px 14px";
+    dokimeBtn.style.fontSize = "0.85rem";
+
+    dokimeHead.appendChild(dokimeBtn);
+    dokimeCard.appendChild(dokimeHead);
+
+    const dokimeRunsContainer = document.createElement("div");
+    dokimeRunsContainer.textContent = "Loading Dokime benchmark runs...";
+    dokimeRunsContainer.style.fontSize = "0.85rem";
+    dokimeRunsContainer.style.color = "#94a3b8";
+    dokimeCard.appendChild(dokimeRunsContainer);
+
+    area.appendChild(dokimeCard);
+
+    // 3. PAIDEIA TRAINING & EVIDENCE PIPELINE CARD
+    const paideiaCard = document.createElement("div");
+    paideiaCard.className = "dash-card";
+
+    const paideiaHead = document.createElement("div");
+    paideiaHead.className = "dash-card-header";
+    paideiaHead.style.display = "flex";
+    paideiaHead.style.justifyContent = "space-between";
+    paideiaHead.style.alignItems = "center";
+
+    const paideiaH2 = document.createElement("h2");
+    paideiaH2.textContent = "Paideia Evidence Pipeline & LoRA Fine-Tuning";
+    paideiaHead.appendChild(paideiaH2);
+
+    const paideiaBtn = document.createElement("button");
+    paideiaBtn.className = "dash-button";
+    paideiaBtn.textContent = "▶ Run Training (Paideia)";
+    paideiaBtn.style.padding = "6px 14px";
+    paideiaBtn.style.fontSize = "0.85rem";
+
+    paideiaHead.appendChild(paideiaBtn);
+    paideiaCard.appendChild(paideiaHead);
+
+    const paideiaRunsContainer = document.createElement("div");
+    paideiaRunsContainer.textContent = "Loading Paideia training runs...";
+    paideiaRunsContainer.style.fontSize = "0.85rem";
+    paideiaRunsContainer.style.color = "#94a3b8";
+    paideiaCard.appendChild(paideiaRunsContainer);
+
+    area.appendChild(paideiaCard);
+
+    // Load tables helper
+    const loadDokimeHistory = async () => {
+      try {
+        const res = await API.getDokimeRuns(10);
+        dokimeRunsContainer.textContent = "";
+        const runs = res.runs || [];
+        if (runs.length === 0) {
+          dokimeRunsContainer.textContent = "No historical Dokime benchmark runs found.";
+          return;
+        }
+
+        const table = document.createElement("table");
+        table.className = "dash-table";
+        const thead = document.createElement("thead");
+        const trH = document.createElement("tr");
+        ["Run ID", "Timestamp", "Models", "Tasks", "Accuracy / Mean", "95% CI", "Status"].forEach((h) => {
+          const th = document.createElement("th");
+          th.textContent = h;
+          trH.appendChild(th);
+        });
+        thead.appendChild(trH);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        runs.forEach((r) => {
+          const tr = document.createElement("tr");
+
+          const tdId = document.createElement("td");
+          tdId.className = "font-mono text-xs";
+          tdId.textContent = r.run_id;
+          tr.appendChild(tdId);
+
+          const tdT = document.createElement("td");
+          tdT.className = "text-xs text-muted";
+          tdT.textContent = this.formatTimestamp(r.timestamp);
+          tr.appendChild(tdT);
+
+          const tdM = document.createElement("td");
+          tdM.className = "text-xs";
+          tdM.textContent = (r.models || []).join(", ") || "n/a";
+          tr.appendChild(tdM);
+
+          const tdTask = document.createElement("td");
+          tdTask.className = "text-xs";
+          tdTask.textContent = (r.tasks || []).join(", ") || "n/a";
+          tr.appendChild(tdTask);
+
+          // Summary metrics
+          let meanStr = "n/a";
+          let ciStr = "n/a";
+          if (r.summary && typeof r.summary === "object") {
+            const keys = Object.keys(r.summary);
+            if (keys.length > 0) {
+              const first = r.summary[keys[0]];
+              const st = first.stats || first;
+              if (st && st.mean !== null && st.mean !== undefined) {
+                meanStr = (st.mean * 100).toFixed(1) + "%";
+              }
+              if (st && st.ci_lower !== null && st.ci_upper !== null && st.ci_lower !== undefined) {
+                ciStr = `[${(st.ci_lower * 100).toFixed(1)}%, ${(st.ci_upper * 100).toFixed(1)}%]`;
+              }
+            }
+          }
+
+          const tdMean = document.createElement("td");
+          tdMean.className = "text-xs font-mono";
+          tdMean.textContent = meanStr;
+          tr.appendChild(tdMean);
+
+          const tdCi = document.createElement("td");
+          tdCi.className = "text-xs font-mono";
+          tdCi.textContent = ciStr;
+          tr.appendChild(tdCi);
+
+          const tdStatus = document.createElement("td");
+          const chip = document.createElement("span");
+          chip.className = "dash-chip dash-chip-simulated";
+          chip.textContent = "SIMULATED";
+          tdStatus.appendChild(chip);
+          tr.appendChild(tdStatus);
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        dokimeRunsContainer.appendChild(table);
+      } catch (err) {
+        dokimeRunsContainer.textContent = "Failed to load Dokime runs: " + err.message;
+      }
+    };
+
+    const loadPaideiaHistory = async () => {
+      try {
+        const res = await API.getPaideiaRuns(10);
+        paideiaRunsContainer.textContent = "";
+        const runs = res.runs || [];
+        if (runs.length === 0) {
+          paideiaRunsContainer.textContent = "No historical Paideia training runs found.";
+          return;
+        }
+
+        const table = document.createElement("table");
+        table.className = "dash-table";
+        const thead = document.createElement("thead");
+        const trH = document.createElement("tr");
+        ["Run ID", "Started At", "Task", "Duration", "Adapter Digest", "Status"].forEach((h) => {
+          const th = document.createElement("th");
+          th.textContent = h;
+          trH.appendChild(th);
+        });
+        thead.appendChild(trH);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        runs.forEach((r) => {
+          const tr = document.createElement("tr");
+
+          const tdId = document.createElement("td");
+          tdId.className = "font-mono text-xs";
+          tdId.textContent = r.run_id ? r.run_id.slice(0, 16) + "..." : "n/a";
+          tr.appendChild(tdId);
+
+          const tdT = document.createElement("td");
+          tdT.className = "text-xs text-muted";
+          tdT.textContent = this.formatTimestamp(r.started_at_utc);
+          tr.appendChild(tdT);
+
+          const tdTask = document.createElement("td");
+          tdTask.className = "text-xs";
+          tdTask.textContent = r.task_name || "qlora_router";
+          tr.appendChild(tdTask);
+
+          const tdDur = document.createElement("td");
+          tdDur.className = "text-xs font-mono";
+          tdDur.textContent = r.duration_seconds !== null && r.duration_seconds !== undefined
+            ? r.duration_seconds.toFixed(2) + "s"
+            : "n/a";
+          tr.appendChild(tdDur);
+
+          const tdDigest = document.createElement("td");
+          tdDigest.className = "font-mono text-xs text-muted";
+          tdDigest.textContent = r.adapter_digest ? r.adapter_digest.slice(0, 12) + "..." : "n/a";
+          tr.appendChild(tdDigest);
+
+          const tdStatus = document.createElement("td");
+          const chip = document.createElement("span");
+          chip.className = "dash-chip dash-chip-simulated";
+          chip.textContent = r.status || "SIMULATED";
+          tdStatus.appendChild(chip);
+          tr.appendChild(tdStatus);
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        paideiaRunsContainer.appendChild(table);
+      } catch (err) {
+        paideiaRunsContainer.textContent = "Failed to load Paideia runs: " + err.message;
+      }
+    };
+
+    // Attach button click listeners with confirmation prompt
+    dokimeBtn.onclick = async () => {
+      const confirmToken = prompt(
+        "RESOURCE WARNING: Dokime evaluation will execute benchmark queries across the harness.\n\n" +
+        "High CPU and memory will be allocated during the run.\n\n" +
+        "Type 'CONFIRM' to start the evaluation benchmark:"
+      );
+      if (confirmToken !== "CONFIRM") {
+        alert("Evaluation cancelled. (Did not enter 'CONFIRM')");
+        return;
+      }
+
+      dokimeBtn.disabled = true;
+      dokimeBtn.textContent = "⏳ Running Dokime Benchmark...";
+      try {
+        const res = await API.runDokimeBatch({
+          confirm_token: "CONFIRM",
+          task_id: "arc_easy_25",
+          model_id: "llama-3.1-8b-instruct",
+          smoke_test: true,
+        });
+        alert(`Dokime run completed successfully!\nRun ID: ${res.run.run_id}\nQueries: ${res.run.total_queries || "completed"}`);
+        await loadDokimeHistory();
+      } catch (err) {
+        alert("Dokime execution failed: " + err.message);
+      } finally {
+        dokimeBtn.disabled = false;
+        dokimeBtn.textContent = "▶ Run Evaluation (Dokime)";
+      }
+    };
+
+    paideiaBtn.onclick = async () => {
+      const confirmToken = prompt(
+        "RESOURCE WARNING: Paideia training will perform hardware preflight checks and write adapter checkpoints.\n\n" +
+        "Type 'CONFIRM' to start training:"
+      );
+      if (confirmToken !== "CONFIRM") {
+        alert("Training cancelled. (Did not enter 'CONFIRM')");
+        return;
+      }
+
+      paideiaBtn.disabled = true;
+      paideiaBtn.textContent = "⏳ Running Paideia Training...";
+      try {
+        const res = await API.runPaideiaBatch({
+          confirm_token: "CONFIRM",
+          task: "router",
+          allow_simulated: true,
+        });
+        alert(`Paideia run completed successfully!\nRun ID: ${res.run.run_id}\nStatus: ${res.run.status}`);
+        await loadPaideiaHistory();
+      } catch (err) {
+        alert("Paideia execution failed: " + err.message);
+      } finally {
+        paideiaBtn.disabled = false;
+        paideiaBtn.textContent = "▶ Run Training (Paideia)";
+      }
+    };
+
+    // Initial load
+    await Promise.all([loadDokimeHistory(), loadPaideiaHistory()]);
   },
 
   /* 7. SESSIONS & AUDIT LOG */

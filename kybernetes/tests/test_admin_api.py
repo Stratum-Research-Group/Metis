@@ -498,3 +498,111 @@ async def test_overview_polling_triggers_zero_model_loads(monkeypatch):
     assert call_counts["load"] == 0
     assert call_counts["completions"] == 0
 
+
+@pytest.mark.asyncio
+async def test_admin_batch_dokime_run_and_history(monkeypatch, tmp_path):
+    """Verify Dokime batch run controls: confirmation gating, execution, audit, and history."""
+    admin_token = "secret-token-dokime-test"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # 1. Unauthenticated request rejected
+        resp_unauth = await client.post(
+            "/v1/admin/batch/dokime/run",
+            json={"confirm_token": "CONFIRM"},
+        )
+        assert resp_unauth.status_code == 401
+
+        # 2. Unconfirmed request rejected (Resource warning check)
+        resp_unconfirmed = await client.post(
+            "/v1/admin/batch/dokime/run",
+            headers=headers,
+            json={"confirm_token": "NO_CONFIRM"},
+        )
+        assert resp_unconfirmed.status_code == 400
+        assert "Explicit confirmation required" in resp_unconfirmed.json()["detail"]
+
+        # 3. Successful run with confirm_token='CONFIRM'
+        resp_run = await client.post(
+            "/v1/admin/batch/dokime/run",
+            headers=headers,
+            json={
+                "confirm_token": "CONFIRM",
+                "task_id": "arc_easy_25",
+                "model_id": "llama-3.1-8b-instruct",
+                "smoke_test": True,
+            },
+        )
+        assert resp_run.status_code == 200
+        run_data = resp_run.json()
+        assert run_data["status"] == "success"
+        assert run_data["tool"] == "dokime"
+        assert run_data["run"]["is_simulated"] is True
+        run_id = run_data["run"]["run_id"]
+
+        # 4. Check history listing endpoint
+        resp_history = await client.get("/v1/admin/batch/dokime/runs?limit=10", headers=headers)
+        assert resp_history.status_code == 200
+        hist_data = resp_history.json()
+        assert hist_data["tool"] == "dokime"
+        assert any(r["run_id"] == run_id for r in hist_data["runs"])
+
+        # 5. Check audit log records the batch run
+        resp_audit = await client.get("/v1/admin/audit-log", headers=headers)
+        assert resp_audit.status_code == 200
+        entries = resp_audit.json()["entries"]
+        assert any(e["action"] == "batch_run_dokime" and e["status"] == "completed" for e in entries)
+
+
+@pytest.mark.asyncio
+async def test_admin_batch_paideia_run_and_history(monkeypatch, tmp_path):
+    """Verify Paideia batch run controls: confirmation gating, preflight check, and manifest catalog."""
+    admin_token = "secret-token-paideia-test"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # 1. Unconfirmed request rejected
+        resp_unconf = await client.post(
+            "/v1/admin/batch/paideia/run",
+            headers=headers,
+            json={"confirm_token": "DENY"},
+        )
+        assert resp_unconf.status_code == 400
+
+        # 2. Successful run with confirm_token='CONFIRM'
+        resp_run = await client.post(
+            "/v1/admin/batch/paideia/run",
+            headers=headers,
+            json={
+                "confirm_token": "CONFIRM",
+                "task": "router",
+                "allow_simulated": True,
+            },
+        )
+        assert resp_run.status_code == 200
+        run_data = resp_run.json()
+        assert run_data["status"] == "success"
+        assert run_data["tool"] == "paideia"
+        assert run_data["run"]["status"] in ("SIMULATED", "COMPLETED")
+        assert run_data["run"]["is_simulated"] is True
+        run_id = run_data["run"]["run_id"]
+
+        # 3. Check history listing endpoint
+        resp_history = await client.get("/v1/admin/batch/paideia/runs?limit=10", headers=headers)
+        assert resp_history.status_code == 200
+        hist_data = resp_history.json()
+        assert hist_data["tool"] == "paideia"
+        assert any(r["run_id"] == run_id for r in hist_data["runs"])
+
+        # 4. Check audit log records the batch run
+        resp_audit = await client.get("/v1/admin/audit-log", headers=headers)
+        assert resp_audit.status_code == 200
+        entries = resp_audit.json()["entries"]
+        assert any(e["action"] == "batch_run_paideia" and e["status"] == "completed" for e in entries)
+

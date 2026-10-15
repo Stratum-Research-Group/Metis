@@ -189,4 +189,26 @@ const API = {
       body: JSON.stringify({ model, confirm }),
     });
   },
+
+  async getDokimeRuns(limit = 20) {
+    return this.request(`/api/dashboard/batch/dokime/runs?limit=${limit}`);
+  },
+
+  async runDokimeBatch(payload) {
+    return this.request("/api/dashboard/batch/dokime/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getPaideiaRuns(limit = 20) {
+    return this.request(`/api/dashboard/batch/paideia/runs?limit=${limit}`);
+  },
+
+  async runPaideiaBatch(payload) {
+    return this.request("/api/dashboard/batch/paideia/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };

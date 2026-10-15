@@ -227,14 +227,78 @@ class ProbeRegistry:
                 mode="simulated",
             )
 
-        if component_id in ("stoma", "dokime", "paideia"):
+        if component_id == "dokime":
+            runs = []
+            try:
+                from kybernetes.admin.batch_runner import batch_job_manager
+                runs = batch_job_manager.get_dokime_runs(limit=1)
+            except Exception:
+                pass
+            if runs:
+                latest = runs[0]
+                return ComponentStatus(
+                    state=ComponentState.SIMULATED,
+                    detail=f"Evaluation harness ready ({len(runs)} historical runs recorded; latest: {latest['run_id']})",
+                    freshness=Freshness.FRESH,
+                    version="0.1.0",
+                    checked_at=checked_at,
+                    evidence=f"Last run {latest['run_id']} recorded (simulated=True)",
+                    is_simulated=True,
+                    status="simulated",
+                    mode="simulated",
+                )
             return ComponentStatus(
                 state=ComponentState.UNKNOWN,
-                detail="Batch tool (no persistent daemon)",
+                detail="Batch evaluation harness (no runs recorded yet)",
                 freshness=Freshness.UNKNOWN,
                 version="0.1.0",
                 checked_at=checked_at,
-                evidence="Batch tool executed via CLI / pipeline",
+                evidence="Batch tool executed via CLI / control plane",
+                is_simulated=True,
+                status="unknown",
+                mode="unknown",
+            )
+
+        if component_id == "paideia":
+            runs = []
+            try:
+                from kybernetes.admin.batch_runner import batch_job_manager
+                runs = batch_job_manager.get_paideia_runs(limit=1)
+            except Exception:
+                pass
+            if runs:
+                latest = runs[0]
+                return ComponentStatus(
+                    state=ComponentState.SIMULATED,
+                    detail=f"Evidence pipeline active (latest run: {latest['run_id']})",
+                    freshness=Freshness.FRESH,
+                    version="0.1.0",
+                    checked_at=checked_at,
+                    evidence=f"Last run {latest['run_id']} (status={latest.get('status', 'SIMULATED')}, simulated=True)",
+                    is_simulated=True,
+                    status="simulated",
+                    mode="simulated",
+                )
+            return ComponentStatus(
+                state=ComponentState.SIMULATED,
+                detail="Evidence pipeline ready; Training runner marker-only",
+                freshness=Freshness.FRESH,
+                version="0.1.0",
+                checked_at=checked_at,
+                evidence="Training runner simulated; GPU lock coordinated",
+                is_simulated=True,
+                status="simulated",
+                mode="simulated",
+            )
+
+        if component_id == "stoma":
+            return ComponentStatus(
+                state=ComponentState.UNKNOWN,
+                detail="Batch tool / storage layer",
+                freshness=Freshness.UNKNOWN,
+                version="0.1.0",
+                checked_at=checked_at,
+                evidence="Storage engine accessed via adapter",
                 is_simulated=False,
                 status="unknown",
                 mode="unknown",

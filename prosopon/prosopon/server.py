@@ -657,6 +657,74 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Model unload failed: {exc}")
 
+    @app.get("/api/dashboard/batch/dokime/runs")
+    async def dashboard_dokime_runs(
+        limit: int = 20,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Fetch historical Dokime evaluation runs."""
+        try:
+            return await kybernetes.get_dokime_runs(limit=limit)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Dokime runs proxy error: {exc}")
+
+    @app.post("/api/dashboard/batch/dokime/run")
+    async def dashboard_dokime_run(
+        req: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Trigger audited Dokime evaluation run."""
+        confirm_token = req.get("confirm_token", "")
+        task_id = req.get("task_id", "arc_easy_25")
+        model_id = req.get("model_id", "llama-3.1-8b-instruct")
+        smoke_test = req.get("smoke_test", True)
+        try:
+            return await kybernetes.run_dokime_batch(
+                confirm_token=confirm_token,
+                task_id=task_id,
+                model_id=model_id,
+                smoke_test=smoke_test,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Dokime run proxy error: {exc}")
+
+    @app.get("/api/dashboard/batch/paideia/runs")
+    async def dashboard_paideia_runs(
+        limit: int = 20,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Fetch historical Paideia fine-tuning runs."""
+        try:
+            return await kybernetes.get_paideia_runs(limit=limit)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Paideia runs proxy error: {exc}")
+
+    @app.post("/api/dashboard/batch/paideia/run")
+    async def dashboard_paideia_run(
+        req: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Trigger audited Paideia fine-tuning run."""
+        confirm_token = req.get("confirm_token", "")
+        task = req.get("task", "router")
+        allow_simulated = req.get("allow_simulated", True)
+        try:
+            return await kybernetes.run_paideia_batch(
+                confirm_token=confirm_token,
+                task=task,
+                allow_simulated=allow_simulated,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Paideia run proxy error: {exc}")
+
     # 9. Health
     @app.get("/api/health")
     async def health():

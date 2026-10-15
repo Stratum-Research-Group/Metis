@@ -330,3 +330,86 @@ class MockKybernetesClient:
         self, model: str, confirm: bool = True, admin_token: Optional[str] = None
     ) -> Dict[str, Any]:
         return {"status": "unloaded", "model": model, "mode": "mock"}
+
+    async def get_dokime_runs(self, limit: int = 20, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {
+            "total": 1,
+            "limit": limit,
+            "tool": "dokime",
+            "runs": [
+                {
+                    "run_id": "run_mock_dokime_001",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "models": ["mock-llama"],
+                    "tasks": ["arc_easy_25"],
+                    "is_simulated": True,
+                    "status": "COMPLETED",
+                    "summary": {
+                        "mock-llama/arc_easy_25": {
+                            "mean": 0.85,
+                            "ci_lower": 0.72,
+                            "ci_upper": 0.94,
+                            "count": 25,
+                        }
+                    },
+                }
+            ],
+        }
+
+    async def run_dokime_batch(
+        self,
+        confirm_token: str,
+        task_id: Optional[str] = "arc_easy_25",
+        model_id: Optional[str] = "llama-3.1-8b-instruct",
+        smoke_test: bool = True,
+        admin_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return {
+            "status": "success",
+            "tool": "dokime",
+            "run": {
+                "run_id": "run_mock_dokime_002",
+                "total_queries": 25,
+                "is_simulated": True,
+                "status": "COMPLETED",
+            },
+        }
+
+    async def get_paideia_runs(self, limit: int = 20, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        return {
+            "total": 1,
+            "limit": limit,
+            "tool": "paideia",
+            "runs": [
+                {
+                    "run_id": "mock-paideia-run-001",
+                    "task_name": "qlora_router",
+                    "status": "SIMULATED",
+                    "is_simulated": True,
+                    "started_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "duration_seconds": 1.25,
+                    "adapter_digest": "mock-adapter-digest-sha256",
+                }
+            ],
+        }
+
+    async def run_paideia_batch(
+        self,
+        confirm_token: str,
+        task: str = "router",
+        allow_simulated: bool = True,
+        admin_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return {
+            "status": "success",
+            "tool": "paideia",
+            "run": {
+                "run_id": "mock-paideia-run-002",
+                "task_name": f"qlora_{task}",
+                "status": "SIMULATED",
+                "is_simulated": True,
+                "duration_seconds": 0.85,
+                "adapter_digest": "mock-new-adapter-sha256",
+            },
+        }

@@ -242,3 +242,53 @@ async def test_dashboard_models_load_unload(tmp_path):
         assert resp_unload.status_code == 200
         assert resp_unload.json()["status"] == "unloaded"
 
+
+@pytest.mark.asyncio
+async def test_dashboard_batch_dokime_and_paideia(tmp_path):
+    """Verify Prosopon proxies Dokime and Paideia batch run triggers and histories."""
+    cfg = ProsoponConfig(data_dir=str(tmp_path), mock_kybernetes=True)
+    app = create_app(cfg)
+    pairing_mgr = app.state.pairing_mgr
+    pin = pairing_mgr.generate_pairing_pin()
+    token = pairing_mgr.verify_pin_and_pair(pin, device_name="Admin Console", role="admin")
+    assert token is not None
+    headers = {"Authorization": f"Bearer {token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as client:
+        # 1. Unauthenticated -> 401
+        resp_unauth = await client.get("/api/dashboard/batch/dokime/runs")
+        assert resp_unauth.status_code == 401
+
+        resp_unauth_post = await client.post("/api/dashboard/batch/dokime/run", json={"confirm_token": "CONFIRM"})
+        assert resp_unauth_post.status_code == 401
+
+        # 2. Dokime runs history
+        resp_dokime_hist = await client.get("/api/dashboard/batch/dokime/runs", headers=headers)
+        assert resp_dokime_hist.status_code == 200
+        assert resp_dokime_hist.json()["tool"] == "dokime"
+
+        # 3. Trigger Dokime run
+        resp_dokime_run = await client.post(
+            "/api/dashboard/batch/dokime/run",
+            headers=headers,
+            json={"confirm_token": "CONFIRM", "task_id": "arc_easy_25"},
+        )
+        assert resp_dokime_run.status_code == 200
+        assert resp_dokime_run.json()["status"] == "success"
+
+        # 4. Paideia runs history
+        resp_paideia_hist = await client.get("/api/dashboard/batch/paideia/runs", headers=headers)
+        assert resp_paideia_hist.status_code == 200
+        assert resp_paideia_hist.json()["tool"] == "paideia"
+
+        # 5. Trigger Paideia run
+        resp_paideia_run = await client.post(
+            "/api/dashboard/batch/paideia/run",
+            headers=headers,
+            json={"confirm_token": "CONFIRM", "task": "router"},
+        )
+        assert resp_paideia_run.status_code == 200
+        assert resp_paideia_run.json()["status"] == "success"
+
+

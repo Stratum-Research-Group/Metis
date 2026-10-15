@@ -30,11 +30,25 @@ from kybernetes.admin.changesets import (
     ConfigApplyRequest,
     changeset_manager,
 )
+from kybernetes.admin.batch_runner import BatchJobBusyError, batch_job_manager
 
 
 class ModelActionRequest(BaseModel):
     model: str = Field(..., description="Target model identifier")
     confirm: bool = Field(default=True, description="Confirmation of GPU side effect")
+
+
+class DokimeRunRequest(BaseModel):
+    confirm_token: str = Field(..., description="Explicit confirmation token; must be 'CONFIRM'")
+    task_id: Optional[str] = Field(default="arc_easy_25", description="Evaluation benchmark task ID")
+    model_id: Optional[str] = Field(default="llama-3.1-8b-instruct", description="Target model ID")
+    smoke_test: bool = Field(default=True, description="Whether to execute simulated smoke benchmark")
+
+
+class PaideiaRunRequest(BaseModel):
+    confirm_token: str = Field(..., description="Explicit confirmation token; must be 'CONFIRM'")
+    task: str = Field(default="router", description="Target fine-tuning task (router or walk_policy)")
+    allow_simulated: bool = Field(default=True, description="Whether to permit marker-only simulated checkpointing")
 
 
 class ProbeRunRequest(BaseModel):
@@ -94,6 +108,7 @@ def create_admin_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/admin", tags=["admin"])
     resolved_admin_token = config.resolve_admin_token()
+    batch_job_manager.set_audit_logger(audit_logger)
 
     async def require_admin_auth(
         request: Request,
@@ -651,5 +666,104 @@ def create_admin_router(
             return await probe_registry.run_functional_probe(req.component_id)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    # =========================================================================
+    # BATCH TOOL RUN CONTROLS (Dokime & Paideia)
+    # =========================================================================
+
+    @router.get("/batch/dokime/runs")
+    async def list_dokime_runs(
+        limit: int = Query(default=20, ge=1, le=100),
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """List historical benchmark runs executed by Dokime."""
+        runs = batch_job_manager.get_dokime_runs(limit=limit)
+        return {
+            "total": len(runs),
+            "limit": limit,
+            "tool": "dokime",
+            "runs": runs,
+        }
+
+    @router.post("/batch/dokime/run")
+    async def trigger_dokime_run(
+        req: DokimeRunRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Trigger an audited Dokime benchmark evaluation run with explicit confirmation."""
+        if req.confirm_token != "CONFIRM":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Explicit confirmation required. Resource warning: benchmark evaluations consume CPU/memory. Send confirm_token='CONFIRM' to proceed.",
+            )
+
+        client_ip = request.client.host if request.client else None
+        actor = request.headers.get("Authorization")
+
+        try:
+            result = await batch_job_manager.run_dokime(
+                task_id=req.task_id,
+                model_id=req.model_id,
+                smoke_test=req.smoke_test,
+                actor=actor,
+                client_ip=client_ip,
+            )
+            return {
+                "status": "success",
+                "tool": "dokime",
+                "run": result,
+            }
+        except BatchJobBusyError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Dokime run failed: {exc}")
+
+    @router.get("/batch/paideia/runs")
+    async def list_paideia_runs(
+        limit: int = Query(default=20, ge=1, le=100),
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """List historical fine-tuning and evidence runs recorded by Paideia."""
+        runs = batch_job_manager.get_paideia_runs(limit=limit)
+        return {
+            "total": len(runs),
+            "limit": limit,
+            "tool": "paideia",
+            "runs": runs,
+        }
+
+    @router.post("/batch/paideia/run")
+    async def trigger_paideia_run(
+        req: PaideiaRunRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Trigger an audited Paideia fine-tuning run with explicit confirmation and preflight checks."""
+        if req.confirm_token != "CONFIRM":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Explicit confirmation required. Resource warning: training jobs consume GPU/VRAM. Send confirm_token='CONFIRM' to proceed.",
+            )
+
+        client_ip = request.client.host if request.client else None
+        actor = request.headers.get("Authorization")
+
+        try:
+            result = await batch_job_manager.run_paideia(
+                task=req.task,
+                allow_simulated=req.allow_simulated,
+                actor=actor,
+                client_ip=client_ip,
+            )
+            return {
+                "status": "success",
+                "tool": "paideia",
+                "run": result,
+            }
+        except BatchJobBusyError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Paideia run failed: {exc}")
 
     return router

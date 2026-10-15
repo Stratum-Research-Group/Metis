@@ -272,3 +272,79 @@ class KybernetesClient:
                     detail = resp.text
                 raise HTTPException(status_code=resp.status_code, detail=detail)
             return resp.json()
+
+    async def get_dokime_runs(self, limit: int = 20, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch historical Dokime evaluation runs."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/admin/batch/dokime/runs?limit={limit}", headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def run_dokime_batch(
+        self,
+        confirm_token: str,
+        task_id: Optional[str] = "arc_easy_25",
+        model_id: Optional[str] = "llama-3.1-8b-instruct",
+        smoke_test: bool = True,
+        admin_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Trigger an audited Dokime benchmark evaluation run."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/batch/dokime/run",
+                json={
+                    "confirm_token": confirm_token,
+                    "task_id": task_id,
+                    "model_id": model_id,
+                    "smoke_test": smoke_test,
+                },
+                headers=headers,
+            )
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=resp.status_code, detail=detail)
+            return resp.json()
+
+    async def get_paideia_runs(self, limit: int = 20, admin_token: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch historical Paideia fine-tuning and evidence runs."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/admin/batch/paideia/runs?limit={limit}", headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def run_paideia_batch(
+        self,
+        confirm_token: str,
+        task: str = "router",
+        allow_simulated: bool = True,
+        admin_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Trigger an audited Paideia fine-tuning run."""
+        token = admin_token or os.environ.get("KYBERNETES_ADMIN_TOKEN")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/admin/batch/paideia/run",
+                json={
+                    "confirm_token": confirm_token,
+                    "task": task,
+                    "allow_simulated": allow_simulated,
+                },
+                headers=headers,
+            )
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise HTTPException(status_code=resp.status_code, detail=detail)
+            return resp.json()

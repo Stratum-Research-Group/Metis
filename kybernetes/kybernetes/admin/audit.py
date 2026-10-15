@@ -52,6 +52,12 @@ class AdminAuditLogger:
             fingerprint = hashlib.sha256(token_clean.encode("utf-8")).hexdigest()[:12]
             actor = f"token:{fingerprint}"
 
+        if isinstance(detail, (dict, list)):
+            import json
+            detail = json.dumps(detail)
+        elif detail is not None:
+            detail = str(detail)
+
         entry = AuditEntry(
             id=f"audit-{self._counter:06d}",
             timestamp=datetime.now(timezone.utc).isoformat(),
@@ -76,3 +82,6 @@ class AdminAuditLogger:
 
     def count(self) -> int:
         return len(self._entries)
+
+
+admin_audit_logger = AdminAuditLogger()
