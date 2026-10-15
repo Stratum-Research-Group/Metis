@@ -50,7 +50,7 @@ class PairingManager:
         """Compute SHA-256 hash of a bearer token."""
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-    def generate_pairing_pin(self, validity_seconds: int = 300) -> str:
+    def generate_pairing_pin(self, validity_seconds: int = 300, role: str = "admin") -> str:
         """Generate a fresh 6-digit pairing PIN valid for 5 minutes and coordinate across processes."""
         pin = f"{secrets.randbelow(1000000):06d}"
         now = time.time()
@@ -72,6 +72,7 @@ class PairingManager:
             "expires_at": expires_at,
             "failed_attempts": 0,
             "lockout_until": active_lockout,
+            "role": role,
         }
         self._save_pin_record(new_record)
         return pin
@@ -109,9 +110,10 @@ class PairingManager:
             now_dt = datetime.now(timezone.utc)
             exp_dt = now_dt + timedelta(hours=self.expiry_hours)
 
+            assigned_role = record.get("role", role) if record else role
             paired = PairedDevice(
                 token_hash=tok_hash,
-                role=role,
+                role=assigned_role,
                 device_name=device_name,
                 paired_at_utc=now_dt.isoformat(),
                 expires_at_utc=exp_dt.isoformat(),

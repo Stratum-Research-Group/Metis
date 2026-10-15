@@ -231,7 +231,7 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 detail="Forbidden: Auto-provisioning only permitted on local loopback.",
             )
 
-        token = pairing_mgr.generate_loopback_token(device_name="Local Browser")
+        token = pairing_mgr.generate_loopback_token(device_name="Local Browser", role="admin")
         return {"status": "ok", "token": token}
 
     @app.post("/api/auth/pair")
