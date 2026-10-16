@@ -19,7 +19,6 @@ from lthcm.benchmarks.real.utils.run_bundle import (
     get_system_hardware_info,
     compute_file_sha256,
 )
-from lthcm.benchmarks.run_real_benchmarks_to_md import validate_artifacts
 
 
 class TestRunBundle(unittest.TestCase):

@@ -8,6 +8,10 @@ in smoke configuration.
 import tempfile
 import shutil
 import unittest
+import pytest
+
+pytest.importorskip("faiss", reason="faiss-cpu not installed (optional benchmark extra)")
+
 from lthcm.benchmarks.real.utils.significance import paired_bootstrap_test
 from lthcm.benchmarks.real.hierarchy.wordnet_eval import WordNetHierarchyBenchmark
 from lthcm.benchmarks.real.niah.ruler_eval import RULERBenchmark

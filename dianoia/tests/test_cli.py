@@ -108,13 +108,25 @@ class TestCLI(unittest.TestCase):
         with patch("pickle.load", return_value=mock_engine):
             with patch("pathlib.Path.is_file", return_value=True):
                 with patch("builtins.open", MagicMock()):
-                    loaded = _load_index("/fake/path.pkl")
+                    loaded = _load_index("/fake/path.pkl", allow_trusted_pickle=True)
                     self.assertEqual(
                         loaded.sheaf_filter.nli_model_name,
                         "cross-encoder/nli-deberta-v3-xsmall",
                     )
                     self.assertEqual(loaded.sheaf_filter.threshold, 2.5)
                     self.assertIsNone(loaded.sheaf_filter._nli_model)
+
+    def test_load_index_untrusted_pickle_refused(self):
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("torch not installed")
+
+        from dianoia.cli import _load_index
+
+        with self.assertRaises(SystemExit) as cm:
+            _load_index("/fake/path.pkl", allow_trusted_pickle=False)
+        self.assertEqual(cm.exception.code, 1)
 
     def test_load_index_missing_sheaf_filter_exits(self):
         try:
@@ -134,7 +146,7 @@ class TestCLI(unittest.TestCase):
             with patch("pathlib.Path.is_file", return_value=True):
                 with patch("builtins.open", MagicMock()):
                     with self.assertRaises(SystemExit) as cm:
-                        _load_index("/fake/path.pkl")
+                        _load_index("/fake/path.pkl", allow_trusted_pickle=True)
                     self.assertEqual(cm.exception.code, 1)
 
     def test_print_walk_result_rewalk_failed_status(self):
