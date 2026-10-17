@@ -256,4 +256,38 @@ const API = {
   async getWorkbenchDiff() {
     return this.request("/api/workbench/diff");
   },
+
+  /* Pinax Tool Catalogue API (Section 7) */
+  async getPinaxTools(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.query) qs.set("query", params.query);
+    if (params.category) qs.set("category", params.category);
+    if (params.risk_tier) qs.set("risk_tier", params.risk_tier);
+    if (params.limit) qs.set("limit", params.limit);
+    const queryStr = qs.toString();
+    return this.request(`/api/pinax/tools${queryStr ? "?" + queryStr : ""}`);
+  },
+
+  async getPinaxToolDetail(toolId) {
+    return this.request(`/api/pinax/tools/${encodeURIComponent(toolId)}`);
+  },
+
+  async getPinaxToolDocs(toolId, maxBytes = 4096) {
+    return this.request(`/api/pinax/tools/${encodeURIComponent(toolId)}/docs?max_bytes=${maxBytes}`);
+  },
+
+  async triggerPinaxScan(pathDirs = null) {
+    return this.request("/api/pinax/scan", {
+      method: "POST",
+      body: JSON.stringify(pathDirs ? { path_dirs: pathDirs } : {}),
+    });
+  },
+
+  async evaluatePinaxInvocation(toolName, args = []) {
+    return this.request("/api/pinax/evaluate", {
+      method: "POST",
+      body: JSON.stringify({ tool_name: toolName, args: args }),
+    });
+  },
 };
+

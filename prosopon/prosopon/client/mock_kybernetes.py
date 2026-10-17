@@ -463,3 +463,149 @@ class MockKybernetesClient:
             "resolved": True,
         }
 
+    # --- Pinax Tool Catalogue Mock Methods ---
+    async def get_pinax_tools(
+        self,
+        query: str = "",
+        category: Optional[str] = None,
+        risk_tier: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        mock_tools = [
+            {
+                "id": "tool:rg",
+                "name": "rg",
+                "summary": "Recursively searches directories for a regex pattern",
+                "category": "text",
+                "risk_tier": "T0",
+                "install_state": "installed",
+                "kind": "binary",
+                "has_structured_signature": False,
+            },
+            {
+                "id": "tool:ls",
+                "name": "ls",
+                "summary": "List directory contents",
+                "category": "filesystem",
+                "risk_tier": "T0",
+                "install_state": "installed",
+                "kind": "binary",
+                "has_structured_signature": False,
+            },
+            {
+                "id": "tool:git",
+                "name": "git",
+                "summary": "Fast, scalable, distributed revision control system",
+                "category": "vcs",
+                "risk_tier": "T0",
+                "install_state": "installed",
+                "kind": "binary",
+                "has_structured_signature": False,
+            },
+            {
+                "id": "tool:curl",
+                "name": "curl",
+                "summary": "Command line tool for transferring data with URL syntax",
+                "category": "network",
+                "risk_tier": "T2",
+                "install_state": "installed",
+                "kind": "binary",
+                "has_structured_signature": False,
+            },
+            {
+                "id": "tool:rm",
+                "name": "rm",
+                "summary": "Remove files or directories",
+                "category": "filesystem",
+                "risk_tier": "T3",
+                "install_state": "installed",
+                "kind": "binary",
+                "has_structured_signature": False,
+            },
+        ]
+        res = mock_tools
+        if query:
+            q = query.lower()
+            res = [t for t in res if q in t["name"].lower() or q in t["summary"].lower()]
+        if category:
+            res = [t for t in res if t["category"] == category]
+        if risk_tier:
+            res = [t for t in res if t["risk_tier"] == risk_tier]
+        return res[:limit]
+
+    async def get_pinax_tool_detail(self, tool_id: str) -> Dict[str, Any]:
+        name = tool_id.replace("tool:", "")
+        return {
+            "id": f"tool:{name}",
+            "name": name,
+            "host_id": "localhost",
+            "kind": "binary",
+            "entry_kind": "installed",
+            "summary": f"Detailed specification for {name}",
+            "category": "filesystem" if name in ("ls", "rm") else ("network" if name == "curl" else "text"),
+            "risk_tier": "T3" if name == "rm" else ("T2" if name == "curl" else "T0"),
+            "install_state": "installed",
+            "invocation_path": f"/usr/bin/{name}",
+            "resolved_path": f"/usr/bin/{name}",
+            "sha256": "abcdef0123456789" * 4,
+            "discovered_by": "curated",
+            "capabilities": [{"capability": "file-read", "risk_weight": 0.1}],
+            "risk_overrides": [
+                {"pattern_kind": "flag", "pattern": "-T", "tier": "T3", "note": "File upload egress"}
+            ] if name == "curl" else [],
+            "signatures": [],
+            "docs": [],
+        }
+
+    async def get_pinax_tool_docs(self, tool_id: str, max_bytes: int = 4096) -> Dict[str, Any]:
+        name = tool_id.replace("tool:", "")
+        return {
+            "tool": name,
+            "found": True,
+            "doc_kind": "man_page",
+            "locator": f"/usr/share/man/man1/{name}.1.gz",
+            "content": f"{name.upper()}(1) User Commands\n\nNAME\n       {name} - command utility\n\nDESCRIPTION\n       Mock documentation slice for {name}.",
+            "truncated": False,
+            "size_bytes": 128,
+        }
+
+    async def trigger_pinax_scan(self, path_dirs: Optional[List[str]] = None) -> Dict[str, Any]:
+        return {
+            "id": "mock-scan-01",
+            "host_id": "localhost",
+            "started_at": 1700000000.0,
+            "finished_at": 1700000000.15,
+            "elapsed_seconds": 0.15,
+            "scanner_version": "0.1.0",
+            "added": 12,
+            "removed": 0,
+            "changed": 35,
+            "installed_updated": 35,
+            "unvetted_candidates": 12,
+            "total_discovered": 47,
+        }
+
+    async def evaluate_pinax_invocation(self, tool_name: str, args: List[str]) -> Dict[str, Any]:
+        tier = "T0"
+        req_approval = False
+        reason = "Base catalogue tier"
+        matched = []
+        if tool_name == "curl" and any(a in ("-T", "--upload-file", "-d") for a in args):
+            tier = "T3"
+            req_approval = True
+            reason = "Override: File upload egress"
+            matched.append({"pattern": "-T", "tier": "T3"})
+        elif tool_name == "rm":
+            tier = "T3"
+            req_approval = True
+            reason = "Base destructive tool"
+        return {
+            "tool": tool_name,
+            "args": args,
+            "tier": tier,
+            "requires_approval": req_approval,
+            "reason": reason,
+            "matched_overrides": matched,
+        }
+
+

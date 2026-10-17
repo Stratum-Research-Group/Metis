@@ -394,3 +394,67 @@ class KybernetesClient:
             resp.raise_for_status()
             return resp.json()
 
+    # --- Pinax Tool Catalogue Client Methods ---
+    async def get_pinax_tools(
+        self,
+        query: str = "",
+        category: Optional[str] = None,
+        risk_tier: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Fetch matching tools from Pinax catalogue."""
+        headers = self._headers()
+        params: Dict[str, Any] = {"limit": limit}
+        if query:
+            params["query"] = query
+        if category:
+            params["category"] = category
+        if risk_tier:
+            params["risk_tier"] = risk_tier
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/v1/pinax/tools", headers=headers, params=params)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_pinax_tool_detail(self, tool_id: str) -> Dict[str, Any]:
+        """Fetch Level 1 specification and risk overrides for a tool."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/v1/pinax/tools/{tool_id}", headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_pinax_tool_docs(self, tool_id: str, max_bytes: int = 4096) -> Dict[str, Any]:
+        """Fetch untrusted size-capped local documentation slice."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{self.base_url}/v1/pinax/tools/{tool_id}/docs",
+                headers=headers,
+                params={"max_bytes": max_bytes},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def trigger_pinax_scan(self, path_dirs: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Trigger passive PATH environment scan without executing binaries."""
+        headers = self._headers()
+        payload = {"path_dirs": path_dirs} if path_dirs else {}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(f"{self.base_url}/v1/pinax/scan", headers=headers, json=payload)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def evaluate_pinax_invocation(self, tool_name: str, args: List[str]) -> Dict[str, Any]:
+        """Evaluate invocation arguments against risk override tables."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/v1/pinax/evaluate",
+                headers=headers,
+                json={"tool_name": tool_name, "args": args},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+

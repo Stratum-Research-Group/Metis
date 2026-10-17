@@ -970,9 +970,85 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         except (WebSocketDisconnect, Exception):
             pass
 
-    # 12. Health
+    # 12. Pinax Tool Catalogue Subsystem API (Section 7)
+    @app.get("/api/pinax/tools")
+    async def pinax_tools(
+        query: str = "",
+        category: Optional[str] = None,
+        risk_tier: Optional[str] = None,
+        limit: int = 50,
+        _: bool = Depends(require_auth),
+    ) -> List[Dict[str, Any]]:
+        """List or search tools from Pinax catalogue."""
+        try:
+            return await kybernetes.get_pinax_tools(
+                query=query,
+                category=category,
+                risk_tier=risk_tier,
+                limit=limit,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Pinax catalogue query error: {exc}")
+
+    @app.get("/api/pinax/tools/{tool_id:path}/docs")
+    async def pinax_tool_docs(
+        tool_id: str,
+        max_bytes: int = 4096,
+        _: bool = Depends(require_auth),
+    ) -> Dict[str, Any]:
+        """Fetch untrusted size-capped local documentation slice."""
+        try:
+            return await kybernetes.get_pinax_tool_docs(tool_id, max_bytes=max_bytes)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Pinax docs error: {exc}")
+
+    @app.get("/api/pinax/tools/{tool_id:path}")
+    async def pinax_tool_detail(
+        tool_id: str,
+        _: bool = Depends(require_auth),
+    ) -> Dict[str, Any]:
+        """Fetch Level 1 tool specification and risk overrides."""
+        try:
+            res = await kybernetes.get_pinax_tool_detail(tool_id)
+            if not res:
+                raise HTTPException(status_code=404, detail=f"Tool '{tool_id}' not found")
+            return res
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Pinax detail error: {exc}")
+
+    @app.post("/api/pinax/scan")
+    async def pinax_scan(
+        request: Request,
+        _: bool = Depends(require_auth),
+    ) -> Dict[str, Any]:
+        """Trigger passive PATH scan without executing binaries."""
+        try:
+            body = await request.json() if (await request.body()) else {}
+            path_dirs = body.get("path_dirs")
+            return await kybernetes.trigger_pinax_scan(path_dirs=path_dirs)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Pinax scan error: {exc}")
+
+    @app.post("/api/pinax/evaluate")
+    async def pinax_evaluate(
+        request: Request,
+        _: bool = Depends(require_auth),
+    ) -> Dict[str, Any]:
+        """Evaluate invocation arguments against risk override tables."""
+        try:
+            body = await request.json()
+            tool_name = body.get("tool_name", "")
+            args = body.get("args", [])
+            return await kybernetes.evaluate_pinax_invocation(tool_name=tool_name, args=args)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Pinax evaluation error: {exc}")
+
+    # 13. Health
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "app": "prosopon", "version": "0.1.0"}
 
     return app
+

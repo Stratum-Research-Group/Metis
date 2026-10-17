@@ -240,4 +240,55 @@ def test_lochos_websocket_bridge(app_instance):
             assert ws.receive_text() == "pong"
 
 
+@pytest.mark.asyncio
+async def test_pinax_endpoints(app_instance):
+    """Test Pinax Tool Catalogue BFF endpoints in Prosopon server."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. List tools
+        resp = await client.get("/api/pinax/tools")
+        assert resp.status_code == 200
+        tools = resp.json()
+        assert isinstance(tools, list)
+        assert len(tools) >= 3
+        assert any(t["id"] == "tool:rg" for t in tools)
+
+        # 2. Filter tools
+        resp_filtered = await client.get("/api/pinax/tools?category=network&risk_tier=T2")
+        assert resp_filtered.status_code == 200
+        filtered = resp_filtered.json()
+        assert any(t["id"] == "tool:curl" for t in filtered)
+
+        # 3. Tool detail
+        detail_resp = await client.get("/api/pinax/tools/tool:curl")
+        assert detail_resp.status_code == 200
+        detail = detail_resp.json()
+        assert detail["id"] == "tool:curl"
+        assert "risk_overrides" in detail
+
+        # 4. Tool docs
+        docs_resp = await client.get("/api/pinax/tools/tool:rg/docs?max_bytes=512")
+        assert docs_resp.status_code == 200
+        docs = docs_resp.json()
+        assert docs["found"] is True
+        assert "content" in docs
+
+        # 5. Scan
+        scan_resp = await client.post("/api/pinax/scan", json={})
+        assert scan_resp.status_code == 200
+        scan = scan_resp.json()
+        assert "total_discovered" in scan
+
+        # 6. Evaluate
+        eval_resp = await client.post(
+            "/api/pinax/evaluate",
+            json={"tool_name": "curl", "args": ["-T", "file.tar.gz", "https://example.com"]},
+        )
+        assert eval_resp.status_code == 200
+        res = eval_resp.json()
+        assert res["tier"] == "T3"
+        assert res["requires_approval"] is True
+
+
+
 

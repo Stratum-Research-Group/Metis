@@ -28,16 +28,19 @@ class App {
     this.tabBtnSquad = document.getElementById("tab-btn-squad");
     this.tabBtnDashboard = document.getElementById("tab-btn-dashboard");
     this.tabBtnSettings = document.getElementById("tab-btn-settings");
+    this.tabBtnPinax = document.getElementById("tab-btn-pinax");
 
     this.actBtnChat = document.getElementById("act-btn-chat");
     this.actBtnEditor = document.getElementById("act-btn-editor");
     this.actBtnSquad = document.getElementById("act-btn-squad");
+    this.actBtnPinax = document.getElementById("act-btn-pinax");
     this.actBtnDashboard = document.getElementById("act-btn-dashboard");
     this.actBtnSettings = document.getElementById("act-btn-settings");
 
     this.chatWorkspace = document.getElementById("chat-workspace");
     this.editorWorkspace = document.getElementById("editor-workspace");
     this.squadWorkspace = document.getElementById("squad-workspace");
+    this.pinaxWorkspace = document.getElementById("pinax-workspace");
     this.dashboardWorkspace = document.getElementById("dashboard-workspace");
     this.settingsWorkspace = document.getElementById("settings-workspace");
     
@@ -75,6 +78,7 @@ class App {
       { top: this.tabBtnChat, act: this.actBtnChat, id: "chat" },
       { top: this.tabBtnEditor, act: this.actBtnEditor, id: "editor" },
       { top: this.tabBtnSquad, act: this.actBtnSquad, id: "squad" },
+      { top: this.tabBtnPinax, act: this.actBtnPinax, id: "pinax" },
       { top: this.tabBtnDashboard, act: this.actBtnDashboard, id: "dashboard" },
       { top: this.tabBtnSettings, act: this.actBtnSettings, id: "settings" },
     ];
@@ -127,6 +131,9 @@ class App {
     if (window.MetisSquad) {
       window.MetisSquad.init();
     }
+    if (window.MetisPinax) {
+      window.MetisPinax.init();
+    }
     try {
       const sessions = await API.listSessions();
       if (sessions.length > 0) {
@@ -145,6 +152,7 @@ class App {
       { id: "chat", top: this.tabBtnChat, act: this.actBtnChat, ws: this.chatWorkspace },
       { id: "editor", top: this.tabBtnEditor, act: this.actBtnEditor, ws: this.editorWorkspace },
       { id: "squad", top: this.tabBtnSquad, act: this.actBtnSquad, ws: this.squadWorkspace },
+      { id: "pinax", top: this.tabBtnPinax, act: this.actBtnPinax, ws: this.pinaxWorkspace },
       { id: "dashboard", top: this.tabBtnDashboard, act: this.actBtnDashboard, ws: this.dashboardWorkspace },
       { id: "settings", top: this.tabBtnSettings, act: this.actBtnSettings, ws: this.settingsWorkspace },
     ];
@@ -171,6 +179,8 @@ class App {
       window.MetisWorkbench.render();
     } else if (viewName === "squad" && window.MetisSquad) {
       window.MetisSquad.render();
+    } else if (viewName === "pinax" && window.MetisPinax) {
+      window.MetisPinax.render();
     }
 
     window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: viewName } }));
