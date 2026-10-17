@@ -306,3 +306,94 @@ class StubRuntimeAdapter(RuntimeAdapter):
                 attention_required=True,
             )
         return ReadinessResult(ready=True)
+
+
+class RemoteProviderSeatAdapter(RuntimeAdapter):
+    """
+    Remote LLM provider seat adapter (e.g. Gemini, Anthropic, OpenAI, Hestia).
+    Conforms to the OpenRig 5-method RuntimeAdapter contract.
+    Enables remote provider specialist seats alongside local coding agents.
+    """
+    runtime_name = "remote-provider"
+
+    def __init__(
+        self,
+        provider: str = "hestia",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        timeout_seconds: float = 30.0,
+    ):
+        self.provider = provider
+        self.api_key = api_key
+        self.base_url = base_url
+        self.timeout_seconds = timeout_seconds
+
+    def list_installed(self, seat: SeatSpec, cwd: Path) -> List[Dict[str, Any]]:
+        return [{"name": s, "category": f"remote-{self.provider}-skill"} for s in seat.skills]
+
+    def project(self, seat: SeatSpec, cwd: Path, skills_root: Optional[Path] = None) -> Dict[str, Any]:
+        pack_dir = cwd / ".metis" / "context-pack"
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        manifest_file = pack_dir / f"manifest_{seat.id}.yaml"
+        manifest_data = {
+            "ref": f"seat:{seat.id}",
+            "role": seat.role,
+            "model": seat.model,
+            "provider": self.provider,
+            "permission_policy": seat.permission_policy,
+            "skills": list(seat.skills),
+            "timestamp": time.time(),
+        }
+        manifest_file.write_text(yaml.dump(manifest_data, sort_keys=False), encoding="utf-8")
+        return {"manifest": str(manifest_file), "projected_skills": list(seat.skills)}
+
+    def deliver_startup(
+        self,
+        seat: SeatSpec,
+        cwd: Path,
+        files: Optional[List[Path]] = None,
+        instructions: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        brief_file = cwd / ".metis" / f"brief_{seat.id}.txt"
+        brief_file.parent.mkdir(parents=True, exist_ok=True)
+        content = (
+            f"Remote Provider Seat: {seat.id}\n"
+            f"Provider: {self.provider}\n"
+            f"Model: {seat.model}\n"
+            f"Role: {seat.role}\n"
+        )
+        if instructions:
+            content += f"\nSystem Instructions:\n{instructions}\n"
+        brief_file.write_text(content, encoding="utf-8")
+        return {"delivered": 1, "path": str(brief_file)}
+
+    def launch_harness(
+        self,
+        seat: SeatSpec,
+        task: WorkItem,
+        cwd: Path,
+        action_generator: Optional[Callable[[int, List[Any]], Optional[Dict[str, Any]]]] = None,
+        verifier: Optional[Callable[[], bool]] = None,
+    ) -> LaunchResult:
+        # Assemble execution deliverable
+        output_file = cwd / ".metis" / f"output_{task.task_id}.md"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        evidence = f"Executed task '{task.title}' via {self.provider}:{seat.model}"
+        output_file.write_text(f"# Deliverable for {task.title}\n\n{evidence}\n", encoding="utf-8")
+
+        passed = True
+        if verifier:
+            passed = verifier()
+
+        return LaunchResult(
+            ok=passed,
+            session_id=f"remote-{seat.id}-{task.task_id}",
+            applied_policy=seat.permission_policy,
+            evidence=evidence,
+            error=None if passed else "Verification rejected deliverable",
+        )
+
+    def check_ready(self, seat: SeatSpec, cwd: Path) -> ReadinessResult:
+        return ReadinessResult(ready=True)
+

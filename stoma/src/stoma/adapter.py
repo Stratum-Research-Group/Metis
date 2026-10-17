@@ -251,6 +251,7 @@ class StomaLTHCMAdapter:
             enforce_sheaf_verification=False,  # Sheaf verification without NLI/edges is bypassed
             use_stochastic_resonance=False,    # Direct retrieval
             use_spectral_wormhole=False,       # No graph edges in v1
+            enable_gauge_transport=False,      # B13: do not perturb embeddings with unseeded/untrained gauge transport
         )
 
         results = raw_result.get("results", [])

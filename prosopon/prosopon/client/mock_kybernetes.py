@@ -413,3 +413,53 @@ class MockKybernetesClient:
                 "adapter_digest": "mock-new-adapter-sha256",
             },
         }
+
+    async def get_lochos_squad(self) -> Dict[str, Any]:
+        return {
+            "rig_name": "metis-sovereign-squad",
+            "version": "0.2",
+            "summary": "Mock sovereign engineering squad",
+            "seats": [
+                {
+                    "id": "coder",
+                    "label": "Autonomous Coding Agent",
+                    "role": "Primary code implementation",
+                    "model": "qwen2.5-coder-32b",
+                    "state": "idle",
+                    "worktree_branch": "squad/coder",
+                    "skills": ["python", "refactoring"],
+                    "current_task": None,
+                },
+                {
+                    "id": "reviewer",
+                    "label": "Independent Review Agent",
+                    "role": "Zero-trust diff auditing",
+                    "model": "qwen2.5-coder-32b",
+                    "state": "idle",
+                    "worktree_branch": "squad/reviewer",
+                    "skills": ["security", "pytest"],
+                    "current_task": None,
+                },
+            ],
+            "active_tasks": [],
+            "attention_required": [],
+        }
+
+    async def get_lochos_queue(self, status: Optional[str] = None, seat_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        return []
+
+    async def dispatch_lochos_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "task_id": "mock-task-123",
+            "status": "in_progress",
+            "title": payload.get("title", "Mock Task"),
+            "assigned_to": payload.get("target_seat", "coder"),
+        }
+
+    async def resolve_lochos_attention(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "task_id": payload.get("task_id", "mock-task"),
+            "status": "in_progress",
+            "resolved": True,
+        }
+

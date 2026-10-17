@@ -279,6 +279,8 @@ class LTHCMEngine(nn.Module):
         coarse_k: Optional[int] = None,
         use_nli_sheaf: bool = True,
         build_community_summaries: bool = False,
+        enable_gauge_transport: bool = True,
+        allow_causal_fallback: bool = True,
     ) -> Dict[str, Any]:
         """
         Execute full end-to-end topological retrieval and verification.
@@ -381,15 +383,20 @@ class LTHCMEngine(nn.Module):
 
         # --- Phase 3: Lie Group Gauge Fibre Parallel Transport ---
         for cand in raw_candidates:
-            cand_domain_coord = self.get_or_create_domain(cand["domain"])
-            aligned_v, alignment_sim = self.bundle.align_to_query_frame(
-                candidate_vector=cand["vector"],
-                candidate_domain=cand_domain_coord,
-                query_vector=q_vec,
-                query_domain=q_domain_coord,
-            )
-            cand["aligned_vector"] = aligned_v
-            cand["gauge_sim"] = alignment_sim
+            cand_domain = cand.get("domain", "general")
+            if enable_gauge_transport and cand_domain != query_domain:
+                cand_domain_coord = self.get_or_create_domain(cand_domain)
+                aligned_v, alignment_sim = self.bundle.align_to_query_frame(
+                    candidate_vector=cand["vector"],
+                    candidate_domain=cand_domain_coord,
+                    query_vector=q_vec,
+                    query_domain=q_domain_coord,
+                )
+                cand["aligned_vector"] = aligned_v
+                cand["gauge_sim"] = alignment_sim
+            else:
+                cand["aligned_vector"] = cand["vector"]
+                cand["gauge_sim"] = 1.0
 
         # --- Phase 4: Lorentzian Spacetime Causal Light-Cone Filtering ---
         causally_valid_candidates = []
@@ -411,7 +418,6 @@ class LTHCMEngine(nn.Module):
                 is_timelike = ds2 <= 0.0
                 in_light_cone = is_past and is_timelike
 
-
                 causal_diagnostics.append({
                     "doc_id": cand["doc_id"],
                     "ds2": float(ds2),
@@ -427,8 +433,18 @@ class LTHCMEngine(nn.Module):
 
         causal_fallback = False
         if enforce_causality and len(causally_valid_candidates) == 0 and len(raw_candidates) > 0:
-            causal_fallback = True
-            candidates_for_sheaf = raw_candidates[:top_k]
+            if allow_causal_fallback:
+                causal_fallback = True
+                candidates_for_sheaf = raw_candidates[:top_k]
+            else:
+                return {
+                    "status": "causally_empty",
+                    "verified_context": [],
+                    "results": [],
+                    "causal_fallback": False,
+                    "causal_diagnostics": causal_diagnostics,
+                    "query": {"domain": query_domain, "timestamp": query_timestamp},
+                }
         else:
             candidates_for_sheaf = causally_valid_candidates
 
@@ -503,18 +519,19 @@ class LTHCMEngine(nn.Module):
         riemannian_langevin_diag = None
         if (update_titans_memory or use_riemannian_langevin) and len(final_top) > 0:
             top_cand = final_top[0]
-            if use_riemannian_langevin:
-                _, surprise_tensor, riemannian_langevin_diag = self.riemannian_memory.step(
-                    k=q_vec.unsqueeze(0),
-                    v=top_cand["aligned_vector"].unsqueeze(0),
-                )
-                titans_surprise = float(surprise_tensor.item())
-            else:
-                _, surprise_tensor = self.titans.step(
-                    k=q_vec.unsqueeze(0),
-                    v=top_cand["aligned_vector"].unsqueeze(0),
-                )
-                titans_surprise = float(surprise_tensor.item())
+            with torch.no_grad():
+                if use_riemannian_langevin:
+                    _, surprise_tensor, riemannian_langevin_diag = self.riemannian_memory.step(
+                        k=q_vec.unsqueeze(0),
+                        v=top_cand["aligned_vector"].unsqueeze(0),
+                    )
+                    titans_surprise = float(surprise_tensor.item())
+                else:
+                    _, surprise_tensor = self.titans.step(
+                        k=q_vec.unsqueeze(0),
+                        v=top_cand["aligned_vector"].unsqueeze(0),
+                    )
+                    titans_surprise = float(surprise_tensor.item())
 
         return {
             "query": {

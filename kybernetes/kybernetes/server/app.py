@@ -1,11 +1,12 @@
 """FastAPI application factory for Kybernetes orchestrator and admin control plane."""
 
+import asyncio
 import json
 import os
 import secrets
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, List, Optional
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -431,5 +432,61 @@ def create_app(
 
         item = lochos_squad.queue.resolve_attention(task_id=task_id, seat_id=seat_id, resolution=resolution)
         return item.to_dict()
+
+    @app.websocket("/v1/lochos/ws")
+    async def lochos_websocket(websocket: WebSocket) -> None:
+        """Live WebSocket streaming bridge for Lochos squad status and task lifecycle events."""
+        await websocket.accept()
+        try:
+            await websocket.send_json({
+                "type": "squad_state",
+                "data": lochos_squad.to_status_dict(),
+            })
+        except Exception:
+            return
+
+        event_queue: asyncio.Queue = asyncio.Queue()
+
+        def _on_event(evt: Dict[str, Any]) -> None:
+            event_queue.put_nowait(evt)
+
+        lochos_squad.add_event_listener(_on_event)
+
+        async def _reader() -> None:
+            try:
+                while True:
+                    msg = await websocket.receive_text()
+                    if msg == "ping":
+                        await websocket.send_text("pong")
+                    elif msg == "refresh":
+                        await websocket.send_json({
+                            "type": "squad_state",
+                            "data": lochos_squad.to_status_dict(),
+                        })
+            except Exception:
+                pass
+
+        async def _writer() -> None:
+            try:
+                while True:
+                    evt = await event_queue.get()
+                    await websocket.send_json(evt)
+            except Exception:
+                pass
+
+        reader_task = asyncio.create_task(_reader())
+        writer_task = asyncio.create_task(_writer())
+
+        try:
+            await asyncio.wait(
+                [reader_task, writer_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        except WebSocketDisconnect:
+            pass
+        finally:
+            reader_task.cancel()
+            writer_task.cancel()
+            lochos_squad.remove_event_listener(_on_event)
 
     return app

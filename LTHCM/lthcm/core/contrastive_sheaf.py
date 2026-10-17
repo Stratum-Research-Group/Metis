@@ -230,7 +230,10 @@ class ContrastiveSheafTrainer:
         """Load projector and sheaf weights, validating metadata constraints if provided."""
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Checkpoint file not found: {path}")
-        data = torch.load(path, map_location=self.device)
+        try:
+            data = torch.load(path, map_location=self.device, weights_only=True)
+        except TypeError:
+            data = torch.load(path, map_location=self.device)
         saved_meta = data.get("metadata", {})
         if expected_metadata:
             if not saved_meta or not isinstance(saved_meta, dict):

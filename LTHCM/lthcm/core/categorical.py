@@ -328,9 +328,10 @@ class AdjointFunctorPair:
 class CausalFilterMorphism(Morphism[PipelineState, PipelineState]):
     """Morphism enforcing Lorentzian Minkowski light-cone causality."""
 
-    def __init__(self, c_speed: float = 1.0):
+    def __init__(self, c_speed: float = 1.0, allow_fallback: bool = True):
         super().__init__(name="LorentzianCausality")
         self.c_speed = c_speed
+        self.allow_fallback = allow_fallback
 
     def forward(self, state: PipelineState) -> PipelineState:
         new_state = state.clone()
@@ -347,13 +348,22 @@ class CausalFilterMorphism(Morphism[PipelineState, PipelineState]):
                 c_u = F.normalize(v.view(-1).cpu(), p=2, dim=0)
                 dx = float(torch.norm(q_u - c_u, p=2).item())
             else:
-                dx = 0.0
+                # Without vector representation, cannot assume co-location (dx=0); assume maximum unit sphere distance dx=2
+                dx = 2.0
             ds2 = -(self.c_speed * dt) ** 2 + (dx ** 2)
             if ds2 <= 0.0:
                 cand["causally_valid"] = True
                 valid_candidates.append(cand)
 
-        new_state.candidates = valid_candidates if len(valid_candidates) > 0 else new_state.candidates
+        if len(valid_candidates) > 0:
+            new_state.candidates = valid_candidates
+            new_state.diagnostics["causal_fallback"] = False
+        elif self.allow_fallback:
+            new_state.candidates = new_state.candidates
+            new_state.diagnostics["causal_fallback"] = True
+        else:
+            new_state.candidates = []
+            new_state.diagnostics["causal_fallback"] = False
         new_state.diagnostics["causal_pass_count"] = len(valid_candidates)
         return new_state
 

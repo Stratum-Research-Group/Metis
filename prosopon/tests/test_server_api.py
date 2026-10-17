@@ -227,4 +227,17 @@ async def test_lochos_squad_endpoints(app_instance):
         assert isinstance(q_resp.json(), list)
 
 
+def test_lochos_websocket_bridge(app_instance):
+    """Test live Lochos squad WebSocket streaming bridge."""
+    from starlette.testclient import TestClient
+    with TestClient(app_instance) as client:
+        with client.websocket_connect("/api/lochos/ws") as ws:
+            snap = ws.receive_json()
+            assert snap["type"] == "squad_state"
+            assert "seats" in snap["data"]
+
+            ws.send_text("ping")
+            assert ws.receive_text() == "pong"
+
+
 

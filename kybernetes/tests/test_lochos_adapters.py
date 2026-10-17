@@ -6,6 +6,7 @@ import pytest
 
 from kybernetes.lochos.adapters import (
     KybernetesCodingAdapter,
+    RemoteProviderSeatAdapter,
     StubRuntimeAdapter,
     TerminalSeatAdapter,
 )
@@ -116,3 +117,57 @@ def test_stub_runtime_adapter():
         res_blocked = blocked_adapter.launch_harness(seat, task, cwd)
         assert res_blocked.ok is False
         assert "trust_gate" in (res_blocked.evidence or "")
+
+
+def test_remote_provider_seat_adapter():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cwd = Path(tmpdir)
+        seat = SeatSpec(
+            id="planner-remote",
+            label="Remote Planner",
+            role="High-Level Architecture Planner",
+            model="hestia-gemini-pro",
+            skills=["planning", "architecture"],
+            permission_policy="strict_readonly",
+        )
+        adapter = RemoteProviderSeatAdapter(provider="hestia", base_url="http://mock-hestia")
+
+        # 1. Ready check
+        ready = adapter.check_ready(seat, cwd)
+        assert ready.ready is True
+
+        # 2. List installed
+        installed = adapter.list_installed(seat, cwd)
+        assert len(installed) == 2
+        assert installed[0]["category"] == "remote-hestia-skill"
+
+        # 3. Project
+        proj = adapter.project(seat, cwd)
+        manifest_path = Path(proj["manifest"])
+        assert manifest_path.exists()
+        assert "planning" in proj["projected_skills"]
+
+        # 4. Deliver startup
+        startup = adapter.deliver_startup(seat, cwd, instructions="Design subsystem")
+        assert startup["delivered"] == 1
+        assert Path(startup["path"]).exists()
+
+        # 5. Launch harness
+        task = WorkItem(
+            task_id="t-remote-plan",
+            rig_id="r1",
+            mission="m1",
+            slice_id="s1",
+            title="Produce Architecture Plan",
+            description="Detail the modules",
+            payload={},
+            status="in_progress",
+            baton_owner="planner-remote@r1",
+            created_at=0.0,
+            updated_at=0.0,
+        )
+        res = adapter.launch_harness(seat, task, cwd)
+        assert res.ok is True
+        assert res.applied_policy == "strict_readonly"
+        assert "Executed task 'Produce Architecture Plan' via hestia:hestia-gemini-pro" in (res.evidence or "")
+

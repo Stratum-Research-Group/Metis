@@ -1,12 +1,11 @@
-"""FastAPI backend server for Prosopon local web & voice interface."""
-
+import asyncio
 import json
 import os
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Set
 import uuid
 
-from fastapi import Depends, FastAPI, File, HTTPException, Header, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Header, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +21,7 @@ class ContentSecurityPolicyMiddleware(BaseHTTPMiddleware):
             "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
-            "connect-src 'self'; "
+            "connect-src 'self' ws: wss:; "
             "img-src 'self' data:; "
             "media-src 'self' blob:; "
             "frame-ancestors 'none';"
@@ -939,6 +938,37 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             return await kybernetes.resolve_lochos_attention(payload)
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Lochos resolve error: {exc}")
+
+    @app.websocket("/api/lochos/ws")
+    async def lochos_ws_endpoint(websocket: WebSocket) -> None:
+        """WebSocket bridge streaming Lochos squad state updates and task events."""
+        await websocket.accept()
+        try:
+            if hasattr(kybernetes, "get_lochos_squad"):
+                initial_state = await kybernetes.get_lochos_squad()
+            else:
+                initial_state = {
+                    "rig_name": "metis-sovereign-squad",
+                    "version": "0.2",
+                    "seats": [{"id": "coder"}, {"id": "reviewer"}],
+                }
+            await websocket.send_json({"type": "squad_state", "data": initial_state})
+        except Exception:
+            return
+
+        try:
+            while True:
+                msg = await websocket.receive_text()
+                if msg == "ping":
+                    await websocket.send_text("pong")
+                elif msg == "refresh":
+                    if hasattr(kybernetes, "get_lochos_squad"):
+                        state = await kybernetes.get_lochos_squad()
+                    else:
+                        state = initial_state
+                    await websocket.send_json({"type": "squad_state", "data": state})
+        except (WebSocketDisconnect, Exception):
+            pass
 
     # 12. Health
     @app.get("/api/health")

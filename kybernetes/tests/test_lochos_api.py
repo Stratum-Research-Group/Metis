@@ -128,3 +128,49 @@ async def test_lochos_squad_api_endpoints(tmp_path):
         assert transfer_brief["source_seat"]["id"] == "coder"
         assert transfer_brief["destination_seat"]["id"] == "reviewer"
         assert transfer_brief["handoff_note"] == "Check this"
+
+
+def test_lochos_websocket_streaming(tmp_path):
+    from starlette.testclient import TestClient
+
+    admin_token = "secret-service-token-lochos"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    rig = create_starter_rig("ws-test-squad")
+    db_path = tmp_path / "lochos.sqlite"
+    squad_manager = LochosSquadManager(
+        rig_spec=rig,
+        workspace_root=tmp_path,
+        queue=None,
+    )
+    squad_manager.queue.db_path = db_path
+    squad_manager.queue._init_db()
+
+    app = create_app(
+        config=cfg,
+        service_token=admin_token,
+        lochos_squad=squad_manager,
+    )
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/v1/lochos/ws") as ws:
+            # 1. Initial snapshot received
+            snap = ws.receive_json()
+            assert snap["type"] == "squad_state"
+            assert snap["data"]["rig_name"] == "ws-test-squad"
+
+            # 2. Dispatch work triggers broadcast event
+            squad_manager.dispatch_work(
+                mission="m-ws",
+                slice_id="s1",
+                title="WS Streamed Task",
+                target_seat="coder",
+            )
+            event = ws.receive_json()
+            assert event["type"] == "task_dispatched"
+            assert event["data"]["title"] == "WS Streamed Task"
+
+            # 3. Ping-pong
+            ws.send_text("ping")
+            pong = ws.receive_text()
+            assert pong == "pong"
+

@@ -2,8 +2,10 @@
 Manages multi-seat teams, git worktree assignments, state machines, and task baton flows.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 import yaml
@@ -116,7 +118,37 @@ class LochosSquadManager:
         self.queue = queue or LochosQueue(self.workspace_root / ".metis" / "lochos.sqlite")
         self.checkpointer = checkpointer or GitMilestoneCheckpointer(self.workspace_root)
         self.seats: Dict[str, SeatRuntime] = {}
+        self._event_listeners: List[Callable[[Dict[str, Any]], Any]] = []
         self._init_seats()
+
+    def add_event_listener(self, listener: Callable[[Dict[str, Any]], Any]) -> None:
+        """Register a callback or async coroutine to receive Lochos squad events."""
+        if listener not in self._event_listeners:
+            self._event_listeners.append(listener)
+
+    def remove_event_listener(self, listener: Callable[[Dict[str, Any]], Any]) -> None:
+        """Unregister an event listener."""
+        if listener in self._event_listeners:
+            self._event_listeners.remove(listener)
+
+    def emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+        """Broadcasts a Lochos squad event to all registered listeners."""
+        event = {
+            "type": event_type,
+            "timestamp": time.time(),
+            "data": data,
+        }
+        for listener in list(self._event_listeners):
+            try:
+                res = listener(event)
+                if asyncio.iscoroutine(res):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(res)
+                    except RuntimeError:
+                        pass
+            except Exception:
+                pass
 
     def _init_seats(self) -> None:
         """Initializes runtimes for all seats defined in the RigSpec."""
@@ -183,15 +215,17 @@ class LochosSquadManager:
             assigned_to=target_addr,
         )
 
+        result_item = item
         if target_addr:
             claimed = self.queue.claim_baton(target_addr, item.task_id)
             if claimed:
                 seat = self.get_seat(target_seat)  # type: ignore
                 seat.current_task = claimed
                 seat.state_machine.transition(AgentSemanticState.PLANNING, reason="Task claimed by seat")
-                return claimed
+                result_item = claimed
 
-        return item
+        self.emit_event("task_dispatched", result_item.to_dict())
+        return result_item
 
     def transfer_baton(
         self,
@@ -219,14 +253,21 @@ class LochosSquadManager:
         if source.current_state != AgentSemanticState.IDLE:
             source.state_machine.transition(AgentSemanticState.IDLE, reason="Baton handed off to peer")
 
+        result_item = transferred
         # Dest claims the transferred baton
         claimed = self.queue.claim_baton(dest.full_address, task_id)
         if claimed:
             dest.current_task = claimed
             dest.state_machine.transition(AgentSemanticState.PLANNING, reason="Baton received")
-            return claimed
+            result_item = claimed
 
-        return transferred
+        self.emit_event("baton_transferred", {
+            "task_id": task_id,
+            "from_seat": source.full_address,
+            "to_seat": dest.full_address,
+            "task": result_item.to_dict(),
+        })
+        return result_item
 
     def generate_handoff_brief(
         self,
@@ -296,12 +337,22 @@ class LochosSquadManager:
                 seat_id=seat.full_address,
                 result={"total_steps": res.total_steps, "final_message": res.final_message},
             )
+            self.emit_event("task_completed", {
+                "task_id": seat.current_task.task_id,
+                "seat_id": seat.full_address,
+                "total_steps": res.total_steps,
+            })
         else:
             self.queue.fail_task(
                 task_id=seat.current_task.task_id,
                 seat_id=seat.full_address,
                 error=res.final_message or "Execution failed verification",
             )
+            self.emit_event("task_failed", {
+                "task_id": seat.current_task.task_id,
+                "seat_id": seat.full_address,
+                "error": res.final_message or "Execution failed verification",
+            })
 
         seat.current_task = self.queue.get_task(seat.current_task.task_id)
         return res

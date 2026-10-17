@@ -1545,6 +1545,94 @@ class TestLTHCM(unittest.TestCase):
         v_ret = engine.retrieve_riemannian_langevin_memory(k)
         self.assertEqual(v_ret.shape, (1, self.d_model))
 
+    def test_hdc_deterministic_atom_seeds(self):
+        """Finding B13a: Atom generation must be deterministic and cross-process reproducible."""
+        vsa1 = VectorSymbolicArchitecture(d_model=self.d_model, d_hdc=64)
+        vsa2 = VectorSymbolicArchitecture(d_model=self.d_model, d_hdc=64)
+
+        atom1 = vsa1.get_or_create_atom("concept_entropy")
+        atom2 = vsa2.get_or_create_atom("concept_entropy")
+
+        self.assertTrue(torch.allclose(atom1, atom2, atol=1e-6))
+        # Different concept produces different quasi-orthogonal atom
+        atom_diff = vsa1.get_or_create_atom("concept_gravity")
+        self.assertFalse(torch.allclose(atom1, atom_diff, atol=1e-3))
+
+    def test_contrastive_sheaf_weights_only_checkpoint(self):
+        """Finding B14: Checkpoint save and load must succeed with weights_only=True."""
+        import tempfile
+        from lthcm.core.contrastive_sheaf import ContrastiveSheafTrainer
+        trainer = ContrastiveSheafTrainer(d_model=self.d_model, stalk_dim=8)
+
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tf:
+            ckpt_path = tf.name
+
+        try:
+            meta = {"commit": "test-commit", "seed": 42}
+            trainer.save_checkpoint(ckpt_path, metadata=meta)
+
+            trainer2 = ContrastiveSheafTrainer(d_model=self.d_model, stalk_dim=8)
+            trainer2.load_checkpoint(ckpt_path, expected_metadata={"commit": "test-commit"})
+
+            # Projector weights must match
+            for p1, p2 in zip(trainer.projector.parameters(), trainer2.projector.parameters()):
+                self.assertTrue(torch.allclose(p1, p2))
+        finally:
+            if os.path.exists(ckpt_path):
+                os.remove(ckpt_path)
+
+    def test_pipeline_gauge_transport_same_domain_identity(self):
+        """Finding B13c: Intra-domain candidates must preserve exact vector without random gauge perturbation."""
+        engine = LTHCMEngine(d_model=self.d_model)
+        doc_vec = torch.randn(1, self.d_model)
+        engine.index_document("doc_id", "Exact Domain Match", doc_vec, domain="physics", timestamp=50.0)
+
+        query = torch.randn(self.d_model)
+        res = engine.retrieve_and_verify(
+            query_vector=query,
+            query_domain="physics",
+            query_timestamp=100.0,
+            enforce_causality=False,
+            enforce_sheaf_verification=False,
+            enable_gauge_transport=True,
+        )
+
+        cand = res["results"][0]
+        # Same domain -> aligned_vector == original vector and gauge_sim == 1.0
+        self.assertTrue(torch.allclose(cand["aligned_vector"], cand["vector"], atol=1e-6))
+        self.assertAlmostEqual(cand["gauge_sim"], 1.0)
+
+    def test_pipeline_no_grad_titans_step(self):
+        """Finding B15: Test-time memory update must execute under torch.no_grad to prevent graph leakage."""
+        engine = LTHCMEngine(d_model=self.d_model)
+        doc_vec = torch.randn(1, self.d_model)
+        engine.index_document("doc_t", "Titans Document", doc_vec, domain="general", timestamp=50.0)
+
+        query = torch.randn(self.d_model, requires_grad=True)
+        res = engine.retrieve_and_verify(
+            query_vector=query,
+            query_domain="general",
+            query_timestamp=100.0,
+            update_titans_memory=True,
+        )
+
+        for param in engine.titans.parameters():
+            self.assertIsNone(param.grad)
+
+    def test_causal_morphism_missing_vector_and_fallback(self):
+        """Finding B11 & B16: Missing vector gets dx=2.0 and allow_fallback=False returns empty."""
+        from lthcm.core.categorical import PipelineState, CausalFilterMorphism
+        q_vec = torch.randn(self.d_model)
+        # Candidate with no vector and dt=0.5 -> with dx=2.0, ds^2 = -(1.0*0.5)^2 + 4.0 = 3.75 > 0 (spacelike)
+        cand_no_vec = {"doc_id": "c1", "timestamp": 99.5}
+        state = PipelineState(query_vector=q_vec, query_timestamp=100.0, candidates=[cand_no_vec])
+
+        morphism_no_fallback = CausalFilterMorphism(c_speed=1.0, allow_fallback=False)
+        out_state = morphism_no_fallback.forward(state)
+
+        # Spacelike candidate without vector must be rejected, and with allow_fallback=False result is empty
+        self.assertEqual(len(out_state.candidates), 0)
+        self.assertEqual(out_state.diagnostics["causal_pass_count"], 0)
 
 if __name__ == "__main__":
     unittest.main()

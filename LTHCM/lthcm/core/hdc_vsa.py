@@ -77,7 +77,9 @@ class VectorSymbolicArchitecture(nn.Module):
     def get_or_create_atom(self, symbol_name: str, device: Optional[torch.device] = None) -> torch.Tensor:
         """Fetch or deterministically generate a quasi-orthogonal atomic basis vector."""
         if symbol_name not in self.atom_codebook:
-            seed = abs(hash(symbol_name)) % (2**31 - 1)
+            import hashlib
+            digest = hashlib.sha256(symbol_name.encode("utf-8")).digest()
+            seed = int.from_bytes(digest[:4], "big") % (2**31 - 1)
             g = torch.Generator().manual_seed(seed)
             v = torch.randn(self.d_hdc, generator=g, device="cpu")
             self.atom_codebook[symbol_name] = F.normalize(v, p=2, dim=-1)

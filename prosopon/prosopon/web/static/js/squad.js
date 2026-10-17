@@ -90,6 +90,63 @@ const MetisSquad = {
     if (!this.container) return;
     this.render();
     await this.fetchLiveSquad();
+    this.connectWebSocket();
+  },
+
+  connectWebSocket() {
+    if (this.ws) {
+      try { this.ws.close(); } catch {}
+    }
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/lochos/ws`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+      this.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "squad_state" && msg.data) {
+            this.updateFromSquadState(msg.data);
+          } else if (
+            msg.type === "task_dispatched" ||
+            msg.type === "baton_transferred" ||
+            msg.type === "task_completed" ||
+            msg.type === "task_failed" ||
+            msg.type === "attention_resolved"
+          ) {
+            this.fetchLiveSquad();
+          }
+        } catch (e) {
+          console.warn("Lochos WS message parse error:", e);
+        }
+      };
+      this.ws.onclose = () => {
+        setTimeout(() => this.connectWebSocket(), 5000);
+      };
+      this.ws.onerror = () => {
+        try { this.ws.close(); } catch {}
+      };
+    } catch (err) {
+      console.warn("Lochos WS connection error:", err);
+    }
+  },
+
+  updateFromSquadState(live) {
+    if (!live || !live.seats) return;
+    this.rigData.name = live.rig_name || this.rigData.name;
+    this.rigData.version = live.version || this.rigData.version;
+    this.rigData.summary = live.summary || this.rigData.summary;
+    if (live.seats.length > 0) {
+      this.rigData.seats = live.seats.map((s) => ({
+        ...s,
+        baton: s.current_task || s.baton || null,
+      }));
+    }
+    if (live.attention_required) {
+      this.rigData.attention_required = live.attention_required;
+    }
+    this.render();
   },
 
   async fetchLiveSquad() {
@@ -97,19 +154,7 @@ const MetisSquad = {
       if (window.API && window.API.getLochosSquad) {
         const live = await window.API.getLochosSquad();
         if (live && live.seats) {
-          this.rigData.name = live.rig_name || this.rigData.name;
-          this.rigData.version = live.version || this.rigData.version;
-          this.rigData.summary = live.summary || this.rigData.summary;
-          if (live.seats.length > 0) {
-            this.rigData.seats = live.seats.map((s) => ({
-              ...s,
-              baton: s.current_task || s.baton || null,
-            }));
-          }
-          if (live.attention_required) {
-            this.rigData.attention_required = live.attention_required;
-          }
-          this.render();
+          this.updateFromSquadState(live);
         }
       }
     } catch {
