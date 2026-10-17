@@ -133,15 +133,19 @@ class PinaxCatalogue:
 
         run_id = f"scan-{uuid.uuid4().hex[:8]}"
         finish_time = time.time()
+        elapsed = round(finish_time - start_time, 4)
         summary = {
             "id": run_id,
             "host_id": self.host_id,
             "started_at": start_time,
             "finished_at": finish_time,
+            "elapsed_seconds": elapsed,
             "scanner_version": "0.1.0",
             "added": added,
             "removed": 0,
             "changed": changed,
+            "installed_updated": changed,
+            "unvetted_candidates": added,
             "total_discovered": len(discovered),
         }
         self.db.record_scan_run(summary)
@@ -160,6 +164,11 @@ class PinaxCatalogue:
         """
         if query:
             tools = self.db.search_tools(query, limit=limit)
+            if category:
+                tools = [t for t in tools if t.category == category]
+            if risk_tier:
+                tier_val = risk_tier.value if hasattr(risk_tier, "value") else str(risk_tier)
+                tools = [t for t in tools if (t.risk_tier.value if hasattr(t.risk_tier, "value") else str(t.risk_tier)) == tier_val]
         else:
             tools = self.db.list_tools(category=category, risk_tier=risk_tier, limit=limit)
 

@@ -299,5 +299,173 @@ def lochos_resolve_cmd(task_id: str, seat: str, resolution: str):
         click.echo(f"Resolution error: {e}", err=True)
 
 
+# =========================================================================
+# Pinax: Tool Catalogue & Large Inventory Subsystem (Section 7)
+# =========================================================================
+
+@cli.group("pinax")
+def pinax_group():
+    """Pinax: Tool Catalogue & Large Tool Inventory subsystem."""
+    pass
+
+
+@pinax_group.command("scan")
+@click.option("--path-dir", "-p", multiple=True, help="Specific directory to scan (repeatable). Defaults to system PATH.")
+@click.option("--json-out", is_flag=True, help="Output raw JSON scan summary.")
+def pinax_scan_cmd(path_dir: tuple[str, ...], json_out: bool):
+    """Run passive PATH scan to discover installed tools without binary execution."""
+    from kybernetes.pinax import PinaxCatalogue
+    import json
+    catalogue = PinaxCatalogue()
+    path_dirs = list(path_dir) if path_dir else None
+    report = catalogue.scan_environment(path_dirs=path_dirs)
+    if json_out:
+        click.echo(json.dumps(report, indent=2))
+        return
+
+    click.echo("\n[Pinax Passive PATH Scan Completed]")
+    click.echo(f"  - Total Discovered Executables: {report['total_discovered']}")
+    click.echo(f"  - Curated Installed Tools:      {report['installed_updated']}")
+    click.echo(f"  - Unvetted Candidates:          {report['unvetted_candidates']}")
+    click.echo(f"  - Scan Time:                    {report['elapsed_seconds']:.2f}s\n")
+
+
+@pinax_group.command("lookup")
+@click.argument("query", default="")
+@click.option("--category", "-c", default=None, help="Filter by category (e.g. filesystem, vcs, search, network)")
+@click.option("--tier", "-t", default=None, help="Filter by risk tier (T0, T1, T2, T3)")
+@click.option("--limit", "-l", default=25, help="Maximum tools to list (default 25)")
+@click.option("--json-out", is_flag=True, help="Output raw JSON results.")
+def pinax_lookup_cmd(query: str, category: Optional[str], tier: Optional[str], limit: int, json_out: bool):
+    """Search or list tools in the Pinax catalogue."""
+    from kybernetes.pinax import PinaxCatalogue
+    import json
+    catalogue = PinaxCatalogue()
+    tools = catalogue.lookup(query=query, category=category, risk_tier=tier, limit=limit)
+    if json_out:
+        click.echo(json.dumps(tools, indent=2))
+        return
+
+    if not tools:
+        click.echo(f"No tools found matching query '{query}'.")
+        return
+
+    table_data = [
+        [
+            t["id"],
+            t["name"],
+            t["category"],
+            t["risk_tier"],
+            t["install_state"],
+            t["summary"][:45] + ("..." if len(t["summary"]) > 45 else ""),
+        ]
+        for t in tools
+    ]
+    click.echo(tabulate(
+        table_data,
+        headers=["Tool ID", "Name", "Category", "Tier", "State", "Summary"],
+        tablefmt="rounded_grid",
+    ))
+
+
+@pinax_group.command("docs")
+@click.argument("tool_name")
+@click.option("--max-bytes", "-b", default=4096, help="Maximum document bytes to slice (default 4096)")
+@click.option("--json-out", is_flag=True, help="Output raw JSON doc slice.")
+def pinax_docs_cmd(tool_name: str, max_bytes: int, json_out: bool):
+    """Fetch size-capped local documentation slice for a specific tool."""
+    from kybernetes.pinax import PinaxCatalogue
+    import json
+    catalogue = PinaxCatalogue()
+    doc_res = catalogue.get_tool_docs(tool_name, max_bytes=max_bytes)
+    if json_out:
+        click.echo(json.dumps(doc_res, indent=2))
+        return
+
+    click.echo(f"\n[Pinax Doc Slice: {doc_res['tool']}]")
+    click.echo(f"  - Found:     {doc_res['found']}")
+    if doc_res.get("doc_kind"):
+        click.echo(f"  - Doc Kind:  {doc_res['doc_kind']}")
+    if doc_res.get("locator"):
+        click.echo(f"  - Locator:   {doc_res['locator']}")
+    click.echo(f"  - Truncated: {doc_res.get('truncated', False)} (capped at {max_bytes} bytes)")
+    click.echo("=" * 80)
+    click.echo(">>> UNTRUSTED DATA - LOCAL DOCUMENTATION EXCERPT <<<")
+    click.echo("=" * 80)
+    click.echo(doc_res.get("content", ""))
+    click.echo("=" * 80 + "\n")
+
+
+@pinax_group.command("detail")
+@click.argument("name_or_id")
+@click.option("--json-out", is_flag=True, help="Output raw JSON detail.")
+def pinax_detail_cmd(name_or_id: str, json_out: bool):
+    """Show detailed Level 1 specification, capabilities, and overrides for a tool."""
+    from kybernetes.pinax import PinaxCatalogue
+    import json
+    catalogue = PinaxCatalogue()
+    detail = catalogue.get_tool_detail(name_or_id)
+    if not detail:
+        click.echo(f"Tool '{name_or_id}' not found in Pinax catalogue.", err=True)
+        return
+
+    if json_out:
+        click.echo(json.dumps(detail, indent=2))
+        return
+
+    click.echo(f"\n[Tool Detail: {detail['name']} ({detail['id']})]")
+    click.echo(f"  Summary:       {detail['summary']}")
+    click.echo(f"  Category:      {detail['category']}")
+    click.echo(f"  Base Tier:     {detail['risk_tier']}")
+    click.echo(f"  Install State: {detail['install_state']}")
+    click.echo(f"  Discovered By: {detail['discovered_by']}")
+    if detail.get("invocation_path"):
+        click.echo(f"  Path:          {detail['invocation_path']}")
+    if detail.get("sha256"):
+        click.echo(f"  SHA256:        {detail['sha256'][:16]}...")
+
+    caps = [c["capability"] for c in detail.get("capabilities", [])]
+    if caps:
+        click.echo(f"  Capabilities:  {', '.join(caps)}")
+
+    ovrs = detail.get("risk_overrides", [])
+    if ovrs:
+        click.echo("\n  Risk Overrides:")
+        for o in ovrs:
+            click.echo(f"    - Pattern [{o['pattern_kind']}: {o['pattern']}] -> {o['tier']} ({o.get('note', '')})")
+
+    sigs = detail.get("signatures", [])
+    if sigs:
+        click.echo("\n  Structured Signatures:")
+        for s in sigs:
+            click.echo(f"    - Call: {s['call_name']}")
+    click.echo("")
+
+
+@pinax_group.command(
+    "evaluate",
+    context_settings=dict(ignore_unknown_options=True),
+)
+@click.argument("tool_name")
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+@click.option("--json-out", is_flag=True, help="Output raw JSON evaluation.")
+def pinax_evaluate_cmd(tool_name: str, args: tuple[str, ...], json_out: bool):
+    """Evaluate invocation arguments against Pinax risk overrides."""
+    from kybernetes.pinax import PinaxCatalogue
+    import json
+    catalogue = PinaxCatalogue()
+    res = catalogue.evaluate_invocation(tool_name, list(args))
+    if json_out:
+        click.echo(json.dumps(res, indent=2))
+        return
+
+    click.echo(f"\n[Pinax Invocation Evaluation: {tool_name} {' '.join(args)}]")
+    click.echo(f"  - Effective Tier:      {res['tier']}")
+    click.echo(f"  - Requires Approval:   {res['requires_approval']}")
+    click.echo(f"  - Reason:              {res['reason']}")
+    click.echo(f"  - Overrides Triggered: {len(res.get('matched_overrides', []))}\n")
+
+
 if __name__ == "__main__":
     cli()
+
