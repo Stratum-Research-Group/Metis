@@ -165,6 +165,39 @@ def demo():
     asyncio.run(run_all_demos())
 
 
+
+@cli.command("code")
+@click.option("--goal", "-g", required=True, help="Engineering goal or bug description to resolve.")
+@click.option("--max-steps", "-s", default=20, help="Maximum agent autonomous steps.")
+@click.option("--auto-approve", "-y", is_flag=True, help="Auto-approve Phylax mutating tool operations.")
+@click.option("--model", "-m", default=None, help="Model name on Hestia server.")
+@click.option("--test-cmd", "-t", default=None, help="Automated verification command (rolls back on failure).")
+@click.option("--workspace", "-w", default=None, type=click.Path(exists=True, file_okay=False), help="Workspace root path.")
+def code_cmd(
+    goal: str,
+    max_steps: int,
+    auto_approve: bool,
+    model: Optional[str],
+    test_cmd: Optional[str],
+    workspace: Optional[str],
+):
+    """Launch the sovereign Metis coding agent (MSS) directly in the terminal."""
+    from pathlib import Path
+    from kybernetes.engine.terminal_agent import TerminalCodingAgent
+
+    ws = Path(workspace).resolve() if workspace else Path.cwd().resolve()
+    agent = TerminalCodingAgent(
+        workspace_root=ws,
+        max_steps=max_steps,
+        auto_approve=auto_approve,
+        model_name=model,
+        test_command=test_cmd,
+    )
+    result = agent.run(goal)
+    if not result.success:
+        sys.exit(1)
+
+
 # --- Lochos Multi-Agent Squad CLI ---
 
 @cli.group("lochos")
@@ -297,6 +330,49 @@ def lochos_resolve_cmd(task_id: str, seat: str, resolution: str):
         click.echo(f"Attention resolved for task [{item.task_id}]. Status: {item.status}")
     except Exception as e:
         click.echo(f"Resolution error: {e}", err=True)
+
+
+@lochos_group.command("run")
+@click.option("--seat", prompt="Target seat ID (e.g. coder)", help="Seat to execute its claimed task")
+@click.option("--auto-approve", "-y", is_flag=True, help="Auto-approve mutating tools")
+@click.option("--max-steps", "-s", default=20, help="Max steps")
+def lochos_run_cmd(seat: str, auto_approve: bool, max_steps: int):
+    """Execute the current claimed task for a Lochos seat using the terminal coding agent."""
+    from kybernetes.lochos import LochosSquadManager
+    from kybernetes.engine.terminal_agent import TerminalCodingAgent
+
+    manager = LochosSquadManager()
+    s = manager.get_seat(seat)
+    if not s:
+        click.echo(f"Seat '{seat}' not found in Lochos squad.", err=True)
+        sys.exit(1)
+    if not s.current_task:
+        pending = manager.queue.list_tasks(status="dispatched")
+        matching = [t for t in pending if t.baton_owner == s.full_address or t.baton_owner == s.spec.id]
+        if matching:
+            claimed = manager.queue.claim_baton(s.full_address, matching[0].task_id)
+            s.current_task = claimed
+        else:
+            click.echo(f"Seat '{seat}' has no active or claimed task in the queue.", err=True)
+            return
+
+    task = s.current_task
+    click.echo(f"Executing task [{task.task_id}] '{task.title}' on seat {s.full_address}...")
+    ws = s.worktree_path or manager.workspace_root
+    agent = TerminalCodingAgent(
+        workspace_root=ws,
+        max_steps=max_steps,
+        auto_approve=auto_approve,
+        model_name=s.spec.model,
+    )
+    res = agent.run(task.title + (f"\n{task.description}" if task.description else ""))
+    if res.success:
+        manager.queue.complete_task(task.task_id, s.full_address, result={"total_steps": res.total_steps, "final_message": res.final_message})
+        click.echo(click.style(f"Task [{task.task_id}] marked complete.", fg="green"))
+    else:
+        manager.queue.fail_task(task.task_id, s.full_address, error=res.final_message)
+        click.echo(click.style(f"Task [{task.task_id}] failed.", fg="red"))
+        sys.exit(1)
 
 
 # =========================================================================
