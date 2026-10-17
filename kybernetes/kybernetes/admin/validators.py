@@ -119,20 +119,20 @@ def validate_krisis(proposed: Dict[str, Any]) -> Tuple[bool, List[str], List[str
 def validate_stoma(proposed: Dict[str, Any]) -> Tuple[bool, List[str], List[str]]:
     errors: List[str] = []
     warnings: List[str] = []
-    try:
-        from stoma.config import StomaConfig
-        max_chunk = proposed.get("max_chunk_tokens", 220)
-        chunk_overlap = proposed.get("chunk_overlap_tokens", 30)
-        if isinstance(max_chunk, (int, float)) and isinstance(chunk_overlap, (int, float)):
-            if int(chunk_overlap) >= int(max_chunk):
-                errors.append(
-                    f"chunk_overlap_tokens ({chunk_overlap}) must be strictly less than max_chunk_tokens ({max_chunk})"
-                )
-        roots = proposed.get("allowed_roots")
-        if roots is not None and not isinstance(roots, list):
-            errors.append("allowed_roots must be a list of paths")
+    max_chunk = proposed.get("max_chunk_tokens", 220)
+    chunk_overlap = proposed.get("chunk_overlap_tokens", 30)
+    if isinstance(max_chunk, (int, float)) and isinstance(chunk_overlap, (int, float)):
+        if int(chunk_overlap) >= int(max_chunk):
+            errors.append(
+                f"chunk_overlap_tokens ({chunk_overlap}) must be strictly less than max_chunk_tokens ({max_chunk})"
+            )
+    roots = proposed.get("allowed_roots")
+    if roots is not None and not isinstance(roots, list):
+        errors.append("allowed_roots must be a list of paths")
 
-        if not errors:
+    if not errors:
+        try:
+            from stoma.config import StomaConfig
             StomaConfig(
                 allowed_roots=[Path(r) for r in roots] if roots else None,
                 storage_dir=Path(proposed.get("storage_dir", ".stoma")),
@@ -141,8 +141,10 @@ def validate_stoma(proposed: Dict[str, Any]) -> Tuple[bool, List[str], List[str]
                 chunk_overlap_tokens=int(chunk_overlap),
                 batch_size=int(proposed.get("batch_size", 32)),
             )
-    except Exception as exc:
-        errors.append(f"StomaConfig validation error: {exc}")
+        except ImportError:
+            warnings.append("stoma package not installed; validated configuration structurally")
+        except Exception as exc:
+            errors.append(f"StomaConfig validation error: {exc}")
     return len(errors) == 0, errors, warnings
 
 

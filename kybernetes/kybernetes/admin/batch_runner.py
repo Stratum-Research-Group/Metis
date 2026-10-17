@@ -167,6 +167,13 @@ class BatchJobManager:
 
             # Run in worker thread to prevent blocking asyncio loop
             def _execute() -> Dict[str, Any]:
+                import sys
+                dokime_src = str(self.workspace_root / "dokime" / "src")
+                if dokime_src not in sys.path:
+                    sys.path.insert(0, dokime_src)
+                if "dokime" in sys.modules and getattr(sys.modules["dokime"], "__file__", None) is None:
+                    del sys.modules["dokime"]
+
                 from dokime.client import HestiaClient
                 from dokime.config import RunConfig
                 from dokime.runner import run_evaluation

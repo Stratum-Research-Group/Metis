@@ -9,6 +9,7 @@ over an LTHCMEngine instance's memory graph.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -205,6 +206,7 @@ class WalkController:
         log_path: Optional[str] = None,
         use_stochastic_resonance: bool = True,
         client: Optional[Any] = None,
+        api_key: Optional[str] = None,
     ):
         self.engine = engine
         self.embedder = embedder
@@ -223,13 +225,19 @@ class WalkController:
         self.fallback_used = False
         self.fallback_available: Optional[bool] = None
 
-        # OpenAI-compatible client for llama.cpp server
+        # OpenAI-compatible client for llama.cpp / Hestia server
         if client is not None:
             self.client = client
         elif OpenAI is not None:
+            resolved_key = (
+                api_key
+                or os.environ.get("HESTIA_SERVICE_TOKEN")
+                or os.environ.get("HESTIA_API_KEY")
+                or "not-needed"
+            )
             self.client = OpenAI(
                 base_url=llm_base_url,
-                api_key="not-needed",  # llama.cpp doesn't require an API key
+                api_key=resolved_key,
             )
         else:
             raise ImportError(

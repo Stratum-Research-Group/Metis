@@ -77,12 +77,22 @@ elif command -v uv >/dev/null 2>&1; then
     uv run kybernetes doctor || true
 fi
 
+generate_token() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 16
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c "import secrets; print(secrets.token_hex(16))"
+    else
+        echo "metis-token-$(date +%s)-$RANDOM"
+    fi
+}
+
 # Step 2: Launch Hestia Model Server
 HESTIA_HOST="${HESTIA_HOST:-127.0.0.1}"
 HESTIA_CONFIG="${HESTIA_CONFIG:-hestia/hestia.yaml}"
 HESTIA_MODELS="${HESTIA_MODELS:-hestia/models.yaml}"
 echo -e "\n[Step 2/4] Starting Hestia Model Server on ${HESTIA_HOST}:${HESTIA_PORT}..."
-export HESTIA_SERVICE_TOKEN="${HESTIA_SERVICE_TOKEN:-metis-sovereign}"
+export HESTIA_SERVICE_TOKEN="${HESTIA_SERVICE_TOKEN:-$(generate_token)}"
 HESTIA_CMD=("serve" "--host" "${HESTIA_HOST}" "--port" "${HESTIA_PORT}" "--config" "${HESTIA_CONFIG}" "--models" "${HESTIA_MODELS}")
 if [ -x "hestia/.venv/bin/hestia" ]; then
     hestia/.venv/bin/hestia "${HESTIA_CMD[@]}" &
@@ -105,18 +115,13 @@ KYBERNETES_MEMORY_ROOT="${KYBERNETES_MEMORY_ROOT:-.stoma}"
 echo -e "\n[Step 3/4] Starting Kybernetes Orchestrator on ${KYBERNETES_HOST}:${KYBERNETES_PORT}..."
 export HESTIA_BASE_URL="http://${HESTIA_HOST}:${HESTIA_PORT}/v1"
 export HESTIA_DEFAULT_MODEL="${HESTIA_DEFAULT_MODEL:-gemma-4-26b-a4b-abliterated}"
-export KYBERNETES_ADMIN_TOKEN="${KYBERNETES_ADMIN_TOKEN:-metis-local-admin-token}"
-export KYBERNETES_SERVICE_TOKEN="${KYBERNETES_SERVICE_TOKEN:-metis-local-service-token}"
+export KYBERNETES_ADMIN_TOKEN="${KYBERNETES_ADMIN_TOKEN:-$(generate_token)}"
+export KYBERNETES_SERVICE_TOKEN="${KYBERNETES_SERVICE_TOKEN:-$(generate_token)}"
 KYB_CMD=("serve" "--host" "${KYBERNETES_HOST}" "--port" "${KYBERNETES_PORT}" "--db-path" "${KYBERNETES_DB_PATH}")
 if [ -n "${KYBERNETES_CONFIG:-}" ] && [ -f "$KYBERNETES_CONFIG" ]; then
     KYB_CMD+=("--config" "$KYBERNETES_CONFIG")
 fi
-if [ -n "${KYBERNETES_ADMIN_TOKEN:-}" ]; then
-    KYB_CMD+=("--admin-token" "$KYBERNETES_ADMIN_TOKEN")
-fi
-if [ -n "${KYBERNETES_SERVICE_TOKEN:-}" ]; then
-    KYB_CMD+=("--service-token" "$KYBERNETES_SERVICE_TOKEN")
-fi
+# Tokens are passed securely via environment variables to avoid exposing credentials in /proc/PID/cmdline (Finding A13)
 if [ -d "${KYBERNETES_MEMORY_ROOT}" ]; then
     echo "[Metis] Wiring live Stoma memory root (${KYBERNETES_MEMORY_ROOT}) into Kybernetes."
     KYB_CMD+=("--memory-root" "${KYBERNETES_MEMORY_ROOT}")

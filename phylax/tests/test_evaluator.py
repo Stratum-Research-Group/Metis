@@ -118,3 +118,52 @@ def test_trusted_caller_spoofing_prevention(tmp_path: Path, sample_policy: Polic
         # If caller tries to claim they are kybernetes, PermissionError must be raised
         with pytest.raises(PermissionError, match="Caller context violation"):
             evaluator.decide("kybernetes", Verb.READ, ResourceClass.FILE, "/tmp/doc.txt")
+
+
+def test_network_destination_matching_not_substring(tmp_path: Path):
+    """Verify network destination matching avoids substring traps (Finding R4)."""
+    policy = PolicyDocument(
+        version="1.0.0",
+        owner="test-owner",
+        rules=[
+            Rule(
+                id="allow_api_com",
+                subject="worker",
+                verb=Verb.SEND,
+                resource=ResourceSpec(resource_class=ResourceClass.NETWORK, destination="api.com"),
+                effect=Effect.ALLOW,
+                priority=10,
+            ),
+            Rule(
+                id="allow_subdomains",
+                subject="worker",
+                verb=Verb.SEND,
+                resource=ResourceSpec(resource_class=ResourceClass.NETWORK, destination="*.trusted.org"),
+                effect=Effect.ALLOW,
+                priority=10,
+            ),
+            Rule(
+                id="default_deny",
+                subject="*",
+                verb=Verb.ALL,
+                resource=ResourceSpec(resource_class=ResourceClass.ALL, path_root="*"),
+                effect=Effect.DENY,
+                priority=1000,
+            ),
+        ],
+    )
+    evaluator = PolicyEvaluator(policy, workspace_root=tmp_path)
+
+    # 1. Exact match allowed
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "api.com").effect == Effect.ALLOW
+
+    # 2. Substring bypasses must be DENIED
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "api.com.evil.com").effect == Effect.DENY
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "evil-api.com").effect == Effect.DENY
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "api.co").effect == Effect.DENY
+
+    # 3. Wildcard matching
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "app.trusted.org").effect == Effect.ALLOW
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "trusted.org").effect == Effect.ALLOW
+    assert evaluator.decide("worker", Verb.SEND, ResourceClass.NETWORK, "evil-trusted.org").effect == Effect.DENY
+

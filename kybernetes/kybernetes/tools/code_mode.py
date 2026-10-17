@@ -5,9 +5,11 @@ programmatically in a single round-trip instead of 20 sequential LLM turns.
 
 import ast
 import concurrent.futures
+import io
 from io import StringIO
 import json
 import math
+import multiprocessing
 from pathlib import Path
 import re
 import sys
@@ -135,6 +137,24 @@ class SafeCodeMode:
                     if node.func.id in ("eval", "exec", "open", "compile", "__import__"):
                         raise CodeModeSecurityError(f"Use of builtin function '{node.func.id}' is prohibited.")
 
+            # Prohibit format-spec dunder traversal in string literals (Finding A6)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if re.search(r"\{[^{}]*__", node.value) or any(
+                    f in node.value and re.search(rf"\{{[^{{}}]*{re.escape(f)}", node.value)
+                    for f in self.FORBIDDEN_ATTRIBUTES
+                ):
+                    raise CodeModeSecurityError(
+                        "Prohibited format-spec attribute traversal in Code Mode string literal."
+                    )
+
+            # Prohibit format-spec dunder traversal in f-strings (Finding A6)
+            if isinstance(node, ast.FormattedValue) and node.format_spec:
+                spec_str = ast.unparse(node.format_spec)
+                if "__" in spec_str or any(f in spec_str for f in self.FORBIDDEN_ATTRIBUTES):
+                    raise CodeModeSecurityError(
+                        "Prohibited format-spec attribute traversal in Code Mode f-string."
+                    )
+
     def _resolve_safe_path(self, raw_path: str) -> Path:
         """Verify that path resides strictly inside allowed roots."""
         candidate = Path(raw_path)
@@ -221,84 +241,91 @@ class SafeCodeMode:
                 "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
             }
 
-        # 2. Build isolated globals environment
-        stdout_buf = StringIO()
-
-        def safe_print(*args: Any, **kwargs: Any) -> None:
-            sep = kwargs.get("sep", " ")
-            end = kwargs.get("end", "\n")
-            line = sep.join(str(a) for a in args) + end
-            # Bound output buffer to 64KB
-            if stdout_buf.tell() < 65536:
-                stdout_buf.write(line)
-
-        env_builtins = dict(self.SAFE_BUILTINS)
-        env_builtins["print"] = safe_print
-
-        sandbox_globals: Dict[str, Any] = {
-            "__builtins__": env_builtins,
-            # Safe libraries
-            "json": json,
-            "re": re,
-            "math": math,
-            # Workspaces tool helpers
-            "read_file": self._helper_read_file,
-            "search_files": self._helper_search_files,
-            "list_dir": self._helper_list_dir,
-            "parse_ast": self._helper_parse_ast,
-            "calculate": lambda expr: self._calc.evaluate(expr),
-            # Default result receptacle
-            "result": None,
-        }
-
-        # 3. Execute with execution watchdog using sys.settrace
         compiled = compile(parsed_ast, filename="<codemode_script>", mode="exec")
 
-        def _timeout_watchdog(frame: Any, event: str, arg: Any) -> Any:
-            if time.perf_counter() - start_time > timeout:
-                raise TimeoutError(f"CodeModeTimeout: Script exceeded max execution time of {timeout}s.")
-            return _timeout_watchdog
+        # Execute in dedicated child process with hard OS timeout killing (Finding A6)
+        def _worker_entry(queue: Any) -> None:
+            stdout_buf = StringIO()
 
-        old_trace = sys.gettrace()
-        try:
-            sys.settrace(_timeout_watchdog)
-            exec(compiled, sandbox_globals)  # pylint: disable=exec-used
+            def safe_print(*args: Any, **kwargs: Any) -> None:
+                sep = kwargs.get("sep", " ")
+                end = kwargs.get("end", "\n")
+                line = sep.join(str(a) for a in args) + end
+                if stdout_buf.tell() < 65536:
+                    stdout_buf.write(line)
 
-            # Check if a main() function was defined
-            if "main" in sandbox_globals and callable(sandbox_globals["main"]):
-                result_val = sandbox_globals["main"]()
-            else:
-                result_val = sandbox_globals.get("result")
+            env_builtins = dict(self.SAFE_BUILTINS)
+            env_builtins["print"] = safe_print
 
-            latency = (time.perf_counter() - start_time) * 1000
+            sandbox_globals: Dict[str, Any] = {
+                "__builtins__": env_builtins,
+                # Safe libraries
+                "json": json,
+                "re": re,
+                "math": math,
+                # Workspaces tool helpers
+                "read_file": self._helper_read_file,
+                "search_files": self._helper_search_files,
+                "list_dir": self._helper_list_dir,
+                "parse_ast": self._helper_parse_ast,
+                "calculate": lambda expr: self._calc.evaluate(expr),
+                # Default result receptacle
+                "result": None,
+            }
 
-            # Sanitize output value (must be JSON-serializable or stringified)
-            serialized_result: Any = None
             try:
-                json.dumps(result_val)
-                serialized_result = result_val
-            except (TypeError, OverflowError):
-                serialized_result = str(result_val)
+                exec(compiled, sandbox_globals)  # pylint: disable=exec-used
 
+                if "main" in sandbox_globals and callable(sandbox_globals["main"]):
+                    result_val = sandbox_globals["main"]()
+                else:
+                    result_val = sandbox_globals.get("result")
+
+                serialized_result: Any = None
+                try:
+                    json.dumps(result_val)
+                    serialized_result = result_val
+                except (TypeError, OverflowError):
+                    serialized_result = str(result_val)
+
+                queue.put({
+                    "success": True,
+                    "result": serialized_result,
+                    "stdout": stdout_buf.getvalue()[:65536],
+                })
+            except Exception as e:
+                queue.put({
+                    "success": False,
+                    "error": f"CodeModeRuntimeError: {type(e).__name__}: {str(e)}",
+                    "stdout": stdout_buf.getvalue()[:65536],
+                })
+
+        mp_ctx = multiprocessing.get_context("fork")
+        result_queue = mp_ctx.Queue()
+        proc = mp_ctx.Process(target=_worker_entry, args=(result_queue,))
+        proc.start()
+        proc.join(timeout=timeout)
+
+        if proc.is_alive():
+            proc.kill()
+            proc.join()
+            latency = (time.perf_counter() - start_time) * 1000
             return {
-                "success": True,
-                "result": serialized_result,
-                "stdout": stdout_buf.getvalue()[:65536],
+                "success": False,
+                "error": f"CodeModeTimeout: Script exceeded max execution time of {timeout}s.",
+                "stdout": "",
                 "latency_ms": round(latency, 2),
             }
-        except TimeoutError as te:
+
+        latency = (time.perf_counter() - start_time) * 1000
+        try:
+            res_dict = result_queue.get_nowait()
+            res_dict["latency_ms"] = round(latency, 2)
+            return res_dict
+        except Exception:
             return {
                 "success": False,
-                "error": str(te),
-                "stdout": stdout_buf.getvalue(),
-                "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
+                "error": f"CodeModeRuntimeError: Process terminated abnormally (exitcode {proc.exitcode}).",
+                "stdout": "",
+                "latency_ms": round(latency, 2),
             }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"CodeModeRuntimeError: {type(e).__name__}: {str(e)}",
-                "stdout": stdout_buf.getvalue(),
-                "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
-            }
-        finally:
-            sys.settrace(old_trace)

@@ -133,6 +133,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
 
     allowed_hosts = _build_allowed_hosts()
 
+    from urllib.parse import urlparse
+
     def _validate_host_header(request: Request) -> None:
         raw_host = request.headers.get("host", "").split(":")[0].strip()
         if raw_host and raw_host not in allowed_hosts:
@@ -140,6 +142,37 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Forbidden: Host header mismatch or untrusted domain.",
             )
+
+        # Cross-site / Origin validation (Finding R3, Gate G29)
+        sec_fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
+        if sec_fetch_site == "cross-site":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Cross-site requests are not permitted.",
+            )
+
+        origin = request.headers.get("origin")
+        if origin:
+            try:
+                parsed_origin = urlparse(origin)
+                origin_hostname = (parsed_origin.hostname or "").strip().lower()
+                origin_allowed = False
+                if origin_hostname in allowed_hosts:
+                    origin_allowed = True
+                elif origin in cfg.allowed_origins or "*" in cfg.allowed_origins:
+                    origin_allowed = True
+                if not origin_allowed:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Forbidden: Untrusted Origin '{origin}'.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Forbidden: Malformed Origin header.",
+                )
 
     # Auth dependencies
     async def require_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:

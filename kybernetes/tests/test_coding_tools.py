@@ -210,3 +210,33 @@ def test_edit_file_block_syntax_diagnostics(tmp_path: Path):
     assert len(res["diagnostics"]) > 0
     assert "SyntaxError" in res["diagnostics"][0]
 
+
+def test_sandboxed_bash_env_sanitization_and_process_cleanup(tmp_path: Path, monkeypatch):
+    """Finding A3 regression: secrets stripped from env and process group timeout termination."""
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+
+    # Set secret tokens in host environment
+    monkeypatch.setenv("KYBERNETES_ADMIN_TOKEN", "super_secret_admin_token_123")
+    monkeypatch.setenv("HESTIA_SERVICE_TOKEN", "super_secret_service_token_456")
+    monkeypatch.setenv("METIS_SOVEREIGN_KEY", "secret_metis_key_789")
+    monkeypatch.setenv("SAFE_VAR", "visible_var")
+
+    runner = SafeSandboxedBash(allowed_roots=[ws])
+
+    # Check env in executed command
+    res = runner.execute("env", cwd=str(ws))
+    assert res["exit_code"] == 0
+    stdout = res["stdout"]
+
+    assert "super_secret_admin_token_123" not in stdout
+    assert "KYBERNETES_ADMIN_TOKEN" not in stdout
+    assert "super_secret_service_token_456" not in stdout
+    assert "HESTIA_SERVICE_TOKEN" not in stdout
+    assert "METIS_SOVEREIGN_KEY" not in stdout
+
+    # Test timeout execution terminates cleanly
+    timeout_res = runner.execute("sleep 5", cwd=str(ws), timeout_seconds=1)
+    assert timeout_res["exit_code"] == -1
+    assert "timed out after 1 seconds" in timeout_res["stderr"]
+

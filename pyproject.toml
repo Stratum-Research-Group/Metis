@@ -53,18 +53,24 @@ kleroterion = { workspace = true }
 paideia = { workspace = true }
 
 [tool.pytest.ini_options]
+norecursedirs = [
+    "harness/references",
+    ".venv",
+    ".git",
+    "dist",
+    "build",
+]
 pythonpath = [
-    ".",
+    "kleroterion/src",
+    "dokime/src",
+    "hestia/src",
+    "stoma/src",
     "dianoia",
     "paideia",
-    "stoma/src",
     "LTHCM",
-    "dokime/src",
-    "kleroterion",
-    "kleroterion/src",
-    "hestia/src",
     "kybernetes",
     "prosopon",
     "phylax",
     "krisis",
+    ".",
 ]

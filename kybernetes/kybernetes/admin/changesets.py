@@ -125,10 +125,38 @@ class ChangeSetManager:
     def __init__(self, snapshot_dir: str = ".admin_snapshots"):
         self.snapshot_dir = Path(snapshot_dir)
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.snapshot_dir.chmod(0o700)
+        except Exception:
+            pass
         self._history: Dict[str, List[ChangeSet]] = {}  # module_id -> List[ChangeSet]
         self._all_changesets: Dict[str, ChangeSet] = {}
         self._snapshots: Dict[str, Dict[str, Any]] = {}  # snapshot_id -> metadata
         self._counter: int = 0
+        self._load_persisted_snapshots()
+
+    def _load_persisted_snapshots(self) -> None:
+        """Load snapshot metadata and changesets from disk to survive server restarts (Finding R2)."""
+        for meta_file in self.snapshot_dir.glob("snap_*.meta.json"):
+            try:
+                meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                snap_id = meta.get("snapshot_id")
+                if snap_id and (self.snapshot_dir / f"{snap_id}.bak").exists():
+                    self._snapshots[snap_id] = meta
+            except Exception:
+                pass
+
+        for cs_file in self.snapshot_dir.glob("cs_*.json"):
+            try:
+                cs_data = json.loads(cs_file.read_text(encoding="utf-8"))
+                cs = ChangeSet.model_validate(cs_data)
+                self._all_changesets[cs.id] = cs
+                if cs.module not in self._history:
+                    self._history[cs.module] = []
+                if not any(existing.id == cs.id for existing in self._history[cs.module]):
+                    self._history[cs.module].append(cs)
+            except Exception:
+                pass
 
     def get_history(self, module_id: Optional[str] = None) -> List[ChangeSet]:
         """Retrieve ChangeSet history in reverse chronological order."""
@@ -144,7 +172,7 @@ class ChangeSetManager:
         return self._all_changesets.get(changeset_id)
 
     def _create_snapshot(self, module_id: str, file_path: Path) -> str:
-        """Create a pre-write snapshot of the target configuration file."""
+        """Create a pre-write snapshot of the target configuration file with secure permissions and metadata."""
         self._counter += 1
         now_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         snap_id = f"snap_{module_id}_{now_str}_{self._counter:04d}"
@@ -156,8 +184,12 @@ class ChangeSetManager:
 
         snap_file = self.snapshot_dir / f"{snap_id}.bak"
         snap_file.write_bytes(content_bytes)
+        try:
+            snap_file.chmod(0o600)
+        except Exception:
+            pass
 
-        self._snapshots[snap_id] = {
+        meta = {
             "snapshot_id": snap_id,
             "module_id": module_id,
             "target_path": str(file_path),
@@ -165,6 +197,15 @@ class ChangeSetManager:
             "size_bytes": len(content_bytes),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        self._snapshots[snap_id] = meta
+
+        meta_file = self.snapshot_dir / f"{snap_id}.meta.json"
+        try:
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
+            meta_file.chmod(0o600)
+        except Exception:
+            pass
+
         return snap_id
 
     def _restore_snapshot(self, snapshot_id: str) -> Path:
@@ -253,6 +294,26 @@ class ChangeSetManager:
         else:
             raise ValueError(f"Unsupported configuration format '{fmt}' for serialization")
 
+    @staticmethod
+    def _merge_patch_preserving_secrets(current: Any, patch: Any) -> Any:
+        """Merge proposed patch over existing config, preserving real secrets when placeholder is passed (Finding R1)."""
+        if not isinstance(current, dict) or not isinstance(patch, dict):
+            if isinstance(patch, str) and patch in ("[REDACTED]", "[REDACTED_SECRET]"):
+                return current
+            return patch
+
+        merged = dict(current)
+        for k, v in patch.items():
+            if isinstance(v, str) and v in ("[REDACTED]", "[REDACTED_SECRET]"):
+                # Preserve existing unredacted secret value
+                if k in current:
+                    merged[k] = current[k]
+            elif isinstance(v, dict) and isinstance(merged.get(k), dict):
+                merged[k] = ChangeSetManager._merge_patch_preserving_secrets(merged[k], v)
+            else:
+                merged[k] = v
+        return merged
+
     def apply(
         self,
         module_id: str,
@@ -302,8 +363,11 @@ class ChangeSetManager:
             self._record_changeset(cs_conflict)
             raise ValueError(cs_conflict.error_message)
 
+        # Resolve effective patch preserving secrets if placeholders were round-tripped (Finding R1)
+        effective_patch = self._merge_patch_preserving_secrets(current_data, patch)
+
         # 2. Run module native validation without side effects
-        val_result = validate_module_configuration(module_id, patch)
+        val_result = validate_module_configuration(module_id, effective_patch)
         if not val_result.valid:
             cs_invalid = ChangeSet(
                 id=cs_id,
@@ -320,11 +384,12 @@ class ChangeSetManager:
             raise ValueError(cs_invalid.error_message)
 
         # 3. Format proposed content and compute diff
-        new_text = self.serialize_config(module_id, patch)
+        new_text = self.serialize_config(module_id, effective_patch)
         diff_text = compute_unified_diff(current_text, new_text, target_path.name)
 
-        # 4. Enforce confirmation token for sensitive modifications
-        is_sensitive, reason = check_sensitive_modification(module_id, patch)
+        # 4. Enforce confirmation token for sensitive modifications that actually changed
+        actually_modified = {k: v for k, v in effective_patch.items() if current_data.get(k) != v}
+        is_sensitive, reason = check_sensitive_modification(module_id, actually_modified)
         if is_sensitive and (not confirm_token or confirm_token.strip().upper() != "CONFIRM"):
             cs_need_confirm = ChangeSet(
                 id=cs_id,
@@ -444,11 +509,18 @@ class ChangeSetManager:
         return rb_cs
 
     def _record_changeset(self, cs: ChangeSet) -> None:
-        """Store ChangeSet in history index."""
+        """Store ChangeSet in history index and persist to snapshot_dir (Finding R2)."""
         if cs.module not in self._history:
             self._history[cs.module] = []
         self._history[cs.module].append(cs)
         self._all_changesets[cs.id] = cs
+
+        cs_file = self.snapshot_dir / f"cs_{cs.id}.json"
+        try:
+            cs_file.write_text(cs.model_dump_json(indent=2), encoding="utf-8")
+            cs_file.chmod(0o600)
+        except Exception:
+            pass
 
 
 # Shared singleton manager

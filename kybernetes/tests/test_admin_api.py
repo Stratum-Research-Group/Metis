@@ -606,3 +606,98 @@ async def test_admin_batch_paideia_run_and_history(monkeypatch, tmp_path):
         entries = resp_audit.json()["entries"]
         assert any(e["action"] == "batch_run_paideia" and e["status"] == "completed" for e in entries)
 
+
+@pytest.mark.asyncio
+async def test_admin_apply_preserves_secrets_when_redacted_placeholders_sent(tmp_path, monkeypatch):
+    """Verify applying a patch with [REDACTED] placeholders preserves original secrets on disk (Finding R1)."""
+    admin_token = "secret-token-redact-preservation"
+    cfg = KybernetesConfig(admin_token=admin_token)
+    app = create_app(config=cfg)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    test_file = tmp_path / "kybernetes.yaml"
+    real_secret = "real_ultra_secure_token_xyz987"
+    test_file.write_text(f"admin_token: {real_secret}\nhestia_base_url: http://127.0.0.1:8080/v1\ndb_path: ':memory:'\n")
+
+    from kybernetes.admin.descriptors import MODULE_REGISTRY
+    monkeypatch.setattr(MODULE_REGISTRY["kybernetes"], "config_path", str(test_file))
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # Step 1: Read config view - verify secret is redacted in view
+        resp_view = await client.get("/v1/admin/modules/kybernetes/config", headers=headers)
+        assert resp_view.status_code == 200
+        data = resp_view.json()
+        assert data["saved"]["admin_token"] == "[REDACTED]"
+        base_hash = data["config_hash"]
+
+        # Step 2: Apply patch round-tripping the redacted placeholder and updating hestia_base_url
+        resp_apply = await client.post(
+            "/v1/admin/modules/kybernetes/config/apply",
+            headers=headers,
+            json={
+                "base_hash": base_hash,
+                "patch": {
+                    "admin_token": "[REDACTED]",
+                    "hestia_base_url": "http://127.0.0.1:9090/v1",
+                },
+            },
+        )
+        assert resp_apply.status_code == 200
+
+        # Step 3: Verify on-disk file still contains real secret, NOT the literal '[REDACTED]'
+        saved_text = test_file.read_text()
+        assert real_secret in saved_text
+        assert "[REDACTED]" not in saved_text
+        assert "http://127.0.0.1:9090/v1" in saved_text
+
+
+@pytest.mark.asyncio
+async def test_admin_snapshot_durability_and_permissions(tmp_path, monkeypatch):
+    """Verify snapshot file permissions (0700/0600) and metadata durability across server restarts (Finding R2)."""
+    from kybernetes.admin.changesets import ChangeSetManager
+    import os
+
+    snap_dir = tmp_path / ".admin_snapshots"
+    mgr1 = ChangeSetManager(snapshot_dir=str(snap_dir))
+
+    # Verify snapshot dir permissions are 0700
+    dir_mode = os.stat(snap_dir).st_mode & 0o777
+    assert dir_mode == 0o700
+
+    test_file = tmp_path / "kybernetes.yaml"
+    test_file.write_text("hestia_base_url: http://127.0.0.1:8080/v1\ndb_path: ':memory:'\n")
+
+    from kybernetes.admin.descriptors import MODULE_REGISTRY
+    monkeypatch.setattr(MODULE_REGISTRY["kybernetes"], "config_path", str(test_file))
+
+    _, _, base_hash = mgr1.get_current_saved_content_and_hash("kybernetes")
+    cs = mgr1.apply(
+        module_id="kybernetes",
+        base_hash=base_hash,
+        patch={"hestia_base_url": "http://127.0.0.1:9999/v1", "db_path": "test.db"},
+        requested_by="admin_test",
+    )
+    assert cs.prev_snapshot_id is not None
+
+    # Check snapshot backup and metadata files exist and have 0600 mode
+    bak_file = snap_dir / f"{cs.prev_snapshot_id}.bak"
+    meta_file = snap_dir / f"{cs.prev_snapshot_id}.meta.json"
+    assert bak_file.exists()
+    assert meta_file.exists()
+    assert (os.stat(bak_file).st_mode & 0o777) == 0o600
+    assert (os.stat(meta_file).st_mode & 0o777) == 0o600
+
+    # Simulate server restart by instantiating a fresh ChangeSetManager
+    mgr2 = ChangeSetManager(snapshot_dir=str(snap_dir))
+    assert cs.prev_snapshot_id in mgr2._snapshots
+
+    # Execute rollback on the new manager instance
+    rb_cs = mgr2.rollback(module_id="kybernetes", changeset_id=cs.id, requested_by="admin_test")
+    assert rb_cs.status.value == "rolled_back_on_disk"
+
+    # Verify file content is restored
+    restored_text = test_file.read_text()
+    assert "http://127.0.0.1:8080/v1" in restored_text
+
+

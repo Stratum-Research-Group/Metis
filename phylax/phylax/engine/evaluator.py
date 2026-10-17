@@ -1,6 +1,7 @@
 """Policy evaluation engine implementing rule matching and deny-precedence."""
 
 from datetime import datetime, timezone
+import fnmatch
 import hashlib
 import json
 from pathlib import Path
@@ -156,9 +157,13 @@ class PolicyEvaluator:
 
         elif resource_class == ResourceClass.NETWORK:
             if res.destination and res.destination != "*":
-                # Check destination pattern match
-                if res.destination not in canon_target and canon_target not in res.destination:
-                    return False
+                # Check destination exact match or glob pattern match (Finding R4)
+                dest = res.destination
+                if canon_target != dest and not fnmatch.fnmatch(canon_target, dest):
+                    if dest.startswith("*.") and canon_target == dest[2:]:
+                        pass
+                    else:
+                        return False
 
         elif resource_class == ResourceClass.SYSTEM:
             if res.command and res.command != "*" and res.command != canon_target:

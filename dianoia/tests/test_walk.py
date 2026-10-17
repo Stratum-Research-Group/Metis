@@ -521,6 +521,38 @@ class TestWalkController(unittest.TestCase):
             )
         self.assertTrue(any("client has no models.list method" in m.lower() for m in log_ctx.output))
 
+    def test_token_auth_resolution(self):
+        """Verify WalkController resolves token auth from argument or env (Finding A14)."""
+        with patch("dianoia.walk.OpenAI") as mock_openai:
+            mock_inst = MagicMock()
+            mock_inst.models.list.return_value = []
+            mock_openai.return_value = mock_inst
+
+            # Case 1: Explicit api_key
+            ctrl = WalkController(
+                engine=self.mock_engine,
+                embedder=self.mock_embedder,
+                api_key="my-hestia-token-abc",
+                model_name="qwen2.5-7b-instruct",
+            )
+            mock_openai.assert_called_with(
+                base_url="http://localhost:8080/v1",
+                api_key="my-hestia-token-abc",
+            )
+
+            # Case 2: From HESTIA_SERVICE_TOKEN env
+            with patch.dict(os.environ, {"HESTIA_SERVICE_TOKEN": "env-service-token-xyz"}):
+                ctrl2 = WalkController(
+                    engine=self.mock_engine,
+                    embedder=self.mock_embedder,
+                    model_name="qwen2.5-7b-instruct",
+                )
+                mock_openai.assert_called_with(
+                    base_url="http://localhost:8080/v1",
+                    api_key="env-service-token-xyz",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
+

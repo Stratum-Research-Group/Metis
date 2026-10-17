@@ -22,6 +22,7 @@ class HestiaClient:
     def __init__(
         self,
         base_url: str | None = None,
+        token: str | None = None,
         timeout: float = 60.0,
         max_retries: int = 3,
         backoff_base: float = 1.0,
@@ -30,10 +31,23 @@ class HestiaClient:
         if base_url is None:
             base_url = os.environ.get("HESTIA_URL") or DEFAULT_HESTIA_URL
         self.base_url = base_url.rstrip("/")
+        self.token = (
+            token
+            or os.environ.get("HESTIA_SERVICE_TOKEN")
+            or os.environ.get("HESTIA_API_KEY")
+        )
         self.timeout = timeout
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self._client = client
+
+    @property
+    def headers(self) -> dict[str, str]:
+        """Construct standard HTTP headers with Bearer token if configured."""
+        hdrs: dict[str, str] = {}
+        if self.token:
+            hdrs["Authorization"] = f"Bearer {self.token}"
+        return hdrs
 
     @property
     def models_url(self) -> str:
@@ -48,7 +62,7 @@ class HestiaClient:
     def _get_client(self) -> httpx.Client:
         if self._client is not None:
             return self._client
-        return httpx.Client(timeout=self.timeout)
+        return httpx.Client(timeout=self.timeout, headers=self.headers)
 
     def get_models_metadata(self) -> list[dict[str, Any]]:
         """Fetch all registered models with metadata (name, type, state) from Hestia.
@@ -60,7 +74,7 @@ class HestiaClient:
 
         # 1. Try Hestia native /models
         try:
-            resp = client.get(self.models_url)
+            resp = client.get(self.models_url, headers=self.headers)
             if resp.status_code == 200:
                 data = resp.json()
                 models_list = data.get("models", [])
@@ -85,7 +99,7 @@ class HestiaClient:
 
         # 2. Try OpenAI standard /v1/models
         try:
-            resp = client.get(f"{self.base_url}/v1/models")
+            resp = client.get(f"{self.base_url}/v1/models", headers=self.headers)
             if resp.status_code == 200:
                 data = resp.json()
                 items = data.get("data") or data.get("models") or []
@@ -184,7 +198,7 @@ class HestiaClient:
         for attempt in range(self.max_retries + 1):
             t_start = time.perf_counter()
             try:
-                resp = client.post(url, json=payload)
+                resp = client.post(url, json=payload, headers=self.headers)
                 latency_ms = (time.perf_counter() - t_start) * 1000.0
 
                 if resp.status_code == 200:

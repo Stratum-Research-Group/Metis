@@ -142,3 +142,29 @@ def test_chat_completion_retry_exhaustion_raises():
         client.chat_completion(model="failing-model", prompt="Q")
 
     assert "Chat completion failed after 2 retries" in str(exc_info.value)
+
+
+def test_client_authorization_header():
+    """Verify HestiaClient attaches Authorization Bearer token header (Finding A14)."""
+    captured_headers = {}
+
+    def mock_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_headers
+        captured_headers = dict(request.headers)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "Auth verified"}}]},
+        )
+
+    transport = httpx.MockTransport(mock_handler)
+    client_http = httpx.Client(transport=transport)
+    client = HestiaClient(
+        base_url="http://mock-hestia:8000",
+        token="test-secret-bearer-token-123",
+        client=client_http,
+    )
+
+    content, _ = client.chat_completion(model="test-model", prompt="Hello")
+    assert content == "Auth verified"
+    assert captured_headers.get("authorization") == "Bearer test-secret-bearer-token-123"
+

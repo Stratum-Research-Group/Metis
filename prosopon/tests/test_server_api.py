@@ -148,3 +148,35 @@ async def test_zero_loopback_exemption_for_approvals(app_instance):
         assert resp.status_code == 401
         assert "paired token required" in resp.json()["detail"].lower()
 
+
+@pytest.mark.asyncio
+async def test_origin_and_cross_site_request_blocking(app_instance):
+    """Verify cross-site requests and untrusted origins are blocked with 403 (Finding R3, Gate G29)."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Attack from malicious external origin
+        resp_untrusted_origin = await client.post(
+            "/api/auth/local-token",
+            headers={"Origin": "http://evil.com"},
+        )
+        assert resp_untrusted_origin.status_code == 403
+        assert "Untrusted Origin" in resp_untrusted_origin.json()["detail"]
+
+        # 2. Browser cross-site metadata flag
+        resp_cross_site = await client.post(
+            "/api/auth/local-token",
+            headers={"Sec-Fetch-Site": "cross-site"},
+        )
+        assert resp_cross_site.status_code == 403
+        assert "Cross-site requests are not permitted" in resp_cross_site.json()["detail"]
+
+        # 3. Legitimate loopback request succeeds
+        resp_legit = await client.post(
+            "/api/auth/local-token",
+            headers={"Origin": "http://127.0.0.1:3000"},
+        )
+        assert resp_legit.status_code == 200
+        assert resp_legit.json()["status"] == "ok"
+        assert "token" in resp_legit.json()
+
+

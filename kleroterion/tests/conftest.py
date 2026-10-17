@@ -2,6 +2,16 @@
 Pytest configuration and common fixtures.
 """
 
+import sys
+from pathlib import Path
+_src = str(Path(__file__).resolve().parent.parent / "src")
+if _src in sys.path:
+    sys.path.remove(_src)
+sys.path.insert(0, _src)
+
+if not getattr(sys.modules.get("kleroterion"), "__file__", None):
+    sys.modules.pop("kleroterion", None)
+
 import numpy as np
 import pytest
 

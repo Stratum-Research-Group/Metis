@@ -116,3 +116,34 @@ def test_code_mode_registered_in_tool_registry(tmp_path: Path):
     result = registry.execute(req)
     assert result.success is True
     assert result.data["result"] == 45.0
+
+
+def test_code_mode_rejects_format_spec_traversal(tmp_path: Path):
+    """Finding A6 regression: format-spec attribute traversal must be blocked by AST safety validation."""
+    cmode = SafeCodeMode(allowed_roots=[tmp_path])
+
+    # 1. Direct string format with dunder attribute
+    script1 = 'result = "{0.__class__}".format(1)'
+    res1 = cmode.execute(script1)
+    assert res1["success"] is False
+    assert "Prohibited format-spec attribute traversal" in res1["error"]
+
+    # 2. String format with mro / forbidden attributes
+    script2 = 'result = "{0.__class__.__mro__}".format(1)'
+    res2 = cmode.execute(script2)
+    assert res2["success"] is False
+    assert "Prohibited format-spec attribute traversal" in res2["error"]
+
+
+def test_code_mode_enforceable_timeout_on_c_extensions(tmp_path: Path):
+    """Finding A6 regression: C-extension runaway calls (e.g. math.factorial) must abort on timeout."""
+    cmode = SafeCodeMode(allowed_roots=[tmp_path])
+
+    # math.factorial(3000000) takes >45s in un-sandboxed C code
+    script = "result = math.factorial(3000000)"
+    res = cmode.execute(script, timeout_seconds=0.5)
+
+    assert res["success"] is False
+    assert "CodeModeTimeout" in res["error"]
+    assert res["latency_ms"] < 3000  # Aborts cleanly within seconds, not 45s
+

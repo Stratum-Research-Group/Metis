@@ -2,6 +2,8 @@
 
 import os
 from pathlib import Path
+import re
+import signal
 import subprocess
 import time
 from typing import Any, Dict, List, Optional
@@ -110,27 +112,81 @@ class SafeSandboxedBash:
             self.MAX_TIMEOUT_SECONDS,
         )
 
-        env = os.environ.copy()
-        env["PAGER"] = "cat"
-        env["PYTHONUNBUFFERED"] = "1"
-        env["TERM"] = "dumb"
+    def _build_sanitized_env(self, target_cwd: Path) -> Dict[str, str]:
+        """Construct a minimal, sanitized environment stripping secrets and auth tokens."""
+        safe_keys = {
+            "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL",
+            "TERM", "TMPDIR", "TZ", "PWD"
+        }
+        clean_env = {k: v for k, v in os.environ.items() if k in safe_keys}
 
-        start_time = time.monotonic()
+        # Inherit non-secret development/toolchain vars
+        for k, v in os.environ.items():
+            k_upper = k.upper()
+            if any(term in k_upper for term in ("TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL", "ADMIN", "METIS_")):
+                continue
+            if k.startswith(("PYTHON", "CARGO", "RUST", "GO", "GIT", "VIRTUAL_ENV")):
+                clean_env[k] = v
+
+        clean_env["PAGER"] = "cat"
+        clean_env["PYTHONUNBUFFERED"] = "1"
+        clean_env["TERM"] = "dumb"
+
+        # Confine TMPDIR into workspace .metis/tmp if possible
+        ws_tmp = target_cwd / ".metis" / "tmp"
         try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                cwd=str(target_cwd),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                errors="replace",
-                timeout=timeout,
-                env=env,
-            )
+            ws_tmp.mkdir(parents=True, exist_ok=True)
+            clean_env["TMPDIR"] = str(ws_tmp)
+        except Exception:
+            pass
+
+        return clean_env
+
+    def execute(
+        self,
+        command: str,
+        cwd: Optional[str] = None,
+        timeout_seconds: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        if not command or not command.strip():
+            raise ValueError("Command cannot be empty")
+
+        target_cwd = Path(cwd) if cwd else self.allowed_roots[0]
+        if not target_cwd.is_absolute():
+            target_cwd = (self.allowed_roots[0] / target_cwd).resolve()
+        else:
+            target_cwd = target_cwd.resolve()
+
+        if not self._is_path_allowed(target_cwd):
+            raise PermissionError(f"CWD {target_cwd} is outside authorized roots: {self.allowed_roots}")
+
+        if not target_cwd.exists() or not target_cwd.is_dir():
+            raise FileNotFoundError(f"Working directory does not exist: {target_cwd}")
+
+        timeout = min(
+            max(1, timeout_seconds or self.DEFAULT_TIMEOUT_SECONDS),
+            self.MAX_TIMEOUT_SECONDS,
+        )
+
+        clean_env = self._build_sanitized_env(target_cwd)
+        start_time = time.monotonic()
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=str(target_cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            start_new_session=True,
+            env=clean_env,
+        )
+
+        try:
+            stdout_raw, stderr_raw = proc.communicate(timeout=timeout)
             duration = time.monotonic() - start_time
-            stdout_clean, trunc_out = self._truncate_output(proc.stdout)
-            stderr_clean, trunc_err = self._truncate_output(proc.stderr)
+            stdout_clean, trunc_out = self._truncate_output(stdout_raw or "")
+            stderr_clean, trunc_err = self._truncate_output(stderr_raw or "")
 
             return {
                 "command": command,
@@ -140,11 +196,15 @@ class SafeSandboxedBash:
                 "duration_seconds": round(duration, 3),
                 "truncated": trunc_out or trunc_err,
             }
-        except subprocess.TimeoutExpired as e:
+        except subprocess.TimeoutExpired:
             duration = time.monotonic() - start_time
-            out = e.stdout or ""
-            err = e.stderr or ""
-            stdout_clean, _ = self._truncate_output(out if isinstance(out, str) else out.decode("utf-8", "replace"))
+            # Terminate the entire process group to ensure child processes are killed
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            out, err = proc.communicate()
+            stdout_clean, _ = self._truncate_output(out or "")
             return {
                 "command": command,
                 "exit_code": -1,
@@ -153,3 +213,9 @@ class SafeSandboxedBash:
                 "duration_seconds": round(duration, 3),
                 "truncated": False,
             }
+        finally:
+            if proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
