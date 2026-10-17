@@ -84,6 +84,7 @@ class PhylaxAdapter:
                     "calculator", "compute", "file_search", "search_files",
                     "read_file_range", "read_file", "edit_file_block",
                     "write_file", "sandboxed_bash", "run_code_mode", "shell_exec",
+                    "catalogue_lookup", "catalogue_docs",
                 }
 
                 if capability == "execute":

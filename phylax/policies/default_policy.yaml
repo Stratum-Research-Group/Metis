@@ -119,6 +119,26 @@ rules:
     effect: "allow"
     priority: 15
 
+  - id: "allow_pinax_catalogue"
+    description: "Allow Kybernetes to query Pinax tool catalogue"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "catalogue_lookup"
+    effect: "allow"
+    priority: 15
+
+  - id: "allow_pinax_docs"
+    description: "Allow Kybernetes to retrieve Pinax tool documentation slices"
+    subject: "kybernetes"
+    verb: "execute"
+    resource:
+      class: "tool"
+      tool_id: "catalogue_docs"
+    effect: "allow"
+    priority: 15
+
   - id: "ask_coding_mutations"
     description: "Require human approval for code edits, file writes, and shell execution"
     subject: "kybernetes"
