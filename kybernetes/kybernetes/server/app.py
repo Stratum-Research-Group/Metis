@@ -489,4 +489,46 @@ def create_app(
             writer_task.cancel()
             lochos_squad.remove_event_listener(_on_event)
 
+    # --- Pinax Tool Catalogue API (Section 7) ---
+    pinax = tool_registry.pinax_catalogue
+
+    @app.get("/v1/pinax/tools")
+    async def list_pinax_tools(
+        query: str = "",
+        category: Optional[str] = None,
+        risk_tier: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List or search tools from Pinax catalogue."""
+        return pinax.lookup(query=query, category=category, risk_tier=risk_tier, limit=limit)
+
+    @app.get("/v1/pinax/tools/{tool_id:path}/docs")
+    async def get_pinax_tool_docs(tool_id: str, max_bytes: int = 4096) -> Dict[str, Any]:
+        """Fetch documentation slice for a tool (Level 2 size-capped)."""
+        return pinax.get_tool_docs(tool_id, max_bytes=max_bytes)
+
+    @app.get("/v1/pinax/tools/{tool_id:path}")
+    async def get_pinax_tool_detail(tool_id: str) -> Dict[str, Any]:
+        """Get Level 1 detailed specification, schema, and capabilities for a tool."""
+        res = pinax.get_tool_detail(tool_id)
+        if not res:
+            raise HTTPException(status_code=404, detail=f"Tool '{tool_id}' not found")
+        return res
+
+    @app.post("/v1/pinax/scan")
+    async def trigger_pinax_scan(
+        payload: Optional[Dict[str, Any]] = None,
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
+        """Run passive PATH scan to discover installed tools."""
+        path_dirs = payload.get("path_dirs") if payload else None
+        return pinax.scan_environment(path_dirs=path_dirs)
+
+    @app.post("/v1/pinax/evaluate")
+    async def evaluate_pinax_invocation(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluate invocation risk for a tool call against catalogue overrides."""
+        tool_name = data.get("tool_name", "")
+        args = data.get("args", [])
+        return pinax.evaluate_invocation(tool_name, args)
+
     return app

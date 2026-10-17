@@ -46,3 +46,8 @@ class ToolResult(BaseModel):
     data: Any = None
     error: Optional[str] = None
     latency_ms: float = 0.0
+
+    @property
+    def output(self) -> Any:
+        return self.data
+

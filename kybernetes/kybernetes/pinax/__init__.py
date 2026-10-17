@@ -1,6 +1,8 @@
-"""Pinax Tool Catalogue module."""
+"""Pinax: Metis Tool Catalogue & Large Tool Inventory subsystem.
+Named after ancient Greek 'pinax' (tablet, register, catalogue).
+"""
 
-from .models import (
+from kybernetes.pinax.models import (
     EntryKind,
     InstallState,
     RiskTier,
@@ -11,15 +13,21 @@ from .models import (
     ToolRiskOverride,
     ToolSignature,
 )
+from kybernetes.pinax.db import PinaxDatabase
+from kybernetes.pinax.scanner import PinaxScanner
+from kybernetes.pinax.catalogue import PinaxCatalogue
 
 __all__ = [
-    "RiskTier",
-    "ToolKind",
-    "EntryKind",
-    "InstallState",
+    "PinaxCatalogue",
+    "PinaxScanner",
+    "PinaxDatabase",
     "ToolRecord",
     "ToolDoc",
     "ToolCapability",
     "ToolRiskOverride",
     "ToolSignature",
+    "RiskTier",
+    "ToolKind",
+    "EntryKind",
+    "InstallState",
 ]

@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 from kybernetes.adapters.phylax import PhylaxAdapter
 from kybernetes.contracts.enums import ToolSideEffectClass
 from kybernetes.contracts.tool_spec import ToolCallRequest, ToolDefinition, ToolResult
+from kybernetes.pinax import PinaxCatalogue
 from kybernetes.tools.calculator import SafeCalculator
 from kybernetes.tools.code_mode import SafeCodeMode
 from kybernetes.tools.edit_file_block import SafeEditBlock
@@ -25,10 +26,12 @@ class ToolRegistry:
         allowed_roots: Optional[List[Path]] = None,
         phylax_adapter: Optional[PhylaxAdapter] = None,
         enforce_approvals: bool = True,
+        pinax_catalogue: Optional[PinaxCatalogue] = None,
     ):
         self.allowed_roots = [r.resolve() for r in (allowed_roots or [Path.cwd()])]
         self.phylax_adapter = phylax_adapter or PhylaxAdapter()
         self.enforce_approvals = enforce_approvals
+        self.pinax_catalogue = pinax_catalogue or PinaxCatalogue()
         self._tools: Dict[str, ToolDefinition] = {}
         self._handlers: Dict[str, Callable[..., Any]] = {}
         self._register_default_tools()
@@ -102,6 +105,69 @@ class ToolRegistry:
             ),
         )
 
+        # Pinax Tool Catalogue Discovery (Section 7)
+        lookup_def = ToolDefinition(
+            name="catalogue_lookup",
+            version="1.0.0",
+            description="Query the Pinax local tool catalogue for available tools, commands, and risk tiers (Level 0/1 retrieval).",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search keyword or intent (e.g. 'extract audio', 'grep', 'git')",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category filter (e.g. 'filesystem', 'vcs', 'network')",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 10)",
+                    },
+                },
+            },
+            side_effect=ToolSideEffectClass.READ_ONLY,
+        )
+        self.register(
+            lookup_def,
+            lambda args: {
+                "tools": self.pinax_catalogue.lookup(
+                    query=args.get("query", ""),
+                    category=args.get("category"),
+                    limit=int(args.get("limit", 10)),
+                ),
+            },
+        )
+
+        docs_def = ToolDefinition(
+            name="catalogue_docs",
+            version="1.0.0",
+            description="Retrieve size-capped local documentation slice for a specific tool from Pinax (Level 2 retrieval).",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Exact name of tool to look up (e.g. 'curl', 'git', 'rg')",
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": "Maximum bytes of doc slice to return (default 4096)",
+                    },
+                },
+                "required": ["tool_name"],
+            },
+            side_effect=ToolSideEffectClass.READ_ONLY,
+        )
+        self.register(
+            docs_def,
+            lambda args: self.pinax_catalogue.get_tool_docs(
+                name_or_id=args.get("tool_name", ""),
+                max_bytes=int(args.get("max_bytes", 4096)),
+            ),
+        )
+
 
 
     def register(self, definition: ToolDefinition, handler: Callable[[Dict[str, Any]], Any]) -> None:
@@ -155,6 +221,25 @@ class ToolRegistry:
                         raise ValueError(f"Parameter '{k}' below minimum {prop_spec['minimum']}")
                     if "maximum" in prop_spec and v > prop_spec["maximum"]:
                         raise ValueError(f"Parameter '{k}' exceeds maximum {prop_spec['maximum']}")
+
+    def create_request(
+        self,
+        name: str,
+        arguments: Optional[Dict[str, Any]] = None,
+        approval_id: Optional[str] = None,
+        trace_id: Optional[str] = None,
+    ) -> ToolCallRequest:
+        """Helper to create a ToolCallRequest."""
+        return ToolCallRequest(
+            tool_id=name,
+            arguments=arguments or {},
+            approval_id=approval_id,
+            trace_id=trace_id,
+        )
+
+    def dispatch(self, request: ToolCallRequest) -> ToolResult:
+        """Alias for execute to support orchestrator dispatch terminology."""
+        return self.execute(request)
 
     def execute(self, request: ToolCallRequest) -> ToolResult:
         """Execute registered tool safely with timing and error isolation."""

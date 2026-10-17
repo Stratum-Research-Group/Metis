@@ -34,9 +34,10 @@ class PinaxDatabase:
 
     @contextmanager
     def _get_connection(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         try:
             yield conn
             conn.commit()
@@ -204,6 +205,57 @@ class PinaxDatabase:
                     "INSERT INTO tools_fts (id, name, summary, category, notes) VALUES (?, ?, ?, ?, ?);",
                     (tool.id, tool.name, tool.summary, tool.category, tool.notes or ""),
                 )
+
+    def batch_upsert_tools(self, tools: List[ToolRecord]) -> None:
+        if not tools:
+            return
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for tool in tools:
+                cursor.execute("""
+                    INSERT INTO tools (
+                        id, host_id, name, kind, entry_kind, summary, category,
+                        invocation_path, resolved_path, env_identity, interpreter,
+                        sha256, version, package, package_manager, install_state,
+                        risk_tier, discovered_by, first_seen, last_verified, notes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        host_id=excluded.host_id,
+                        name=excluded.name,
+                        kind=excluded.kind,
+                        entry_kind=excluded.entry_kind,
+                        summary=excluded.summary,
+                        category=excluded.category,
+                        invocation_path=excluded.invocation_path,
+                        resolved_path=excluded.resolved_path,
+                        env_identity=excluded.env_identity,
+                        interpreter=excluded.interpreter,
+                        sha256=excluded.sha256,
+                        version=excluded.version,
+                        package=excluded.package,
+                        package_manager=excluded.package_manager,
+                        install_state=excluded.install_state,
+                        risk_tier=excluded.risk_tier,
+                        discovered_by=excluded.discovered_by,
+                        last_verified=excluded.last_verified,
+                        notes=excluded.notes;
+                """, (
+                    tool.id, tool.host_id, tool.name,
+                    tool.kind.value if isinstance(tool.kind, ToolKind) else str(tool.kind),
+                    tool.entry_kind.value if isinstance(tool.entry_kind, EntryKind) else str(tool.entry_kind),
+                    tool.summary, tool.category, tool.invocation_path, tool.resolved_path,
+                    tool.env_identity, tool.interpreter, tool.sha256, tool.version,
+                    tool.package, tool.package_manager,
+                    tool.install_state.value if isinstance(tool.install_state, InstallState) else str(tool.install_state),
+                    tool.risk_tier.value if isinstance(tool.risk_tier, RiskTier) else str(tool.risk_tier),
+                    tool.discovered_by, tool.first_seen, tool.last_verified, tool.notes,
+                ))
+                if self.fts5_enabled:
+                    cursor.execute("DELETE FROM tools_fts WHERE id = ?;", (tool.id,))
+                    cursor.execute(
+                        "INSERT INTO tools_fts (id, name, summary, category, notes) VALUES (?, ?, ?, ?, ?);",
+                        (tool.id, tool.name, tool.summary, tool.category, tool.notes or ""),
+                    )
 
     def get_tool(self, tool_id_or_name: str) -> Optional[ToolRecord]:
         with self._get_connection() as conn:
