@@ -3,6 +3,7 @@ Spins up autonomous background subagents in isolated git worktrees so speculativ
 heavy test suites, or multi-file audits never lock or dirty the developer's working tree.
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 import subprocess
@@ -40,10 +41,38 @@ class SubagentTask:
             "created_at": self.created_at,
             "finished_at": self.finished_at,
             "success": self.success,
+            "output": self.output,
+            "diff": self.diff,
             "output_preview": self.output[:500] if self.output else "",
             "diff_preview": self.diff[:500] if self.diff else "",
             "error": self.error,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SubagentTask":
+        """Reconstitute a SubagentTask from persisted dictionary representation."""
+        raw_state = data.get("current_state")
+        init_state = AgentSemanticState.IDLE
+        if raw_state:
+            try:
+                init_state = AgentSemanticState(raw_state)
+            except ValueError:
+                pass
+        sm = AgentStateMachine(initial_state=init_state)
+        wt = Path(data["worktree_path"]) if data.get("worktree_path") else None
+        return cls(
+            subagent_id=data["subagent_id"],
+            description=data.get("description", ""),
+            worktree_path=wt,
+            branch_name=data.get("branch_name"),
+            state_machine=sm,
+            created_at=data.get("created_at", time.time()),
+            finished_at=data.get("finished_at"),
+            success=data.get("success"),
+            output=data.get("output", data.get("output_preview", "")),
+            diff=data.get("diff", data.get("diff_preview", "")),
+            error=data.get("error"),
+        )
 
 
 class SubagentManager:
@@ -55,8 +84,37 @@ class SubagentManager:
     def __init__(self, workspace_root: Optional[Path] = None, checkpointer: Optional[GitMilestoneCheckpointer] = None):
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
         self.checkpointer = checkpointer or GitMilestoneCheckpointer(self.workspace_root)
+        self.storage_dir = self.workspace_root / ".metis" / "subagents"
+        try:
+            self.storage_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         self._tasks: Dict[str, SubagentTask] = {}
         self._lock = threading.Lock()
+        self._load_persisted_tasks()
+
+    def _save_task(self, task: SubagentTask) -> None:
+        """Persist subagent task metadata to disk for restart durability (Finding B5)."""
+        try:
+            self.storage_dir.mkdir(parents=True, exist_ok=True)
+            task_file = self.storage_dir / f"{task.subagent_id}.json"
+            temp_file = self.storage_dir / f"{task.subagent_id}.tmp"
+            temp_file.write_text(json.dumps(task.to_dict(), indent=2), encoding="utf-8")
+            temp_file.replace(task_file)
+        except Exception:
+            pass
+
+    def _load_persisted_tasks(self) -> None:
+        """Load persisted subagent tasks from disk upon initialization (Finding B5)."""
+        if not self.storage_dir.exists():
+            return
+        for task_file in self.storage_dir.glob("*.json"):
+            try:
+                data = json.loads(task_file.read_text(encoding="utf-8"))
+                task = SubagentTask.from_dict(data)
+                self._tasks[task.subagent_id] = task
+            except Exception:
+                pass
 
     def get_task(self, subagent_id: str) -> Optional[SubagentTask]:
         with self._lock:
@@ -95,6 +153,7 @@ class SubagentManager:
 
         with self._lock:
             self._tasks[subagent_id] = task
+            self._save_task(task)
 
         # Launch background runner thread
         thread = threading.Thread(
@@ -156,19 +215,23 @@ class SubagentManager:
             task.finished_at = time.time()
 
             final_state = AgentSemanticState.COMPLETED if task.success else AgentSemanticState.FAILED
+            self._save_task(task)
             task.state_machine.transition(
                 final_state,
                 reason="Subagent finished workload",
             )
+            self._save_task(task)
 
         except Exception as e:
             task.finished_at = time.time()
             task.success = False
             task.error = f"{type(e).__name__}: {str(e)}"
+            self._save_task(task)
             task.state_machine.transition(
                 AgentSemanticState.FAILED,
                 reason=f"Subagent failed: {str(e)}",
             )
+            self._save_task(task)
 
     def merge_subagent(self, subagent_id: str) -> bool:
         """Merge verified subagent branch into active branch and prune worktree."""
@@ -188,6 +251,7 @@ class SubagentManager:
         merged = self.checkpointer.merge_worktree_sandbox(subagent_id)
         if merged and task.worktree_path:
             self.checkpointer.prune_worktree_sandbox(task.worktree_path)
+        self._save_task(task)
         return merged
 
     def discard_subagent(self, subagent_id: str) -> bool:
@@ -204,4 +268,13 @@ class SubagentManager:
                 cwd=str(self.workspace_root),
                 capture_output=True,
             )
+
+        with self._lock:
+            self._tasks.pop(subagent_id, None)
+            task_file = self.storage_dir / f"{subagent_id}.json"
+            if task_file.exists():
+                try:
+                    task_file.unlink()
+                except Exception:
+                    pass
         return True

@@ -90,3 +90,46 @@ def test_subagent_discard_cleans_up_worktree(git_workspace: Path):
     discarded = manager.discard_subagent(subagent_id)
     assert discarded is True
     assert not (git_workspace / ".metis" / "worktrees" / subagent_id).exists()
+
+
+def test_subagent_task_persistence_across_restart(git_workspace: Path):
+    """Verify subagent task registry persists on disk and reloads across restarts (Finding B5)."""
+    checkpointer = GitMilestoneCheckpointer(git_workspace)
+    manager = SubagentManager(workspace_root=git_workspace, checkpointer=checkpointer)
+
+    def persistent_action(worktree_dir: Path):
+        return {"success": True, "output": "Persistent output 12345"}
+
+    subagent_id = "test-persistent-subagent"
+    task = manager.fork_subagent(
+        subagent_id=subagent_id,
+        description="Persistent background task",
+        action_fn=persistent_action,
+        isolated=False,
+    )
+
+    for _ in range(50):
+        if task.state_machine.is_terminal():
+            break
+        time.sleep(0.05)
+
+    assert task.success is True
+
+    # Check on-disk persistence file exists
+    persisted_file = git_workspace / ".metis" / "subagents" / f"{subagent_id}.json"
+    assert persisted_file.exists()
+
+    # Re-instantiate a fresh SubagentManager against the same workspace
+    new_manager = SubagentManager(workspace_root=git_workspace, checkpointer=checkpointer)
+    loaded_task = new_manager.get_task(subagent_id)
+    assert loaded_task is not None
+    assert loaded_task.subagent_id == subagent_id
+    assert loaded_task.description == "Persistent background task"
+    assert loaded_task.success is True
+    assert loaded_task.output == "Persistent output 12345"
+    assert loaded_task.state_machine.current_state == AgentSemanticState.COMPLETED
+
+    # Clean up
+    assert new_manager.discard_subagent(subagent_id) is True
+    assert not persisted_file.exists()
+    assert new_manager.get_task(subagent_id) is None
