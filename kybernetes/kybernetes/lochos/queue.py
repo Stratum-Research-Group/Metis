@@ -381,6 +381,19 @@ class LochosQueue:
         now = time.time()
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            row = cursor.execute(
+                "SELECT * FROM work_items WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if not row:
+                raise ValueError(f"Task '{task_id}' does not exist")
+            if row["baton_owner"] != seat_id:
+                raise PermissionError(
+                    f"Seat '{seat_id}' is not the baton owner for task '{task_id}'"
+                )
+            if row["status"] == "attention_required":
+                raise PermissionError(
+                    f"Task '{task_id}' is blocked on attention_required and must be resolved before completion"
+                )
             cursor.execute(
                 """
                 UPDATE work_items

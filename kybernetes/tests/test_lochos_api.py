@@ -110,3 +110,21 @@ async def test_lochos_squad_api_endpoints(tmp_path):
         resp = await client.get("/v1/lochos/attention")
         assert resp.status_code == 200
         assert len(resp.json()) == 0
+
+        # 7. Check seat brief endpoint
+        resp = await client.get("/v1/lochos/seats/coder/brief")
+        assert resp.status_code == 200
+        brief = resp.json()
+        assert brief["id"] == "coder"
+        assert "python" in brief["skills"]
+
+        # 8. Check transfer brief endpoint
+        resp = await client.get(
+            f"/v1/lochos/transfer/brief?task_id={task_id}&from_seat=coder&to_seat=reviewer&note=Check+this"
+        )
+        assert resp.status_code == 200
+        transfer_brief = resp.json()
+        assert transfer_brief["task_id"] == task_id
+        assert transfer_brief["source_seat"]["id"] == "coder"
+        assert transfer_brief["destination_seat"]["id"] == "reviewer"
+        assert transfer_brief["handoff_note"] == "Check this"

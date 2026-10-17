@@ -386,6 +386,32 @@ def create_app(
         )
         return item.to_dict()
 
+    @app.get("/v1/lochos/seats/{seat_id}/brief")
+    async def get_lochos_seat_brief(seat_id: str) -> Dict[str, Any]:
+        """Retrieve the continuity/restore brief for a squad seat."""
+        seat = lochos_squad.get_seat(seat_id)
+        if not seat:
+            raise HTTPException(status_code=404, detail=f"Seat '{seat_id}' not found")
+        return seat.generate_restore_brief()
+
+    @app.get("/v1/lochos/transfer/brief")
+    async def get_lochos_transfer_brief(
+        task_id: str,
+        from_seat: str,
+        to_seat: str,
+        note: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a peer handoff brief between squad seats."""
+        try:
+            return lochos_squad.generate_handoff_brief(
+                from_seat=from_seat,
+                to_seat=to_seat,
+                task_id=task_id,
+                note=note,
+            )
+        except ValueError as err:
+            raise HTTPException(status_code=400, detail=str(err))
+
     @app.get("/v1/lochos/attention")
     async def get_lochos_attention() -> List[Dict[str, Any]]:
         """Retrieve cross-seat attention reconciliation requests."""

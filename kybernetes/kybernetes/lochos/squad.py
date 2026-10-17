@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+import yaml
 from kybernetes.contracts.enums import AgentSemanticState
 from kybernetes.engine.checkpoint import GitMilestoneCheckpointer
 from kybernetes.engine.state import AgentStateMachine
@@ -30,6 +31,56 @@ class SeatRuntime:
     def current_state(self) -> AgentSemanticState:
         return self.state_machine.current_state
 
+    def generate_restore_brief(self) -> Dict[str, Any]:
+        """
+        Generates a structured handover/restore brief for continuity across restarts or peer handoffs.
+        """
+        return {
+            "address": self.full_address,
+            "id": self.spec.id,
+            "role": self.spec.role,
+            "model": self.spec.model,
+            "current_state": self.current_state.value,
+            "worktree_path": str(self.worktree_path) if self.worktree_path else None,
+            "worktree_branch": self.spec.worktree_branch,
+            "task_id": self.current_task.task_id if self.current_task else None,
+            "task_title": self.current_task.title if self.current_task else None,
+            "task_status": self.current_task.status if self.current_task else None,
+            "skills": list(self.spec.skills),
+            "permission_policy": self.spec.permission_policy,
+        }
+
+    def project_context_pack(self, skills_root: Optional[Path] = None) -> Path:
+        """
+        Projects seat context pack and skills manifest into seat workspace.
+        Enables instant skill retrieval and runtime isolation without global leakage.
+        """
+        target_root = self.worktree_path or Path.cwd()
+        pack_dir = target_root / ".metis" / "context-pack"
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        manifest_file = pack_dir / "manifest.yaml"
+        manifest_data = {
+            "ref": f"seat:{self.spec.id}",
+            "address": self.full_address,
+            "role": self.spec.role,
+            "model": self.spec.model,
+            "permission_policy": self.spec.permission_policy,
+            "skills": list(self.spec.skills),
+            "worktree_branch": self.spec.worktree_branch,
+        }
+        manifest_file.write_text(yaml.dump(manifest_data, sort_keys=False), encoding="utf-8")
+
+        if skills_root and skills_root.exists():
+            agents_skills_dir = target_root / ".agents" / "skills"
+            agents_skills_dir.mkdir(parents=True, exist_ok=True)
+            for skill_name in self.spec.skills:
+                for match in skills_root.rglob(f"*{skill_name}*"):
+                    if match.is_dir() and (match / "SKILL.md").exists():
+                        dest = agents_skills_dir / match.name
+                        dest.mkdir(parents=True, exist_ok=True)
+                        (dest / "SKILL.md").write_text((match / "SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
+        return manifest_file
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "address": self.full_address,
@@ -43,6 +94,7 @@ class SeatRuntime:
             "current_task": self.current_task.to_dict() if self.current_task else None,
             "permission_policy": self.spec.permission_policy,
             "skills": self.spec.skills,
+            "restore_brief": self.generate_restore_brief(),
         }
 
 
@@ -68,6 +120,7 @@ class LochosSquadManager:
 
     def _init_seats(self) -> None:
         """Initializes runtimes for all seats defined in the RigSpec."""
+        skills_root = self.workspace_root / ".metis" / "skills"
         for seat_spec in self.spec.list_seats():
             addr = seat_spec.full_address(self.spec.name)
             worktree_path: Optional[Path] = None
@@ -86,6 +139,7 @@ class LochosSquadManager:
                 rig_name=self.spec.name,
                 worktree_path=worktree_path,
             )
+            runtime.project_context_pack(skills_root)
             self.seats[seat_spec.id] = runtime
             self.seats[addr] = runtime
 
@@ -173,6 +227,34 @@ class LochosSquadManager:
             return claimed
 
         return transferred
+
+    def generate_handoff_brief(
+        self,
+        from_seat: str,
+        to_seat: str,
+        task_id: str,
+        note: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generates a continuity handoff packet between two squad seats for audit and peer review.
+        """
+        src = self.get_seat(from_seat)
+        dst = self.get_seat(to_seat)
+        task = self.queue.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task '{task_id}' not found")
+        return {
+            "task_id": task.task_id,
+            "mission": task.mission,
+            "slice_id": task.slice_id,
+            "title": task.title,
+            "description": task.description,
+            "payload": task.payload,
+            "source_seat": src.generate_restore_brief() if src else None,
+            "destination_seat": dst.generate_restore_brief() if dst else None,
+            "handoff_note": note or "",
+            "continuity_policy": "peer_verified_handoff",
+        }
 
     def get_attention_summary(self) -> List[Dict[str, Any]]:
         """Returns all open attention requests across all seats in the squad."""
