@@ -36,3 +36,16 @@ def test_cli_chat_factual():
     assert result.exit_code == 0
     assert "evidence citations" in result.output
     assert "Turn Completed" in result.output
+
+
+def test_cli_lochos():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["lochos", "ps"])
+    assert result.exit_code == 0
+    assert "Lochos Squad" in result.output
+    assert "coder@metis-sovereign-squad" in result.output
+    assert "reviewer@metis-sovereign-squad" in result.output
+
+    res_q = runner.invoke(cli, ["lochos", "queue"])
+    assert res_q.exit_code == 0
+

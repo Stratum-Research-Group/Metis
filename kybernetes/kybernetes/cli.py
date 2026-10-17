@@ -165,5 +165,139 @@ def demo():
     asyncio.run(run_all_demos())
 
 
+# --- Lochos Multi-Agent Squad CLI ---
+
+@cli.group("lochos")
+def lochos_group():
+    """Lochos: Multi-Agent Squad and Durable Work Queue Management."""
+    pass
+
+
+@lochos_group.command("ps")
+@click.option("--db-path", default=None, help="Path to lochos.sqlite")
+def lochos_ps(db_path: Optional[str] = None):
+    """List all agent seats, semantic states, and active batons in the squad."""
+    from kybernetes.lochos import LochosQueue, LochosSquadManager
+    custom_db = Path(db_path) if db_path else None
+    queue = LochosQueue(custom_db) if custom_db else None
+    manager = LochosSquadManager(queue=queue)
+    status_dict = manager.to_status_dict()
+
+    click.echo(f"\n[Lochos Squad: {status_dict['rig_name']} (v{status_dict['version']})]")
+    click.echo(f"Summary: {status_dict['summary']}\n")
+
+    table_data = []
+    for seat in status_dict["seats"]:
+        baton_str = seat["current_task"]["title"] if seat["current_task"] else "None (idle)"
+        table_data.append([
+            seat["address"],
+            seat["role"],
+            seat["model"],
+            seat["state"].upper(),
+            seat["permission_policy"],
+            baton_str[:35] + ("..." if len(baton_str) > 35 else ""),
+        ])
+
+    click.echo(tabulate(
+        table_data,
+        headers=["Seat Address", "Role", "Model", "State", "Policy", "Active Baton"],
+        tablefmt="rounded_grid",
+    ))
+
+    attns = status_dict["attention_required"]
+    if attns:
+        click.echo(f"\n[!] Attention Required ({len(attns)} blocked seat{'s' if len(attns) > 1 else ''}):")
+        for a in attns:
+            click.echo(f"  - [{a['seat_id']}] Task: '{a['task_title']}' -> Reason: {a['reason']}")
+    else:
+        click.echo("\n[x] No blocked seats. All agents operational.\n")
+
+
+@lochos_group.command("queue")
+@click.option("--status", default=None, help="Filter by status (queued, in_progress, completed, failed)")
+@click.option("--seat", default=None, help="Filter by seat ID")
+def lochos_queue_cmd(status: Optional[str] = None, seat: Optional[str] = None):
+    """List work items in the durable SQLite queue."""
+    from kybernetes.lochos import LochosSquadManager
+    manager = LochosSquadManager()
+    tasks = manager.queue.list_tasks(status=status, seat_id=seat)
+    if not tasks:
+        click.echo("No work items found in queue.")
+        return
+
+    table_data = [
+        [
+            t.task_id,
+            t.mission,
+            t.title[:30] + ("..." if len(t.title) > 30 else ""),
+            t.baton_owner or "Unassigned",
+            t.status.upper(),
+        ]
+        for t in tasks
+    ]
+    click.echo(tabulate(
+        table_data,
+        headers=["Task ID", "Mission", "Title", "Baton Owner", "Status"],
+        tablefmt="rounded_grid",
+    ))
+
+
+@lochos_group.command("dispatch")
+@click.option("--mission", "-m", default="release-0.5.8", help="Mission identifier")
+@click.option("--slice", "-s", "slice_id", default="001", help="Slice identifier")
+@click.option("--title", "-t", prompt="Task title", help="Title of task")
+@click.option("--seat", prompt="Target seat (e.g. coder, reviewer)", help="Target seat ID")
+def lochos_dispatch_cmd(mission: str, slice_id: str, title: str, seat: str):
+    """Enqueue and assign a mission slice task to a seat."""
+    from kybernetes.lochos import LochosSquadManager
+    manager = LochosSquadManager()
+    try:
+        item = manager.dispatch_work(
+            mission=mission,
+            slice_id=slice_id,
+            title=title,
+            target_seat=seat,
+        )
+        click.echo(f"Successfully dispatched task [{item.task_id}] to {item.baton_owner} (Status: {item.status})")
+    except Exception as e:
+        click.echo(f"Dispatch error: {e}", err=True)
+
+
+@lochos_group.command("transfer")
+@click.option("--task-id", prompt="Task ID", help="Task ID to transfer")
+@click.option("--from-seat", prompt="Current seat", help="Seat handing off baton")
+@click.option("--to-seat", prompt="Destination seat", help="Seat receiving baton")
+@click.option("--note", default="Baton handoff", help="Handoff note")
+def lochos_transfer_cmd(task_id: str, from_seat: str, to_seat: str, note: str):
+    """Transfer task baton from one seat to another."""
+    from kybernetes.lochos import LochosSquadManager
+    manager = LochosSquadManager()
+    try:
+        item = manager.transfer_baton(
+            task_id=task_id,
+            from_seat=from_seat,
+            to_seat=to_seat,
+            note=note,
+        )
+        click.echo(f"Baton for task [{item.task_id}] transferred to {item.baton_owner}")
+    except Exception as e:
+        click.echo(f"Transfer error: {e}", err=True)
+
+
+@lochos_group.command("resolve")
+@click.option("--task-id", prompt="Task ID", help="Task ID with attention block")
+@click.option("--seat", prompt="Seat address/id", help="Seat ID to unblock")
+@click.option("--resolution", default="approved_by_operator", help="Approval resolution")
+def lochos_resolve_cmd(task_id: str, seat: str, resolution: str):
+    """Resolve an attention block and resume the seat."""
+    from kybernetes.lochos import LochosSquadManager
+    manager = LochosSquadManager()
+    try:
+        item = manager.queue.resolve_attention(task_id=task_id, seat_id=seat, resolution=resolution)
+        click.echo(f"Attention resolved for task [{item.task_id}]. Status: {item.status}")
+    except Exception as e:
+        click.echo(f"Resolution error: {e}", err=True)
+
+
 if __name__ == "__main__":
     cli()
