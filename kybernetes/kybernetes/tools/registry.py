@@ -1,5 +1,6 @@
 """Tool registry providing declarative schema validation, capability checks, and execution sandboxing."""
 
+import concurrent.futures
 from pathlib import Path
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -34,6 +35,7 @@ class ToolRegistry:
         self.pinax_catalogue = pinax_catalogue or PinaxCatalogue()
         self._tools: Dict[str, ToolDefinition] = {}
         self._handlers: Dict[str, Callable[..., Any]] = {}
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="tool_exec")
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
@@ -297,7 +299,24 @@ class ToolRegistry:
         try:
             self.validate_arguments(request.tool_id, request.arguments)
             handler = self._handlers[request.tool_id]
-            data = handler(request.arguments)
+
+            # Enforce active tool execution timeout (Finding B3)
+            if tool.timeout_ms and tool.timeout_ms > 0:
+                timeout_sec = tool.timeout_ms / 1000.0
+                future = self._executor.submit(handler, request.arguments)
+                try:
+                    data = future.result(timeout=timeout_sec)
+                except concurrent.futures.TimeoutError:
+                    latency = (time.perf_counter() - start_time) * 1000
+                    return ToolResult(
+                        tool_id=request.tool_id,
+                        success=False,
+                        error=f"Tool '{request.tool_id}' exceeded declared timeout of {tool.timeout_ms}ms (execution timed out)",
+                        latency_ms=round(latency, 2),
+                    )
+            else:
+                data = handler(request.arguments)
+
             latency = (time.perf_counter() - start_time) * 1000
 
             if tool.timeout_ms and latency > tool.timeout_ms:

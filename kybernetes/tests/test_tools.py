@@ -69,3 +69,35 @@ def test_tool_registry_validation_and_execution():
     res_bad = registry.execute(bad_req)
     assert res_bad.success is False
     assert "Missing required parameter" in res_bad.error
+
+
+def test_tool_registry_active_timeout_enforcement():
+    """Verify tool execution with declared timeout_ms aborts without waiting for long handler to finish (Finding B3)."""
+    import time
+    from kybernetes.contracts.tool_spec import ToolDefinition
+    from kybernetes.contracts.enums import ToolSideEffectClass
+
+    registry = ToolRegistry()
+    slow_def = ToolDefinition(
+        name="slow_tool",
+        description="A tool that sleeps longer than its timeout",
+        side_effect_class=ToolSideEffectClass.READ_ONLY,
+        timeout_ms=50,
+        parameters_schema={"type": "object", "properties": {}},
+    )
+
+    def slow_handler(args):
+        time.sleep(0.4)
+        return {"done": True}
+
+    registry.register(slow_def, slow_handler)
+
+    req = ToolCallRequest(tool_id="slow_tool", arguments={})
+    t0 = time.perf_counter()
+    res = registry.execute(req)
+    elapsed = (time.perf_counter() - t0) * 1000
+
+    assert res.success is False
+    assert "execution timed out" in res.error
+    # Should terminate well before the full 400ms sleep
+    assert elapsed < 300

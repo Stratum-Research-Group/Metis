@@ -8,8 +8,27 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 from typing import Any, Dict, List, Tuple
 from pydantic import BaseModel, Field
+
+# Ensure sibling Metis modules are resolvable for native config validation
+_WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+for _rel in (
+    "hestia/src",
+    "prosopon",
+    "phylax",
+    "krisis",
+    "stoma/src",
+    "dokime/src",
+    "paideia",
+    "dianoia",
+    "kleroterion",
+    "LTHCM",
+):
+    _p = str(_WORKSPACE_ROOT / _rel)
+    if _p not in sys.path and (_WORKSPACE_ROOT / _rel).exists():
+        sys.path.insert(0, _p)
 
 from kybernetes.admin.descriptors import MODULE_REGISTRY
 from kybernetes.config import KybernetesConfig

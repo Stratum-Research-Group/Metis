@@ -20,16 +20,25 @@ class PhylaxAdapter:
         self._approval_events: Dict[str, asyncio.Event] = {}
 
         if self.shim is None and policy_path:
+            import sys
             from pathlib import Path
+
+            policy_file = Path(policy_path).resolve()
+            if not policy_file.exists():
+                raise FileNotFoundError(f"Phylax policy file not found: {policy_file}")
+
+            # Ensure phylax package is in sys.path if running in an isolated environment
+            for parent in policy_file.parents:
+                if (parent / "phylax" / "__init__.py").exists():
+                    if str(parent) not in sys.path:
+                        sys.path.insert(0, str(parent))
+                    break
+
             from phylax.adapters.kybernetes import KybernetesShim
             from phylax.approvals.manager import ApprovalManager
             from phylax.audit.logger import AuditLogger
             from phylax.engine.manager import PolicyManager
             from phylax.gateway.gateway import GuardedGateway
-
-            policy_file = Path(policy_path).resolve()
-            if not policy_file.exists():
-                raise FileNotFoundError(f"Phylax policy file not found: {policy_file}")
 
             workspace_root = policy_file.parents[1] if policy_file.parent.name == "policies" else policy_file.parent
             audit_file = workspace_root / ".phylax" / "audit.jsonl"

@@ -5,7 +5,8 @@
    ========================================================================== */
 
 /* 1. Theme: Obsidian Cyber (Sovereign Mission Control / Default) */
-:root, body.theme-obsidian {
+:root,
+body.theme-obsidian {
   --bg-primary: #080d1a;
   --bg-secondary: #0f172a;
   --bg-tertiary: #1e293b;
@@ -92,7 +93,7 @@ body.theme-amber {
   --status-warning: #f59e0b;
   --status-danger: #ef4444;
   background-image: linear-gradient(rgba(245, 158, 11, 0.03) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(245, 158, 11, 0.03) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(245, 158, 11, 0.03) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
@@ -132,7 +133,7 @@ body.theme-nordic {
   --status-warning: #f59e0b;
   --status-danger: #ef4444;
   background-image: radial-gradient(ellipse at 85% 0%, rgba(14, 165, 233, 0.12) 0%, transparent 60%),
-                    radial-gradient(ellipse at 15% 100%, rgba(99, 102, 241, 0.1) 0%, transparent 60%);
+    radial-gradient(ellipse at 15% 100%, rgba(99, 102, 241, 0.1) 0%, transparent 60%);
 }
 
 body.theme-nordic .dash-tab-btn,
@@ -253,7 +254,7 @@ body {
   background-color: var(--accent-primary);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .nav-title {
@@ -316,6 +317,7 @@ body {
   color: var(--text-muted);
   border-color: rgba(148, 163, 184, 0.25);
 }
+
 .agent-state-pill.state-idle .state-dot {
   background-color: #94a3b8;
 }
@@ -325,6 +327,7 @@ body {
   color: #60a5fa;
   border-color: rgba(59, 130, 246, 0.35);
 }
+
 .agent-state-pill.state-planning .state-dot {
   background-color: #3b82f6;
   animation: pulse-dot 1.5s infinite;
@@ -335,6 +338,7 @@ body {
   color: #fbbf24;
   border-color: rgba(245, 158, 11, 0.4);
 }
+
 .agent-state-pill.state-mutating .state-dot {
   background-color: #f59e0b;
   animation: pulse-dot 1s infinite;
@@ -347,6 +351,7 @@ body {
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
   animation: pulse-border 1.2s infinite;
 }
+
 .agent-state-pill.state-awaiting_approval .state-dot {
   background-color: #ef4444;
   animation: pulse-dot 0.6s infinite;
@@ -357,6 +362,7 @@ body {
   color: #c084fc;
   border-color: rgba(168, 85, 247, 0.35);
 }
+
 .agent-state-pill.state-verifying .state-dot {
   background-color: #a855f7;
   animation: pulse-dot 1.2s infinite;
@@ -367,6 +373,7 @@ body {
   color: #34d399;
   border-color: rgba(16, 185, 129, 0.35);
 }
+
 .agent-state-pill.state-completed .state-dot {
   background-color: #10b981;
 }
@@ -376,20 +383,40 @@ body {
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.3);
 }
+
 .agent-state-pill.state-failed .state-dot {
   background-color: #ef4444;
 }
 
 @keyframes pulse-dot {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.3); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.6; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
 }
 
 @keyframes pulse-border {
-  0% { border-color: rgba(239, 68, 68, 0.4); }
-  50% { border-color: rgba(239, 68, 68, 1); }
-  100% { border-color: rgba(239, 68, 68, 0.4); }
+  0% {
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  50% {
+    border-color: rgba(239, 68, 68, 1);
+  }
+
+  100% {
+    border-color: rgba(239, 68, 68, 0.4);
+  }
 }
 
 .icon-btn {
@@ -455,7 +482,8 @@ body {
   align-items: center;
 }
 
-.session-item:hover, .session-item.active {
+.session-item:hover,
+.session-item.active {
   background-color: var(--bg-tertiary);
 }
 
@@ -553,7 +581,7 @@ body {
   border-radius: 12px;
   padding: 16px;
   margin: 12px 16px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .approval-card h4 {
@@ -624,9 +652,17 @@ body {
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+
+  70% {
+    box-shadow: 0 0 0 14px rgba(239, 68, 68, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 
 .composer-form {
@@ -653,7 +689,7 @@ body {
 .modal {
   position: fixed;
   inset: 0;
-  background-color: rgba(0,0,0,0.6);
+  background-color: rgba(0, 0, 0, 0.6);
   z-index: 50;
   display: none;
   align-items: center;
@@ -1075,7 +1111,9 @@ body {
 }
 
 /* Enhanced Dashboard Buttons & Controls */
-.dash-button, .dash-probe-btn, .dash-btn {
+.dash-button,
+.dash-probe-btn,
+.dash-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1115,13 +1153,15 @@ body {
   transform: none;
 }
 
-.dash-btn-primary, .dash-button.primary {
+.dash-btn-primary,
+.dash-button.primary {
   background: linear-gradient(135deg, #7c3aed, #6d28d9);
   border-color: #8b5cf6;
   color: #ffffff;
 }
 
-.dash-btn-primary:hover:not(:disabled), .dash-button.primary:hover:not(:disabled) {
+.dash-btn-primary:hover:not(:disabled),
+.dash-button.primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   border-color: #a78bfa;
 }
@@ -1278,7 +1318,8 @@ body {
   user-select: none;
 }
 
-.activity-top, .activity-bottom {
+.activity-top,
+.activity-bottom {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1576,17 +1617,18 @@ body {
   transition: all 0.25s;
 }
 
-.antigravity-toggle input:checked + .slider {
+.antigravity-toggle input:checked+.slider {
   background-color: #0284c7;
   border-color: #38bdf8;
 }
 
-.antigravity-toggle input:checked + .slider:before {
+.antigravity-toggle input:checked+.slider:before {
   transform: translateX(20px);
   background-color: #ffffff;
 }
 
-.setting-select, .setting-input {
+.setting-select,
+.setting-input {
   background: #0b0e14;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #f1f5f9;
@@ -1597,7 +1639,8 @@ body {
   min-width: 180px;
 }
 
-.setting-select:focus, .setting-input:focus {
+.setting-select:focus,
+.setting-input:focus {
   border-color: #38bdf8;
 }
 
@@ -2334,7 +2377,8 @@ body {
   color: #ef4444;
 }
 
-.eval-reason, .eval-overrides {
+.eval-reason,
+.eval-overrides {
   font-size: 0.85rem;
   color: var(--text-main);
 }
@@ -2749,7 +2793,8 @@ body {
   border-radius: var(--radius-sm);
 }
 
-.overrides-table th, .overrides-table td {
+.overrides-table th,
+.overrides-table td {
   padding: 0.55rem 0.75rem;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -2830,6 +2875,3 @@ body {
   border-radius: 4px;
   font-size: 0.72rem;
 }
-
-
-

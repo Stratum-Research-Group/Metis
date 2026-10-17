@@ -171,6 +171,9 @@ class BatchJobManager:
                 dokime_src = str(self.workspace_root / "dokime" / "src")
                 if dokime_src not in sys.path:
                     sys.path.insert(0, dokime_src)
+                for sp in (self.workspace_root / "dokime" / ".venv" / "lib").glob("python*/site-packages"):
+                    if str(sp) not in sys.path:
+                        sys.path.append(str(sp))
                 if "dokime" in sys.modules and getattr(sys.modules["dokime"], "__file__", None) is None:
                     del sys.modules["dokime"]
 
@@ -324,6 +327,9 @@ class BatchJobManager:
                 paideia_dir = str(self.workspace_root / "paideia")
                 if paideia_dir not in sys.path:
                     sys.path.insert(0, paideia_dir)
+                for sp in (self.workspace_root / "paideia" / ".venv" / "lib").glob("python*/site-packages"):
+                    if str(sp) not in sys.path:
+                        sys.path.append(str(sp))
 
                 from paideia.data.splitter import DatasetSplits
                 from paideia.training.config import TrainingConfig
