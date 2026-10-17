@@ -94,8 +94,8 @@ const MetisSquad = {
 
   async fetchLiveSquad() {
     try {
-      if (window.API && window.API.request) {
-        const live = await window.API.request("/v1/lochos/squad");
+      if (window.API && window.API.getLochosSquad) {
+        const live = await window.API.getLochosSquad();
         if (live && live.seats) {
           this.rigData.name = live.rig_name || this.rigData.name;
           this.rigData.version = live.version || this.rigData.version;
@@ -103,7 +103,7 @@ const MetisSquad = {
           if (live.seats.length > 0) {
             this.rigData.seats = live.seats.map((s) => ({
               ...s,
-              baton: s.current_task || null,
+              baton: s.current_task || s.baton || null,
             }));
           }
           if (live.attention_required) {
@@ -119,11 +119,8 @@ const MetisSquad = {
 
   async resolveAttention(taskId, seatId) {
     try {
-      if (window.API && window.API.request) {
-        await window.API.request("/v1/lochos/attention/resolve", {
-          method: "POST",
-          body: JSON.stringify({ task_id: taskId, seat_id: seatId, resolution: "approved" }),
-        });
+      if (window.API && window.API.resolveLochosAttention) {
+        await window.API.resolveLochosAttention({ task_id: taskId, seat_id: seatId, resolution: "approved" });
         await this.fetchLiveSquad();
       }
     } catch (err) {

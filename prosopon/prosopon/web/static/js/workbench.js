@@ -1,10 +1,12 @@
 /**
  * Metis Antigravity & VS Code Styled Workbench & Diff Review Engine
- * Provides multi-tab code viewing, file exploration, and Phylax-guarded side-by-side diff review.
+ * Provides multi-tab code viewing, real filesystem exploration, and Phylax-guarded side-by-side diff review.
  */
 
 const MetisWorkbench = {
   activeFile: "kybernetes/kybernetes/tools/registry.py",
+  fileContentCache: {},
+  fileTree: [],
   openTabs: [
     { path: "kybernetes/kybernetes/tools/registry.py", name: "registry.py", modified: false },
     { path: "phylax/policies/default_policy.yaml", name: "default_policy.yaml", modified: false },
@@ -34,52 +36,62 @@ const MetisWorkbench = {
     ],
   },
 
-  mockFileTree: [
-    {
-      name: "kybernetes",
-      type: "dir",
-      children: [
-        { name: "tools/read_file_range.py", type: "file" },
-        { name: "tools/edit_file_block.py", type: "file" },
-        { name: "tools/write_file.py", type: "file" },
-        { name: "tools/sandboxed_bash.py", type: "file" },
-        { name: "tools/registry.py", type: "file" },
-      ],
-    },
-    {
-      name: "phylax",
-      type: "dir",
-      children: [
-        { name: "policies/default_policy.yaml", type: "file" },
-        { name: "gateway/gateway.py", type: "file" },
-      ],
-    },
-    {
-      name: "harness",
-      type: "dir",
-      children: [
-        { name: "hardness.md", type: "file" },
-        { name: "harness.md", type: "file" },
-      ],
-    },
-    {
-      name: "prosopon",
-      type: "dir",
-      children: [
-        { name: "server.py", type: "file" },
-        { name: "web/static/js/settings.js", type: "file" },
-        { name: "web/static/js/workbench.js", type: "file" },
-      ],
-    },
-  ],
-
-  init() {
+  async init() {
     this.container = document.getElementById("editor-workspace");
     if (!this.container) return;
     this.render();
+    await this.loadTree();
+    await this.loadDiff();
+    await this.loadFile(this.activeFile);
+    this.render();
+  },
+
+  async loadTree() {
+    try {
+      if (window.API && window.API.getWorkbenchTree) {
+        const tree = await window.API.getWorkbenchTree();
+        if (tree && Array.isArray(tree) && tree.length > 0) {
+          this.fileTree = tree;
+          this.render();
+        }
+      }
+    } catch (err) {
+      console.warn("Workbench loadTree:", err);
+    }
+  },
+
+  async loadDiff() {
+    try {
+      if (window.API && window.API.getWorkbenchDiff) {
+        const diffData = await window.API.getWorkbenchDiff();
+        if (diffData && diffData.targetFile) {
+          this.activeDiff = diffData;
+          this.render();
+        }
+      }
+    } catch (err) {
+      console.warn("Workbench loadDiff:", err);
+    }
+  },
+
+  async loadFile(path) {
+    if (path === "DIFF_PREVIEW") return;
+    if (this.fileContentCache[path]) return;
+    try {
+      if (window.API && window.API.getWorkbenchFile) {
+        const res = await window.API.getWorkbenchFile(path);
+        if (res && res.lines) {
+          this.fileContentCache[path] = res.lines;
+          this.render();
+        }
+      }
+    } catch (err) {
+      console.warn(`Workbench loadFile (${path}):`, err);
+    }
   },
 
   render() {
+    if (!this.container) return;
     this.container.textContent = "";
 
     const workbench = document.createElement("div");
@@ -146,6 +158,9 @@ const MetisWorkbench = {
 
       tabEl.addEventListener("click", () => {
         this.activeFile = tab.path;
+        if (!tab.isDiff && !this.fileContentCache[tab.path]) {
+          this.loadFile(tab.path);
+        }
         this.render();
       });
 
@@ -155,19 +170,21 @@ const MetisWorkbench = {
 
   renderFileTree(container) {
     container.textContent = "";
-    this.mockFileTree.forEach((node) => {
+    const treeData = this.fileTree.length > 0 ? this.fileTree : this.getDefaultMockTree();
+
+    treeData.forEach((node) => {
       const dirHeader = document.createElement("div");
       dirHeader.className = "tree-dir-header";
       dirHeader.textContent = `▾ ${node.name}`;
       container.appendChild(dirHeader);
 
-      node.children.forEach((child) => {
+      (node.children || []).forEach((child) => {
         const fileItem = document.createElement("div");
-        fileItem.className = `tree-file-item ${this.activeFile.endsWith(child.name) ? "selected" : ""}`;
+        const fullPath = `${node.name}/${child.name}`;
+        fileItem.className = `tree-file-item ${this.activeFile === fullPath ? "selected" : ""}`;
         fileItem.textContent = `  ${child.name}`;
         fileItem.addEventListener("click", () => {
-          const fullPath = `${node.name}/${child.name}`;
-          this.openFile(fullPath, child.name);
+          this.openFile(fullPath, child.name.split("/").pop());
         });
         container.appendChild(fileItem);
       });
@@ -180,6 +197,9 @@ const MetisWorkbench = {
       this.openTabs.push({ path, name, modified: false });
     }
     this.activeFile = path;
+    if (!this.fileContentCache[path]) {
+      this.loadFile(path);
+    }
     this.render();
   },
 
@@ -243,10 +263,10 @@ const MetisWorkbench = {
 
     const leftLines = document.createElement("div");
     leftLines.className = "diff-lines";
-    this.activeDiff.oldLines.forEach((line, idx) => {
+    (this.activeDiff.oldLines || []).forEach((line, idx) => {
       const row = document.createElement("div");
       row.className = "diff-row";
-      row.innerHTML = `<span class="diff-num">${idx + 20}</span><span class="diff-code">${line}</span>`;
+      row.innerHTML = `<span class="diff-num">${idx + 1}</span><span class="diff-code">${this.escapeHtml(line)}</span>`;
       leftLines.appendChild(row);
     });
     leftPane.appendChild(leftLines);
@@ -261,11 +281,11 @@ const MetisWorkbench = {
 
     const rightLines = document.createElement("div");
     rightLines.className = "diff-lines";
-    this.activeDiff.newLines.forEach((line, idx) => {
+    (this.activeDiff.newLines || []).forEach((line, idx) => {
       const row = document.createElement("div");
-      const isAdded = idx >= 5;
+      const isAdded = !this.activeDiff.oldLines || !this.activeDiff.oldLines.includes(line);
       row.className = `diff-row ${isAdded ? "diff-added" : ""}`;
-      row.innerHTML = `<span class="diff-num">${idx + 20}</span><span class="diff-code">${line}</span>`;
+      row.innerHTML = `<span class="diff-num">${idx + 1}</span><span class="diff-code">${this.escapeHtml(line)}</span>`;
       rightLines.appendChild(row);
     });
     rightPane.appendChild(rightLines);
@@ -289,31 +309,14 @@ const MetisWorkbench = {
     const linesContainer = document.createElement("div");
     linesContainer.className = "code-editor-lines";
 
-    const sampleLines = [
-      "# Metis Sovereign Stack Component",
-      '"""Vetted declarative tool specifications with capability guardrails."""',
-      "",
-      "import time",
-      "from typing import Any, Callable, Dict, Optional",
-      "",
-      "from kybernetes.contracts.enums import ToolSideEffectClass",
-      "from kybernetes.contracts.tool_spec import ToolDefinition, ToolResult",
-      "from kybernetes.tools.edit_file_block import SafeEditBlock",
-      "from kybernetes.tools.read_file_range import SafeReadRange",
-      "from kybernetes.tools.sandboxed_bash import SafeSandboxedBash",
-      "from kybernetes.tools.write_file import SafeWriteFile",
-      "",
-      "class ToolRegistry:",
-      '    """Central registry of vetted tools with capability sandboxing."""',
-      "    def __init__(self):",
-      "        self._tools = {}",
-      "        self._register_default_tools()",
+    const lines = this.fileContentCache[this.activeFile] || [
+      "# Loading workspace file from disk...",
     ];
 
-    sampleLines.forEach((line, idx) => {
+    lines.forEach((line, idx) => {
       const row = document.createElement("div");
       row.className = "editor-row";
-      row.innerHTML = `<span class="line-num">${idx + 1}</span><span class="line-code">${line}</span>`;
+      row.innerHTML = `<span class="line-num">${idx + 1}</span><span class="line-code">${this.escapeHtml(line)}</span>`;
       linesContainer.appendChild(row);
     });
 
@@ -321,18 +324,64 @@ const MetisWorkbench = {
     viewport.appendChild(codeWrap);
   },
 
-  handleApproveDiff() {
+  async handleApproveDiff() {
     const banner = document.querySelector(".phylax-diff-banner");
-    if (banner) {
-      banner.innerHTML = `<strong style="color: var(--accent-emerald);">✓ Patch Committed Successfully</strong>. Phylax single-use token consumed. Working tree updated.`;
+    try {
+      if (window.API && window.API.resolveApproval && this.activeDiff.approvalId) {
+        await window.API.resolveApproval(this.activeDiff.approvalId, "allow_once");
+      }
+      if (banner) {
+        banner.innerHTML = `<strong style="color: var(--accent-emerald);">✓ Patch Committed Successfully</strong>. Phylax single-use token consumed. Working tree updated.`;
+      }
+    } catch (err) {
+      if (banner) {
+        banner.innerHTML = `<strong style="color: var(--accent-rose);">Approval Error</strong>: ${this.escapeHtml(String(err))}`;
+      }
     }
   },
 
-  handleRejectDiff() {
+  async handleRejectDiff() {
     const banner = document.querySelector(".phylax-diff-banner");
-    if (banner) {
-      banner.innerHTML = `<strong style="color: var(--accent-rose);">✗ Patch Rejected</strong>. Dianoia triggered backtrack to parent hypothesis node.`;
+    try {
+      if (window.API && window.API.resolveApproval && this.activeDiff.approvalId) {
+        await window.API.resolveApproval(this.activeDiff.approvalId, "deny");
+      }
+      if (banner) {
+        banner.innerHTML = `<strong style="color: var(--accent-rose);">✗ Patch Rejected</strong>. Dianoia triggered backtrack to parent hypothesis node.`;
+      }
+    } catch (err) {
+      if (banner) {
+        banner.innerHTML = `<strong style="color: var(--accent-rose);">Reject Error</strong>: ${this.escapeHtml(String(err))}`;
+      }
     }
+  },
+
+  escapeHtml(text) {
+    const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
+    return String(text).replace(/[&<>"']/g, (m) => map[m]);
+  },
+
+  getDefaultMockTree() {
+    return [
+      {
+        name: "kybernetes",
+        type: "dir",
+        children: [
+          { name: "tools/read_file_range.py", type: "file" },
+          { name: "tools/edit_file_block.py", type: "file" },
+          { name: "tools/write_file.py", type: "file" },
+          { name: "tools/sandboxed_bash.py", type: "file" },
+          { name: "tools/registry.py", type: "file" },
+        ],
+      },
+      {
+        name: "phylax",
+        type: "dir",
+        children: [
+          { name: "policies/default_policy.yaml", type: "file" },
+        ],
+      },
+    ];
   },
 };
 

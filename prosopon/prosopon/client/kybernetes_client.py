@@ -348,3 +348,49 @@ class KybernetesClient:
                     detail = resp.text
                 raise HTTPException(status_code=resp.status_code, detail=detail)
             return resp.json()
+
+    async def get_lochos_squad(self) -> Dict[str, Any]:
+        """Fetch Lochos multi-agent squad status, seats, and active tasks."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/lochos/squad", headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_lochos_queue(self, status: Optional[str] = None, seat_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch work items tracked in the Lochos task queue."""
+        headers = self._headers()
+        params = {}
+        if status:
+            params["status"] = status
+        if seat_id:
+            params["seat_id"] = seat_id
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/lochos/queue", headers=headers, params=params)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def dispatch_lochos_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Dispatch a mission slice task to a specific seat in the Lochos squad."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(f"{self.base_url}/lochos/dispatch", json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def resolve_lochos_attention(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve a blocked seat's attention request."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(f"{self.base_url}/lochos/attention/resolve", json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_lochos_attention(self) -> List[Dict[str, Any]]:
+        """Retrieve cross-seat attention reconciliation requests."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{self.base_url}/lochos/attention", headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+

@@ -219,4 +219,41 @@ const API = {
       body: JSON.stringify(payload),
     });
   },
+
+  /* Lochos Multi-Agent Fleet API */
+  async getLochosSquad() {
+    return this.request("/api/lochos/squad");
+  },
+
+  async getLochosQueue(status = null) {
+    const url = status ? `/api/lochos/queue?status=${encodeURIComponent(status)}` : "/api/lochos/queue";
+    return this.request(url);
+  },
+
+  async dispatchLochos(payload) {
+    return this.request("/api/lochos/dispatch", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async resolveLochosAttention(payload) {
+    return this.request("/api/lochos/resolve-attention", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /* Workbench Real-Time API */
+  async getWorkbenchTree() {
+    return this.request("/api/workbench/tree");
+  },
+
+  async getWorkbenchFile(path) {
+    return this.request(`/api/workbench/file?path=${encodeURIComponent(path)}`);
+  },
+
+  async getWorkbenchDiff() {
+    return this.request("/api/workbench/diff");
+  },
 };

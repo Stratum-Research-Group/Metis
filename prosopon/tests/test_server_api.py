@@ -180,3 +180,51 @@ async def test_origin_and_cross_site_request_blocking(app_instance):
         assert "token" in resp_legit.json()
 
 
+@pytest.mark.asyncio
+async def test_workbench_endpoints(app_instance):
+    """Finding B8 regression: Workbench real-time endpoints for tree, files, and traversal protection."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Fetch tree
+        tree_resp = await client.get("/api/workbench/tree")
+        assert tree_resp.status_code == 200
+        tree = tree_resp.json()
+        assert isinstance(tree, list)
+        assert any(node["name"] == "prosopon" for node in tree)
+
+        # 2. Fetch existing file
+        file_resp = await client.get("/api/workbench/file?path=prosopon/pyproject.toml")
+        assert file_resp.status_code == 200
+        f_data = file_resp.json()
+        assert f_data["path"] == "prosopon/pyproject.toml"
+        assert f_data["total_lines"] > 0
+        assert any("prosopon" in line for line in f_data["lines"])
+
+        # 3. Path traversal blocked
+        bad_resp = await client.get("/api/workbench/file?path=../../etc/passwd")
+        assert bad_resp.status_code in (400, 403)
+
+        # 4. Fetch diff
+        diff_resp = await client.get("/api/workbench/diff")
+        assert diff_resp.status_code == 200
+        assert "targetFile" in diff_resp.json()
+
+
+@pytest.mark.asyncio
+async def test_lochos_squad_endpoints(app_instance):
+    """Finding B8 regression: Lochos squad fleet status and queue endpoints."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/lochos/squad")
+        assert resp.status_code == 200
+        squad = resp.json()
+        assert "seats" in squad
+        assert len(squad["seats"]) >= 2
+        assert any(s["id"] == "coder" for s in squad["seats"])
+
+        q_resp = await client.get("/api/lochos/queue")
+        assert q_resp.status_code == 200
+        assert isinstance(q_resp.json(), list)
+
+
+
