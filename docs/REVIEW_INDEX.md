@@ -13,4 +13,17 @@ The original `.txt` prompts are paired duplicates: each `v2` file repeats its ea
 
 The existing core components have detailed local documentation: [Stoma](../stoma/README.md), [Dianoia](../dianoia/README.md), [Dokime](../dokime/README.md), [Hestia](../hestia/README.md), [LTHCM](../LTHCM/README.md), [Kleroterion](../kleroterion/README.md), and [Krisis](../krisis/README.md). The overarching integration contract is [the stack integration plan](stack-integration.md).
 
-**First action:** resolve the incompatible LTHCM pins, Hestia `/v1/models`, Stoma's zero-edge Dianoia path, and query timestamps. Then implement one traced, cited answer through the public interfaces before beginning Paideia training or Prosopon voice.
+## Historical Reviews and Architecture Specifications (`docs/review/`)
+
+| File | Topic / Scope |
+| --- | --- |
+| [metis-repo-wide-round4-369939e-findings-7ced56a6.txt](review/metis-repo-wide-round4-369939e-findings-7ced56a6.txt) | Round 4 Repo-wide Review (v6) Findings & Verification |
+| [metis-openrig-lochos-integration-spec-a41d7c29-fb788990.txt](review/metis-openrig-lochos-integration-spec-a41d7c29-fb788990.txt) | Lochos Multi-Agent Squad & Durable Work Queue Specification |
+| [metis-pinax-tool-catalogue-spec-83941186.txt](review/metis-pinax-tool-catalogue-spec-83941186.txt) | Pinax System Tool Catalogue & FTS5 Discovery Specification |
+| [metis-dashboard-implementation-spec-ae93d36c.txt](review/metis-dashboard-implementation-spec-ae93d36c.txt) | Prosopon Admin & Workbench Architecture Specification |
+| [metis-repo-wide-round1-fixes-6752222c.txt](review/metis-repo-wide-round1-fixes-6752222c.txt) | Round 1 Review Findings & Remediations |
+| [metis-repo-wide-round2-45f0e72-fixes-be5f1a23.txt](review/metis-repo-wide-round2-45f0e72-fixes-be5f1a23.txt) | Round 2 Review Findings & Remediations |
+| [metis-round2-bcac410-fixes-002bd2aa.txt](review/metis-round2-bcac410-fixes-002bd2aa.txt) | Round 2 Delta Fixes |
+| [metis-review-aacb3e58-71bc604c.txt](review/metis-review-aacb3e58-71bc604c.txt) | Initial Foundation Review |
+| [LTHCM-recovery-application-plan-356cbcd7.txt](review/LTHCM-recovery-application-plan-356cbcd7.txt) | LTHCM Topology & Sheaf Recovery Plan |
+

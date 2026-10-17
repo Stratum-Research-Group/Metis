@@ -1,6 +1,6 @@
 # Metis Sovereign Coding Agent & Workbench Harness Specification
 **Document ID:** `METIS-HARNESS-ARCH-001`  
-**File:** `harness/hardness.md` (also accessible as `harness/harness.md`)  
+**File:** `harness/harness.md` (historical alias: `hardness.md`)  
 **Status:** Approved Architectural Blueprint  
 **Subsystems:** `prosopon` (Presentation/UI), `kybernetes` (Orchestration), `phylax` (Guardrails), `stoma` (Ingestion), `LTHCM` (Memory), `dianoia` (Reasoning), `hestia` (Inference)
 

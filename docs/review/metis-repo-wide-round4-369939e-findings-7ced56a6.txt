@@ -1,0 +1,371 @@
+METIS REPO-WIDE REVIEW - ROUND 4 (v6, consolidated current-state sweep; all-module source coverage complete)
+Commit: 369939e4fb191eeeb381170f35f16803f65a60af (origin/main; verified via git ls-remote + GitLab events API, 2026-10-17)
+Base for delta: db6af840 (round 3). Delta: 6 commits, 42 files, +5371/-156.
+Scope: all 11 modules + root tests + scripts + harness, read-only. No source modified.
+Coverage: every module has substantive current-source coverage - LTHCM core/graph/engine line-level;
+benchmark eval harnesses at metric/arms/data-path level (hotpot, wordnet, significance.py full);
+prosopon voice/client/ops and stoma chunker/provenance/plugins/cli read in full. Remaining open scope
+is runtime-bound only, per the coverage table and gates. Items: 24 actionable findings/capability gaps
+(A1-A14 + R1-R10), 18 design/hardening notes (B1-B18), 3 open/unconfirmed (C1-C3).
+Labels: REPRODUCED (executed here, command/output captured) | SOURCE (read at this commit) | HYPOTHESIS.
+
+===============================================================================
+0. TEST RESULTS (logs-backed)
+===============================================================================
+Environment: this sandbox, Python 3.12.14 (uv unified venv at repo root), pytest 9.1.1, no torch, 2 CPU.
+Exact command (run 3x, stable):
+  IGNORES=$(.venv/bin/python -m pytest --collect-only -q 2>&1 | grep '^ERROR ' | awk '{print "--ignore="$2}' | sort -u)
+  .venv/bin/python -m pytest -q -p no:cacheprovider $IGNORES
+Result: 3 failed, 419 passed, 25 skipped  (12.6s)
+
+The 32 excluded paths (collection errors; deps missing or duplicate-basename collisions; list re-verified against a fresh collect-only run):
+  torch-blocked: LTHCM/tests/test_build_edges.py, test_community_graphrag.py, test_contrastive_sheaf.py,
+    test_lthcm.py, test_recovery_comparisons.py, test_recovery_plan.py, test_retriever_parity.py,
+    test_run_bundle.py; stoma/tests/test_adapter.py, test_causal.py, test_chunker.py, test_e2e.py,
+    test_indexer.py, test_interchange.py, test_round1_regressions.py, test_round2_regressions.py,
+    test_round3_regressions.py, test_round4_regressions.py, test_watcher.py; hestia/tests (dir);
+    paideia/tests/test_baselines.py, test_cli.py, test_contracts.py
+  duplicate-basename/import collisions (collect fine per-module, clash in one unified run):
+    krisis/tests/test_cli.py, kybernetes/tests/test_cli.py, kybernetes/tests/test_routing.py,
+    phylax/tests/test_cli.py, phylax/tests/test_contracts.py, prosopon/tests/test_cli.py,
+    prosopon/tests/test_contracts.py, prosopon/tests/test_server_api.py, tests/test_round2_fixes.py
+
+Per-module collection (each module run separately, same venv):
+  LTHCM 0 collected/8 error-files (torch) | dianoia 60 | dokime 133 | hestia 66 | kleroterion 43 |
+  krisis 29 | kybernetes 107 | paideia 24/2 error | phylax 34 | prosopon 39 | stoma 11/11 error | tests 23
+Count reconciliation vs round 3 ("506 passed/24 skipped"): not comparable - round 3 used per-directory
+invocations in a different env; this round's unified numbers above are exactly reproducible with the command above.
+
+Unified-run failures (3, all order-dependent, all pass in isolation): see A9/A10.
+Deterministic per-module failures (2, present at HEAD AND db6af840): see A11/A12.
+
+===============================================================================
+PART A - ACTIONABLE FINDINGS & CAPABILITY GAPS (24: A1-A14 + R1-R10)
+A1-A8, A13: new-code (this push). R-items re-derived at HEAD from prior rounds. All refs current.
+===============================================================================
+
+A1. [REPRODUCED, CRITICAL] Coding-agent tools ignore approvals.
+    kybernetes/kybernetes/tools/registry.py:148 execute() never inspects request.approval_id,
+    side_effect_class, or declared_capabilities. Verified: write_file succeeds with approval_id=None
+    and with fabricated approval_id="appr-fake123".
+
+A2. [REPRODUCED, CRITICAL] CodingAgentHarness approval state is decorative.
+    kybernetes/kybernetes/engine/coding_agent.py:144 - requires_approval=True with no token records
+    AWAITING_APPROVAL then executes the mutating tool in the same iteration. Verified: file written.
+
+A3. [REPRODUCED, CRITICAL] sandboxed_bash is not sandboxed.
+    kybernetes/kybernetes/tools/sandboxed_bash.py:122 shell=True; only CWD is root-checked (:98).
+    Verified: read /etc/hostname and wrote /tmp/metis-escape-proof from inside "allowed" roots.
+    Full os.environ inherited (:116: admin/service tokens readable by any command). Timeout kills only
+    the direct shell; child processes survive (no process-group kill).
+
+A4. [REPRODUCED, HIGH] Live Phylax gateway: mutations hard-denied, approvals unreachable.
+    kybernetes/kybernetes/adapters/phylax.py:80-92 maps write_file/edit_file_block to verb "write"/class
+    "file", sandboxed_bash to verb "execute"/class "tool" with target=raw command string. The new rules
+    (phylax/policies/default_policy.yaml:122,133,144) require class "tool" + tool_id, which no caller path
+    found supplies. Verified with the real policy: write_file and sandboxed_bash return permitted=False,
+    approval=None (default deny). Net: with a live gateway, the documented ask-approve-run flow cannot occur.
+    Adapter also keeps a private _approvals dict parallel to the gateway's ApprovalManager (double bookkeeping).
+
+A5. [SOURCE, HIGH] Fail-open degradation in PhylaxAdapter.
+    adapters/phylax.py:43 and :120: `except Exception: pass` - any gateway/policy error silently falls back
+    to simulated mode or the legacy keyword heuristic.
+
+A6. [REPRODUCED, HIGH] code_mode sandbox: filter bypass + unenforceable timeout.
+    kybernetes/kybernetes/tools/code_mode.py:
+    - Format-spec attribute traversal bypasses the AST dunder filter (:118-134). Verified reads:
+      "{0.__class__}".format(1) and "{0.__class__.__mro__}".format(1) both execute. Achieved boundary:
+      read-level introspection past the filter (format specs allow attribute/index access but not calls);
+      no OS-level escape demonstrated - but the AST filter is proven not to be a security boundary.
+    - Watchdog (:254-264) is sys.settrace: fires only on Python line events. Verified: math.factorial(3000000)
+      ran >45s wall despite timeout_seconds=1.0 (killed externally); a pure-Python loop aborts at ~1.0s.
+      The injected `re` module allows the same via catastrophic backtracking.
+    - default_policy.yaml:112 auto-ALLOWS run_code_mode with no approval.
+
+A7. [SOURCE, HIGH] Checkpoint rollback destroys untracked files; milestone commits incomplete + ungated.
+    kybernetes/kybernetes/engine/checkpoint.py:75 rollback() runs `git clean -fd` (permanently deletes all
+    untracked files, incl. .metis/skills written by the skill learner and any pre-existing user files);
+    baseline stash (:54) covers tracked files only. commit_milestone (:87-92) uses `git add -u` (agent-created
+    new files silently omitted) and commits to the user's active branch with no approval gate.
+
+A8. [SOURCE, HIGH] Session persistence: path traversal + dead redaction.
+    kybernetes/kybernetes/engine/session.py:227 - caller-controlled session_id used raw as a filename;
+    "../" escapes storage_dir. Persist (:228) and load (:237) swallow all exceptions. Turn events (which can
+    contain secrets) persist unredacted: redact_sensitive_text (:252) has zero callers in kybernetes.
+
+A9. [REPRODUCED, MEDIUM] Session-scoped chdir fixtures poison later modules.
+    krisis/tests/conftest.py:5-12 and phylax/tests/conftest.py:5-12: session-scoped autouse os.chdir, restored
+    only at session end. Verified pairwise: krisis+smoke and phylax+smoke each fail
+    tests/test_stack_smoke.py::test_hestia_model_registry_loading (CWD-relative Path at
+    tests/test_stack_smoke.py:183); phylax+admin fails test_admin_apply_sensitive_confirmation_gating and
+    test_admin_apply_and_rollback_restores_hash. Fix: monkeypatch.chdir or root-relative paths.
+
+A10. [REPRODUCED, MEDIUM] Suite outcome depends on invocation shape.
+    Consequence of A9 + per-module pytest configs: file-alone / per-module / unified runs give different
+    pass-fail sets. Any "N passed" claim must name its exact invocation (this file does).
+
+A11. [REPRODUCED, MEDIUM] Stoma config validation misses overlap rule (pre-existing).
+    kybernetes/tests/test_admin_api.py:256 expects chunk_overlap_tokens >= max_chunk_tokens rejected; no such
+    check in kybernetes/kybernetes/admin/descriptors.py (:141) validation path. Fails at HEAD and db6af840.
+
+A12. [REPRODUCED, MEDIUM] Dokime batch endpoint 500s (pre-existing).
+    POST /v1/admin/batch/dokime/run -> 500 "Dokime run failed: No module named 'dokime.client'"
+    (kybernetes/kybernetes/admin/batch_runner.py:170). Verified causes: (a) root pyproject
+    [project.dependencies] installs only kybernetes/prosopon/hestia/phylax/krisis - dokime/stoma/dianoia/
+    paideia/kleroterion/LTHCM never installed in the unified venv; (b) repo-root directory `dokime/` shadows
+    the package as a namespace package (verified: import dokime -> _NamespacePath(['/tmp/metis/dokime']));
+    (c) kybernetes/pyproject.toml sets pythonpath=[kybernetes] only. Also: batch runs write dokime/runs/run_*
+    into the repo tree; dokime/runs/ is not gitignored (only paideia/runs/ is).
+
+A13. [SOURCE, MEDIUM] Static default tokens on the command line (regression vs db6af840).
+    scripts/run_stack.sh:85,108,109 - commit 4a87c7f replaced the openssl-random admin token default with the
+    committed constants "metis-local-admin-token"/"metis-local-service-token"/"metis-sovereign", now passed via
+    --admin-token/--service-token argv. Exposure scope: any same-user process (reads `ps` args) and anyone who
+    can read the committed script + reach the loopback admin port. db6af840 generated a random token per boot.
+A14. [SOURCE, HIGH] Cross-module Hestia auth gap: dokime and dianoia cannot call the standard stack's Hestia.
+    scripts/run_stack.sh:85 exports HESTIA_SERVICE_TOKEN (default literal "metis-sovereign"); Hestia requires a
+    bearer on every inference endpoint (hestia/src/hestia/api/app.py:82-105; enforced on chat completions :238,
+    embeddings :349, and :408/:415/:439). Only kybernetes (adapters/hestia.py) and Hestia's own CLI send it.
+    dokime/src/dokime/client.py sets no Authorization header anywhere, and dianoia/dianoia/walk.py:232 hardcodes
+    api_key="not-needed" with no env override. Result: dokime eval runs and dianoia walks get 401 against a
+    stack started via run_stack.sh; both only work with METIS_INSECURE_DEV=1 or a token-less Hestia. Runtime
+    confirmation gated (no live Hestia here) but the 401 path is deterministic from both ends' source.
+
+R1. [SOURCE, HIGH] Dashboard Apply round-trips redacted placeholders into real config files.
+    kybernetes/kybernetes/admin/routes.py:230-259 serves redacted views ("[REDACTED]" for secrets, basename-only
+    for absolute paths, descriptors.py:188-205) with config_hash computed over the redacted dict
+    (changesets.py:236-241). apply() then writes serialize_config(module_id, patch) as the FULL new file
+    (changesets.py:311) with no "[REDACTED]" guard - a UI round-trip overwrites real tokens/pins with the
+    literal "[REDACTED]" and destroys absolute paths. Patch is full-replacement: a partial patch drops all
+    unlisted keys. Do not use dashboard Apply on real configs.
+
+R2. [SOURCE, HIGH] Config snapshots with secrets written with default umask; rollback metadata memory-only.
+    changesets.py:159 snap_file.write_bytes() applies no explicit mode, so the file lands 0644
+    (world-readable) under the common umask 022 - actual mode depends on the deployment umask and was
+    not reproduced here. Stores full unredacted configs;
+    rollback metadata self._snapshots (:130) is in-memory only - after a server restart, rollback of pre-restart
+    changesets raises "no recorded snapshot" (:409) though .bak files remain.
+
+R3. [SOURCE, HIGH] Loopback admin-token handout.
+    prosopon/prosopon/server.py:222-234 POST /api/auth/local-token mints an admin-role bearer for any loopback
+    caller in local (non-LAN) mode - no PIN/proof. Any same-host process gets admin. Whether a
+    browser-origin page can reach this endpoint depends on _validate_host_header and CORS behavior,
+    which was not exercised live - treat browser reachability as UNVERIFIED (gate G29). Round-3 item,
+    unchanged this push.
+
+R4. [SOURCE, MEDIUM] Phylax destination matching is substring, both directions.
+    phylax/phylax/engine/evaluator.py:158-160: rule destination matches when either string contains the other -
+    "api.com" matches "api.com.evil.com"; a broad rule matches unrelated hosts. Round-2 item, still present.
+
+R5. [SOURCE, MEDIUM] Calculator tool output marked VERIFIED without verification.
+    kybernetes/kybernetes/engine/pipeline.py:706-707: final_status=VERIFIED whenever the calculator ran.
+
+R6. [SOURCE, MEDIUM] Fallback-generated answers can be labelled non-simulated.
+    pipeline.py:710-713 computes is_turn_simulated only from citations/v_report; when Hestia is down the
+    response is template-generated (:596-630) but a turn with non-simulated citations reports is_simulated=False.
+
+R7. [SOURCE, MEDIUM] Benchmark report writer hard-codes verdicts.
+    LTHCM/lthcm/benchmarks/run_real_benchmarks_to_md.py:185,280-282,325: literal "$p < 0.0001$",
+    "**Extremely Significant Win**", "zero degradation ... p = 1.0000" print regardless of recomputed values;
+    deltas are computed but the verdict text is fixed. A rerun with different numbers prints the same claims.
+
+R8. [SOURCE, LOW] demo_niah "mrr" is not MRR.
+    LTHCM/lthcm/benchmarks/synthetic/demo_niah.py:236-237: metric named mrr = 1.0 if recall@1 else 0.2 if
+    recall@5 else 0.0 - not reciprocal rank.
+
+R9. [REPRODUCED, LOW] Kleroterion README example fails.
+    kleroterion/README.md:111+ example -> TypeError: HostCallbacks.__init__() got an unexpected keyword argument
+    'score_fn' (reproduced at HEAD; interfaces.HostCallbacks has no score_fn).
+
+R10. [SOURCE, INFO] Paideia QLoRA still does not train - but labels are now honest.
+    paideia/paideia/training/runner.py:168-210: writes marker checkpoint only, status SIMULATED,
+    is_simulated=True, explicit note "without optimizer steps or weight updates"; real path raises
+    TrainingUnavailableError unless allow_simulated. Round-2's silent-COMPLETED issue is fixed; capability absent.
+
+===============================================================================
+PART B - DESIGN / HARDENING NOTES (18)
+===============================================================================
+
+B1. [SOURCE] Hestia error-chunk fallback: deltas already streamed before an error chunk can't be unsent
+    (pipeline.py ~:556-600); client sees partial text then fallback text. 
+B2. [SOURCE] Reconnect race: session.py:145 subscribe_turn_events can miss events emitted between buffer
+    snapshot and subscriber registration; _turn_buffers never pruned (memory growth).
+B3. [SOURCE] Declared tool timeouts advisory only: registry.py checks timeout_ms after the handler returns.
+B4. [SOURCE] edit_file_block writes even when syntax diagnostics fail (tools/edit_file_block.py:217-230);
+    out-of-range hash anchors silently skipped (:170-178); 16-bit line hashes collide.
+B5. [SOURCE] subagent.py: daemon threads + in-process task registry - no restart durability (static read;
+    not runtime-tested).
+B6. [SOURCE] Blueprint drift (harness/hardness.md): spec 250-line read cap vs code 500; spec says overwrite
+    requires Phylax approval (nothing enforces); spec says 4 tools (registry auto-registers 7); spec puts
+    coding policies in phylax/policies/coding_agent.yaml (they went into default_policy.yaml); the doc's
+    "Approved Architectural Blueprint" line is document text, not anyone's approval.
+B7. [SOURCE] harness/harness.md is a symlink to "hardness.md" - canonical spec file named with a typo;
+    symlinks break on Windows checkouts.
+B8. [SOURCE] Studio UI is a static shell: workbench.js hardcoded tree/diff, zero fetch() calls; settings.js
+    persists to localStorage only. Not wired to the backend; NOT visually verified (no browser run here).
+B9. [SOURCE] run_stack.sh writes kybernetes_budget.db to repo root (not gitignored); .gitignore gained a
+    top-level "vscode/" entry; merge_worktree_sandbox (checkpoint.py:126-134) falls back from --ff-only to a
+    full merge commit with no approval.
+B10. [SOURCE, LOW] Prior-round review/plan artifacts tracked in repo root (verified via git ls-files):
+    metis-repo-wide-round1-fixes-6752222c.txt, metis-repo-wide-round2-45f0e72-fixes-be5f1a23.txt,
+    metis-review-aacb3e58-71bc604c.txt, metis-round2-bcac410-fixes-002bd2aa.txt,
+    LTHCM-recovery-application-plan-356cbcd7.txt, metis-dashboard-implementation-spec-ae93d36c.txt
+    (plus per-module *-prompt.txt / spec txts). Hygiene: internal review history ships with the repo;
+    recommend moving to docs/review/. All predate this push (last touched 1fbad2f, Oct 5).
+B11. [SOURCE, LOW] LTHCM causal fallback silently serves causally-invalid candidates.
+    LTHCM/lthcm/engine/pipeline.py:428-432: when zero candidates pass the light-cone filter, the pipeline
+    proceeds with raw (causally invalid) candidates and only flags "causal_fallback": true in the result dict.
+    Any consumer that does not check the flag receives unverified-temporality results. Consider abstaining or
+    making the fallback opt-in.
+B12. [SOURCE, LOW] Stoma generation cloning is a full pickle round-trip per cycle.
+    stoma/src/stoma/indexer.py:821 _clone_candidate_engine does pickle.loads(pickle.dumps(engine)) - O(index
+    size) memory and time on every generation build, plus the full pickle error surface in-process.
+B13. [SOURCE, MEDIUM] Unseeded/untrained random-weight modules on ranking paths (load paths verified).
+    (a) hdc_vsa.py:81: atom "deterministic" seeds use Python's salted hash() (abs(hash(symbol_name)) %
+    (2**31-1)) - per-process randomized unless PYTHONHASHSEED is fixed, so HDC propositions are
+    incomparable across processes; contradicts utils/determinism.py's own PYTHONHASHSEED warning.
+    (b) Verified via repo-wide grep: no load_state_dict/torch.load path exists for gauge_bundle,
+    spectral_wormhole, diffeomorphic, SR, or Langevin weights anywhere in LTHCM/stoma/dianoia, and
+    `git ls-files` shows zero tracked checkpoints (.pt/.pth). So on any fresh init from this repo these
+    weights are untrained; nothing in-repo loads trained weights for them. External injection of trained
+    weights by a downstream deployment is possible but no such mechanism ships here. Only
+    contrastive_sheaf has training + checkpoint loading (ContrastiveSheafTrainer, used by
+    vitaminc_eval's leak-free R5 arm with seed/metadata validation).
+    (c) Default-enable verification: gauge transport is UNCONDITIONAL Phase 3 in retrieve_and_verify
+    (pipeline.py:385) - it runs on every candidate in every path, including stoma's production query
+    path (adapter.py:245; stoma CLI even displays per-result "Gauge Similarity"). The untrained random
+    SO(D) rotation therefore perturbs all downstream cosine ranking in production. In contrast, stoma's
+    adapter explicitly disables stochastic_resonance and spectral_wormhole (adapter.py:252-253), so
+    their unseeded weights affect only direct-engine/benchmark callers, not the stoma path.
+    (d) Fisher-Rao is safe: Lambda initialized to identity (fisher_rao.py:34-40).
+    Regression test: two subprocesses, same engine config + same store, assert identical top-k ordering
+    (expected to fail via (a) and (c); execute under torch - gate G1).
+B14. [SOURCE, LOW] contrastive_sheaf.py:236 torch.load(path) without weights_only=True - pickle-class
+    deserialization risk on torch < 2.6 if a checkpoint is untrusted; metadata validation runs only
+    after deserialization.
+B15. [SOURCE, LOW] Test-time memory updates run without no_grad.
+    pipeline.py:513-521 calls titans.step()/riemannian_memory.step() outside torch.no_grad(); both
+    mutate fast weights via differentiable ops from nn.Parameter base_memory, chaining autograd history
+    across calls (memory/graph growth, potential gradient leakage) when update flags are enabled.
+B16. [SOURCE, LOW] categorical.py CausalFilterMorphism (~:344-353): candidates with no vector default
+    dx=0.0, making ds2 <= 0 always - they pass causality unchecked; same serve-invalid-when-empty
+    fallback as B11 (valid_candidates if any else original).
+B17. [SOURCE, MEDIUM] wordnet_eval.py "Real WordNet Benchmark (Nickel & Kiela protocol)" is
+    tautological: it does not learn embeddings. Both arms are constructed analytically from tree depth
+    along the same seeded random directions (wordnet_eval.py:~157-168: poincare_embs[i] =
+    tanh(depth/3)*0.85 * directions[i]; euclidean_embs[i] = depth * directions[i]). The MAP/mean-rank
+    "Poincare vs Euclidean" comparison therefore measures a hand-built radial encoding, not learned
+    representations; N&K train embeddings - this evaluates nothing trainable. It is also a 250-node BFS
+    subtree of entity.n.01, not the N&K full noun closure (~82k nodes). Any doc citing these numbers as
+    evidence for the hyperbolic-geometry claim is citing an engineered demo. Fix: rename as a synthetic
+    construction demo, or implement actual Riemannian-SGD embedding training per N&K.
+B18. [SOURCE, LOW] community_sheaf_eval.py Arm 4 ("Pure Geometric Cellular Sheaf") evaluates a
+    freshly-initialized CellularSheaf (random restriction maps; no checkpoint ships in-repo) and sets its
+    decision threshold transductively from the median of the eval split's energies (~:355). The median
+    split uses no labels, so this is not label leakage - but it is test-set-calibrated, which breaks the
+    train/eval protocol separation and forces ~50/50 predictions, so the reported accuracy/F1 vs the
+    majority baseline cannot be read as a capability result. A random-init arm is legitimate as an
+    explicitly-labeled ablation/baseline; the issue is presentation, not existence. Arm 5's sheaf_filter
+    is likewise freshly initialized untrained (its signal comes only from NLI grounding).
+    vitaminc_eval.py's C2 arm has the same untrained-filter property but is honestly paired with the
+    leak-free trained R5 arm. Fix: label Arm 4 as a random-init ablation and calibrate its threshold on
+    a held-out split, or gate it behind a trained checkpoint.
+
+===============================================================================
+PART C - OPEN / UNCONFIRMED (3)
+===============================================================================
+
+C1. Round-3's full 161-item txt is not byte-recoverable in this environment (WhatsApp attachment has no
+    retrievable blob). R1-R10 above re-derive its highest-severity items independently at HEAD with current
+    line refs. The remaining round-3 entries are NOT mapped item-by-item; mapping is unknown, not "fixed".
+C2. No caller found that issues tool_id-keyed decisions to the live gateway; until one exists the new
+    ask_* policy rules are dead (see A4). If a caller is added later, re-test the whole approval chain.
+C3. krisis/phylax conftest chdir may corrupt other CWD-relative suites beyond the 3 observed failures.
+
+===============================================================================
+PER-MODULE COVERAGE THIS ROUND (honest depth)
+===============================================================================
+  kybernetes  - DEEP: tools (all 7), engine (coding_agent, checkpoint, state, subagent, session, pipeline),
+                adapters/phylax, admin (changesets/routes/descriptors/batch_runner), server/app, tests
+  phylax      - DEEP: default_policy.yaml, gateway, evaluator, approvals wiring
+  prosopon    - DEEP: server.py (apply/redact/auth/local-token), auth/pairing.py, storage/session_store.py
+                (path-traversal blocked, atomic writes), web static; voice/* read in full (whisper_stt,
+                piper_tts, transcoder: list-arg subprocess only, timeout+kill, honest mock flags,
+                size/duration caps), client/kybernetes_client.py (Bearer from env, timeouts),
+                ops/doctor.py (honest WARN states) - no defects found in files read
+  LTHCM       - LINE-LEVEL: all 22 core/* files + graph/* (community, build_edges, learned_edge_scorer) +
+                engine/* (pipeline, retriever) read in full; utils/determinism.py read. Findings: B11, B13-B16;
+                in the files read, the implementations match their documented math (POVM math, Chebyshev
+                recurrence, Z/2 boundary reduction, Sinkhorn log-stabilization, seeded Leiden, flops
+                accounting) with no defects found beyond those filed. Benchmarks: run_real_benchmarks_to_md
+                (R7), demo_niah (R8) deep. Eval harnesses reviewed at metric/arms/data-path level
+                (hotpot_real_eval.py read in full incl. all 11 arms, _record_metrics, routing benchmark;
+                significance.py read in full - textbook paired permutation + bootstrap; musique/twowiki/
+                scifact/vitaminc/community_sheaf read at data-loading + metric + arm-construction level;
+                wordnet_eval read in full; run_bundle read at provenance-capture level). Findings: B17, B18.
+                In the sections read, metric computation is standard (nDCG/MAP/recall/joint@2 in hotpot/
+                twowiki; pytrec_eval for scifact); gold labels confined to clearly-labeled oracle arms;
+                synthetic fallbacks fail-closed by default.
+  dianoia     - DEEP: walk.py (full), verify.py, cli.py (gated pickle), log.py, embedding.py, prompts.py
+  dokime      - MEDIUM: runner.py, client.py (A14), manifest.py, stats.py, tasks/* (base_mc robust
+                extraction; arc/gpqa/zebra/math/epistemic defs) - no defects found in files read beyond A14
+  krisis      - DEEP: engine/selector, gates/evaluator, audit/replay, routing, dedup, contracts, cli -
+                no defects found (Decimal scoring, anti-spoof producer check, fixture replay)
+  hestia      - MEDIUM-DEEP: api/app.py (auth, streaming, admission), server/__init__.py, backend/llamacpp.py,
+                vram.py, device_lock.py (proper flock, 0700, no unlink races), registry.py - no defects
+                found in files read
+  paideia     - MEDIUM-DEEP: training/runner.py (R10), export/registry.py (hash-gated, refuses simulated),
+                data/splitter.py (leakage-safe, checksummed), contracts/* (pydantic, strict validators) -
+                no defects found in files read
+  stoma       - DEEP: indexer.py (hash-chained commit ledger, crash recovery, verified restore - rigorous),
+                adapter.py + interchange.py (gated pickle), watcher.py (bounded queues, dead-letter),
+                config.py (dependency-provenance verification), embedder.py (offline enforcement, identity
+                binding), chunker.py full (token-bounded subdivision, bounded dedup, oversized-unit
+                slicing without text loss), provenance.py full (fail-closed strict model-identity
+                validation), plugins/base.py (error taxonomy), cli.py (honest status output) - B12 only
+  kleroterion - MEDIUM: core.py, interfaces.py, marginal_policy.py, proposals.py, entropy_feedback.py,
+                masked_softmax.py - real numpy, no defects found beyond R9 (README mismatch)
+  scripts/harness - DEEP: run_stack.sh full diff; harness/hardness.md full read
+  prosopon web UI - source-read only; NOT visually rendered (gate G22 stays open)
+
+===============================================================================
+DO-NOT-TOUCH / SAFETY
+===============================================================================
+- Review was read-only; repros ran in /tmp tempdirs. No source, config, or git state modified.
+- Do not run torch/GPU suites or large compute here (G1). No unbounded-timeout experiments.
+- A7 rollback/clean must not run against the real working repo until redesigned (git clean -fd destroys
+  untracked files).
+
+===============================================================================
+FIX ORDER
+===============================================================================
+1. A1, A2, A3, A4, A5 - one design pass over the gating story: enforce at ToolRegistry.execute, bind approvals
+   to argument digests, fail-closed, correct verb/tool_id mapping, single approval store.
+2. A13 - restore random per-boot tokens; pass via env/stdin, not argv.
+3. A7, A8 - data-loss and traversal fixes before pointing the coding agent at any real repo.
+4. A6 - code_mode: subprocess isolation or remove auto-allow; treat AST filter as non-boundary.
+5. R1, R2, R3 - dashboard/config admin safety (pre-existing, user-facing).
+6. A9, A11, A12 - deterministic green suite.
+7. R4-R10, B1-B9 - hardening, labels, contract alignment.
+8. B10-B18 - repo hygiene (tracked review artifacts, B10), determinism (B13), eval-harness honesty
+   (B17, B18), and remaining low-severity robustness notes.
+
+===============================================================================
+OPEN TEST GATES
+===============================================================================
+G1  LTHCM/Stoma torch suites - torch absent here (20 collection errors). OPEN.
+G22 Dashboard/workbench rendered check - UI changed this push; still static source, not visually verified. OPEN.
+G23 85 MC answer keys - unverified. OPEN (carried).
+G24 LTHCM real benchmark reruns - not run. OPEN (carried).
+G25 NEW: unified full-suite green run after A9/A11/A12 fixes, using the exact command in section 0.
+G26 NEW: adversarial re-test of code_mode + registry approval enforcement after A1/A6 fixes.
+G27 NEW: live 401 check - run dokime + dianoia against a token-protected Hestia to confirm A14 end-to-end.
+G28 CLOSED: source coverage complete - see per-module coverage table. No source areas remain unread;
+   what is left is runtime verification only (G1, G22-G27).
+G29 NEW: verify _validate_host_header / CORS actually block browser-origin requests to the loopback
+   /api/auth/local-token endpoint (R3 browser-reachability half).
+
+VERDICT: NOT CLEAN. A14's source indicates a cross-module integration auth gap (live 401 confirmation is gate G27). On the reproduced execution paths (ToolRegistry.execute, CodingAgentHarness), approvals are
+not enforced at all; the conversational pipeline with a live gateway hard-denies mutations instead of offering
+approval (A4) - no working approval path for the new tools was found. The "sandboxed" primitives do not meet
+their stated bounds (A3, A6). Separately, the re-derived admin/config issues (R1-R3) remain live at HEAD.

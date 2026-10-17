@@ -1,0 +1,796 @@
+METIS TOOL CATALOGUE + LARGE TOOL INVENTORY
+Proposed working name: "pinax" (ancient Greek for tablet, list, register,
+catalogue). Name proposed only, not selected. A name carries no safety
+guarantee; the design below is what does or does not protect you.
+Status: design proposal for Nick. No code written, nothing installed, no repo
+changes. Date: 2026-10-17. Metis context @ 369939e (round 4 review facts).
+Machine context assumed: Omarchy (Arch-based) Linux, Hyprland, RTX 5060 Ti.
+Nothing in the inventory is claimed to be installed on your machine; the
+passive scanner in section 4 establishes what actually exists.
+Sources for CLI behaviour claims: appendix A (official docs, checked
+2026-10-17). Flag-level details describe upstream behaviour of the named
+tool family; the exact flags of YOUR installed version must be confirmed
+against the local man page the catalogue records, since versions differ.
+
+=====================================================================
+0. WHAT YOU ASKED, ANSWERED DIRECTLY
+=====================================================================
+
+Yes, there should be a DB. A local SQLite catalogue that records, per tool:
+
+  - what it is called and what it does (one line)
+  - where each installed copy lives: invocation path, resolved target,
+    and env/venv identity (several copies may coexist and differ)
+  - where its manual lives (man page location, help text, upstream docs)
+  - how it is invoked (arguments, or a structured signature for curated tools)
+  - what kind of thing it can do (read, write, network, destructive, exec)
+  - whether it is actually installed right now, on which machine, and when
+    that was last checked
+  - where each fact came from (PATH scan, pacman, man-db, hand-written entry)
+
+The model then asks the catalogue instead of relying on training memory.
+That REDUCES (does not eliminate) three real risks: hallucinated flags,
+wrong assumptions about what is installed, and missing documentation. Only
+running the tool under the gate reduces the rest.
+
+Three things the DB is NOT:
+
+  1. It is not permission. The catalogue documents; Phylax authorizes, and
+     the execution environment enforces. A low risk tier in a row must never
+     be the only thing between the model and a destructive command.
+  2. It is not an installer. "not installed, package name X" is information;
+     installing is a gated action like any other.
+  3. It is not authority for new tools. A tool appearing on the machine is
+     catalogued as unvetted and stays denied until you curate it.
+
+=====================================================================
+1. WHERE THIS SITS IN METIS
+=====================================================================
+
+  - kybernetes  owns the tool registry and dispatch today. The round-4
+    review context showed seven registered structured tools; five are
+    named here as examples (read_file_range, edit_file_block, write_file,
+    sandboxed_bash, run_code_mode). The
+    catalogue becomes its lookup layer: "what tools exist, how do I call
+    them, what do the docs say."
+  - phylax      consumes the catalogue's risk tags as INPUT to policy, but
+    policy itself stays in code/config (section 6).
+  - prosopon    gets a read-only catalogue browser later (consistent with
+    the dashboard spec: status first; no Apply-on-real-configs until the
+    round-4 dashboard findings are fixed).
+  - lthcm       optional long-term memory of tool usage patterns. Not
+    required for v1. The catalogue is live state; LTHCM is learned
+    knowledge.
+  - dokime      evaluates the catalogue itself (section 8).
+
+Hard dependency note: round 4 found approval enforcement broken on the
+coding agent paths and the shell tool escaping its allowed roots. A
+catalogue makes those problems more important, not less. This feature
+lands AFTER or ALONGSIDE those fixes, never as a substitute. A DB row
+cannot contain a bad command; only isolation does (section 5).
+
+=====================================================================
+2. DATABASE SCHEMA (SQLite, single file, e.g. pinax.db)
+=====================================================================
+
+SQLite fits: one file, zero services, already the Metis convention for
+local structured state. FTS5 for search is a COMPILE OPTION, not
+guaranteed (sqlite.org compile docs, appendix A): check for it at build
+time and fall back to LIKE search if absent.
+
+Key design decisions, driven by how machines actually look:
+
+  - Rows are per (machine, invocation path), not per tool name. Your
+    system python3 and a venv python3 are different rows: two venvs can
+    point at the same resolved python binary yet behave completely
+    differently, and "yq" can be two unrelated programs (see 3.2).
+    tools.name is a label; identity is host + invocation path +
+    resolved target + env identity.
+  - Interpreter/shell context is recorded: shebang of scripts, owning
+    venv, shell for builtins. What runs depends on it.
+  - entry_kind separates INSTALLED facts from CANDIDATES (section 3 is a
+    wanted list). Candidate rows carry package names so "what would I
+    install" is answerable without pretending it exists.
+  - Freshness is per row and checked at USE time: before dispatching
+    a curated binary, kybernetes re-stats the path and re-hashes it
+    against the row. This NARROWS the scan-now-run-later (TOCTOU)
+    window; it does not close it - a replacement can land after the
+    hash, and identity is more than one file (interpreter, linked
+    libraries, config). Where the risk warrants it, dispatch anchors
+    harder: an immutable trusted snapshot of the executable plus its
+    dependency/config set, or execution bound to an already-open,
+    already-verified file descriptor (e.g. execveat on that fd) so the
+    checked bytes are the executed bytes - with section-5 isolation as
+    the independent backstop either way.
+  - pacman ground truth is partial ground truth: pacman knows packaged
+    files only. Ad-hoc installs (curl-sh scripts, cargo, manual copies)
+    appear in the PATH scan with package "unknown". Both signals are
+    kept, neither is trusted alone.
+
+  tools(
+    id,
+    host_id,               -- which machine/environment this row describes
+    name,                  -- canonical label, e.g. "curl"; NOT unique
+    kind,                  -- binary | script | builtin | structured
+    entry_kind,            -- installed | candidate
+    summary,               -- one line, curated or from --help
+    invocation_path,       -- path as invoked, e.g. .venv/bin/python
+                           -- (may be a symlink; same target + different
+                           -- venv = different behaviour)
+    resolved_path,         -- resolved absolute target, or NULL for candidates
+    env_identity,          -- owning venv/env root that changes behaviour
+    interpreter,           -- shebang/shell context where applicable
+    sha256,                -- of the executable, for use-time re-verify
+    version,               -- from package metadata or vetted probe, or NULL
+    package,               -- owning package, or "unknown"
+    package_manager,       -- pacman | pip | cargo | manual | unknown
+    install_state,         -- installed | not-installed | broken | unknown
+    risk_tier,             -- T0 | T1 | T2 | T3  (see section 5)
+    discovered_by,         -- path-scan | pacman | man-db | curated | manual
+    first_seen, last_verified,
+    notes
+  )
+
+  tool_docs(
+    tool_id REFERENCES tools(id),
+                           -- every doc row is persistently bound to one
+                           -- tool row
+    doc_kind,                -- man | help | info | upstream-url | example
+    locator,                 -- man file path+section, file path, or URL
+    version_scope,           -- which tool version this doc describes;
+                             -- local man pages match the installed version
+    sha256, size_bytes,      -- changed docs are detectable
+    fetched_at
+  )
+
+  tool_capabilities(
+    tool_id, capability,     -- file-read | file-write | network-read |
+                             -- network-write | process-exec | destructive |
+                             -- privilege | install | interactive
+    detail                   -- e.g. "uploads via -T/--upload-file"
+  )
+
+  tool_risk_overrides(       -- curated per-pattern escalations
+    tool_id, pattern_kind,   -- subcommand | flag | regex
+    pattern,                 -- e.g. "push", "--upload-file", "--delete"
+    tier,                    -- tier this pattern forces
+    note
+  )
+
+  tool_signatures(           -- structured invocation for curated tools
+    tool_id, call_name,      -- e.g. "http_request" wrapping curl
+    arg_schema_json,         -- JSON schema of accepted arguments
+    curated_by, curated_at
+  )
+
+  scan_runs(                 -- audit trail of discovery runs
+    id, host_id, started_at, finished_at, scanner_version,
+    added, removed, changed
+  )
+
+Referential integrity: tool_docs, tool_capabilities,
+tool_risk_overrides and tool_signatures all declare
+FOREIGN KEY (tool_id) REFERENCES tools(id). A doc, capability, override
+or signature row cannot exist without its tool row.
+
+=====================================================================
+3. THE INVENTORY (candidate tools, one row each)
+=====================================================================
+
+Everything below is a CANDIDATE list: standard, useful tools an agent on a
+dev machine will want. entry_kind for all of these starts as "candidate";
+the passive scanner (section 4) promotes rows to "installed" with real
+paths and versions. Tiers are recommended curated defaults for the COMMON
+form of the tool; section 5 explains why tiers attach to invocations, and
+why many everyday tools have an execution surface that overrides them.
+Version-specific flags below come from upstream docs (appendix A) and must
+be re-verified against the installed version's local man page.
+
+Format: name - what it does [tier; notes]
+
+--- 3.1 Files and directories ---
+  ls - list directory contents [T0]
+  cat - print file contents [T0; reads outside allowed roots can expose
+      secrets - the filesystem boundary contains this, not the tier]
+  head - file start [T0]
+  tail - file end [T0]
+  file - identify file type [T0]
+  stat - file metadata, sizes, times, permissions [T0]
+  tree - directory tree view [T0]
+  du - disk usage per path [T0]
+  df - filesystem free space [T0]
+  ncdu - interactive disk usage explorer [T0; interactive, low priority
+      for agent use]
+  find - locate files by name/type/time [T0 search; -exec runs arbitrary
+      commands and -delete destroys files, both T3]
+  fd - friendlier find [T0]
+  cp - copy files [T1]
+  mv - move/rename files [T1; overwrite risk]
+  rm - delete files [T3; always T3]
+  mkdir - create directories [T1]
+  touch - create/update file timestamps [T1]
+  ln - hard/symbolic links [T1; symlinks can break path-scope checks -
+      resolve before validating]
+  readlink - resolve symlinks [T0]
+  realpath - canonicalize paths [T0]
+  chmod - change permissions [T1 scoped; T3 on system paths]
+  chown - change ownership [T1 scoped; T3 on system paths]
+  rename - bulk rename [T1]
+  rsync - sync/copy trees, local or over ssh [T1 local; T3 with --delete
+      or remote push]
+  trash-cli - move to trash instead of deleting [T1; safer default than rm]
+  dd - raw block copy [T3; device targets are irreversible]
+  mktemp - safe temp files/dirs [T1]
+  xdg-open - open file/URL with desktop default [T1; launches desktop apps]
+
+--- 3.2 Search and text processing ---
+  grep - pattern search [T0]
+  rg - fast recursive search [T0; --pre runs a preprocessor command (T3),
+      and RIPGREP_CONFIG_PATH can inject flags - pin or ignore config in
+      agent runs]
+  fzf - fuzzy finder/filter [T0; interactive normally]
+  awk - column/pattern text processing [T0 for YOUR scripts; awk programs
+      can call system() and write files, so a generated or untrusted awk
+      script is code execution - treat like authored code, T1+]
+  sed - stream edit [T0 read of YOUR scripts; T1 with -i; GNU sed's e
+      command executes shell - untrusted sed scripts are T3]
+  sd - friendlier sed [T0; T1 with in-place]
+  sort - order lines [T0]
+  uniq - dedupe lines [T0]
+  cut - column extraction [T0]
+  tr - character translate/delete [T0]
+  wc - counts [T0]
+  diff - file comparison [T0]
+  patch - apply diffs [T1]
+  comm - set ops on sorted lines [T0]
+  join - relational join on fields [T0]
+  paste - merge lines side by side [T0]
+  column - align text tables [T0]
+  jq - JSON query/transform [T0 with trusted filters; jq loads modules
+      (~/.jq, -L paths) and filters are code - untrusted filters are T3]
+  yq - YAML/JSON/XML/TOML query [T0; NAME COLLISION: mikefarah/yq (Go) and
+      kislyuk/yq (Python, wraps jq) are different programs sharing the
+      name - catalogue must record which one is installed; kislyuk also
+      publishes xq for XML]
+  bat - cat with syntax highlight [T0]
+  less - pager [T0 but supports shell escapes via "!" - exclude from
+      non-interactive agent use; use bat/cat instead]
+  iconv - charset conversion [T0; T1 writing]
+  pandoc - document conversion [T1; can fetch URLs -> T2]
+
+--- 3.3 Version control ---
+  git - the VCS [T0 read: status/log/diff/show; T1: add/commit/branch/
+      checkout; T3: push, reset --hard, clean -f. Config is an execution
+      surface: hooks (core.hooksPath), aliases (!cmd), external
+      diff/pager drivers, include.path - untrusted repos and configs can
+      run code; agent runs should pin -c core.hooksPath=/dev/null style
+      isolation]
+  delta - pretty diff pager [T0]
+  gh - GitHub CLI [T2 read; T3 for PR merge, release, repo edit]
+  glab - GitLab CLI (your repos are GitLab) [T2 read; T3 for mutations]
+  git-lfs - large file support [T1]
+
+--- 3.4 Network ---
+  curl - HTTP(S)/FTP client [T2 for plain GET to allowlisted hosts; T3
+      with -T/--upload-file/-F/--data or any egress of local data; GET
+      leaks data too (query string, headers); cap redirects
+      (--max-redirs), restrict protocols (--proto), and block
+      localhost/link-local targets (SSRF)]
+  wget - downloader [T2; T3 with --post-data/--post-file; recursive mode
+      (-r) fetches whole sites - gate explicitly]
+  http - HTTPie, human-friendly HTTP client [T2; T3 uploads]
+  aria2 - multi-connection downloader [T2]
+  ping - reachability [T2; generates network traffic by design]
+  mtr - path diagnosis [T2]
+  traceroute - path discovery [T2]
+  dig - DNS queries [T2; the query itself discloses what you look up]
+  dog - modern dig [T2]
+  host - DNS lookup [T2]
+  nslookup - DNS lookup [T2]
+  ip - interfaces, routes, addresses [T0 read; T3 write]
+  ss - socket statistics [T0]
+  nmap - port/host scanning [T3 by default; probing machines is an action
+      AGAINST them - allow only on your own hosts/lab with explicit
+      approval for anything wider]
+  nc - raw TCP/UDP [T3; can exfiltrate anything]
+  ncat - nmap-project netcat [T3]
+  socat - bidirectional relay [T3]
+  ssh - remote shell [T2 for vetted read-only remote commands; T3
+      otherwise; ssh_config ProxyCommand/LocalCommand execute locally -
+      pin -F /dev/null or a vetted config for agent runs]
+  scp - copy over ssh [T2 download; T3 upload]
+  sftp - transfer over ssh [T2 download; T3 upload]
+  iperf3 - bandwidth testing [T2]
+  whois - registry lookup [T2]
+
+--- 3.5 Archives and compression ---
+  tar - create/extract archives [T0 list (-t); T1 extract, and ONLY into a
+      fresh empty directory with -P/--absolute-names and .. paths refused
+      - GNU tar's own security docs: untrusted archives can write outside
+      the working directory, including via symlink sequences]
+  gzip - compression [T1]
+  xz - compression [T1]
+  zstd - compression [T1]
+  bzip2 - compression [T1]
+  zip - create zip archives [T1]
+  unzip - extract zip [T1; same traversal caveat as tar]
+  7z - 7-Zip [T1; same caveat]
+
+--- 3.6 Build and development ---
+  make - build automation [T1 for YOUR projects; Makefiles execute
+      arbitrary recipes - untrusted source trees are T3]
+  cmake - build generator [T1; same untrusted-tree caveat]
+  ninja - build runner [T1; same caveat]
+  gcc - C compiler [T1; -fplugin loads arbitrary shared objects -
+      untrusted flags/code T3]
+  g++ - C++ compiler [T1; same plugin caveat]
+  clang - C/C++ compiler [T1; same plugin caveat]
+  cargo - Rust build tool [T1 YOUR projects; build.rs scripts execute at
+      build time - untrusted crates are T3]
+  rustc - Rust compiler [T1]
+  go - Go toolchain [T1; go run/build compiles and can execute -
+      untrusted code T3]
+  python3 - interpreter [T1 for scoped authored scripts; arbitrary or
+      untrusted code T3]
+  uv - fast Python package/project manager [T1 venv ops; T3 installs from
+      untrusted indexes]
+  pip - Python packages [T3 install/uninstall]
+  ipython - interactive Python [T1]
+  node - JS runtime [T1 authored scripts; untrusted code T3]
+  npm - JS packages [T1 run scripts you wrote; T3 installs (lifecycle
+      scripts execute on install)]
+  pnpm - JS packages [T1; same install caveat]
+  ruff - Python lint/format [T0 check; T1 --fix]
+  mypy - Python type check [T0]
+  pytest - Python tests [T1 YOUR suites; test code executes - untrusted
+      suites T3]
+  gdb - debugger [T1]
+  valgrind - memory debugging [T1]
+  strace - syscall tracing [T1]
+  ltrace - library call tracing [T1]
+  hyperfine - benchmark commands [T1; it RUNS the commands you benchmark]
+  ctags - code index [T1]
+  shellcheck - shell script lint [T0]
+  shfmt - shell formatter [T0; T1 -w]
+  just - command runner [T1; same Makefile caveat]
+  entr - rerun command on file change [T1; runs commands]
+  watch - repeat a command [T1; runs commands]
+
+--- 3.7 Data and databases ---
+  sqlite3 - SQLite CLI [T0 SELECT on scoped DBs; T1 writes; the CLI's dot
+      commands include .shell/.system and .load (extensions) - untrusted
+      input scripts are T3]
+  duckdb - analytics SQL over CSV/parquet/JSON [T0 read; T1 write; can
+      read http(s) URLs -> T2]
+  csvkit - csvcut/csvgrep/csvjoin etc. [T0]
+  miller - CSV/JSON/TSV swiss-army (mlr) [T0]
+  psql - PostgreSQL client, if ever used [T2 read; T3 write]
+  mysql - MySQL client, if ever used [T2 read; T3 write]
+  visidata - terminal data explorer [T0; interactive]
+
+--- 3.8 Documents and media ---
+  pdftotext - extract PDF text (poppler) [T0]
+  pdfinfo - PDF metadata [T0]
+  pdftoppm - PDF pages to images [T1]
+  qpdf - PDF structure ops [T1]
+  pdfunite - merge PDFs [T1]
+  pdfseparate - split PDFs [T1]
+  exiftool - read/write file metadata [T0 read; T1 write]
+  ffmpeg - media conversion [T1; it also speaks network protocols (http,
+      rtsp...) with all protocols allowed by default - pin
+      -protocol_whitelist for agent runs; untrusted inputs have a long
+      CVE history -> T3 handling]
+  ffprobe - media inspection [T0]
+  magick - ImageMagick image ops [T1; coders can read/write unexpected
+      files and some formats (SVG, MSL) are scriptable - ship a restrictive
+      policy.xml; untrusted inputs T3]
+  tesseract - OCR [T1; reads the image and WRITES a text output file]
+  yt-dlp - video/audio download [T2; writes files]
+  sox - audio processing [T1]
+  grim - Wayland screenshot [T1; reads screen contents - privacy]
+  slurp - region selector for grim [T1]
+  wl-copy - set clipboard [T1]
+  wl-paste - read clipboard [T0 but privacy-sensitive - may contain
+      secrets; treat output as sensitive]
+  hyprctl - Hyprland control [T1]
+  notify-send - desktop notification [T1; mutates desktop state, and
+      notification text is visible on screen - no secrets in it]
+
+--- 3.9 System information and process control ---
+  uname - kernel info [T0]
+  fastfetch - distro/hardware summary [T0]
+  ps - processes [T0; command lines can contain secrets - filter output]
+  top - process monitor [T0; interactive]
+  htop - process monitor [T0; interactive]
+  btop - process monitor [T0; interactive]
+  pgrep - find processes by name [T0]
+  pkill - kill processes by name [T3]
+  kill - signal processes [T3]
+  free - memory [T0]
+  vmstat - performance stats [T0]
+  iostat - disk stats [T0]
+  uptime - load [T0]
+  lsof - open files/sockets per process [T0]
+  lsblk - block devices [T0]
+  lsusb - USB devices [T0]
+  lspci - PCI devices [T0]
+  nvidia-smi - GPU status/memory [T0]
+  sensors - temperatures [T0]
+  smartctl - disk health [T0 read]
+  dmesg - kernel log [T0]
+  journalctl - system logs [T0 read]
+  systemctl - services [T0 status; T3 start/stop/enable]
+  env - print environment [T0; routinely contains tokens - treat output
+      as sensitive and filter it]
+  printenv - print environment [T0; same caveat]
+  which - locate a command on PATH [T0; feeds the scanner]
+  whereis - locate binary/man/source [T0]
+  type - shell command kind [T0]
+  mount - mount filesystems [T3]
+  umount - unmount filesystems [T3]
+  mkfs - format devices [T3; always manual approval]
+
+--- 3.10 Security and crypto ---
+  gpg - encryption/signing [T1 sign/encrypt; T3 key deletion]
+  age - modern file encryption [T1]
+  openssl - TLS/crypto toolkit [T1; s_client network use T2]
+  ssh-keygen - key generation [T1]
+  pass - password store [reads return SECRETS - gate output handling, T1
+      write]
+  sha256sum - checksums [T0]
+  md5sum - checksums [T0]
+
+--- 3.11 Containers and virtualisation (if you adopt them) ---
+  podman - containers [T3; can mount host paths and run privileged - also
+      the natural home for the isolated probes in section 4]
+  docker - containers [T3; same]
+  distrobox - user-space distros [T1/T3]
+
+--- 3.12 Scheduling and automation ---
+  cronie - cron daemon jobs [T1 create; the job CONTENT is what runs -
+      review it]
+  at - one-shot scheduled command [T1; same content caveat]
+  tmux - persistent terminal sessions [T1; new sessions execute commands]
+  parallel - GNU parallel job runner [T1; runs commands - untrusted input
+      T3]
+
+--- 3.13 AI-adjacent local binaries ---
+  llama-cli - llama.cpp one-shot inference (hestia owns serving; the
+      catalogue should still know these exist) [T1]
+  llama-server - llama.cpp server [T1]
+  llama-bench - llama.cpp benchmarking [T1]
+  whisper-cli - whisper.cpp speech to text (prosopon voice path) [T1]
+  piper - text to speech (prosopon voice path) [T1]
+  ollama - model runner CLI, only if you add it later [T1; pulls are
+      network + disk, T2/T3]
+
+--- 3.14 Structured tools (kybernetes registry; 5 named below as
+      examples from the round-4 context, which showed 7 registered;
+      the other 2 belong in the curated seed too; plus 2 proposed) ---
+  read_file_range - read a section of a source file [T0]
+  edit_file_block - anchored block replacement [T1]
+  write_file - create/write a file [T1]
+  sandboxed_bash - shell commands (tests, searches, builds) [tier per
+      parsed command; the NAME is not a safety guarantee - round 4 found
+      it escaping allowed roots; see section 5 for the isolation model
+      it actually needs]
+  run_code_mode - Python snippets for scripted work [T1 scoped; T3
+      arbitrary]
+  http_request - PROPOSED structured HTTP tool: method, url, headers,
+      body as explicit fields so Phylax validates destination and egress
+      instead of parsing a shell string [T2/T3 by method+host]
+  git_ops - PROPOSED structured git tool: separates status/diff from
+      push/reset [T0/T1/T3 by subcommand]
+
+This inventory is exactly 195 rows = 188 external CLI tool candidates,
+plus 5 structured tools named as examples from kybernetes' current
+registry (the round-4 context showed 7 registered in total), plus 2
+proposed structured tools (http_request, git_ops) that do not exist yet.
+"Candidate" and "proposed" mean exactly that: this file does not claim
+all of these tools exist or are installed. Rows are one tool each, so the row count is
+also the distinct-name count (counted programmatically from this file, not
+estimated). It is a starting inventory, not a claim of completeness: the
+scanner and manual entries grow it, and section 7 keeps the model from
+ever having to hold all of it at once.
+
+=====================================================================
+4. DISCOVERY: PASSIVE FIRST, PROBES ONLY IN ISOLATION
+=====================================================================
+
+Design rule: the scanner must be safe to run against a hostile PATH. An
+executable that nobody has vetted must NEVER be executed by discovery -
+a timeout is not a sandbox, and malicious code can do anything it wants
+in its first millisecond. Discovery is therefore two tiers:
+
+PASSIVE (default). The only programs run are trusted metadata utilities
+(/usr/bin/pacman, /usr/bin/man, ...), invoked by ABSOLUTE path in a
+sanitized environment so a hostile PATH cannot hijack them. No DISCOVERED
+TARGET is ever executed - an unvetted binary from PATH is only ever
+listed, never run:
+
+  1. PATH walk: list executable names and resolved absolute paths from
+     $PATH directories, plus stat metadata (owner, mode, mtime, symlink
+     target). Pure readdir/stat.
+  2. Package metadata: pacman -Q lists installed packages; pacman -Qo
+     <path> maps an executable to its owning package; pacman -Qi gives
+     the version. All from the package database, no execution. (Assumes
+     Arch/Omarchy; verify distro at scan time, record package_manager.)
+     pacman knows packaged files only - ad-hoc installs show up in the
+     PATH walk with package "unknown".
+  3. man-db files: resolve page FILES via manpath/man -w and record
+     locator + sha256 + size. Do not render man pages in the scanner:
+     rendering runs a groff pipeline and a pager (man(1), less(1)),
+     i.e. executes helpers on untrusted input. Text extraction from the
+     raw roff source happens only in the isolated pipeline below.
+  4. Curated seed file (versioned in the repo): summaries, capabilities,
+     tiers, overrides, signatures for section 3 plus the structured
+     kybernetes tools. Discovery fills paths/versions; curation fills
+     meaning and risk.
+  5. Manual entry: pinax add <name> for aliases, functions, remote-only
+     tools.
+
+ACTIVE PROBES (only for curated, allowlisted tools, only in isolation):
+
+  - --version / --help output for tools you have already curated, run
+    inside an isolated environment: no network, empty credential-free
+    environment (explicit env allowlist), hard time cap, output size
+    cap, whole process-tree kill on expiry. A container (podman) is the
+    natural fit; a bare "timeout 5 tool --version" is NOT acceptable.
+  - Doc text extraction (roff -> text, or --help capture) runs in the
+    same isolated environment, output hashed and size-capped.
+
+Rescan: on demand (pinax scan) plus an optional pacman hook so installs
+update the DB. Staleness is first-class: rows older than N days report
+as stale; "stale" never answers as "installed" without a rescan.
+Uninstalled tools are marked not-installed, never silently deleted.
+Discovery never installs anything and never authorizes anything: a newly
+appearing tool is catalogued as unvetted and default-denied until
+curated.
+
+ACCEPTANCE TESTS for the scanner (run in a throwaway VM/container, not
+on your real home directory):
+
+  A1 malicious-PATH: a directory on PATH contains an executable that
+     writes a marker file and phones out if executed. After a full
+     passive scan, the marker must not exist.
+  A2 symlink swap: a curated binary's path is replaced by a symlink to
+     something else between scan and dispatch. The dispatcher's
+     use-time re-check (section 2) must detect the change and refuse
+     to run it.
+  A3 hanging helper: a curated probe target that never exits. The probe
+     harness must kill the whole process tree within the cap and mark
+     the row broken.
+  A4 help-text exfiltration: a probe target whose --help output embeds
+     content that would be dangerous if obeyed, and which attempts
+     network egress. The probe environment has no network and no
+     credentials; the output lands in the DB as inert, capped text.
+  A5 unvetted newcomer: a brand-new binary appears on PATH. It is
+     catalogued, marked unvetted, and any attempt to dispatch it is
+     denied.
+
+=====================================================================
+5. RISK TIERS AND THE ISOLATION MODEL (Phylax consumes)
+=====================================================================
+
+  T0  Read-only, local, no secrets. Default allow inside scoped roots.
+  T1  Local writes scoped to allowed roots. Path validation mandatory.
+  T2  Network read, allowlisted destinations, size/redirect caps, no
+      local-network targets.
+  T3  Irreversible, egress-capable, privileged, system-mutating, or any
+      execution of untrusted code/config. Explicit approval, every time,
+      with the exact command shown.
+
+Five corrections to naive versions of this table:
+
+  1. Tier attaches to an INVOCATION, parsed, not to a binary. The same
+     curl is T2 for a GET and T3 for an upload; the same git is T0 for
+     diff and T3 for push. tool_risk_overrides encodes the patterns that
+     force escalation, matched on parsed arguments, never substring
+     search (round 4 flagged Phylax destination-substring matching:
+     substrings are how "allow example.com" becomes
+     "curl evil.com?next=example.com").
+
+  2. Many "safe" tools have an execution surface (appendix A sources):
+     awk has system(); GNU sed has the e command; find has -exec and
+     -delete; rg has --pre and a config file; jq loads modules; less
+     runs shell escapes; sqlite3 dot-commands include .shell and .load;
+     git runs hooks, aliases, external pagers/diff drivers; make/cargo/
+     npm run code from the project; gcc/clang load plugins; tar and
+     ImageMagick have format-level traps. Consequence: the tier table
+     describes each tool's common form, and any GENERATED or UNTRUSTED
+     script/config/input for these tools is itself code and escalates.
+
+  3. No parser of arbitrary shell can enforce policy alone. Compound
+     commands, pipes, redirections, command substitution, interpreter
+     -c flags, environment, cwd, config files and hooks all change what
+     runs. Therefore sandboxed_bash must (a) fail closed on anything it
+     cannot parse into a known-safe form, and (b) rely on boundaries the
+     OS enforces independently of parsing: a filesystem allowlist (bind
+     mounts/namespace), a network egress allowlist (firewall/proxy),
+     and a credential-free environment. Parsing decides intent;
+     isolation limits damage when parsing is wrong.
+
+  4. Reads and GETs leak too. T0 reads can expose secrets
+     (cat ~/.ssh/..., env output) - contained by the filesystem boundary
+     and output filtering, not the tier. T2 GETs carry data in query
+     strings and headers, follow redirects, resolve DNS, and can target
+     localhost/link-local (SSRF). Fetched content that is then executed
+     (curl | sh) is T3 by construction: gate any pipe into an
+     interpreter.
+
+  5. Discovery never authorizes (repeated from section 4 because it is
+     the cheapest place to get it wrong): unvetted = deny.
+
+=====================================================================
+6. TRUST MODEL: WHY TIERS CANNOT LIVE ONLY IN THE DB
+=====================================================================
+
+If rm's tier were only a mutable row, anything that can write the DB
+could downgrade rm to T0. So:
+
+  - Curated tiers and overrides ship in the seed file, versioned in the
+    repo, loaded at scan time. DB rows for discovered-only tools default
+    to the most conservative plausible tier until curated.
+  - Phylax treats the catalogue as ADVISORY data. Deny-by-default stays
+    in policy code. Catalogue compromise must be able to hide a tool,
+    never to un-gate one.
+  - Doc text (man pages, --help, README scrapes) is UNTRUSTED DATA:
+    quoted into the model's context size-capped, never executed, never
+    obeyed. A man page saying "run X with sudo" is text about X. Same
+    injection class as untrusted email/web content; label doc excerpts
+    as data in prompt assembly.
+  - scan_runs plus per-row sha256 give an audit trail: a changed binary,
+    a changed man page, or a new path is visible, and the use-time
+    re-hash (section 2) refuses stale approvals.
+
+=====================================================================
+7. RETRIEVAL: HOW THE MODEL USES IT WITHOUT DROWNING
+=====================================================================
+
+The failure mode to design against: stuffing ~200 tools and their
+manuals into the prompt. The catalogue exists so the model can ask, not
+memorize.
+
+  Level 0 - digest. Compact list: name, 5-10 word summary, tier, grouped
+    by category. Usually only the relevant categories are shown,
+    selected by the orchestrator from the task.
+  Level 1 - signature. For the chosen tool: the curated argument schema
+    (tool_signatures) or the invocation synopsis from its LOCAL docs
+    (which match the installed version, unlike upstream URLs).
+  Level 2 - doc slice. On demand: the relevant local man section or
+    --help excerpt, size-capped (~2-4KB), labeled as untrusted
+    reference text.
+  Search - full-text over names, summaries and help text (FTS5 if the
+    SQLite build has it - verify, it is a compile option - else LIKE
+    fallback): "extract audio from a video" should return ffmpeg.
+    kybernetes exposes catalogue_lookup and catalogue_docs as two small
+    structured tools.
+  Unknowns - a tool absent from the catalogue is reported as unknown,
+    and unknown means "ask or use a known equivalent," never "improvise
+    flags from memory."
+
+LTHCM can later store learned usage ("this project builds with just") on
+top; the catalogue remains the live fact source for existence and
+location.
+
+=====================================================================
+8. EVALUATION (dokime, small and honest)
+=====================================================================
+
+  - Lookup correctness: 50 "which tool does X" questions with known
+    answers; top-1 and top-3 retrieval accuracy.
+  - Inventory accuracy: scanner report vs pacman -Q on the real machine,
+    reported as false-installed / false-missing counts, with the known
+    gap stated (pacman misses ad-hoc installs; PATH scan misses
+    unlinked packages).
+  - Scanner safety: acceptance tests A1-A5 from section 4, in a
+    throwaway environment.
+  - Tier spot checks: curated tier assignments reviewed by you, not
+    asserted by the system.
+  - No synthetic-pass shortcuts: if the machine lacks the tool, the eval
+    says SKIP, not PASS (round 4 flagged this failure class elsewhere).
+
+=====================================================================
+9. BUILD PHASES (you build; this is the spec)
+=====================================================================
+
+  P1  Schema + passive scanner (PATH walk, pacman metadata, man-db file
+      locators) producing pinax.db plus a scan report. Executes nothing
+      from the machine.
+  P2  Curated seed for the section-3 inventory + use-time re-hash in
+      dispatch + catalogue_lookup/catalogue_docs in kybernetes.
+  P3  Isolated probe harness for curated --version/--help/doc
+      extraction; retrieval levels 0-2 wired into the coding agent loop;
+      doc-injection labeling.
+  P4  Prosopon read-only catalogue browser; dokime evals incl. A1-A5;
+      optional pacman rescan hook.
+
+Explicit non-goals for v1: installing tools, executing tools through the
+catalogue (kybernetes dispatch already does that), auto-authoring
+signatures from man pages (too unreliable to trust unreviewed), and any
+Apply/write path in the dashboard.
+
+=====================================================================
+10. OPEN DECISIONS FOR YOU
+=====================================================================
+
+  1. Name: "pinax" proposed (a register/list). Alternatives: "ergaleion"
+     (tool), "katalogos". Your call, as always with the Greek names.
+  2. Signature authoring: hand-curated only (recommended) vs assisted
+     drafting with your review.
+  3. Probe isolation technology: podman container (recommended) vs
+     namespaces/seccomp by hand.
+  4. Rescan trigger: manual + on-demand only, or pacman hook.
+  5. Whether LTHCM stores tool-usage knowledge at all.
+  6. Where pinax lives: own component, or inside kybernetes as a library
+     (recommended for v1; split if prosopon/dokime grow direct
+     consumers).
+
+=====================================================================
+APPENDIX A. SOURCES (official docs; checked 2026-10-17)
+=====================================================================
+
+These ground the capability and risk claims above. Where a flag is
+version-specific, the LOCAL man page recorded by the catalogue (which
+matches your installed version) wins over these upstream URLs.
+
+  curl options/manpage (--upload-file/-T, -F, --data, --max-redirs,
+    --proto, --append): https://curl.se/docs/manpage.html and
+    https://curl.se/docs/optionsall.html
+  GNU findutils manual (-delete, -exec):
+    https://www.gnu.org/software/findutils/manual/html_node/find_html/
+    (content confirmed via GNU manual mirrors; gnu.org blocks direct
+    fetching for some tools)
+  gawk manual, I/O functions (system(), pipes, /inet):
+    https://www.gnu.org/software/gawk/manual/html_node/I_002fO-Functions.html
+    (same mirror caveat)
+  GNU sed manual, extended commands (e command executes shell):
+    https://www.gnu.org/software/sed/manual/html_node/Extended-Commands.html
+    (same mirror caveat)
+  ripgrep guide (--pre preprocessor; also RIPGREP_CONFIG_PATH):
+    https://ripgrep.dev/docs/guide/ and https://github.com/BurntSushi/ripgrep
+  jq manual (modules, -L search path):
+    https://jqlang.github.io/jq/manual/ (v1.7 page verified)
+  less(1) (! shell-command escape):
+    https://man7.org/linux/man-pages/man1/less.1.html
+  sqlite3 CLI dot-commands (.shell, .load):
+    https://sqlite.org/cli.html
+  SQLite FTS5 (compile option; enabled by default in the amalgamation,
+    verify in your build):
+    https://sqlite.org/fts5.html and https://sqlite.org/compile.html
+  git hooks and core.hooksPath: https://git-scm.com/docs/githooks
+  git-config (includes, alias, external diff/pager settings):
+    https://git-scm.com/docs/git-config
+  pacman(8) (-Q, -Qo file ownership, -F files database):
+    https://man.archlinux.org/man/pacman.8.en
+  man(1) (pager/preprocessor pipeline):
+    https://man7.org/linux/man-pages/man1/man.1.html
+  GNU make manual (recipes execute shell commands):
+    https://www.gnu.org/software/make/manual/make.html (mirror caveat)
+  GNU tar manual, Security section (untrusted archives write outside
+    the working directory; --absolute-names):
+    https://www.gnu.org/software/tar/manual/html_section/Security.html
+    (mirror caveat)
+  GNU wget manual (--post-data/--post-file, recursive -r):
+    https://www.gnu.org/software/wget/manual/wget.html (mirror caveat)
+  GCC internals, Plugins (-fplugin dlopen's shared objects):
+    https://gcc.gnu.org/onlinedocs/gccint/Plugins.html (mirror caveat:
+    confirmed via sourceware snapshot docs)
+  Cargo build scripts (build.rs compiles and executes at build time):
+    https://doc.rust-lang.org/cargo/reference/build-scripts.html
+  ssh_config(5) (ProxyCommand, LocalCommand, PermitLocalCommand):
+    https://man.openbsd.org/OpenBSD-current/ssh_config.5
+  FFmpeg protocols (all protocols allowed by default;
+    protocol_whitelist option): https://ffmpeg.org/ffmpeg-protocols.html
+  ImageMagick security policy (policy.xml; coder restrictions):
+    https://imagemagick.org/security-policy/
+  Nmap reference (target specification; scanning is an action against
+    the target): https://nmap.org/book/man-target-specification.html
+  Python command line (-c, -m): https://docs.python.org/3/using/cmdline.html
+  tesseract command-line usage (input image -> output file):
+    https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html
+  mikefarah/yq (Go; YAML, JSON, XML, TOML...): https://github.com/mikefarah/yq
+  kislyuk/yq (Python; wraps jq) and xq: https://kislyuk.github.io/yq/
+
+=====================================================================
+END
