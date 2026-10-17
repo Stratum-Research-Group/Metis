@@ -302,10 +302,30 @@ class PinaxDatabase:
             return self.list_tools(limit=limit)
 
         with self._get_connection() as conn:
+            # 1. Exact name/id match boost
+            q_lower = query_clean.lower()
+            exact_tool = conn.execute(
+                "SELECT * FROM tools WHERE lower(name) = ? OR lower(id) = ? LIMIT 1;",
+                (q_lower, q_lower if q_lower.startswith("tool:") else f"tool:{q_lower}"),
+            ).fetchone()
+            exact_rec = self._row_to_tool(exact_tool) if exact_tool else None
+
             if self.fts5_enabled:
                 try:
-                    # Sanitize FTS5 query
-                    fts_query = " ".join([f'"{part}"*' for part in query_clean.split() if part.isalnum()])
+                    stopwords = {
+                        "a", "an", "the", "for", "with", "and", "or", "to", "in", "of",
+                        "by", "that", "on", "from", "as", "is", "at", "into", "using",
+                        "such", "each", "specified", "across", "report", "output", "display",
+                    }
+                    import re
+                    tokens = [
+                        part.lower() for part in re.findall(r"\b[a-zA-Z0-9_\-]+\b", query_clean)
+                        if len(part) > 1 and part.lower() not in stopwords
+                    ]
+                    if not tokens:
+                        tokens = [part.lower() for part in re.findall(r"\b[a-zA-Z0-9_\-]+\b", query_clean)] or [query_clean.lower()]
+
+                    fts_query = " OR ".join([f'"{tok}"*' for tok in tokens])
                     if fts_query:
                         rows = conn.execute("""
                             SELECT t.* FROM tools t
@@ -314,19 +334,38 @@ class PinaxDatabase:
                             ORDER BY rank LIMIT ?;
                         """, (fts_query, limit)).fetchall()
                         if rows:
-                            return [self._row_to_tool(r) for r in rows]
+                            results = [self._row_to_tool(r) for r in rows]
+                            if exact_rec:
+                                if exact_rec.id not in [r.id for r in results]:
+                                    results.insert(0, exact_rec)
+                                elif results[0].id != exact_rec.id:
+                                    results = [exact_rec] + [r for r in results if r.id != exact_rec.id]
+                            return results[:limit]
                 except sqlite3.OperationalError:
                     pass
 
-            # Fallback to LIKE matching across name, summary, category, notes
-            like_pat = f"%{query_clean}%"
-            rows = conn.execute("""
+            # Fallback to token-based LIKE matching across name, summary, category, notes
+            tokens = [part for part in query_clean.split() if len(part) > 1] or [query_clean]
+            like_clauses = " OR ".join(["(name LIKE ? OR summary LIKE ? OR category LIKE ? OR notes LIKE ?)" for _ in tokens[:8]])
+            params: List[Any] = []
+            for t in tokens[:8]:
+                pat = f"%{t}%"
+                params.extend([pat, pat, pat, pat])
+            params.extend([query_clean, f"{query_clean}%", limit])
+
+            rows = conn.execute(f"""
                 SELECT * FROM tools
-                WHERE name LIKE ? OR summary LIKE ? OR category LIKE ? OR notes LIKE ?
+                WHERE {like_clauses}
                 ORDER BY CASE WHEN name = ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END, name ASC
                 LIMIT ?;
-            """, (like_pat, like_pat, like_pat, like_pat, query_clean, f"{query_clean}%", limit)).fetchall()
-            return [self._row_to_tool(r) for r in rows]
+            """, params).fetchall()
+            results = [self._row_to_tool(r) for r in rows]
+            if exact_rec:
+                if exact_rec.id not in [r.id for r in results]:
+                    results.insert(0, exact_rec)
+                elif results and results[0].id != exact_rec.id:
+                    results = [exact_rec] + [r for r in results if r.id != exact_rec.id]
+            return results[:limit]
 
     def add_doc(self, doc: ToolDoc) -> None:
         with self._get_connection() as conn:

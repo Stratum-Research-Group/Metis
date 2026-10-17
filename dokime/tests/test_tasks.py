@@ -80,3 +80,38 @@ def test_task_registry_discovery():
     info = list_task_info()
     arc_info = next(item for item in info if item["task_id"] == "arc_easy_25")
     assert arc_info["items"] == 25
+
+    pinax_info = next(item for item in info if item["task_id"] == "pinax_lookup_50")
+    assert pinax_info["items"] == 50
+
+
+def test_pinax_lookup_50_loading_and_scoring():
+    from dokime.tasks.pinax_lookup import PinaxLookup50Task
+    task = PinaxLookup50Task()
+    queries = task.load()
+    assert len(queries) == 50
+
+    q1 = queries[0]
+    assert q1.id == "pinax-01"
+    assert q1.expected == "rg"
+
+    # Prediction extraction and scoring
+    assert task.extract_prediction(q1, "rg") == "rg"
+    assert task.score(q1, "rg") == 1.0
+    assert task.score(q1, "`rg`") == 1.0
+    assert task.score(q1, "The tool is `rg`.") == 1.0
+    assert task.score(q1, "tool:rg") == 1.0
+    assert task.score(q1, "curl") == 0.0
+
+    # Direct catalogue evaluator
+    def mock_lookup(query, limit=5):
+        if "regex" in query:
+            return [{"id": "tool:rg", "name": "rg"}]
+        return [{"id": "tool:unknown", "name": "unknown"}]
+
+    res = task.evaluate_catalogue(mock_lookup)
+    assert res["total_queries"] == 50
+    assert res["top1_hits"] >= 1
+    assert "top1_accuracy" in res
+    assert "top3_accuracy" in res
+

@@ -10,6 +10,7 @@ from dokime.tasks.arc import ArcEasy25Task
 from dokime.tasks.epistemic import EpistemicAdversarialTask, EpistemicAdversarialV2Task
 from dokime.tasks.gpqa import GPQADiamondTask, GPQADiamondV2Task
 from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetitionMathV2Task
+from dokime.tasks.pinax_lookup import PinaxLookup50Task
 from dokime.tasks.protocol import Task
 from dokime.tasks.zebra import ZebraHardLogicTask, ZebraHardLogicV2Task
 
@@ -24,6 +25,7 @@ BUILTIN_TASKS: dict[str, type[Task] | Task] = {
     "zebra_hard_logic_v2": ZebraHardLogicV2Task,
     "epistemic_adversarial": EpistemicAdversarialTask,
     "epistemic_adversarial_v2": EpistemicAdversarialV2Task,
+    "pinax_lookup_50": PinaxLookup50Task,
 }
 
 

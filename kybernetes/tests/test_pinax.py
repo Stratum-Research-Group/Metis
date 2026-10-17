@@ -281,3 +281,27 @@ async def test_pinax_server_api_endpoints(tmp_path):
         assert "total_discovered" in scan_data
         assert scan_data["total_discovered"] == 1
 
+
+def test_dokime_pinax_lookup_50_eval(tmp_path):
+    """
+    Dokime Section 8 Benchmark:
+    50 'which tool does X' queries evaluated against PinaxCatalogue.
+    Measures top-1 and top-3 retrieval correctness on curated/installed tools.
+    """
+    from dokime.tasks.pinax_lookup import PinaxLookup50Task
+
+    db_path = tmp_path / "eval_pinax.db"
+    catalogue = PinaxCatalogue(db_path=db_path)
+
+    task = PinaxLookup50Task()
+    res = task.evaluate_catalogue(catalogue.lookup)
+
+    assert res["total_queries"] == 50
+    # Pinax catalogue seed has curated tools matching all 50 questions
+    # Verify high-accuracy top-1 and top-3 retrieval (>90%)
+    assert res["top1_hits"] >= 45
+    assert res["top3_hits"] >= 48
+    assert res["top1_accuracy"] >= 0.90
+    assert res["top3_accuracy"] >= 0.95
+
+
