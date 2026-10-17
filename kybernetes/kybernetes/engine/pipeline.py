@@ -218,6 +218,7 @@ class ExecutionPipeline:
         tool_output: Optional[Dict[str, Any]] = None
         v_report: Optional[KrisisVerificationReport] = None
         response_text = ""
+        succeeded = False
         stage_outcomes: List[StageOutcome] = []
         components_used = ["Hestia", "Phylax", "Krisis"]
         timings_ms: Dict[str, float] = {}
@@ -699,19 +700,20 @@ class ExecutionPipeline:
         total_lat = (time.perf_counter() - start_time) * 1000
         timings_ms["total"] = round(total_lat, 2)
 
-        # Determine final status following actual verification verdict and stage outcomes
+        # Determine final status following actual verification verdict and stage outcomes (Finding R5)
         if any(not so.success for so in stage_outcomes):
             final_status = TurnOutcomeStatus.FAILED
         elif v_report is not None:
             final_status = v_report.status
-        elif executed_tool_name == "calculator" and tool_output is not None:
-            final_status = TurnOutcomeStatus.VERIFIED
         else:
             final_status = TurnOutcomeStatus.DRAFT
 
+        # Finding R6: if Hestia generation failed and fallback was used, is_turn_simulated must be True
         is_turn_simulated = (
-            any(c.is_simulated for c in citations)
+            is_turn_simulated
+            or any(c.is_simulated for c in citations)
             or (v_report.is_simulated if v_report else False)
+            or (not succeeded)
         )
 
         # 7. Completed event with route_summary matching Prosopon

@@ -116,44 +116,61 @@ from kleroterion.interfaces import (
     ActionID,
     KleroterionConfig,
     PolicyProfile,
+    PolicyProfileType,
     HostCallbacks,
+    ControllerState,
+    RngState,
 )
 
-# 1. Host defines legal actions and their logits
+# 1. Host defines legal actions and initial eligibility
 actions = [ActionID("expand_node_A"), ActionID("expand_node_B"), ActionID("backtrack")]
-logits = np.array([2.5, 3.1, 0.8], dtype=np.float64)
-eligibility_mask = np.array([True, True, False], dtype=bool)
+eligibility_mask = [True, True, False]
 
 # 2. Host callbacks for scoring and proposal evaluation
-def score_callback(proposal, action_ids):
-    # Adjust logits based on proposal vector
-    return logits[:len(action_ids)]
-
-callbacks = HostCallbacks(score_fn=score_callback)
+callbacks = HostCallbacks(
+    proposal_features=lambda x, inc: x + inc,
+    proposal_mask=lambda r, x: list(r.authoritative_mask),
+    score_actions=lambda r, x, acts: np.array([2.5, 3.1, 0.8]),
+    revalidate_before_execute=lambda act, snap: (True, None),
+)
 
 # 3. Create routing request
 request = RoutingRequest(
     request_id="req_001",
-    action_ids=actions,
-    eligibility_mask=eligibility_mask,
-    base_logits=logits,
-    feature_dim=4,
-    seed=42,
+    episode_id="ep_001",
+    query_context="How does Metis route actions?",
+    walk_state="node_A",
+    snapshot_id="snap_001",
+    lthcm_revision="rev_001",
+    feature_schema_version="v1.0",
+    policy_features=np.array([1.0, 0.5, -0.2, 0.8], dtype=np.float64),
+    actions=actions,
+    authoritative_mask=eligibility_mask,
+    policy_profile=PolicyProfile(
+        profile_name="exploratory",
+        profile_type=PolicyProfileType.EXPLORATORY,
+    ),
 )
 
 config = KleroterionConfig(
-    num_proposals=8,
-    proposal_scale=0.1,
-    temperature=1.0,
-    profile=PolicyProfile.EXPLORATION,
+    proposal_count=4,
+    noise_rms_budget=0.1,
+    noise_hard_radius=0.2,
+    temperature_initial=1.0,
+)
+
+ctrl_state = ControllerState(log_temperature=0.0)
+rng = RngState(
+    proposal_rng=np.random.default_rng(42),
+    selection_rng=np.random.default_rng(100),
 )
 
 # 4. Propose action
-decision = propose_action(request, config, callbacks)
+decision = propose_action(request, config, ctrl_state, rng, callbacks)
 
 print(f"Selected Action: {decision.selected_action_id}")
 print(f"Marginal Probabilities: {decision.marginal_probabilities}")
-print(f"Shannon Entropy: {decision.shannon_entropy:.4f}")
+print(f"Marginal Entropy: {decision.marginal_entropy:.4f}")
 ```
 
 ---

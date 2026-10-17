@@ -183,8 +183,10 @@ class SyntheticNeedleDemo:
 
         dense_recalls_at_1 = []
         dense_recalls_at_5 = []
+        dense_rrs = []
         lthcm_recalls_at_1 = []
         lthcm_recalls_at_5 = []
+        lthcm_rrs = []
 
         depth_results = []
         start_time = time.time()
@@ -204,6 +206,8 @@ class SyntheticNeedleDemo:
 
             dense_recalls_at_1.append(dense_top_1_hit)
             dense_recalls_at_5.append(dense_top_5_hit)
+            dense_rank = next((rank_idx + 1 for rank_idx, idx in enumerate(top_dense_indices) if haystack[idx] == target_fact), None)
+            dense_rrs.append((1.0 / dense_rank) if dense_rank is not None else 0.0)
 
             # 2. LTHCM
             lthcm_hits = lthcm_store.query(q_emb, top_k=10)
@@ -221,6 +225,8 @@ class SyntheticNeedleDemo:
 
             lthcm_recalls_at_1.append(lthcm_top_1_hit)
             lthcm_recalls_at_5.append(lthcm_top_5_hit)
+            lthcm_rank = next((rank_idx + 1 for rank_idx, item in enumerate(reranked) if item[0] == target_fact), None)
+            lthcm_rrs.append((1.0 / lthcm_rank) if lthcm_rank is not None else 0.0)
 
             depth_results.append({
                 "needle_id": n["needle_id"],
@@ -233,8 +239,8 @@ class SyntheticNeedleDemo:
 
         elapsed_ms = (time.time() - start_time) * 1000.0
 
-        dense_mrr = sum(1.0 if r1 else (0.2 if r5 else 0.0) for r1, r5 in zip(dense_recalls_at_1, dense_recalls_at_5)) / max(1, len(needles))
-        lthcm_mrr = sum(1.0 if r1 else (0.2 if r5 else 0.0) for r1, r5 in zip(lthcm_recalls_at_1, lthcm_recalls_at_5)) / max(1, len(needles))
+        dense_mrr = sum(dense_rrs) / max(1, len(needles))
+        lthcm_mrr = sum(lthcm_rrs) / max(1, len(needles))
 
         results = {
             "haystack_size": len(haystack),

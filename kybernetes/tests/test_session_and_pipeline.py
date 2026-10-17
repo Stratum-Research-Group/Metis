@@ -114,3 +114,17 @@ def test_session_manager_redaction_and_reconnect(pipeline_setup):
     redacted = sessions.redact_sensitive_text(secret_text)
     assert "secret1234567890abcdef" not in redacted
     assert "[REDACTED_SECRET]" in redacted
+
+
+@pytest.mark.asyncio
+async def test_pipeline_fallback_marked_simulated(pipeline_setup):
+    """Verify that when Hestia is unreachable and fallback synthesis runs, is_simulated is True (Finding R6)."""
+    pipeline, _, _ = pipeline_setup
+    # HestiaAdapter in offline/unreachable state by default in this test fixture
+    req = TurnRequest(session_id="s1", query="Calculate 50 + 50")
+    events = [e async for e in pipeline.execute_turn_stream(req)]
+    completed = events[-1]
+    assert completed.event_type == EventType.COMPLETED.value
+    show_work = completed.payload.get("route_summary", {})
+    assert show_work.get("is_simulated") is True
+
