@@ -187,3 +187,77 @@ def test_session_turn_secrets_redacted_on_persistence_and_memory(tmp_path: Path)
     assert len(loaded_session.turns) == 1
     assert secret_key not in loaded_session.turns[0].query
 
+
+def test_session_manager_turn_buffer_pruning():
+    """Finding B2 regression: completed turn buffers must be pruned by count and TTL."""
+    mgr = SessionManager()
+    mgr.max_buffered_turns = 3
+    mgr.turn_buffer_ttl_seconds = 10.0
+
+    # Register and complete 5 turns
+    for i in range(5):
+        tid = f"turn-{i}"
+        mgr.register_active_turn(tid)
+        ev = TurnEvent(
+            turn_id=tid,
+            seq_num=0,
+            event_type=EventType.STARTED.value,
+            payload={},
+            status=TurnOutcomeStatus.DRAFT.value,
+        )
+        mgr.append_turn_event(tid, ev)
+        mgr.unregister_active_turn(tid)
+
+    # Only max 3 completed turns should remain in _turn_buffers
+    assert len(mgr._turn_buffers) == 3
+    assert "turn-0" not in mgr._turn_buffers
+    assert "turn-1" not in mgr._turn_buffers
+    assert "turn-2" in mgr._turn_buffers
+    assert "turn-3" in mgr._turn_buffers
+    assert "turn-4" in mgr._turn_buffers
+
+
+@pytest.mark.asyncio
+async def test_session_manager_subscribe_race_prevention():
+    """Finding B2 regression: concurrent append during subscription must not drop events."""
+    mgr = SessionManager()
+    tid = "race-turn-1"
+    mgr.register_active_turn(tid)
+
+    # Pre-populate ev0
+    ev0 = TurnEvent(
+        turn_id=tid,
+        seq_num=0,
+        event_type=EventType.STARTED.value,
+        payload={"step": 0},
+        status=TurnOutcomeStatus.DRAFT.value,
+    )
+    mgr.append_turn_event(tid, ev0)
+
+    received_seqs = []
+
+    async def consumer():
+        async for ev in mgr.subscribe_turn_events(tid, after_seq=-1):
+            received_seqs.append(ev.seq_num)
+
+    task = asyncio.create_task(consumer())
+
+    # Concurrently emit events
+    for s in range(1, 10):
+        ev = TurnEvent(
+            turn_id=tid,
+            seq_num=s,
+            event_type=EventType.DELTA.value,
+            payload={"step": s},
+            status=TurnOutcomeStatus.DRAFT.value,
+        )
+        mgr.append_turn_event(tid, ev)
+        await asyncio.sleep(0.001)
+
+    mgr.unregister_active_turn(tid)
+    await task
+
+    # Verify all sequence numbers 0..9 were delivered without drops or duplicates
+    assert received_seqs == list(range(10))
+
+

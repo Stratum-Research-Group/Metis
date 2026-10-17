@@ -104,8 +104,8 @@ class QLoRATrainingRunner:
         """
         hardware = inspect_hardware()
 
-        # If on GPU, check VRAM
-        if hardware.cuda_available:
+        # If on GPU and not in simulated mode, check VRAM and acquire GPU lock
+        if hardware.cuda_available and not getattr(self.config, "allow_simulated", False):
             if hardware.free_vram_mb < required_free_vram_mb:
                 raise TrainingPreflightError(
                     f"Insufficient free VRAM: {hardware.free_vram_mb:.0f} MB available, "

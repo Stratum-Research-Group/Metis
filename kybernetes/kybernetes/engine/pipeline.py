@@ -556,16 +556,36 @@ class ExecutionPipeline:
                 # Check if Hestia is live; if not, generate grounded synthetic response
                 h_health = await self.hestia.check_health()
                 succeeded = False
+                streamed_delta_count = 0
                 if h_health.get("available"):
                     async for chunk in self.hestia.stream_chat(prompt=prompt):
                         if chunk.get("error"):
                             # Hestia returned error (e.g. 401 Unauthorized or model error); fall back
-                            response_text = ""
-                            succeeded = False
+                            err_msg = chunk.get("error")
+                            if streamed_delta_count > 0:
+                                # Finding B1: Deltas were already streamed to client.
+                                # Prevent concatenating unrelated fallback text onto partial stream.
+                                notice = f"\n\n[Upstream generation interrupted: {err_msg}]"
+                                response_text += notice
+                                e_notice = TurnEvent(
+                                    turn_id=turn_id,
+                                    seq_num=seq_num,
+                                    event_type=EventType.DELTA.value,
+                                    payload={"text": notice, "stream_interrupted": True, "error": err_msg},
+                                    status=TurnOutcomeStatus.DRAFT.value,
+                                )
+                                _record_event(e_notice)
+                                yield e_notice
+                                seq_num += 1
+                                succeeded = True
+                            else:
+                                response_text = ""
+                                succeeded = False
                             break
                         delta = chunk.get("delta", "")
                         if delta:
                             response_text += delta
+                            streamed_delta_count += 1
                             e_delta = TurnEvent(
                                 turn_id=turn_id,
                                 seq_num=seq_num,

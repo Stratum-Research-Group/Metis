@@ -67,6 +67,9 @@ class ToolRegistry:
                 path=args.get("path", ""),
                 search_block=args.get("search_block", ""),
                 replace_block=args.get("replace_block", ""),
+                expected_start_hash=args.get("expected_start_hash"),
+                expected_end_hash=args.get("expected_end_hash"),
+                allow_syntax_errors=bool(args.get("allow_syntax_errors", False)),
             ),
         )
 

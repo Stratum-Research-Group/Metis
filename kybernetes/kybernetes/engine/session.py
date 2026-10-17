@@ -69,6 +69,34 @@ class SessionManager:
         # In-flight real-time event buffer and subscriber queues for reconnects
         self._turn_buffers: Dict[str, List[TurnEvent]] = {}
         self._turn_subscribers: Dict[str, List[asyncio.Queue]] = {}
+        self._turn_completed_at: Dict[str, float] = {}
+        self.max_buffered_turns: int = 100
+        self.turn_buffer_ttl_seconds: float = 3600.0
+
+    def _prune_turn_buffers(self) -> None:
+        """Prune completed turn event buffers to prevent unbounded memory growth (Finding B2)."""
+        now = time.time()
+        # 1. Prune expired completed turns
+        expired = [
+            tid for tid, finished_at in self._turn_completed_at.items()
+            if (now - finished_at) > self.turn_buffer_ttl_seconds and tid not in self._active_turns
+        ]
+        for tid in expired:
+            self._turn_buffers.pop(tid, None)
+            self._turn_completed_at.pop(tid, None)
+            self._cancellation_events.pop(tid, None)
+            self._active_cancellations.pop(tid, None)
+
+        # 2. Prune excess completed turns if count exceeds max_buffered_turns
+        completed_tids = [tid for tid in self._turn_completed_at if tid not in self._active_turns]
+        if len(completed_tids) > self.max_buffered_turns:
+            completed_tids.sort(key=lambda tid: self._turn_completed_at.get(tid, 0.0))
+            excess = len(completed_tids) - self.max_buffered_turns
+            for tid in completed_tids[:excess]:
+                self._turn_buffers.pop(tid, None)
+                self._turn_completed_at.pop(tid, None)
+                self._cancellation_events.pop(tid, None)
+                self._active_cancellations.pop(tid, None)
 
     def _prune_sessions(self) -> None:
         """Evict expired sessions or excess sessions exceeding max_sessions by LRU."""
@@ -87,6 +115,8 @@ class SessionManager:
             for sid, _ in sorted_by_lru[:excess]:
                 self._sessions.pop(sid, None)
                 self._session_access.pop(sid, None)
+
+        self._prune_turn_buffers()
 
     def _validate_session_id(self, session_id: str) -> None:
         """Validate session_id against path traversal attempts."""
@@ -144,10 +174,12 @@ class SessionManager:
         """Unregister a turn upon completion or termination and notify subscribers."""
         self._active_turns.discard(turn_id)
         self.clear_cancellation(turn_id)
+        self._turn_completed_at[turn_id] = time.time()
         # Notify subscribers of terminal close by sending None
         subs = self._turn_subscribers.pop(turn_id, [])
         for q in subs:
             q.put_nowait(None)
+        self._prune_turn_buffers()
 
     def is_turn_active(self, turn_id: str) -> bool:
         return turn_id in self._active_turns
@@ -174,27 +206,34 @@ class SessionManager:
         """
         Async generator yielding historical buffered events after `after_seq`,
         and then streaming subsequent real-time events until turn ends.
+        Registers queue prior to snapshot to close the event gap (Finding B2).
         """
         import asyncio
-        # 1. Yield any buffered historical events
-        past = self.get_turn_events_after(turn_id, after_seq)
-        last_yielded_seq = after_seq
-        for ev in past:
-            yield ev
-            last_yielded_seq = ev.seq_num
 
-        # If turn is no longer active, we're done
-        if not self.is_turn_active(turn_id):
+        # If turn is inactive and no buffer exists, nothing to stream
+        if not self.is_turn_active(turn_id) and turn_id not in self._turn_buffers:
             return
 
-        # 2. Register live subscriber queue
+        # 1. Register live subscriber queue FIRST to ensure no event is missed during snapshot
         q: asyncio.Queue = asyncio.Queue()
         if turn_id not in self._turn_subscribers:
             self._turn_subscribers[turn_id] = []
         self._turn_subscribers[turn_id].append(q)
 
+        # 2. Snapshot historical buffered events AFTER queue is registered
+        past = self.get_turn_events_after(turn_id, after_seq)
+        last_yielded_seq = after_seq
+
         try:
+            for ev in past:
+                yield ev
+                if ev.seq_num > last_yielded_seq:
+                    last_yielded_seq = ev.seq_num
+
+            # 3. Stream from live queue, skipping any events already yielded from history
             while True:
+                if not self.is_turn_active(turn_id) and q.empty():
+                    break
                 ev = await q.get()
                 if ev is None:
                     # Terminal signal

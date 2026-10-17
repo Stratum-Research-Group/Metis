@@ -128,3 +128,35 @@ async def test_pipeline_fallback_marked_simulated(pipeline_setup):
     show_work = completed.payload.get("route_summary", {})
     assert show_work.get("is_simulated") is True
 
+
+@pytest.mark.asyncio
+async def test_pipeline_midstream_hestia_error_fallback(pipeline_setup, monkeypatch):
+    """Finding B1 regression: mid-stream Hestia error must not concatenate unrelated fallback text."""
+    pipeline, _, _ = pipeline_setup
+
+    async def mock_check_health():
+        return {"available": True, "model": "mock-hestia"}
+
+    async def mock_stream_chat(prompt):
+        # Stream 2 deltas, then encounter an error
+        yield {"delta": "Hello "}
+        yield {"delta": "world "}
+        yield {"error": "Upstream token limit exceeded"}
+
+    monkeypatch.setattr(pipeline.hestia, "check_health", mock_check_health)
+    monkeypatch.setattr(pipeline.hestia, "stream_chat", mock_stream_chat)
+
+    req = TurnRequest(session_id="s1", query="Calculate 25 + 25")
+    events = [e async for e in pipeline.execute_turn_stream(req)]
+
+    deltas = [e.payload["text"] for e in events if e.event_type == EventType.DELTA.value]
+    full_text = "".join(deltas)
+
+    # Must contain the partial stream and explicit interruption notice
+    assert "Hello world " in full_text
+    assert "[Upstream generation interrupted: Upstream token limit exceeded]" in full_text
+
+    # Must NOT concatenate the local fallback sentence ("The calculation result is ...")
+    assert "The calculation result is" not in full_text
+
+

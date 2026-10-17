@@ -158,6 +158,62 @@ def render_markdown(
     r5a_a_pval = sig_r5a_a["p_value"]
     r5a_a_pval_str = f"p < 0.0001" if r5a_a_pval < 0.0001 else f"p = {r5a_a_pval:.4f}"
 
+    # 5. MuSiQue dynamic significance and verdict formatting (R7)
+    musique_flat_delta = musique_res["significance_mined_vs_flat2step_joint@2"]["delta"]
+    musique_flat_pval = musique_res["significance_mined_vs_flat2step_joint@2"]["p_value"]
+    musique_flat_pval_math = "p < 0.0001" if musique_flat_pval < 0.0001 else f"p = {musique_flat_pval:.4f}"
+    musique_flat_pval_str = f"${musique_flat_pval_math}$"
+    if musique_flat_pval < 0.001 and musique_flat_delta > 0:
+        musique_flat_verdict = "**Extremely Significant Win**"
+    elif musique_flat_pval < 0.05 and musique_flat_delta > 0:
+        musique_flat_verdict = "**Statistically Significant Win**"
+    elif musique_flat_delta > 0:
+        musique_flat_verdict = "**Directional Lead**"
+    elif musique_flat_pval < 0.05 and musique_flat_delta < 0:
+        musique_flat_verdict = "**Statistically Significant Loss**"
+    else:
+        musique_flat_verdict = "**Neutral**"
+
+    if musique_flat_pval < 0.05 and musique_flat_delta > 0:
+        musique_scorecard_win = f"**Win (+{musique_flat_delta*100:.1f}pp, {musique_flat_pval_str})**"
+    elif musique_flat_delta > 0:
+        musique_scorecard_win = f"**Directional (+{musique_flat_delta*100:.1f}pp, {musique_flat_pval_str})**"
+    elif musique_flat_pval < 0.05 and musique_flat_delta < 0:
+        musique_scorecard_win = f"**Loss ({musique_flat_delta*100:.1f}pp, {musique_flat_pval_str})**"
+    else:
+        musique_scorecard_win = f"**Neutral ({musique_flat_pval_str})**"
+
+    musique_random_delta = musique_res["significance_mined_vs_random_joint@2"]["delta"]
+    musique_random_pval = musique_res["significance_mined_vs_random_joint@2"]["p_value"]
+    musique_random_pval_math = "p < 0.0001" if musique_random_pval < 0.0001 else f"p = {musique_random_pval:.4f}"
+    musique_random_pval_str = f"${musique_random_pval_math}$"
+    if musique_random_pval < 0.001 and musique_random_delta > 0:
+        musique_random_verdict = "**Extremely Significant Win**"
+    elif musique_random_pval < 0.05 and musique_random_delta > 0:
+        musique_random_verdict = "**Statistically Significant Win**"
+    elif musique_random_delta > 0:
+        musique_random_verdict = "**Directional Lead**"
+    elif musique_random_pval < 0.05 and musique_random_delta < 0:
+        musique_random_verdict = "**Statistically Significant Loss**"
+    else:
+        musique_random_verdict = "**Neutral**"
+
+    # Comparison questions routed significance (R7)
+    sig_comp_routed = hotpot_res.get("significance_by_type", {}).get("comparison", {}).get("lthcm_routed_vs_flat_rerank")
+    if sig_comp_routed is not None:
+        comp_routed_sig_delta = sig_comp_routed["delta"] * 100
+        comp_routed_sig_pval = sig_comp_routed["p_value"]
+        comp_routed_sig_ci_low = sig_comp_routed["ci_lower"] * 100
+        comp_routed_sig_ci_high = sig_comp_routed["ci_upper"] * 100
+        comp_routed_sig_pval_math = "p < 0.0001" if comp_routed_sig_pval < 0.0001 else f"p = {comp_routed_sig_pval:.4f}"
+        if abs(comp_routed_sig_delta) < 1e-4:
+            comp_routed_str = f"with zero degradation ($\\Delta = 0.00\\%$, 95% CI: $[{comp_routed_sig_ci_low:+.2f}\\%, {comp_routed_sig_ci_high:+.2f}\\%]$, ${comp_routed_sig_pval_math}$)"
+        else:
+            comp_routed_str = f"($\\Delta = {comp_routed_sig_delta:+.2f}\\%$, 95% CI: $[{comp_routed_sig_ci_low:+.2f}\\%, {comp_routed_sig_ci_high:+.2f}\\%]$, ${comp_routed_sig_pval_math}$)"
+    else:
+        comp_routed_sig_delta = comp_routed_rerank - comp_flat_rerank
+        comp_routed_str = f"($\\Delta = {comp_routed_sig_delta:+.2f}\\%$)"
+
     from lthcm.benchmarks.real.utils.run_bundle import get_git_info, get_system_hardware_info
     git_info = get_git_info()
     hw_info = get_system_hardware_info()
@@ -182,7 +238,7 @@ def render_markdown(
 
 | Suite / Setting | Task Definition | Key Baseline | LTHCM Result | Win / Neutral / Loss | Primary Finding & Bound |
 |---|---|---|---|---|---|
-| **MuSiQue Multi-Hop ($N=500$)** | Shortcut-free multi-hop passage retrieval (10-para pool) | Flat 2-Step (Joint@2 {musique_res['summary']['flat_2step']['joint@2']:.3f}) | **LTHCM Mined 2-Step ({musique_res['summary']['lthcm_mined']['joint@2']:.3f})** (Oracle: {musique_res['summary'].get('lthcm_oracle', {}).get('joint@2', 0.716):.3f}) | **Win (+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp, $p < 0.0001$)** | Graph-driven 2nd step holds robustly at scale (95% CI: $[+{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']*100:.1f}%, +{musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']*100:.1f}%]$) |
+| **MuSiQue Multi-Hop ($N=500$)** | Shortcut-free multi-hop passage retrieval (10-para pool) | Flat 2-Step (Joint@2 {musique_res['summary']['flat_2step']['joint@2']:.3f}) | **LTHCM Mined 2-Step ({musique_res['summary']['lthcm_mined']['joint@2']:.3f})** (Oracle: {musique_res['summary'].get('lthcm_oracle', {}).get('joint@2', 0.716):.3f}) | {musique_scorecard_win} | Graph-driven 2nd step holds robustly at scale (95% CI: $[{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']*100:+.1f}%, {musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']*100:+.1f}%]$) |
 | **HotpotQA Bridge ($N=250$)** | Unmentioned intermediary entity hopping (10-para pool) | Flat+Rerank ({hotpot_res['by_question_type']['bridge']['flat_rerank']['joint@2']*100:.1f}%) | **LTHCM Mined+Rerank ({hotpot_res['by_question_type']['bridge']['lthcm_mined_rerank']['joint@2']*100:.1f}%)** | **Win (+{hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['delta']*100:.1f}pp, $p={hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['p_value']:.4f}$)** | Statistically significant gain on multi-hop bridge questions |
 | **HotpotQA Routing ($N=500$)** | Type-aware query routing (bridge vs comparison) | Flat+Rerank ({pooled_flat_rerank_joint:.1f}%) | **LTHCM Routed+Rerank ({pooled_routed_joint:.1f}%)** | **Win vs Flat (+{pooled_routed_delta:.1f}pp, $p={pooled_routed_pval:.4f}$); Parity vs Mined ({pooled_routed_joint:.1f}% vs {pooled_mined_rerank_joint:.1f}%)** | Routing matches always-mined while bypassing graph build on comparison questions |
 | **2WikiMultiHopQA ($N=100$)** | Multi-hop reasoning over Wikipedia pool | Flat 2-Step (Joint@2 {twowiki_res['summary']['flat_2step']['joint@2']:.3f}) | **LTHCM Mined 2-Step ({twowiki_res['summary']['lthcm_mined']['joint@2']:.3f})** | **Directional (+{(twowiki_res['summary']['lthcm_mined']['joint@2'] - twowiki_res['summary']['flat_2step']['joint@2'])*100:.1f}pp vs Flat, $p={twowiki_res['significance_mined_vs_flat2step_joint@2']['p_value']:.4f}$)** | Directional gain; larger held-out validation needed to exclude zero |
@@ -277,9 +333,9 @@ To resolve the structural architectural imbalance where static 1-hop graphs lose
 
 #### Significance Tests & MuSiQue Scaling Analysis (10,000 Paired Bootstrap Resamples)
 - **MuSiQue at Scale ($N=500$ Questions):**
-  - **Mined vs. Flat 2-Step:** $\\Delta = \\mathbf{{+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']:.3f}}}$ (+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp), 95% CI: $\\mathbf{{[+{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']:.3f}, +{musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']:.3f}]}}$, $\\mathbf{{p < 0.0001}}$ (**Extremely Significant Win**).
-  - **Mined vs. Random Control:** $\\Delta = \\mathbf{{+{musique_res['significance_mined_vs_random_joint@2']['delta']:.3f}}}$ (+{musique_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp), 95% CI: $\\mathbf{{[+{musique_res['significance_mined_vs_random_joint@2']['ci_lower']:.3f}, +{musique_res['significance_mined_vs_random_joint@2']['ci_upper']:.3f}]}}$, $\\mathbf{{p < 0.0001}}$ (**Extremely Significant Win**).
-  - *Evaluation at Scale:* At target scale ($N=500$), the graph-driven 2nd step achieves an effect size of **+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp** over Flat 2-step ({musique_res['summary']['lthcm_mined']['joint@2']:.3f} vs {musique_res['summary']['flat_2step']['joint@2']:.3f}) with a tight 95% confidence interval strictly between $+{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']*100:.1f}\\%$ and $+{musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']*100:.1f}\\%$, confirmed decisive and statistically significant ($p < 0.0001$).
+  - **Mined vs. Flat 2-Step:** $\\Delta = \\mathbf{{+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']:.3f}}}$ (+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp), 95% CI: $\\mathbf{{[{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']:+.3f}, {musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']:+.3f}]}}$, $\\mathbf{{{musique_flat_pval_math}}}$ ({musique_flat_verdict}).
+  - **Mined vs. Random Control:** $\\Delta = \\mathbf{{+{musique_res['significance_mined_vs_random_joint@2']['delta']:.3f}}}$ (+{musique_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp), 95% CI: $\\mathbf{{[{musique_res['significance_mined_vs_random_joint@2']['ci_lower']:+.3f}, {musique_res['significance_mined_vs_random_joint@2']['ci_upper']:+.3f}]}}$, $\\mathbf{{{musique_random_pval_math}}}$ ({musique_random_verdict}).
+  - *Evaluation at Scale:* At target scale ($N=500$), the graph-driven 2nd step achieves an effect size of **+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp** over Flat 2-step ({musique_res['summary']['lthcm_mined']['joint@2']:.3f} vs {musique_res['summary']['flat_2step']['joint@2']:.3f}) with a tight 95% confidence interval strictly between {musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']*100:+.1f}\\% and {musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']*100:+.1f}\\%, confirmed decisive and statistically significant ({musique_flat_pval_str}).
 - **2WikiMultiHopQA ($N=100$):**
   - **Mined vs. Flat 2-Step:** $\\Delta = \\mathbf{{+{(twowiki_res['summary']['lthcm_mined']['joint@2'] - twowiki_res['summary']['flat_2step']['joint@2']):.3f}}}$ (+{(twowiki_res['summary']['lthcm_mined']['joint@2'] - twowiki_res['summary']['flat_2step']['joint@2'])*100:.1f}pp), 95% CI: $[{twowiki_res['significance_mined_vs_flat2step_joint@2']['ci_lower']:+.3f}, {twowiki_res['significance_mined_vs_flat2step_joint@2']['ci_upper']:+.3f}]$, $p = {twowiki_res['significance_mined_vs_flat2step_joint@2']['p_value']:.4f}$ (Directional lead, non-significant).
   - **Mined vs. Random Control:** $\\Delta = \\mathbf{{+{twowiki_res['significance_mined_vs_random_joint@2']['delta']:.3f}}}$ (+{twowiki_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp), 95% CI: $\\mathbf{{[+{twowiki_res['significance_mined_vs_random_joint@2']['ci_lower']:.3f}, +{twowiki_res['significance_mined_vs_random_joint@2']['ci_upper']:.3f}]}}$, $\\mathbf{{p = {twowiki_res['significance_mined_vs_random_joint@2']['p_value']:.4f}}}$ (**Statistically Significant Win**).
@@ -322,7 +378,7 @@ To evaluate whether routing provides value against always-running `mined+rerank`
 #### The Value Case for Routing vs. Always-Mined+Rerank:
 1. **Statistical Power & Significance Against Flat+Rerank:**
    - **Bridge Questions ($N=250$):** Both `mined+rerank` and `routed+rerank` achieve a statistically significant gain over `flat+rerank`: $\\Delta = \\mathbf{{+{hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['delta']*100:.2f}pp}}$ ($p = {hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['p_value']:.4f}$, 95% CI: $[+{hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['ci_lower']*100:.2f}\\%, +{hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['ci_upper']*100:.2f}\\%]$).
-   - **Comparison Questions ($N=250$):** `routed+rerank` matches `flat+rerank` with zero degradation ($\\Delta = 0.00\\%$, 95% CI: $[0.00\\%, 0.00\\%]$, $p = 1.0000$). `mined+rerank` performs similarly ({comp_mined_rerank:.1f}% vs {comp_flat_rerank:.1f}%, $\\Delta = {comp_mined_rerank_delta:+.2f}\\%$, $p = {comp_mined_rerank_pval:.4f}$, not significant).
+   - **Comparison Questions ($N=250$):** `routed+rerank` matches `flat+rerank` {comp_routed_str}. `mined+rerank` performs similarly ({comp_mined_rerank:.1f}% vs {comp_flat_rerank:.1f}%, $\\Delta = {comp_mined_rerank_delta:+.2f}\\%$, $p = {comp_mined_rerank_pval:.4f}$, not significant).
    - **Pooled Significance ($N=500$):** `routed+rerank` achieves a **statistically significant win over flat rerank** ($\\Delta = \\mathbf{{+{pooled_routed_delta:.2f}pp}}$, {pooled_routed_joint:.1f}% vs {pooled_flat_rerank_joint:.1f}%, $\\mathbf{{p = {pooled_routed_pval:.4f}}}$, 95% CI: $[+{hotpot_res['significance_routed_vs_flat_rerank_joint@2']['ci_lower']*100:.2f}\\%, +{hotpot_res['significance_routed_vs_flat_rerank_joint@2']['ci_upper']*100:.2f}\\%]$). By contrast, `mined+rerank` vs flat rerank sits at $p = {pooled_mined_rerank_pval:.4f}$ (marginal).
 2. **Measured Computational Efficiency (Dedicated Production-Routing Benchmark):**
    A dedicated production benchmark executing exclusively `retrieve_routed` (standalone production path, zero ablation overhead) over all $N=500$ questions recorded:
@@ -436,7 +492,7 @@ We explicitly document the contrastive restriction-map fine-tuning work (Tier R5
 ## 6. Audit of Review Items & Commitments
 
 1. **Item 1 (MuSiQue Discrepancy):** Resolved. Documented that "N=100S" meant synthetic fallback fixture ($p=0.004$); true HF evaluation is $0.240$ vs $0.180$ ($p=0.3444$).
-2. **Item 2 (MuSiQue / 2Wiki Dynamic Retrieval):** Resolved. Graph-driven 2nd step retrieval implemented. Evaluated at target scale ($N=500$), MuSiQue demonstrates verified performance at **{musique_res['summary']['lthcm_mined']['joint@2']:.3f}** (+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp over Flat 2-step {musique_res['summary']['flat_2step']['joint@2']:.3f}, $p < 0.0001$, 95% CI $[+{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']*100:.1f}\\%, +{musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']*100:.1f}\\%]$; +{musique_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp over Random {musique_res['summary']['lthcm_random']['joint@2']:.3f}). 2Wiki reaches **{twowiki_res['summary']['lthcm_mined']['joint@2']:.3f}** (+{(twowiki_res['summary']['lthcm_mined']['joint@2'] - twowiki_res['summary']['flat_2step']['joint@2'])*100:.1f}pp over Flat 2-step [$p={twowiki_res['significance_mined_vs_flat2step_joint@2']['p_value']:.4f}$, non-significant]; +{twowiki_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp over Random [$p={twowiki_res['significance_mined_vs_random_joint@2']['p_value']:.4f}$, significant]).
+2. **Item 2 (MuSiQue / 2Wiki Dynamic Retrieval):** Resolved. Graph-driven 2nd step retrieval implemented. Evaluated at target scale ($N=500$), MuSiQue demonstrates verified performance at **{musique_res['summary']['lthcm_mined']['joint@2']:.3f}** (+{musique_res['significance_mined_vs_flat2step_joint@2']['delta']*100:.1f}pp over Flat 2-step {musique_res['summary']['flat_2step']['joint@2']:.3f}, {musique_flat_pval_str}, 95% CI $[{musique_res['significance_mined_vs_flat2step_joint@2']['ci_lower']*100:+.1f}\\%, {musique_res['significance_mined_vs_flat2step_joint@2']['ci_upper']*100:+.1f}\\%]$; +{musique_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp over Random {musique_res['summary']['lthcm_random']['joint@2']:.3f}). 2Wiki reaches **{twowiki_res['summary']['lthcm_mined']['joint@2']:.3f}** (+{(twowiki_res['summary']['lthcm_mined']['joint@2'] - twowiki_res['summary']['flat_2step']['joint@2'])*100:.1f}pp over Flat 2-step [$p={twowiki_res['significance_mined_vs_flat2step_joint@2']['p_value']:.4f}$, non-significant]; +{twowiki_res['significance_mined_vs_random_joint@2']['delta']*100:.1f}pp over Random [$p={twowiki_res['significance_mined_vs_random_joint@2']['p_value']:.4f}$, significant]).
 3. **Item 3 (Type-Aware Routing at Scale):** Resolved. Evaluated at $N=500$ (250 Bridge, 250 Comparison). On Bridge queries, routed rerank beats flat rerank by +{hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['delta']*100:.2f}pp ($p={hotpot_res['significance_by_type']['bridge']['lthcm_rerank_vs_flat_rerank']['p_value']:.4f}$). On Comparison queries, unrouted graph search incurs a {comp_penalty:+.1f}pp 1-shot collapse ({comp_mined1:.1f}% vs {comp_flat1:.1f}%); routing completely bypasses the graph, matching flat rerank ({comp_routed_rerank:.1f}% vs {comp_flat_rerank:.1f}%, $\\Delta = {comp_routed_rerank - comp_flat_rerank:+.1f}$pp) while avoiding unnecessary graph compute. Across all $N=500$, Routed+Rerank achieves a statistically significant win over Flat+Rerank ($\\Delta = +{hotpot_res['significance_routed_vs_flat_rerank_joint@2']['delta']*100:.2f}$pp, $p={hotpot_res['significance_routed_vs_flat_rerank_joint@2']['p_value']:.4f}$).
 4. **Item 4 (FEVER/HoVer Sample & Table):** Resolved. Sampler fixed to stratify 50/50. Broken N=20 table removed; multi-sentence compositional limitation documented.
 5. **Item 5 (Phase 2 Relabeling):** Resolved. Relabeled from "benchmarks" to "qualitative case studies" in all docs, code, and paper. All PASS stamps removed.

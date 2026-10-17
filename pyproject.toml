@@ -57,6 +57,7 @@ norecursedirs = [
     "harness/references",
     ".venv",
     ".git",
+    ".metis",
     "dist",
     "build",
 ]

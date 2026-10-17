@@ -11,7 +11,7 @@
         "lthcm/__init__.py",
         "pyproject.toml"
       ],
-      "content_sha256": "cd97c3dcf998b545341d362bc693276e7155cc05fc4d6b264082363120881c00"
+      "content_sha256": "8925049f1d33b218fdb15e460011f761a1dfdf3df297caccf150af27d2d96674"
     },
     "dianoia": {
       "target_subdirs": [
@@ -22,7 +22,7 @@
         "dianoia/__init__.py",
         "pyproject.toml"
       ],
-      "content_sha256": "3a8e2bca35252091d8b8d2ba52af80f214e5245d29a3d8086f932b57e404a95b"
+      "content_sha256": "2371179c95e2ddae9c1c7ef4d385542de8ddeb8d5df46dea4360eb7bc9968ad2"
     }
   }
 }

@@ -95,6 +95,10 @@ class SafeEditBlock:
                         "type": "string",
                         "description": "Optional 4-hex-char FNV-1a hash of the last line of the search block for stale-anchor check",
                     },
+                    "allow_syntax_errors": {
+                        "type": "boolean",
+                        "description": "If true, persist file changes even if syntax validation detects errors (default false)",
+                    },
                 },
                 "required": ["path", "search_block", "replace_block"],
             },
@@ -108,6 +112,7 @@ class SafeEditBlock:
                     "lines_after": {"type": "integer"},
                     "syntax_valid": {"type": "boolean"},
                     "diagnostics": {"type": "array", "items": {"type": "string"}},
+                    "error": {"type": "string"},
                 },
             },
             declared_capabilities=["write_file", "edit_code"],
@@ -133,6 +138,7 @@ class SafeEditBlock:
         replace_block: str,
         expected_start_hash: Optional[str] = None,
         expected_end_hash: Optional[str] = None,
+        allow_syntax_errors: bool = False,
     ) -> Dict[str, Any]:
         target = Path(path)
         if not target.is_absolute():
@@ -165,15 +171,18 @@ class SafeEditBlock:
         # 1. Stale-Anchor Verification if hashline anchors were provided in search_block
         if parsed_anchors:
             for line_no, expected_hash in parsed_anchors:
-                if 1 <= line_no <= len(file_lines):
-                    actual_line = file_lines[line_no - 1]
-                    actual_hash = compute_line_hash(actual_line)
-                    if actual_hash.lower() != expected_hash.lower():
-                        raise ValueError(
-                            f"Stale-anchor rejection on line {line_no}: expected hash '{expected_hash}', "
-                            f"but file has hash '{actual_hash}' (content: '{actual_line.strip()}'). "
-                            "File has drifted since last read. Re-read with read_file_range before editing."
-                        )
+                if not (1 <= line_no <= len(file_lines)):
+                    raise ValueError(
+                        f"Anchor line number {line_no} is out of range for {target} (file has {len(file_lines)} lines)."
+                    )
+                actual_line = file_lines[line_no - 1]
+                actual_hash = compute_line_hash(actual_line)
+                if actual_hash.lower() != expected_hash.lower():
+                    raise ValueError(
+                        f"Stale-anchor rejection on line {line_no}: expected hash '{expected_hash}', "
+                        f"but file has hash '{actual_hash}' (content: '{actual_line.strip()}'). "
+                        "File has drifted since last read. Re-read with read_file_range before editing."
+                    )
 
         occurrences = content.count(clean_search)
         if occurrences == 0:
@@ -195,6 +204,10 @@ class SafeEditBlock:
         end_line_no = start_line_no + len(search_lines) - 1
 
         if expected_start_hash:
+            if not (1 <= start_line_no <= len(file_lines)):
+                raise ValueError(
+                    f"Start line number {start_line_no} is out of range for {target} (file has {len(file_lines)} lines)."
+                )
             actual_start_hash = compute_line_hash(file_lines[start_line_no - 1])
             if actual_start_hash.lower() != expected_start_hash.lower():
                 raise ValueError(
@@ -203,6 +216,10 @@ class SafeEditBlock:
                 )
 
         if expected_end_hash:
+            if not (1 <= end_line_no <= len(file_lines)):
+                raise ValueError(
+                    f"End line number {end_line_no} is out of range for {target} (file has {len(file_lines)} lines)."
+                )
             actual_end_hash = compute_line_hash(file_lines[end_line_no - 1])
             if actual_end_hash.lower() != expected_end_hash.lower():
                 raise ValueError(
@@ -214,6 +231,19 @@ class SafeEditBlock:
 
         # In-process syntax check (Feature C)
         diagnostics = validate_syntax(target, new_content)
+
+        # Gated write on syntax diagnostics (Finding B4)
+        if diagnostics and not allow_syntax_errors:
+            return {
+                "path": str(target),
+                "replaced": False,
+                "occurrences": 1,
+                "lines_before": len(file_lines),
+                "lines_after": len(file_lines),
+                "syntax_valid": False,
+                "diagnostics": diagnostics,
+                "error": f"Syntax validation failed: {diagnostics[0]}. Edit was aborted to prevent file corruption. Pass allow_syntax_errors=True to override.",
+            }
 
         # Atomic write via temporary file in the same directory
         temp_dir = target.parent

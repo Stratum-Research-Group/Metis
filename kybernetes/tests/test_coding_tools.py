@@ -192,23 +192,59 @@ def test_edit_file_block_hashline_stale_anchor_rejection(tmp_path: Path):
 
 
 def test_edit_file_block_syntax_diagnostics(tmp_path: Path):
+    """Finding B4 regression: edits with syntax errors are aborted unless allow_syntax_errors=True."""
     ws = tmp_path / "workspace"
     ws.mkdir()
     py_file = ws / "broken.py"
-    py_file.write_text("def valid():\n    return 1\n", encoding="utf-8")
+    initial_content = "def valid():\n    return 1\n"
+    py_file.write_text(initial_content, encoding="utf-8")
 
     editor = SafeEditBlock(allowed_roots=[ws])
 
-    # Edit into invalid syntax
+    # 1. Edit into invalid syntax without allow_syntax_errors -> aborted, file unchanged
     res = editor.edit_block(
         str(py_file),
         search_block="    return 1",
         replace_block="    return (unclosed",
+        allow_syntax_errors=False,
     )
-    assert res["replaced"] is True
+    assert res["replaced"] is False
     assert res["syntax_valid"] is False
     assert len(res["diagnostics"]) > 0
     assert "SyntaxError" in res["diagnostics"][0]
+    assert "Syntax validation failed" in res["error"]
+    assert py_file.read_text(encoding="utf-8") == initial_content
+
+    # 2. Force write with allow_syntax_errors=True
+    res_forced = editor.edit_block(
+        str(py_file),
+        search_block="    return 1",
+        replace_block="    return (unclosed",
+        allow_syntax_errors=True,
+    )
+    assert res_forced["replaced"] is True
+    assert res_forced["syntax_valid"] is False
+    assert len(res_forced["diagnostics"]) > 0
+    assert py_file.read_text(encoding="utf-8") == "def valid():\n    return (unclosed\n"
+
+
+def test_edit_file_block_out_of_range_anchor_rejection(tmp_path: Path):
+    """Finding B4 regression: out-of-range hash anchors must raise ValueError instead of being skipped."""
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    py_file = ws / "test.py"
+    py_file.write_text("x = 1\ny = 2\n", encoding="utf-8")
+
+    editor = SafeEditBlock(allowed_roots=[ws])
+
+    # Line 99 does not exist (file only has 2 lines)
+    bad_anchor = "99:abcd|z = 3"
+    with pytest.raises(ValueError, match="Anchor line number 99 is out of range"):
+        editor.edit_block(
+            str(py_file),
+            search_block=bad_anchor,
+            replace_block="z = 4",
+        )
 
 
 def test_sandboxed_bash_env_sanitization_and_process_cleanup(tmp_path: Path, monkeypatch):
