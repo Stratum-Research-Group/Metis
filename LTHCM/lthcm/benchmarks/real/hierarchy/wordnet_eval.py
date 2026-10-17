@@ -1,14 +1,13 @@
 """
-Real WordNet Hierarchy Benchmark (Poincaré Hyperbolic Metric vs Euclidean)
-==========================================================================
-Evaluates hierarchical reconstruction on the WordNet noun transitive closure
-following the classic Nickel & Kiela (NeurIPS 2017) protocol.
+WordNet Hierarchy Geometric Demo (Poincaré Hyperbolic vs Euclidean Radial Construction)
+=======================================================================================
+Evaluates hierarchical capacity on a BFS subtree of the WordNet noun transitive closure.
 
-Evaluates the central metric claim of LTHCM (Section 3):
-  - In trees and hierarchical taxonomies, the number of nodes grows exponentially
-    with depth (2^d), which is isometric to the hyperbolic disk H^n where circumference
-    and area grow exponentially as 2*pi*sinh(r) and 2*pi*(cosh(r) - 1).
-  - Euclidean space cannot embed trees without catastrophic distortion or massive dimensionality.
+NOTE (Finding B17):
+  This is a synthetic radial construction demonstration, not an empirical benchmark of
+  representations trained via Riemannian SGD (as in Nickel & Kiela 2017). Both arms are
+  constructed analytically from graph tree depth along seeded random directions to
+  illustrate hyperbolic vs Euclidean radial metric properties, not learned embeddings.
 
 Metrics:
   - Mean Average Precision (MAP)
@@ -221,29 +220,35 @@ class WordNetHierarchyBenchmark:
             "poincare_hyperbolic": {
                 "map": round(p_map, 4),
                 "mean_rank": round(p_mrank, 2),
+                "description": "Analytical radial projection in Poincaré Ball H^D",
             },
             "euclidean": {
                 "map": round(e_map, 4),
                 "mean_rank": round(e_mrank, 2),
+                "description": "Analytical radial projection in Euclidean Space R^D",
             },
             "gain_hyperbolic_over_euclidean": {
                 "map_delta": round(p_map - e_map, 4),
                 "rank_reduction": round(e_mrank - p_mrank, 2),
             },
             "significance_test": sig_test,
+            "protocol": "synthetic_radial_construction_demo",
+            "is_learned_embedding": False,
+            "finding_b17_disclosure": "Constructed analytically from graph depth; illustrates metric capacity, not trained Riemannian SGD representations.",
             "run_id": run_id,
         }
 
         print("\n" + "=" * 80)
-        print(" REAL WORDNET HIERARCHICAL RECONSTRUCTION BENCHMARK")
+        print(" WORDNET HIERARCHY GEOMETRIC DEMO (Analytical Radial Construction)")
         print("=" * 80)
-        print(f" {'Metric Space':<28} | {'Dimension (D)':<15} | {'MAP':<10} | {'Mean Rank':<10}")
+        print(f" {'Metric Space':<32} | {'Dimension (D)':<15} | {'MAP':<10} | {'Mean Rank':<10}")
         print("-" * 80)
-        print(f" {'Euclidean Space R^D':<28} | {self.d_model:<15} | {e_map:<10.4f} | {e_mrank:<10.2f}")
-        print(f" {'Poincaré Ball H^D (LTHCM)':<28} | {self.d_model:<15} | {p_map:<10.4f} | {p_mrank:<10.2f}")
+        print(f" {'Euclidean Radial R^D':<32} | {self.d_model:<15} | {e_map:<10.4f} | {e_mrank:<10.2f}")
+        print(f" {'Poincaré Radial H^D (Demo)':<32} | {self.d_model:<15} | {p_map:<10.4f} | {p_mrank:<10.2f}")
         print("=" * 80)
         print(f" Paired Bootstrap Test (Poincaré vs Euclidean MAP): Delta = {sig_test['delta']:+.4f}, "
               f"95% CI: [{sig_test['ci_lower']:+.4f}, {sig_test['ci_upper']:+.4f}], p = {sig_test['p_value']:.4f}")
+        print(" Note: Synthetic radial construction from tree depth (Finding B17), not learned SGD embeddings.")
         print("=" * 80 + "\n")
 
         with open(os.path.join(output_dir, "wordnet_hierarchy_summary.json"), "w") as f:

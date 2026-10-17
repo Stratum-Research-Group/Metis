@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from enum import Enum
 import collections
+import copy
 import json
 import logging
 import os
@@ -818,7 +819,7 @@ class StomaIndexer:
 
     def _clone_candidate_engine(self) -> LTHCMEngine:
         """Clone current serving engine in memory without touching serving state."""
-        return pickle.loads(pickle.dumps(self.adapter.engine))
+        return copy.deepcopy(self.adapter.engine)
 
     def _normalize_rel_path(self, path: Path) -> str:
         """Convert a path into a stable normalized relative path."""
