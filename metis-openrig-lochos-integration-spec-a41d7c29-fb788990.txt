@@ -1,0 +1,214 @@
+================================================================================
+METIS / MSS INTEGRATION SPEC - OpenRig (mvschwarz/openrig) as a new MSS section
+Proposed working name: LOCHOS (lokhos, "a squad/file of soldiers with assigned
+stations"). Alternates: TAXIS (battle-ordering), SYMMORIA (company). Proposed
+only - naming is Nick's call.
+================================================================================
+Prepared: 2026-10-17, by Instinct (independent read, not your coding AI)
+Sources, read directly this session:
+  - OpenRig full clone @ HEAD 45bff691134e47898df9a0e4275c161057228635
+    (2026-10-17). https://github.com/mvschwarz/openrig
+  - Metis full clone @ 369939e4fb191eeeb381170f35f16803f65a60af (origin/main).
+    https://gitlab.com/akarta-315h/metis
+  - OpenRig GitHub Actions, observed live (URLs cited inline).
+Scope: this file covers ONLY the OpenRig -> MSS item. Existing-code defects
+stay in the round-4 review file; nothing here is a current bug.
+Metis status label: everything said about Metis below is source inspection at
+369939e. The concurrent review round owns test execution; this file asserts
+nothing as runtime-proven.
+
+--------------------------------------------------------------------------------
+1. PLAIN VERDICT
+--------------------------------------------------------------------------------
+Is it good? Yes. OpenRig is a working, actively developed agent-orchestration
+system: pull requests were merging the day I read it, and its Tests workflow
+(build, typecheck, package tests, and the installed-scenario job) was green on
+an observed run from today:
+  https://github.com/mvschwarz/openrig/actions/runs/39026233282
+It solves a layer MSS does not currently have: a persistent TEAM of agents with
+roles, named addresses, shared context, and durable owned work. MSS at 369939e
+is one coding agent (kybernetes) with in-process worktree subagents.
+
+Is it worth your time? Yes, as a design source for that team layer, and
+possibly as a component (two routes in section 5, left open).
+
+Worth knowing: your stack already credits this author's ecosystem.
+kybernetes/kybernetes/engine/state.py line 1: "Agent Semantic State Finite
+State Machine (inspired by Herdr agent multiplexer)". On the OpenRig side,
+`rig setup` installs herdr by default (README, "What OpenRig changes on your
+machine"), so Herdr and OpenRig are connected projects. Anything beyond that
+(how much of OpenRig grew out of Herdr) is my inference, not verified lineage.
+
+--------------------------------------------------------------------------------
+2. WHAT OPENRIG IS (from the repo, anchors inline)
+--------------------------------------------------------------------------------
+- Local daemon (packages/daemon/): HTTP server (Hono, port 7433), SQLite state
+  in ~/.openrig/openrig.sqlite, event bus, SSE updates. Source:
+  ARCHITECTURE.md, "The request path".
+- Declarative teams: a RigSpec YAML (v0.2) defines rigs -> pods -> seats; each
+  seat has an AgentSpec, a runtime, cwd, model, restore policy, and a
+  permission policy. Source: docs/reference/rig-spec.md,
+  packages/daemon/src/domain/rigspec-schema.ts.
+- Six runtime adapters: claude-code, codex, pi, omp (extends pi), terminal,
+  stub. Agents run UNMODIFIED, inside tmux; OpenRig adds coordination around
+  them. Adapter contract (listInstalled, project, deliverStartup,
+  launchHarness, checkReady): packages/daemon/src/domain/runtime-adapter.ts.
+- Kernel: a built-in rig with an "operator" agent you talk to; it coordinates
+  other teams. Ships starter/workshop/factory team templates (README).
+- Durable work queue with explicit ownership ("baton"). Sending a message does
+  NOT create work; agents record tasks in the queue deliberately. The
+  queue-baton-survives-restart scenario (packages/test-system/scenarios/
+  queue-baton-survives-restart.yaml) runs in the installed-scenario CI job,
+  and that job is green on observed runs:
+  https://github.com/mvschwarz/openrig/actions/runs/39026233282 (today) and
+  https://github.com/mvschwarz/openrig/actions/runs/38180892950 (2026-10-11).
+  I verified the job result, not the scenario's internal assertions.
+- Attention surface: seats blocked on trust/permission prompts report
+  attention_required; `rig ps` and the TUI reconcile what needs a human
+  (docs/reference/agent-startup-guide.md; packages/daemon/src/domain/
+  seat-attention-reconciler.ts).
+- Skills + context packs: SKILL.md libraries with versioned manifests,
+  projected into each seat's workspace at launch and served by the daemon
+  (ARCHITECTURE.md, "A shipped skill" / "A context pack").
+- Permission governance: per-seat modes (floor / full_bypass / inherit) applied
+  as native harness launch flags, audited changes, YOLO off by default
+  (docs/reference/rig-spec.md, docs/reference/non-interruptive-mode.md).
+  This works by wrapping harness CLIs' own flag systems - a different
+  mechanism from Phylax's action-bound tokens (harness/hardness.md section 4).
+  I have not audited either system end-to-end; treat both as designs plus the
+  test evidence each carries.
+- Test system worth copying: YAML scenarios run the real CLI, daemon, tmux and
+  SQLite with scripted stub agents. Each defect-class scenario pairs a healthy
+  run with a deliberately seeded regression and must go RED on the seeded run
+  (packages/test-system/README.md, "The seed contract"). Per the same file,
+  most authored scenarios are not yet runnable; the ones in CI are named
+  above. Scale reference (self-reported, ARCHITECTURE.md "Key counts" at
+  c750304f): 94 migrations, 87 rig commands, 18 MCP tools, 15 scenarios.
+
+--------------------------------------------------------------------------------
+3. HOW IT MAPS ONTO MSS - the proposed LOCHOS section
+--------------------------------------------------------------------------------
+The MSS blueprint (harness/hardness.md @369939e) specifies a single-agent loop:
+Stoma map -> Dianoia root -> 4 tools -> Phylax gate -> Krisis gate -> Odyssey
+checkpoint -> Hermes skill learn. OpenRig's contribution is the layer AROUND
+that loop when several agents run at once.
+
+OpenRig concept            -> proposed MSS home
+---------------------------+-----------------------------------------------
+Rig / pod / seat topology  -> New kybernetes module (proposed name "lochos")
+  (RigSpec YAML)              with a rig.yaml-style schema. Seats = addressed
+                              agents (name@rig).
+Kernel operator            -> Kybernetes itself, extended: the conversational
+                              front-end that assigns work to specialist seats
+                              and reports back. Matches its orchestrator role
+                              in the component table.
+Runtime adapters           -> Metis-native runtimes: the kybernetes coding
+                              agent on a hestia-served model, worktree
+                              subagents (kybernetes/kybernetes/engine/
+                              subagent.py exists in source), a plain terminal
+                              seat, and a stub runtime for tests. OpenRig's
+                              RuntimeAdapter interface (path above) is a
+                              concrete contract to mirror.
+Durable queue + baton      -> Proposal: a transactional SQLite work queue
+                              beside kybernetes, explicit owner per item,
+                              required to survive a kybernetes restart, with a
+                              restart-survival test modeled on the OpenRig
+                              scenario. Reason this matters: the current
+                              subagent manager runs background work on
+                              in-process threads (subagent.py imports
+                              threading, lines 9/59/100), so unfinished work
+                              does not obviously survive a process restart.
+                              I inspected the source; I did not test restart
+                              behavior.
+Attention surface          -> kybernetes FSM already has AWAITING_APPROVAL
+                              (contracts/enums.py; engine/state.py). Lochos
+                              extends that idea to a cross-seat attention list,
+                              surfaced in Prosopon (fits the bottom-dock
+                              Phylax audit tab in hardness.md section 5).
+Skills / context packs     -> harness/skill_learner.py writes learned
+                              .metis/skills (source inspected). Lochos adds
+                              the distribution half: per-seat manifests
+                              projected at seat launch. OpenRig's context-pack
+                              manifest format is a ready template.
+Session restore            -> engine/checkpoint.py implements git milestone
+                              checkpoints (source inspected). Lochos adds
+                              cross-seat restore briefs and peer-driven
+                              restore, per OpenRig's continuity_policy
+                              (docs/reference/rig-spec.md).
+Scenario test discipline   -> Dokime-shaped: seeded-regression scenario pairs
+                              (GREEN healthy / RED seeded) for multi-agent
+                              behavior. The discipline is the valuable part;
+                              the code is TypeScript and not portable.
+Prosopon UI                -> New activity-bar section (proposed: "Lochos")
+                              beside the seven in hardness.md section 5, with
+                              OpenRig's TUI drill-down (rig graph -> seat
+                              table -> seat detail) as the interaction model.
+                              Note: OpenRig's own React web UI is in
+                              maintenance mode upstream (ARCHITECTURE.md,
+                              Packages table) - copy the TUI's model, not the
+                              web UI's.
+
+--------------------------------------------------------------------------------
+4. WHAT TO BRING ACROSS vs WHAT NOT TO TAKE
+--------------------------------------------------------------------------------
+TAKE, in this order (my ranking from reading both codebases):
+ 1. Durable owned-work queue with baton semantics and a restart-survival
+    test. Largest gap between the two designs.
+ 2. Declarative team spec (rig.yaml/agent.yaml) bootable with one command.
+ 3. Attention-required taxonomy and reconciler, so no seat stalls silently.
+ 4. Seeded-regression scenario discipline for multi-agent behavior.
+ 5. Context-pack distribution of skills to seats at launch.
+ 6. Named addressing (seat@rig) and the rule that a message is not a task;
+    tasks enter the queue explicitly. Cheap, prevents a whole bug class.
+
+DO NOT TAKE:
+ - The tmux-pane runtime model. It exists to wrap closed harness CLIs
+   (Claude Code, Codex); Metis agents are your own Python processes.
+ - Their permission implementation. It is native-harness flag management for
+   external CLIs; Metis's Phylax design (single-use action-bound tokens,
+   hardness.md section 4) is a different mechanism and the blueprint intends
+   it to gate every mutation. How well each works in practice is a test
+   question, not something this spec asserts.
+ - Provider sign-in machinery (Claude/Codex account handling): not applicable
+   to hestia-served local models.
+
+--------------------------------------------------------------------------------
+5. OPEN DECISIONS (not picked for you)
+--------------------------------------------------------------------------------
+A) Build route. Both keep everything local; this is a tooling tradeoff, not a
+   control tradeoff.
+   A1. Native: implement the Lochos layer in Python inside kybernetes,
+       borrowing OpenRig's semantics. One language, no new daemons; you
+       rebuild queue/restore/attention semantics yourself.
+   A2. Adapter: run OpenRig as-is and write a Metis RuntimeAdapter (their
+       documented extension point; their roadmap lists a planned shared
+       adapter for new agent types, design discussion issue #43) so OpenRig
+       manages kybernetes seats. Fastest way to evaluate the team semantics
+       hands-on; cost is Node 22 + tmux + a second daemon in your stack.
+   A2-then-A1 is a valid sequence: evaluate first, port what proves out.
+B) UI placement: new activity-bar icon vs a "team" tab inside the existing
+   Metis Agent view (hardness.md already defines 7 icons).
+C) Name: LOCHOS / TAXIS / SYMMORIA - your pick.
+
+--------------------------------------------------------------------------------
+6. RISKS / CAVEATS
+--------------------------------------------------------------------------------
+- OpenRig moves fast (94 migrations; multiple PR merges on the day I read it).
+  Record the SHA you build from; this spec is pinned to 45bff691.
+- Scope discipline: Lochos is a NEW layer. The 4-tool contract, Phylax gating
+  and the Dianoia loop are MSS's existing spine per the blueprint; the mapping
+  above adds coordination around them, it does not replace them.
+- The queue proposal assumes the restart-durability gap from source inspection
+  (threaded in-process subagents). The round-4 review may confirm or adjust
+  this; take its finding over mine if they differ.
+
+--------------------------------------------------------------------------------
+7. SUGGESTED FIRST BOUNDED CHANGE (if you say go)
+--------------------------------------------------------------------------------
+Rig #1, "starter" equivalent: two seats - build (kybernetes coding agent on a
+hestia model) and review (second seat, independent context) - one durable
+SQLite queue, one rig.yaml, one boot command, and one seeded-regression test
+proving a queue baton survives a kybernetes restart. That single slice forces
+the queue, the spec schema, addressing and the test discipline into existence
+without touching Phylax/Dianoia internals.
+================================================================================

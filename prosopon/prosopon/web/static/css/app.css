@@ -1903,4 +1903,225 @@ body {
   white-space: pre;
 }
 
+/* ==========================================================================
+   Lochos Multi-Agent Squad Fleet & Seat Inspector Styles
+   ========================================================================== */
+.squad-workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+}
+
+.squad-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.squad-col {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 1.25rem;
+  border-right: 1px solid var(--border-color);
+}
+
+.squad-seats-col {
+  width: 340px;
+  min-width: 300px;
+  background: var(--bg-secondary);
+}
+
+.squad-details-col {
+  flex: 1;
+  min-width: 420px;
+  background: var(--bg-dark);
+}
+
+.squad-queue-col {
+  width: 360px;
+  min-width: 320px;
+  background: var(--bg-secondary);
+  border-right: none;
+}
+
+.squad-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.squad-panel-header h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.squad-seats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.squad-seat-card {
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.squad-seat-card:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+.squad-seat-card.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.seat-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.seat-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+.seat-card-address {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--accent-primary);
+  margin-bottom: 0.5rem;
+}
+
+.seat-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.seat-card-baton {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-left: 2px solid #10b981;
+  border-radius: 4px;
+  color: var(--text-main);
+}
+
+.baton-label {
+  font-weight: 600;
+  color: #10b981;
+}
+
+.seat-card-idle {
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* Seat Details */
+.squad-seat-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.skills-pill-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.skill-pill {
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+/* Attention Cards */
+.attention-card {
+  padding: 0.85rem;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  margin-bottom: 0.75rem;
+}
+
+.attention-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.attention-body p {
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+}
+
+.attention-actions {
+  margin-top: 0.5rem;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.queue-item-card {
+  padding: 0.85rem;
+  border-radius: 6px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+}
+
+.queue-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+}
+
+.queue-card-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 0.35rem;
+}
+
+.queue-card-owner {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
 

@@ -26,6 +26,7 @@ from kybernetes.config import KybernetesConfig, load_config
 from kybernetes.contracts.turn import ApprovalResolution, TurnRequest
 from kybernetes.engine.pipeline import ExecutionPipeline
 from kybernetes.engine.session import SessionManager
+from kybernetes.lochos import LochosSquadManager
 from kybernetes.routing.router import PlanRouter
 from kybernetes.tools.registry import ToolRegistry
 
@@ -59,6 +60,7 @@ def create_app(
     phylax_adapter: Optional[PhylaxAdapter] = None,
     krisis_adapter: Optional[KrisisAdapter] = None,
     hestia_adapter: Optional[HestiaAdapter] = None,
+    lochos_squad: Optional[LochosSquadManager] = None,
     config: Optional[KybernetesConfig] = None,
 ) -> FastAPI:
     """Create and configure FastAPI application for Kybernetes."""
@@ -80,6 +82,7 @@ def create_app(
     phylax_adapter = phylax_adapter or PhylaxAdapter()
     krisis_adapter = krisis_adapter or KrisisAdapter()
     session_manager = SessionManager()
+    lochos_squad = lochos_squad or LochosSquadManager()
     router = PlanRouter()
 
     pipeline = ExecutionPipeline(
@@ -168,6 +171,9 @@ def create_app(
             "endpoints": {
                 "health": "/v1/health",
                 "chat_turn": "/v1/chat/turn",
+                "lochos_squad": "/v1/lochos/squad",
+                "lochos_queue": "/v1/lochos/queue",
+                "lochos_attention": "/v1/lochos/attention",
                 "admin_overview": "/v1/admin/overview",
                 "docs": "/docs",
             },
@@ -319,5 +325,85 @@ def create_app(
         if not rep:
             raise HTTPException(status_code=404, detail=f"No reconciliation report found for task {task_id}")
         return rep.model_dump()
+
+    # --- Lochos Multi-Agent Squad API ---
+
+    @app.get("/v1/lochos/squad")
+    async def get_lochos_squad() -> Dict[str, Any]:
+        """Retrieve active Lochos multi-agent squad status, seats, and active tasks."""
+        return lochos_squad.to_status_dict()
+
+    @app.get("/v1/lochos/queue")
+    async def get_lochos_queue(
+        status: Optional[str] = None,
+        seat_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve work items tracked in the Lochos SQLite queue."""
+        tasks = lochos_squad.queue.list_tasks(status=status, seat_id=seat_id)
+        return [t.to_dict() for t in tasks]
+
+    @app.post("/v1/lochos/dispatch")
+    async def dispatch_lochos_work(
+        data: Dict[str, Any],
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
+        """Dispatch a mission slice task to a specific seat in the squad."""
+        mission = data.get("mission", "general")
+        slice_id = data.get("slice_id", "001")
+        title = data.get("title", "Untitled Task")
+        description = data.get("description", "")
+        target_seat = data.get("target_seat")
+        payload = data.get("payload")
+
+        item = lochos_squad.dispatch_work(
+            mission=mission,
+            slice_id=slice_id,
+            title=title,
+            description=description,
+            target_seat=target_seat,
+            payload=payload,
+        )
+        return item.to_dict()
+
+    @app.post("/v1/lochos/transfer")
+    async def transfer_lochos_baton(
+        data: Dict[str, Any],
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
+        """Transfer work baton from one seat to another."""
+        task_id = data.get("task_id")
+        from_seat = data.get("from_seat")
+        to_seat = data.get("to_seat")
+        note = data.get("note")
+        if not task_id or not from_seat or not to_seat:
+            raise HTTPException(status_code=400, detail="task_id, from_seat, and to_seat are required")
+
+        item = lochos_squad.transfer_baton(
+            task_id=task_id,
+            from_seat=from_seat,
+            to_seat=to_seat,
+            note=note,
+        )
+        return item.to_dict()
+
+    @app.get("/v1/lochos/attention")
+    async def get_lochos_attention() -> List[Dict[str, Any]]:
+        """Retrieve cross-seat attention reconciliation requests."""
+        return lochos_squad.get_attention_summary()
+
+    @app.post("/v1/lochos/attention/resolve")
+    async def resolve_lochos_attention(
+        data: Dict[str, Any],
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
+        """Resolve a blocked seat's attention request."""
+        task_id = data.get("task_id")
+        seat_id = data.get("seat_id")
+        resolution = data.get("resolution", "approved")
+        if not task_id or not seat_id:
+            raise HTTPException(status_code=400, detail="task_id and seat_id are required")
+
+        item = lochos_squad.queue.resolve_attention(task_id=task_id, seat_id=seat_id, resolution=resolution)
+        return item.to_dict()
 
     return app

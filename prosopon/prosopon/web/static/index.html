@@ -28,6 +28,14 @@
             <polyline points="8 6 2 12 8 18"/>
           </svg>
         </button>
+        <button id="act-btn-squad" class="activity-btn" data-view="squad" aria-label="Lochos Squad & Team Fleet" title="Lochos Squad & Team Fleet">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </button>
         <button id="act-btn-dashboard" class="activity-btn" data-view="dashboard" aria-label="Control Dashboard & Telemetry" title="Control Dashboard & Telemetry">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="7" height="9"/>
@@ -58,6 +66,7 @@
           <div class="view-switcher" role="tablist">
             <button id="tab-btn-chat" class="view-tab-btn active" role="tab" aria-selected="true">Agent</button>
             <button id="tab-btn-editor" class="view-tab-btn" role="tab" aria-selected="false">Workbench</button>
+            <button id="tab-btn-squad" class="view-tab-btn" role="tab" aria-selected="false">Lochos Squad</button>
             <button id="tab-btn-dashboard" class="view-tab-btn" role="tab" aria-selected="false">Control Center</button>
             <button id="tab-btn-settings" class="view-tab-btn" role="tab" aria-selected="false">Settings</button>
           </div>
@@ -158,6 +167,11 @@
         <section id="settings-workspace" class="settings-workspace hidden" role="region" aria-label="Metis Settings">
           <!-- Rendered dynamically by settings.js -->
         </section>
+
+        <!-- 5. Lochos Multi-Agent Squad Fleet Workspace -->
+        <section id="squad-workspace" class="squad-workspace hidden" role="region" aria-label="Lochos Squad Fleet">
+          <!-- Rendered dynamically by squad.js -->
+        </section>
       </div>
     </div>
 
@@ -194,6 +208,7 @@
   <script src="/static/js/dashboard.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/workbench.js"></script>
+  <script src="/static/js/squad.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

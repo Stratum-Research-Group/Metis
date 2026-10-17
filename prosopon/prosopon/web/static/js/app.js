@@ -25,16 +25,19 @@ class App {
     // Views & Workspaces
     this.tabBtnChat = document.getElementById("tab-btn-chat");
     this.tabBtnEditor = document.getElementById("tab-btn-editor");
+    this.tabBtnSquad = document.getElementById("tab-btn-squad");
     this.tabBtnDashboard = document.getElementById("tab-btn-dashboard");
     this.tabBtnSettings = document.getElementById("tab-btn-settings");
 
     this.actBtnChat = document.getElementById("act-btn-chat");
     this.actBtnEditor = document.getElementById("act-btn-editor");
+    this.actBtnSquad = document.getElementById("act-btn-squad");
     this.actBtnDashboard = document.getElementById("act-btn-dashboard");
     this.actBtnSettings = document.getElementById("act-btn-settings");
 
     this.chatWorkspace = document.getElementById("chat-workspace");
     this.editorWorkspace = document.getElementById("editor-workspace");
+    this.squadWorkspace = document.getElementById("squad-workspace");
     this.dashboardWorkspace = document.getElementById("dashboard-workspace");
     this.settingsWorkspace = document.getElementById("settings-workspace");
     
@@ -71,6 +74,7 @@ class App {
     const navViews = [
       { top: this.tabBtnChat, act: this.actBtnChat, id: "chat" },
       { top: this.tabBtnEditor, act: this.actBtnEditor, id: "editor" },
+      { top: this.tabBtnSquad, act: this.actBtnSquad, id: "squad" },
       { top: this.tabBtnDashboard, act: this.actBtnDashboard, id: "dashboard" },
       { top: this.tabBtnSettings, act: this.actBtnSettings, id: "settings" },
     ];
@@ -120,6 +124,9 @@ class App {
     if (window.MetisWorkbench) {
       window.MetisWorkbench.init();
     }
+    if (window.MetisSquad) {
+      window.MetisSquad.init();
+    }
     try {
       const sessions = await API.listSessions();
       if (sessions.length > 0) {
@@ -137,6 +144,7 @@ class App {
     const views = [
       { id: "chat", top: this.tabBtnChat, act: this.actBtnChat, ws: this.chatWorkspace },
       { id: "editor", top: this.tabBtnEditor, act: this.actBtnEditor, ws: this.editorWorkspace },
+      { id: "squad", top: this.tabBtnSquad, act: this.actBtnSquad, ws: this.squadWorkspace },
       { id: "dashboard", top: this.tabBtnDashboard, act: this.actBtnDashboard, ws: this.dashboardWorkspace },
       { id: "settings", top: this.tabBtnSettings, act: this.actBtnSettings, ws: this.settingsWorkspace },
     ];
@@ -161,6 +169,8 @@ class App {
       window.MetisSettings.render();
     } else if (viewName === "editor" && window.MetisWorkbench) {
       window.MetisWorkbench.render();
+    } else if (viewName === "squad" && window.MetisSquad) {
+      window.MetisSquad.render();
     }
 
     window.dispatchEvent(new CustomEvent("prosopon:tab-changed", { detail: { tab: viewName } }));
