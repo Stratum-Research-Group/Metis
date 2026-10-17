@@ -140,13 +140,41 @@ class CodingAgentHarness:
             is_mutating = tool_name in ("edit_file_block", "write_file", "sandboxed_bash")
             if is_mutating:
                 active_checkpoint = self.checkpointer.create_checkpoint(f"Pre-{tool_name} step {step}")
-                # If awaiting approval is requested in action:
+                # If awaiting approval is requested in action (Finding A2):
                 if action.get("requires_approval") and not approval_token:
                     self.state_machine.transition(
                         AgentSemanticState.AWAITING_APPROVAL,
                         reason=f"Phylax gating required for mutating tool '{tool_name}'",
                         metadata={"step": step, "tool_name": tool_name, "arguments": args},
                     )
+                    result = ToolResult(
+                        tool_id=tool_name,
+                        success=False,
+                        error=f"Mutating tool '{tool_name}' paused: awaiting Phylax approval token",
+                    )
+                    turn_state = CodingTurnState(
+                        step=step,
+                        tool_name=tool_name,
+                        arguments=args,
+                        result=result,
+                        passed_validation=False,
+                        error=result.error,
+                        semantic_state=AgentSemanticState.AWAITING_APPROVAL,
+                    )
+                    history.append(turn_state)
+                    break
+
+                # If in autonomous mode (no interactive approval requested) and no explicit token provided:
+                if not approval_token and getattr(self.tool_registry, "enforce_approvals", False):
+                    _, app_req = self.tool_registry.phylax_adapter.is_action_permitted(
+                        capability=tool_name,
+                        target=args.get("path", tool_name),
+                        arguments=args,
+                    )
+                    if app_req:
+                        self.tool_registry.phylax_adapter.resolve_approval(app_req["approval_id"], "allow_once")
+                        approval_token = app_req["approval_id"]
+
                 self.state_machine.transition(
                     AgentSemanticState.MUTATING,
                     reason=f"Executing mutating tool '{tool_name}'",
@@ -194,15 +222,21 @@ class CodingAgentHarness:
             history.append(turn_state)
 
         # Final verification
-        all_passed = (len(history) > 0 and history[-1].passed_validation and (verifier() if verifier else True))
-        status = TurnOutcomeStatus.VERIFIED if all_passed else TurnOutcomeStatus.FAILED
-
-        final_state = AgentSemanticState.COMPLETED if all_passed else AgentSemanticState.FAILED
-        self.state_machine.transition(
-            final_state,
-            reason="Autonomous coding loop completed" if all_passed else "Loop ended with open verification failures",
-            metadata={"success": all_passed, "total_steps": len(history)},
-        )
+        if self.state_machine.current_state == AgentSemanticState.AWAITING_APPROVAL:
+            all_passed = False
+            status = TurnOutcomeStatus.DENIED
+            final_state = AgentSemanticState.AWAITING_APPROVAL
+            final_msg = f"Autonomous coding loop paused awaiting interactive approval for step {len(history)}."
+        else:
+            all_passed = (len(history) > 0 and history[-1].passed_validation and (verifier() if verifier else True))
+            status = TurnOutcomeStatus.VERIFIED if all_passed else TurnOutcomeStatus.FAILED
+            final_state = AgentSemanticState.COMPLETED if all_passed else AgentSemanticState.FAILED
+            self.state_machine.transition(
+                final_state,
+                reason="Autonomous coding loop completed" if all_passed else "Loop ended with open verification failures",
+                metadata={"success": all_passed, "total_steps": len(history)},
+            )
+            final_msg = "Task completed and verified." if all_passed else "Task completed with open verification issues."
 
         return CodingSessionResult(
             session_id=session_id,
@@ -210,7 +244,7 @@ class CodingAgentHarness:
             status=status,
             total_steps=len(history),
             history=history,
-            final_message="Task completed and verified." if all_passed else "Task completed with open verification issues.",
+            final_message=final_msg,
             checkpoints_taken=len(self.checkpointer.list_checkpoints()),
             backtracks_executed=backtracks,
             final_state=final_state,

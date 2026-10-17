@@ -519,7 +519,8 @@ class ExecutionPipeline:
                     return
 
                 executed_tool_name = tool_name
-                t_res = self.tool_registry.execute(ToolCallRequest(tool_id=tool_name, arguments=tool_args))
+                approval_id = app_req.get("approval_id") if app_req else None
+                t_res = self.tool_registry.execute(ToolCallRequest(tool_id=tool_name, arguments=tool_args, approval_id=approval_id))
                 tool_output = t_res.data
                 stage_lat = (time.perf_counter() - stage_start) * 1000
                 timings_ms["tool"] = round(stage_lat, 2)

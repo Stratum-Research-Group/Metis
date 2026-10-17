@@ -1,5 +1,6 @@
 """Session management, turn history, cancellation handling, and privacy redaction."""
 
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -8,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from kybernetes.contracts.turn import TurnEvent, TurnRequest
+
+logger = logging.getLogger(__name__)
 
 
 class SessionTurn(BaseModel):
@@ -41,6 +44,8 @@ class SessionManager:
         re.compile(r"(?i)api[_-]?key[\s]*[=:][\s]*['\"]?([a-zA-Z0-9_\-]{16,})['\"]?"),
         re.compile(r"(?i)bearer[\s]+([a-zA-Z0-9_\-\.]{20,})"),
         re.compile(r"(?i)password[\s]*[=:][\s]*['\"]?([^'\"\s]{6,})['\"]?"),
+        re.compile(r"(?i)token[\s]*[=:][\s]*['\"]?([a-zA-Z0-9_\-\.]{16,})['\"]?"),
+        re.compile(r"(?i)secret[\s]*[=:][\s]*['\"]?([^'\"\s]{6,})['\"]?"),
     ]
 
     def __init__(
@@ -83,7 +88,30 @@ class SessionManager:
                 self._sessions.pop(sid, None)
                 self._session_access.pop(sid, None)
 
+    def _validate_session_id(self, session_id: str) -> None:
+        """Validate session_id against path traversal attempts."""
+        if not session_id or not isinstance(session_id, str):
+            raise ValueError(f"Invalid session_id: {session_id!r}")
+        if ".." in session_id or "/" in session_id or "\\" in session_id:
+            raise ValueError(f"Path traversal detected in session_id: {session_id}")
+
+    def _get_session_path(self, session_id: str) -> Optional[Path]:
+        """Resolve safe session persistence path inside storage_dir."""
+        if not self.storage_dir:
+            return None
+        self._validate_session_id(session_id)
+        safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", session_id)
+        if not safe_id:
+            raise ValueError(f"Invalid empty session_id after sanitization: {session_id}")
+        session_file = (self.storage_dir / f"{safe_id}.jsonl").resolve()
+        try:
+            session_file.relative_to(self.storage_dir)
+        except ValueError:
+            raise ValueError(f"Path traversal detected in session_id: {session_id}")
+        return session_file
+
     def get_or_create_session(self, session_id: str) -> SessionState:
+        self._validate_session_id(session_id)
         now = time.time()
         if session_id not in self._sessions:
             # Check if persisted on disk
@@ -192,16 +220,46 @@ class SessionManager:
         self._active_cancellations.pop(turn_id, None)
         self._cancellation_events.pop(turn_id, None)
 
+    def _redact_value(self, key: Optional[str], val: Any) -> Any:
+        """Recursively redact sensitive text and key values."""
+        if isinstance(val, str):
+            if key and any(k in key.lower() for k in ("password", "api_key", "secret", "token", "auth", "credential")):
+                return "[REDACTED_SECRET]"
+            return self.redact_sensitive_text(val)
+        elif isinstance(val, dict):
+            return {k: self._redact_value(str(k), v) for k, v in val.items()}
+        elif isinstance(val, list):
+            return [self._redact_value(None, item) for item in val]
+        return val
+
+    def redact_turn(self, turn: SessionTurn) -> SessionTurn:
+        """Sanitize turn query, response_text, and event payloads by removing sensitive tokens."""
+        redacted_query = self.redact_sensitive_text(turn.query)
+        redacted_response = self.redact_sensitive_text(turn.response_text)
+        redacted_events = []
+        for ev in turn.events:
+            redacted_payload = self._redact_value(None, ev.payload) if ev.payload else {}
+            redacted_events.append(ev.model_copy(update={"payload": redacted_payload}))
+        return turn.model_copy(
+            update={
+                "query": redacted_query,
+                "response_text": redacted_response,
+                "events": redacted_events,
+            }
+        )
+
     def record_turn_events(self, session_id: str, turn: SessionTurn) -> None:
         """Store completed turn in session memory and write to disk if enabled."""
+        self._validate_session_id(session_id)
+        redacted_turn = self.redact_turn(turn)
         session = self.get_or_create_session(session_id)
-        session.turns.append(turn)
+        session.turns.append(redacted_turn)
         if len(session.turns) > session.max_context_turns:
             session.turns.pop(0)
 
         # Store in turn buffers in case of post-completion queries
-        self._turn_buffers[turn.turn_id] = list(turn.events)
-        self._persist_turn_to_disk(session_id, turn)
+        self._turn_buffers[turn.turn_id] = list(redacted_turn.events)
+        self._persist_turn_to_disk(session_id, redacted_turn)
 
     def get_past_events_for_reconnect(self, session_id: str, turn_id: str) -> List[TurnEvent]:
         """Support reconnects by retrieving previously emitted events without repeating side effects."""
@@ -223,34 +281,47 @@ class SessionManager:
         """Append-only serialization of turn record to JSONL."""
         if not self.storage_dir:
             return
+        session_file = self._get_session_path(session_id)
+        if not session_file:
+            return
+        redacted_turn = self.redact_turn(turn)
         try:
-            session_file = self.storage_dir / f"{session_id}.jsonl"
             with open(session_file, "a", encoding="utf-8") as f:
-                f.write(turn.model_dump_json() + "\n")
-        except Exception:
-            pass
+                f.write(redacted_turn.model_dump_json() + "\n")
+        except Exception as e:
+            logger.error("Failed to persist turn %s for session %s to disk: %s", turn.turn_id, session_id, e)
+            raise
 
     def _load_session_from_disk(self, session_id: str) -> Optional[SessionState]:
         """Load session turns from disk JSONL file if available."""
         if not self.storage_dir:
             return None
-        session_file = self.storage_dir / f"{session_id}.jsonl"
-        if not session_file.exists():
+        session_file = self._get_session_path(session_id)
+        if not session_file or not session_file.exists():
             return None
 
         state = SessionState(session_id=session_id)
         try:
             with open(session_file, "r", encoding="utf-8") as f:
-                for line in f:
+                for line_num, line in enumerate(f, 1):
                     line = line.strip()
                     if line:
-                        state.turns.append(SessionTurn.model_validate_json(line))
+                        try:
+                            state.turns.append(SessionTurn.model_validate_json(line))
+                        except Exception as e:
+                            logger.warning(
+                                "Skipping corrupted turn at line %d in session file %s: %s",
+                                line_num, session_file, e
+                            )
             return state
-        except Exception:
+        except Exception as e:
+            logger.error("Failed to load session file %s: %s", session_file, e)
             return None
 
     def redact_sensitive_text(self, text: str) -> str:
         """Redact secrets and sensitive tokens from log and trace strings."""
+        if not text:
+            return text
         redacted = text
         for pattern in self.REDACTION_PATTERNS:
             redacted = pattern.sub("[REDACTED_SECRET]", redacted)

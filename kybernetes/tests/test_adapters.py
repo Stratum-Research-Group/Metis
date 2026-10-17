@@ -156,11 +156,44 @@ def test_phylax_adapter_live_policy_evaluation():
     if policy_path.exists():
         phylax = PhylaxAdapter(policy_path=str(policy_path))
         assert phylax.is_simulated is False
+
         # read_file_range is explicitly allowed in default_policy.yaml
         permitted, _ = phylax.is_action_permitted("execute", "read_file_range", {})
         assert permitted is True
+
+        # file_search and run_code_mode are explicitly allowed
+        p_search, _ = phylax.is_action_permitted("file_search", ".", {"pattern": "metis"})
+        assert p_search is True
+        p_code, _ = phylax.is_action_permitted("run_code_mode", "code", {"script": "x = 1"})
+        assert p_code is True
 
         # edit_file_block requires ask approval
         permitted, app_req = phylax.is_action_permitted("execute", "edit_file_block", {})
         assert permitted is False
         assert app_req is not None
+
+        # write_file and sandboxed_bash require ask approval (Finding A4)
+        p_write, app_write = phylax.is_action_permitted("write_file", "/tmp/test.txt", {"content": "data"})
+        assert p_write is False
+        assert app_write is not None
+        assert "approval_id" in app_write
+
+        p_bash, app_bash = phylax.is_action_permitted("sandboxed_bash", "sandboxed_bash", {"command": "ls"})
+        assert p_bash is False
+        assert app_bash is not None
+        assert "approval_id" in app_bash
+
+        # Live gateway approval resolution & consumption flow (Finding A4)
+        app_id = app_write["approval_id"]
+        assert phylax.resolve_approval(app_id, "allow_once") is True
+        consumed, msg = phylax.consume_approval(app_id, "write_file", {"content": "data"})
+        assert consumed is True
+
+        # Replay prevention against live gateway
+        consumed_replay, _ = phylax.consume_approval(app_id, "write_file", {"content": "data"})
+        assert consumed_replay is False
+
+    # Fail-closed check: invalid policy path raises FileNotFoundError (Finding A5)
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        PhylaxAdapter(policy_path="/nonexistent/policy.yaml")

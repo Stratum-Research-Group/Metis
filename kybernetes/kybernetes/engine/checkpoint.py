@@ -16,6 +16,7 @@ class MilestoneCheckpoint:
     description: str
     stash_ref: Optional[str] = None
     commit_sha: Optional[str] = None
+    untracked_files: List[str] = None
 
 
 class GitMilestoneCheckpointer:
@@ -42,6 +43,15 @@ class GitMilestoneCheckpointer:
         res = self._run_git(["rev-parse", "HEAD"])
         return res.stdout.strip() if res.returncode == 0 else ""
 
+    def _get_untracked_files(self) -> List[str]:
+        res = self._run_git(["status", "--porcelain", "-uall"])
+        untracked = []
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                if line.startswith("?? "):
+                    untracked.append(line[3:].strip())
+        return untracked
+
     def create_checkpoint(self, description: str) -> MilestoneCheckpoint:
         """Create a point-in-time milestone before mutating operations."""
         checkpoint_id = f"cp-{int(time.time() * 1000)}-{len(self._checkpoints) + 1}"
@@ -49,7 +59,9 @@ class GitMilestoneCheckpointer:
 
         # Check if there are uncommitted changes to stash as clean baseline
         stash_ref = None
+        untracked_files = []
         if self.is_git_repo():
+            untracked_files = self._get_untracked_files()
             stash_msg = f"metis-checkpoint-{checkpoint_id}"
             stash_res = self._run_git(["stash", "create", stash_msg])
             if stash_res.returncode == 0 and stash_res.stdout.strip():
@@ -61,18 +73,35 @@ class GitMilestoneCheckpointer:
             description=description,
             stash_ref=stash_ref,
             commit_sha=head_sha,
+            untracked_files=untracked_files,
         )
         self._checkpoints.append(checkpoint)
         return checkpoint
 
     def rollback(self, checkpoint: MilestoneCheckpoint) -> bool:
-        """Revert working tree to the state at checkpoint time upon test failure."""
+        """Revert working tree to the state at checkpoint time upon test failure without destroying untracked files."""
         if not self.is_git_repo():
             return False
 
-        # Reset unstaged modifications
+        # Reset unstaged modifications to tracked files
         self._run_git(["checkout", "--", "."])
-        self._run_git(["clean", "-fd"])
+
+        # Remove ONLY newly created untracked files that were not present at checkpoint time (Finding A7)
+        current_untracked = set(self._get_untracked_files())
+        baseline_untracked = set(checkpoint.untracked_files or [])
+        newly_created = current_untracked - baseline_untracked
+
+        for rel_path in newly_created:
+            target = (self.workspace_root / rel_path).resolve()
+            try:
+                target.relative_to(self.workspace_root)
+                if target.is_file() or target.is_symlink():
+                    target.unlink()
+                elif target.is_dir():
+                    import shutil
+                    shutil.rmtree(target, ignore_errors=True)
+            except Exception:
+                pass
 
         # If we had a specific stash reference, restore it
         if checkpoint.stash_ref:
@@ -84,14 +113,18 @@ class GitMilestoneCheckpointer:
 
         return True
 
-    def commit_milestone(self, message: str) -> bool:
-        """Stage and commit verified changes after test gates pass."""
+    def commit_milestone(self, message: str, files: Optional[List[str]] = None) -> bool:
+        """Stage and commit verified changes after test gates pass, including new files (Finding A7)."""
         if not self.is_git_repo():
             return False
 
-        add_res = self._run_git(["add", "-u"])
-        if add_res.returncode != 0:
-            return False
+        if files:
+            for f in files:
+                self._run_git(["add", f])
+        else:
+            add_res = self._run_git(["add", "."])
+            if add_res.returncode != 0:
+                self._run_git(["add", "-A"])
 
         commit_res = self._run_git(["commit", "-m", f"[Metis Milestone] {message}"])
         return commit_res.returncode == 0

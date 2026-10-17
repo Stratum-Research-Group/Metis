@@ -108,18 +108,40 @@ def test_sandboxed_bash_execution(tmp_path: Path):
 
 
 def test_registry_invokes_new_tools(tmp_path: Path):
-    registry = ToolRegistry()
+    registry = ToolRegistry(allowed_roots=[tmp_path])
     assert registry.get_tool("read_file_range") is not None
     assert registry.get_tool("edit_file_block") is not None
     assert registry.get_tool("write_file") is not None
     assert registry.get_tool("sandboxed_bash") is not None
 
-    # Test sandboxed_bash via ToolCallRequest
-    req = ToolCallRequest(tool_id="sandboxed_bash", arguments={"command": "echo 42"})
-    res = registry.execute(req)
+    # Mutating tool sandboxed_bash without approval fails closed (Finding A1)
+    req_no_app = ToolCallRequest(tool_id="sandboxed_bash", arguments={"command": "echo 42"})
+    res_no_app = registry.execute(req_no_app)
+    assert res_no_app.success is False
+    assert "requires verified Phylax approval token" in res_no_app.error
+
+    # Mutating tool with fabricated approval token fails closed (Finding A1)
+    req_fake_app = ToolCallRequest(tool_id="sandboxed_bash", arguments={"command": "echo 42"}, approval_id="appr-fake123")
+    res_fake_app = registry.execute(req_fake_app)
+    assert res_fake_app.success is False
+    assert "Invalid or unverified Phylax approval token" in res_fake_app.error
+
+    # Mutating tool with legitimate approved token succeeds
+    _, app_req = registry.phylax_adapter.is_action_permitted("sandboxed_bash", "sandboxed_bash", {"command": "echo 42"})
+    assert app_req is not None
+    app_id = app_req["approval_id"]
+    assert registry.phylax_adapter.resolve_approval(app_id, "allow_once") is True
+
+    req_valid = ToolCallRequest(tool_id="sandboxed_bash", arguments={"command": "echo 42"}, approval_id=app_id)
+    res = registry.execute(req_valid)
     assert res.success is True
     assert res.data["exit_code"] == 0
     assert "42" in res.data["stdout"]
+
+    # Replay with same token rejected
+    res_replay = registry.execute(req_valid)
+    assert res_replay.success is False
+    assert "replay rejected" in res_replay.error
 
 
 def test_read_file_range_hashline(tmp_path: Path):

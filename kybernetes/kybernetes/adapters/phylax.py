@@ -20,28 +20,27 @@ class PhylaxAdapter:
         self._approval_events: Dict[str, asyncio.Event] = {}
 
         if self.shim is None and policy_path:
-            try:
-                from pathlib import Path
-                from phylax.adapters.kybernetes import KybernetesShim
-                from phylax.approvals.manager import ApprovalManager
-                from phylax.audit.logger import AuditLogger
-                from phylax.engine.manager import PolicyManager
-                from phylax.gateway.gateway import GuardedGateway
+            from pathlib import Path
+            from phylax.adapters.kybernetes import KybernetesShim
+            from phylax.approvals.manager import ApprovalManager
+            from phylax.audit.logger import AuditLogger
+            from phylax.engine.manager import PolicyManager
+            from phylax.gateway.gateway import GuardedGateway
 
-                policy_file = Path(policy_path).resolve()
-                if policy_file.exists():
-                    workspace_root = policy_file.parents[1] if policy_file.parent.name == "policies" else policy_file.parent
-                    audit_file = workspace_root / ".phylax" / "audit.jsonl"
-                    audit_file.parent.mkdir(parents=True, exist_ok=True)
-                    approval_file = workspace_root / ".phylax" / "approvals.json"
+            policy_file = Path(policy_path).resolve()
+            if not policy_file.exists():
+                raise FileNotFoundError(f"Phylax policy file not found: {policy_file}")
 
-                    policy_mgr = PolicyManager(policy_file, workspace_root=workspace_root)
-                    audit_logger = AuditLogger(audit_file)
-                    approval_mgr = ApprovalManager(approval_file)
-                    gateway = GuardedGateway(policy_mgr, audit_logger, approval_mgr)
-                    self.shim = KybernetesShim(gateway)
-            except Exception:
-                pass
+            workspace_root = policy_file.parents[1] if policy_file.parent.name == "policies" else policy_file.parent
+            audit_file = workspace_root / ".phylax" / "audit.jsonl"
+            audit_file.parent.mkdir(parents=True, exist_ok=True)
+            approval_file = workspace_root / ".phylax" / "approvals.json"
+
+            policy_mgr = PolicyManager(policy_file, workspace_root=workspace_root)
+            audit_logger = AuditLogger(audit_file)
+            approval_mgr = ApprovalManager(approval_file)
+            gateway = GuardedGateway(policy_mgr, audit_logger, approval_mgr)
+            self.shim = KybernetesShim(gateway)
 
         self.is_simulated = (self.shim is None)
 
@@ -80,20 +79,45 @@ class PhylaxAdapter:
         if self.shim and hasattr(self.shim, "gateway"):
             try:
                 from phylax.contracts.enums import Effect
-                verb = "read" if capability in ("read_file", "search_files") else (
-                    "write" if capability in ("write_file", "edit_file_block") else (
-                        "send" if capability == "send" else "execute"
-                    )
-                )
-                res_class = "file" if verb in ("read", "write") else (
-                    "network" if verb == "send" else "tool"
-                )
+
+                tool_ids = {
+                    "calculator", "compute", "file_search", "search_files",
+                    "read_file_range", "read_file", "edit_file_block",
+                    "write_file", "sandboxed_bash", "run_code_mode", "shell_exec",
+                }
+
+                if capability == "execute":
+                    verb = "execute"
+                    res_class = "tool"
+                    effective_target = target
+                elif capability in tool_ids:
+                    verb = "execute"
+                    res_class = "tool"
+                    if capability == "compute":
+                        effective_target = "calculator"
+                    elif capability == "read_file":
+                        effective_target = "read_file_range"
+                    elif capability == "search_files":
+                        effective_target = "file_search"
+                    else:
+                        effective_target = capability
+                elif capability == "send":
+                    verb = "send"
+                    res_class = "network"
+                    effective_target = target
+                else:
+                    verb = "execute"
+                    res_class = "tool"
+                    effective_target = capability
+
+                call_args = arguments or {}
+
                 auth_rec = self.shim.gateway.decide(
                     subject="kybernetes",
                     verb=verb,
                     resource_class=res_class,
-                    target=target,
-                    arguments=arguments,
+                    target=effective_target,
+                    arguments=call_args,
                 )
                 if auth_rec.effect == Effect.ALLOW:
                     return True, None
@@ -101,15 +125,22 @@ class PhylaxAdapter:
                     return False, None
                 elif auth_rec.effect == Effect.ASK:
                     approval_id = auth_rec.approval_id or f"app-{uuid.uuid4().hex[:8]}"
+                    rule_ttl = 300
+                    if hasattr(self.shim.gateway, "policy_manager") and auth_rec.matched_rule_id:
+                        for r in self.shim.gateway.policy_manager.policy.rules:
+                            if r.id == auth_rec.matched_rule_id and getattr(r, "ask_ttl_seconds", None):
+                                rule_ttl = r.ask_ttl_seconds
+                                break
                     now = datetime.now(timezone.utc)
+                    expiry_dt = now + timedelta(seconds=rule_ttl)
                     req = {
                         "approval_id": approval_id,
                         "action": capability.upper(),
                         "target": target,
                         "argument_summary": arguments,
                         "policy_rule": f"PhylaxPolicy: Matched rule '{auth_rec.matched_rule_id}' requiring explicit single-use approval.",
-                        "expiry_utc": (now + timedelta(minutes=5)).isoformat(),
-                        "expiry_timestamp": (now + timedelta(minutes=5)).timestamp(),
+                        "expiry_utc": expiry_dt.isoformat(),
+                        "expiry_timestamp": expiry_dt.timestamp(),
                         "status": "pending",
                         "decision": None,
                         "consumed": False,
@@ -117,8 +148,11 @@ class PhylaxAdapter:
                     self._approvals[approval_id] = req
                     self._approval_events[approval_id] = asyncio.Event()
                     return False, req
+                else:
+                    return False, None
             except Exception:
-                pass
+                # Fail-closed: Never fall back to simulated mode on live gateway errors
+                return False, None
 
         # Read-only actions and safe calculations do not require interactive prompt
         if capability in ("compute", "read_file") and not any(kw in target.lower() for kw in ["secret", "passwd", "shadow", "key"]):
@@ -214,14 +248,91 @@ class PhylaxAdapter:
             self._approval_events[approval_id].set()
             return False
 
-        # Reject double resolution if already terminal
-        if req.get("status") != "pending":
+        # Reject double resolution if already terminal or executed
+        if req.get("status") not in ("pending",) and req.get("consumed", False):
             return False
 
         req["status"] = "approved" if decision == "allow_once" else "denied"
         req["decision"] = decision
         self._approval_events[approval_id].set()
+
+        if self.shim and hasattr(self.shim, "gateway") and hasattr(self.shim.gateway, "approval_manager"):
+            try:
+                approved = (decision == "allow_once")
+                self.shim.gateway.approval_manager.resolve_request(
+                    approval_id=approval_id,
+                    approved=approved,
+                    reason=f"Resolved via PhylaxAdapter with {decision}",
+                )
+            except Exception:
+                pass
+
         return True
+
+    def consume_approval(
+        self,
+        approval_id: str,
+        tool_id: str,
+        arguments: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """
+        Atomically verify and consume an approved token for immediate tool execution.
+        Enforces single-use, non-expired, and argument-bound matching.
+        """
+        if not approval_id:
+            return False, "Approval token missing"
+
+        # Check live gateway approval manager if active
+        if self.shim and hasattr(self.shim, "gateway") and hasattr(self.shim.gateway, "approval_manager"):
+            mgr = self.shim.gateway.approval_manager
+            app_req = mgr.get_request(approval_id)
+            if not app_req:
+                return False, f"Approval request '{approval_id}' does not exist in gateway"
+
+            policy_ver = getattr(self.shim.gateway.policy_manager.policy, "version", "1.0.0")
+            consumed, msg = mgr.consume_for_execution(
+                approval_id=approval_id,
+                subject="kybernetes",
+                action="execute",
+                canonical_target=tool_id,
+                arguments=arguments,
+                policy_version=policy_ver,
+            )
+            if approval_id in self._approvals:
+                self._approvals[approval_id]["executed"] = consumed
+                if consumed:
+                    self._approvals[approval_id]["status"] = "consumed"
+                    self._approvals[approval_id]["consumed"] = True
+            return consumed, msg
+
+        # Simulated / local mode
+        if approval_id not in self._approvals:
+            return False, f"Approval token '{approval_id}' not found in active store"
+
+        req = self._approvals[approval_id]
+        if self._is_expired(req):
+            req["status"] = "expired"
+            return False, "Approval has expired (TTL elapsed)"
+
+        if req.get("executed", False):
+            return False, "Approval token has already been consumed for execution (replay rejected)"
+
+        if req.get("decision") != "allow_once" and req.get("status") not in ("approved", "consumed"):
+            return False, f"Approval token is not approved (status={req.get('status')})"
+
+        if req.get("decision") and req.get("decision") != "allow_once":
+            return False, f"Approval decision was '{req.get('decision')}' (not approved)"
+
+        # Check argument binding
+        expected_args = req.get("argument_summary", {})
+        if expected_args != arguments:
+            return False, "Argument digest mismatch: arguments do not match approved request"
+
+        # Atomically consume for execution
+        req["executed"] = True
+        req["consumed"] = True
+        req["status"] = "consumed"
+        return True, "Approval verified and consumed"
 
     def verify_action_execution(
         self,
@@ -234,9 +345,28 @@ class PhylaxAdapter:
         Verify that an approval matches the exact action, target, and arguments being executed.
         Prevents capability tampering between approval and execution.
         """
+        if not approval_id:
+            return False
+
+        if self.shim and hasattr(self.shim, "gateway") and hasattr(self.shim.gateway, "approval_manager"):
+            mgr = self.shim.gateway.approval_manager
+            app_req = mgr.get_request(approval_id)
+            if not app_req:
+                return False
+            from phylax.contracts.enums import ApprovalStatus
+            from phylax.engine.evaluator import compute_argument_digest
+            if app_req.status not in (ApprovalStatus.APPROVED, ApprovalStatus.CONSUMED, ApprovalStatus.PENDING):
+                return False
+            digest = compute_argument_digest(arguments)
+            if app_req.argument_digest != digest:
+                return False
+            return True
+
         if approval_id not in self._approvals:
             return False
         req = self._approvals[approval_id]
+        if self._is_expired(req):
+            return False
         if req.get("action") != capability.upper():
             return False
         if req.get("target") != target:

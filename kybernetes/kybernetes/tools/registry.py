@@ -5,6 +5,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 
+from kybernetes.adapters.phylax import PhylaxAdapter
 from kybernetes.contracts.enums import ToolSideEffectClass
 from kybernetes.contracts.tool_spec import ToolCallRequest, ToolDefinition, ToolResult
 from kybernetes.tools.calculator import SafeCalculator
@@ -19,8 +20,15 @@ from kybernetes.tools.write_file import SafeWriteFile
 class ToolRegistry:
     """Central registry of vetted, declarative tools for Kybernetes orchestrator."""
 
-    def __init__(self, allowed_roots: Optional[List[Path]] = None):
+    def __init__(
+        self,
+        allowed_roots: Optional[List[Path]] = None,
+        phylax_adapter: Optional[PhylaxAdapter] = None,
+        enforce_approvals: bool = True,
+    ):
         self.allowed_roots = [r.resolve() for r in (allowed_roots or [Path.cwd()])]
+        self.phylax_adapter = phylax_adapter or PhylaxAdapter()
+        self.enforce_approvals = enforce_approvals
         self._tools: Dict[str, ToolDefinition] = {}
         self._handlers: Dict[str, Callable[..., Any]] = {}
         self._register_default_tools()
@@ -156,6 +164,47 @@ class ToolRegistry:
                 error=f"Unregistered tool: '{request.tool_id}'",
                 latency_ms=(time.perf_counter() - start_time) * 1000,
             )
+
+        # 1. Enforce Phylax gating for mutating tools (Finding A1)
+        is_mutating = tool.side_effect_class != ToolSideEffectClass.READ_ONLY
+        if is_mutating and self.enforce_approvals:
+            if not request.approval_id:
+                latency = (time.perf_counter() - start_time) * 1000
+                return ToolResult(
+                    tool_id=request.tool_id,
+                    success=False,
+                    error=f"Tool '{request.tool_id}' requires verified Phylax approval token (side_effect_class={tool.side_effect_class.value})",
+                    latency_ms=round(latency, 2),
+                )
+
+            consumed, msg = self.phylax_adapter.consume_approval(
+                approval_id=request.approval_id,
+                tool_id=request.tool_id,
+                arguments=request.arguments,
+            )
+            if not consumed:
+                latency = (time.perf_counter() - start_time) * 1000
+                return ToolResult(
+                    tool_id=request.tool_id,
+                    success=False,
+                    error=f"Invalid or unverified Phylax approval token: '{request.approval_id}' - {msg}",
+                    latency_ms=round(latency, 2),
+                )
+        elif request.approval_id:
+            # If an approval_id was explicitly provided for any tool, verify and consume it
+            consumed, msg = self.phylax_adapter.consume_approval(
+                approval_id=request.approval_id,
+                tool_id=request.tool_id,
+                arguments=request.arguments,
+            )
+            if not consumed:
+                latency = (time.perf_counter() - start_time) * 1000
+                return ToolResult(
+                    tool_id=request.tool_id,
+                    success=False,
+                    error=f"Invalid or unverified Phylax approval token: '{request.approval_id}' - {msg}",
+                    latency_ms=round(latency, 2),
+                )
 
         try:
             self.validate_arguments(request.tool_id, request.arguments)
