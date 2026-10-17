@@ -44,9 +44,9 @@ def prefetch_model(
     prev_tf_offline = os.environ.pop("TRANSFORMERS_OFFLINE", None)
     prev_hf_offline = os.environ.pop("HF_HUB_OFFLINE", None)
     try:
-        from dianoia.embedding import TextEmbedder
-        embedder = TextEmbedder(model_name=model_name, device=device or "cpu")
-        logger.info("Successfully prefetched model '%s' (d_model=%s)", model_name, getattr(embedder, "d_model", None))
+        dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        embedder = TextEmbedder(model_name=model_name, device=dev)
+        logger.info("Successfully prefetched model '%s' (d_model=%s) on %s", model_name, getattr(embedder, "d_model", None), dev)
     finally:
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         os.environ["HF_HUB_OFFLINE"] = "1"
