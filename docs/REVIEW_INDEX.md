@@ -18,8 +18,10 @@ The existing core components have detailed local documentation: [Stoma](../stoma
 
 | File | Topic / Scope |
 | --- | --- |
+| [mss-pyle-webrtc-passkey-spec.md](review/mss-pyle-webrtc-passkey-spec.md) | MSS Pyle: Modern WebRTC DataChannels & WebAuthn/Passkey Architecture Specification |
 | [metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md](review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md) | NCM (Schedion, Symbolon, Anabathmos), Anadrome Walk Replay, and MSS Pyle Remote Access Synthesis & Roadmap |
-| [mss-pyle-remote-access-devices-spec-c949cfb0.txt](review/mss-pyle-remote-access-devices-spec-c949cfb0.txt) | MSS Pyle Remote Access, Device Identity & Management Specification |
+| [mss-pyle-remote-access-devices-spec-c949cfb0.txt](review/mss-pyle-remote-access-devices-spec-c949cfb0.txt) | MSS Pyle Remote Access, Device Identity & Management Specification (Historical Base) |
+
 | [metis-anadrome-walk-replay-experiment-spec-aa69f396.txt](review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt) | Metis Anadrome Walk-Trace Replay Policy Optimization Specification |
 | [metis-ncm-schedion-integration-spec-2026-10-18-a3f41c7d-2aa95bb2.txt](review/metis-ncm-schedion-integration-spec-2026-10-18-a3f41c7d-2aa95bb2.txt) | Metis x NCM Schedion Coarse-to-Fine Candidate Generation Specification |
 | [lthcm-ncm-symbolon-integration-spec-2026-10-18-c51d8a62-8951392a.txt](review/lthcm-ncm-symbolon-integration-spec-2026-10-18-c51d8a62-8951392a.txt) | LTHCM x NCM Symbolon Discrete Code Auxiliary Indexing Specification |
