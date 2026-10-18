@@ -1,0 +1,465 @@
+MSS - PYLE: REMOTE ACCESS, DEVICE IDENTITY AND MANAGE DEVICES
+Build specification (PROPOSAL). Planning only. No code changed anywhere.
+Revision 2 (reconciled after review).
+Project: Metis Sovereign Studio (MSS), inside the Metis repo. Owner component: Prosopon (UI/auth boundary). Touches Kybernetes, Phylax, Hestia only through listed interfaces.
+"Pyle" (Greek: gate) is a proposed feature name. Rename freely.
+
+Sources read for this spec
+- T3 Code remote-access doc: https://github.com/pingdotgg/t3code/blob/main/docs/user/remote-access.md
+- T3 Code source, shallow clone at 9c161462 (main, Oct 18 2026): packages/contracts/src/auth.ts, apps/server/src/auth/{SessionStore,PairingGrantStore,EnvironmentAuthPolicy,http}.ts, apps/server/src/cli/auth.ts, persistence migrations 020/021, apps/web/src/components/settings/ConnectionsSettings.tsx
+- Metis repo, shallow clone of https://gitlab.com/akarta-315h/metis at eb6920e (main HEAD at time of reading): docs/MSS.md, prosopon/prosopon/{server.py,config.py,cli.py,auth/pairing.py,auth/tls.py}, prosopon/prosopon/web/static/{index.html,js/api.js,js/settings.js}, prosopon/DASHBOARD_SPEC.md, phylax/THREAT_MODEL.md
+- Earlier MSS review was at 369939e. HEAD has moved since. Nothing here was executed or tested. Every statement about Metis code is from reading it.
+
+Tags used below
+[EXISTS]  read in the Metis code at eb6920e
+[T3]      how T3 Code does it (observed in their source/doc)
+[PROPOSED] new design for MSS, not built, not decided
+[RISK]    a weakness I found by reading; not exploited or reproduced
+[OPEN]    needs the owner's decision
+
+======================================================================
+0. WHAT THIS IS AND IS NOT
+======================================================================
+Goal: let the owner (Nick) use MSS (chat, approvals, workbench, squad view) from another device - phone, laptop browser, second desktop - while MSS and its models keep running on his home machine. Plus a "Manage Devices" window and a Settings section to control who can reach MSS, how, and with what powers.
+
+Not in scope: running MSS in the cloud, any MSS-required relay or account, telemetry, multi-user teams. MSS is local-first and single-owner. T3's "T3 Connect" depends on T3's hosted relay and a cloud sign-in; Pyle does not copy it.
+External dependencies, stated plainly: the core paths (LAN, SSH forward, owner-run reverse proxy/self-hosted relay) need no third-party account or service. Tailscale is an OPTIONAL route: it needs a Tailscale account and Tailscale's coordination service and is outside MSS's control. MSS only detects and uses it if the owner already runs it; it is never required or bundled.
+
+Not a defect report. Section 2 lists real weaknesses in today's pairing code because remote exposure makes them matter, but nothing here claims MSS is currently unsafe on a loopback-only setup.
+
+======================================================================
+1. WHAT T3 CODE DOES (REFERENCE, FROM DOC + SOURCE)
+======================================================================
+1.1 Ways to reach a host machine [T3]
+- T3 Connect: cloud relay, no port forwarding, needs account sign-in. (Skip for MSS.)
+- LAN / private network direct pairing: host binds to a private IP (t3 serve --host <ip>), user makes a one-time pairing link/QR, other device scans or pastes it.
+- Tailscale HTTPS: tailscale serve mapping gives https://machine.tailnet.ts.net/ (t3 serve --tailscale-serve, t3 pair --tailscale).
+- Desktop-managed SSH: desktop app starts/reuses a server on the remote host and forwards the port.
+- Hosted web app needs an HTTPS endpoint; it connects direct to your server.
+
+1.2 Multiple routes per machine [T3]
+- One machine can have several routes (LAN, Tailscale, VPN, public URL, SSH). Pairing again over another address adds a route, not a second machine.
+- Routes are ordered by speed, user can drag to reorder. First route that answers wins. Dead LAN routes are skipped briefly and retried last. Client re-checks earlier routes on network change, app focus and every minute, and moves back when one works.
+- Server reports its current LAN/Tailscale addresses while connected, client adds them as "learned" routes (reorderable, not removable).
+- Tailscale range 100.64.0.0/10 is shared with other VPNs, so it only shows as Tailscale if confirmed.
+
+1.3 Auth model (source) [T3]
+- Server auth policy descriptor with 4 values: desktop-managed-local, loopback-browser, remote-reachable, unsafe-no-auth. Chosen from bind host (remote-reachable if not loopback).
+- Bootstrap methods: desktop-bootstrap or one-time-token.
+- Session methods: browser session cookie (httpOnly, sameSite lax), bearer access token, DPoP-bound access token.
+- Pairing link: one-time credential, default TTL 5 minutes, optional label, optional scope list, can be revoked before use. Consumed on use.
+- Session: stored in auth_sessions with id, subject, role, method, issued/expiry, revoked_at, plus client metadata (label, IP, user agent, device type, OS, browser). Default TTL 30 days.
+- Live state: lastConnectedAt and connected (websocket currently open) per session, plus "current" (this is the session making the request).
+- Websocket tickets: short-lived (5 min) tickets instead of putting the long credential on the socket.
+- Scopes (fine-grained): orchestration:read/operate, settings:write, providers:manage, environment:maintain, preview:operate, diagnostics:read, terminal:read/operate, filesystem:read/write, source-control:write, access:read/write, relay:read/write. A pairing link can be created with a narrower scope list. They note that terminal/agent operate already reaches full power, so narrowing means choosing explicit scopes.
+- Access stream: server pushes snapshot + upsert/remove events for pairing links and client sessions so the devices list updates live.
+- Revoke one session, revoke all other sessions, revoke a pairing link. "Revoke others" is disabled when there is nothing else.
+- Headless CLI: t3 auth pairing create|list|revoke and t3 auth session issue|list|revoke <session-id>.
+- A "Permissions" view shows what the current connection can do; it applies only to the route marked "In use".
+
+1.4 UI (ConnectionsSettings.tsx) [T3]
+Settings > Connections: network access toggle, pairing link creation (with QR + copy), list of active pairing links with Revoke, list of authorized clients with Revoke and "Revoke others", route list per machine with reorder/remove/Add route, Permissions, Load balancing across machines, Tailscale HTTPS toggle, Add environment (SSH). "Changing network access restarts the desktop app."
+
+1.5 Parts of T3's design I am NOT carrying over
+- T3 Connect cloud relay, account sign-in, push relay, mobile push (APNs/FCM), webhooks held while offline. Cloud dependency; conflicts with MSS being fully offline.
+- Auto-balance of new threads across machines. MSS has one GPU host. Park until there are two hosts. [OPEN]
+- Codex/ACP provider account management. Not relevant.
+
+======================================================================
+2. WHAT MSS ALREADY HAS (STARTING POINT)
+======================================================================
+2.1 Existing pairing and auth in Prosopon [EXISTS]
+- prosopon serve --lan binds 0.0.0.0, prints a 6-digit pairing PIN valid 5 minutes. prosopon pair prints a new PIN. prosopon revoke revokes all device tokens.
+- PairingManager (auth/pairing.py): PIN pairing, tokens are secrets.token_urlsafe(32), stored only as SHA-256 hash in data_dir/paired_tokens.json, expiry default 72h (session_expiry_hours), PIN record in pairing_pin.json. 5 failed PIN attempts triggers a 15 minute lockout. Cross-process sync via files.
+- PairedDevice fields: token_hash, role ("chat" or "admin"), device_name, paired_at_utc, expires_at_utc, ip_address.
+- Endpoints: POST /api/auth/pin, /api/auth/pair, /api/auth/local-token, /api/auth/revoke. Revoke by a non-admin token revokes only itself; admin token revokes ALL.
+- require_auth: loopback callers are exempt when the server is not in LAN mode; otherwise bearer token required. require_admin_auth: no loopback exemption, admin role required (used for /api/dashboard/*, approvals, workbench).
+- Host header allow-list, Origin check, Sec-Fetch-Site cross-site rejection, CSP, X-Frame-Options DENY.
+- Optional self-signed TLS (prosopon serve --tls) with generate_self_signed_cert.
+- Web UI: a "Device Pairing" PIN modal (index.html), an activity-bar Settings view (settings.js) with categories General, Hestia, Kybernetes, Phylax, Memory, Voice. Settings Panel opens with Ctrl+, per docs/MSS.md. Dashboard BFF proxies to Kybernetes /v1/admin with a service token.
+- docs/MSS.md says approvals are single-use and bound to an action; Prosopon's approval endpoint accepts only allow_once or deny.
+
+2.2 Gaps and risks I found by reading [RISK]. Each must be fixed or consciously accepted before Pyle exposes MSS beyond loopback.
+R1. Default pairing role is admin. generate_pairing_pin(role="admin") and verify_pin_and_pair takes the role from the PIN record, so a phone paired by PIN becomes admin, with approval, dashboard-config and workbench rights. No least-privilege path from the CLI/UI today.
+R2. No device identity. PairedDevice has no device id, no last-seen time, no user-agent/OS metadata, and revocation is by raw token. get_paired_devices() exists in code but no HTTP route lists devices (not seen in server.py). The UI cannot show or revoke one device by id.
+R3. "Revoke" by an admin token wipes every device. There is no "revoke this one" for an admin viewing others.
+R4. Loopback exemption vs tunnels. require_auth trusts request.client.host in {127.0.0.1, ::1} when not in LAN mode, and POST /api/auth/local-token hands out an admin token to loopback callers. An SSH -L forward, a tailscale serve mapping or any reverse proxy delivers remote traffic from loopback, with no forwarding headers in the SSH case, so neither source address nor header inspection can tell local from remote. With a loopback bind and remote mode off, an SSH-forwarded caller could obtain an admin token. (Admin routes are guarded separately, chat/session routes are not.) Not tested.
+R5. /api/lochos/ws accepts the WebSocket without any auth check in the code I read (websocket.accept() first). It streams squad state. Not tested.
+R6. Token lives in localStorage ("prosopon_token") and CSP allows script-src 'unsafe-inline'. Any XSS could read the token. T3 uses httpOnly cookies.
+R7. PIN is global, 6 digits, with lockout that is global rather than per source address. Fine for a short LAN window; weak as the only gate for an internet-reachable route.
+R8. Allowed hosts are a static list plus the machine's hostname/IPs. A Tailscale name, custom domain or new LAN IP is rejected until added by hand. Pyle routes must feed this list.
+R9. Phylax states it is not an OS sandbox (phylax/THREAT_MODEL.md). A remote device that can drive the coding agent can cause shell commands inside the agent's sandboxed_bash. So "operate the agent" is effectively a powerful grant, same point T3 makes.
+R10. TLS is self-signed only; phones will warn and the browser Secure Context needed for voice/mic is unavailable over plain HTTP.
+
+======================================================================
+3. DESIGN PRINCIPLES (PROPOSED)
+======================================================================
+P1. Local-first. No Pyle feature requires an MSS-operated or third-party relay. Core routes: LAN, SSH forward, owner-run reverse proxy. Tailscale (or another VPN the owner already runs) is optional and carries its own account and service dependency, which the spec does not hide. A self-hosted relay is deferred (section 13).
+P2. Remote off by default. A fresh MSS binds loopback only. Turning remote on is an explicit owner action from a local, authenticated session or the terminal.
+P3. Device identity first. Every remote client is a named, listed, revocable device with its own credential. No shared secrets.
+P4. Least privilege by default. New devices get a Companion preset (chat + read), not admin. Powers are explicit scopes.
+P5. Owner step-up for dangerous actions. Pairing new devices, widening scopes, enabling remote, and approving T2/T3-tier actions from a remote device can require confirmation on the host or an already-trusted owner device.
+P6. Honest status. The UI shows what is actually reachable, which route is in use, and when nothing has been verified.
+P7. Fail closed. If proxy awareness, TLS state or the auth store is uncertain, require a token.
+P8. Prosopon owns the access boundary. Kybernetes stays on loopback and is reached only via Prosopon's service token (as DASHBOARD_SPEC.md already requires). Phylax stays the decision engine for agent actions; Pyle decides who may ask, Phylax decides what may happen.
+
+======================================================================
+4. THREAT MODEL (SHORT)
+======================================================================
+Assets: source code in the workspace, shell execution through the coding agent, model/GPU time, Phylax approvals, chat history, memory (LTHCM), settings, audit log.
+Attackers considered: someone on the same Wi-Fi; a stolen/lost paired phone; a malicious web page in a paired browser (CSRF/XSS); a compromised other tailnet node; an internet scanner finding an exposed port.
+Out of scope: attacker with host OS access, malicious local process under his UID (Phylax already says it cannot stop this).
+Required outcomes: unauthenticated user can reach nothing except a login/pair page and a health endpoint; a lost phone can be cut off in one action and its live connections drop immediately; no device can silently gain more power than it was paired with.
+
+======================================================================
+5. FEATURE OVERVIEW (PROPOSED)
+======================================================================
+5.1 Access modes (host-side setting "Remote access")
+ OFF            loopback only (default).
+ LAN            bind a chosen private interface/IP only (not 0.0.0.0 unless the owner picks "all interfaces" with a warning).
+ TAILNET (optional) HTTPS via tailscale serve mapping; needs a Tailscale account/service the owner runs; MSS stays bound to loopback behind it. Because requests then arrive from loopback, auth must not rely on source address (see 8.3).
+ SSH            no listening change. UI/CLI shows the exact ssh -L command. Forwarded requests arrive from loopback with no proxy headers, so they are authenticated like any other request (see 8.3).
+ CUSTOM URL     owner-run reverse proxy with a stated public hostname; requires TLS and a trusted-proxy setting.
+Modes can be combined. Each enabled mode is a Route (section 7).
+
+5.2 Pairing methods
+ - One-time pairing link + QR (primary). 5 minute TTL by default, single use, carries a label and scope preset chosen by the owner when creating it.
+ - Short code fallback (6+ digits) shown only on the host console/Manage Devices window, for people who cannot scan. Longer entropy than today (8 digits or word code) and per-source rate limit.
+ - Optional host confirm: when a device redeems a link, the host shows "Pixel 8 on 192.168.1.40 wants to join as Companion. Allow / Deny." Default on. [OPEN: default on or off]
+ - CLI pairing for headless host: prosopon device pair.
+
+5.3 Sessions
+ - Browser: httpOnly, SameSite=Lax (Strict if no cross-site need), Secure when TLS, cookie with random session id.
+ - Non-browser clients: bearer token. DPoP binding is optional later (T3 has it); not needed v1.
+ - Server stores only hashes. Per-device TTL (default 30 days, fixed expiry; sliding is an optional setting), owner can set per device: 1 day / 7 / 30 / 90 / never expire (never = warning).
+ - Short-lived websocket tickets (60 s, single use) for all WebSocket endpoints.
+
+5.4 Manage Devices window (see section 9)
+ List of devices with live connection state, scopes, last seen, route used; revoke; edit; create pairing link; audit trail.
+
+5.5 Settings > Remote Access section (see section 10).
+
+======================================================================
+6. DATA MODEL (PROPOSED)
+======================================================================
+Replace paired_tokens.json with SQLite (data_dir/access.db, file mode 0600), WAL on. T3 also uses SQLite tables for this. Keep a one-time migration that imports existing paired_tokens.json entries as legacy devices with scope preset "Legacy admin" and a banner asking the owner to review them. [OPEN: or just invalidate them]
+
+Tables
+ devices
+   device_id        TEXT PK (random, e.g. dev_ + 16 bytes base32). Not secret.
+   label            TEXT         owner-editable name
+   created_at, paired_via ("link"|"code"|"cli"|"legacy"|"local")
+   preset           TEXT         viewer|companion|operator|owner|custom
+   scopes           TEXT (JSON array)
+   expires_at       TEXT nullable
+   revoked_at       TEXT nullable
+   revoked_reason   TEXT nullable ("owner"|"expired"|"panic"|"policy")
+   pinned_ip_range  TEXT nullable (optional lock to a subnet) [OPEN]
+ device_sessions
+   session_id PK, device_id FK, token_hash (SHA-256), method (cookie|bearer), issued_at, expires_at, revoked_at
+ device_client_meta (1:1 with device, refreshed on connect)
+   user_agent, os, browser, device_type (desktop|mobile|tablet|unknown), app_version
+ device_activity
+   device_id, last_seen_at, last_ip, last_route_id, connected (derived at runtime from open sockets, not stored), request_count
+ pairing_links
+   id PK, credential_hash, label, preset, scopes, created_at, expires_at, consumed_at, consumed_by_device_id, revoked_at, created_by_device_id
+ routes
+   route_id PK, kind (lan|tailnet|ssh|custom|loopback), address, state (active|unreachable|disabled), learned (bool), priority, last_verified_at, tls (none|self-signed|trusted)
+ access_audit
+   id, ts, actor_device_id, action (pair_created|pair_redeemed|pair_denied|device_revoked|scope_changed|remote_enabled|remote_disabled|login_failed|approval_resolved_remote|panic_lockdown), target_device_id, ip, route_id, detail JSON
+   Append-only; each row stores hash of previous row (hash chain, same idea Phylax docs already describe for its audit).
+
+Never log raw tokens, pairing credentials or codes.
+
+======================================================================
+7. ROUTES (PROPOSED, MIRRORS T3 CONCEPT BUT ADJUSTED FOR BROWSERS)
+======================================================================
+- A Route is one way to reach this MSS host: LAN address, tailnet name, SSH forward, custom URL.
+- Device scopes are per DEVICE, not per route, and apply on every route. (T3 shows a per-route Permissions panel because its T3 Connect and direct sessions can differ. MSS has one device credential store, so the Routes tab only shows route state; scopes are shown on the device.) Every route uses the same authorization code path.
+- Browser origins differ per route (https://host.lan:8000 with a LAN cert, https://host.tailnet.ts.net, and for SSH, https://localhost:PORT through the tunnel). Cookies and localStorage do not follow a hostname change, and an HTTPS page cannot call an HTTP LAN endpoint (mixed content). Consequences:
+  * Browser clients are enrolled PER ROUTE ORIGIN. A phone paired over Tailnet has no session on the LAN origin until it enrols there too. It is the same device_id on the host; each origin gets its own session/cookie. The pairing flow offers "also enrol this route" (fresh link, or on-device confirm from an already-trusted session).
+  * A browser tab or PWA is still sandboxed to one origin: it cannot pin certificates, and it cannot hold a credential usable across other origins. Automatic failover across routes, certificate pinning and a cross-origin credential store are therefore claimed ONLY for a native client (Phase 4, separate decision). For browsers and PWAs, v1 does manual route choice with "open this route" links and no automatic failover. A browser-compatible failover design would need its own justification and is not assumed.
+  * Authenticated remote access is TLS-only. Plain HTTP may serve at most a non-sensitive landing/setup page (host name, how to reach the TLS route, certificate fingerprint to compare). Plain HTTP never accepts credential redemption, cookies or bearer tokens. An HTTPS page is never asked to call an HTTP route.
+  * SSH-forwarded browser route: HTTPS through the SSH tunnel only. Prosopon serves HTTPS on the host and the user forwards to it (https://localhost:PORT), checking the host cert fingerprint shown on the host. There is no plain-HTTP exception. The session audience is that exact origin and the same rules as every other route apply.
+  * Credentials are never placed in URLs beyond the one-time pairing credential, which is removed from the address bar after redemption (redirect, Referrer-Policy: no-referrer).
+- Host identity verification: before a device sends a pairing credential it should confirm it reached the right host. Trusted cert: the cert. Self-signed LAN: a native client checks the fingerprint carried in the link/QR; in a browser the owner compares the fingerprint shown on the host with the one the browser displays in its certificate warning (manual check, not enforced by MSS). No credential redemption over plain HTTP, ever.
+- Linking a second origin to an existing device: the client never supplies device_id or label as proof. Enrolling route B for an existing device requires a device-link proof: an owner/Owner-device-approved, single-use link request that the host binds server-side to that device_id (or an already authenticated session on route A requesting a link-token that is redeemed on B). Without proof, enrolling on B creates a NEW device record.
+- Session audience binding: each session is stored server-side with its route/origin (audience). The server rejects a session credential presented on a different route/origin than it was issued for, regardless of cookie scoping; host-only cookies are a browser convenience, not the control.
+- Origin, CORS and CSRF per route: allowed_hosts and allowed_origins are generated from enabled routes only, CORS is not opened to other origins, cookies are host-only (no Domain attribute), mutating requests need SameSite cookie plus Origin check plus a custom header, and trusted proxies are explicit (8.3).
+- Route status honesty: the host can verify that a listener exists and that its own TLS/cert is valid. It cannot prove a phone can reach it. The UI shows "Listening (host checked)" and shows "Reached by a device at <time>" only after a real device connection over that route. Never "Active" from a host-side probe alone. A "Test from this device" button checks reachability from the device in use.
+- Host publishes its current addresses over an authenticated endpoint so enrolled devices can learn new LAN/Tailnet addresses; learned routes are suggestions the owner can review.
+- Tailnet detection: do not label an address in 100.64.0.0/10 as Tailscale unless `tailscale status` confirms it (T3 caveat).
+
+======================================================================
+8. SECURITY REQUIREMENTS (PROPOSED)
+======================================================================
+8.1 Scopes
+ chat:read            read sessions and history
+ chat:operate         send messages, voice, create/delete sessions
+ workbench:read       file tree, file view, diffs
+ workbench:write      edits made by the user through the UI (not agent)
+ agent:operate        start/stop MSS coding-agent runs, dispatch Lochos tasks
+ approvals:resolve    allow_once/deny for Phylax approval prompts
+ approvals:resolve_high  same for T2/T3-tier actions (shell mutation, network, install)
+ squad:read / squad:operate   Lochos view / dispatch+resolve attention
+ pinax:read           tool catalogue
+ settings:read / settings:write   dashboard config view / apply + rollback
+ models:operate       load/unload Hestia models
+ diagnostics:read     traces, audit-log, GPU telemetry
+ access:read / access:write   list all devices / manage devices and pairing
+ Self endpoints (see 11) need only a valid credential and no scope: read own device record and scopes, rename own device, sign out. They never expose other devices.
+ remote:configure     change access mode and routes
+Notes: agent:operate is functionally close to shell access because the agent has sandboxed_bash and Phylax is not an OS sandbox. The UI must say so when granting it.
+
+8.2 Presets
+ Viewer       chat:read, workbench:read, squad:read, diagnostics:read
+ Companion    Viewer + chat:operate. (phone default; cannot approve, cannot start agent runs)
+ Operator     Companion + agent:operate, squad:operate, approvals:resolve (not _high), models:operate
+ Owner        everything incl. settings:write, access:write, remote:configure, approvals:resolve_high
+ Custom       any list
+ Rules: only an Owner device (or the host via the host-owner credential) can create an Owner link. A device can never create a link with scopes it does not hold. Default: one Owner device (the host's own "This computer" device); more Owner devices are an optional owner choice.
+
+8.3 Auth enforcement
+ - Single authorization dependency used by every route and WebSocket: authenticate -> resolve device -> check scope. Replaces the current mix of require_auth / require_admin_auth.
+ - NO loopback exemption at all. Every application endpoint and WebSocket requires a device credential, whether or not remote mode is on and whatever the source address or headers. Only /api/health (minimal), /api/auth/descriptor and /api/auth/redeem are unauthenticated. This replaces the idea of inferring "local" from bind address or headers, which cannot work for SSH forwards (R4).
+ - Local bootstrap without a loopback exemption: (a) at startup Prosopon writes a host-owner credential file in data_dir (mode 0600, owned by the running user, rotated on each start and on demand). (b) `prosopon open` reads that file, mints a one-time, 60 second, single-use local login link and opens the browser (or prints it); the browser redeems it for a normal cookie session on a device named "This computer (host)". (c) The same file lets the CLI call the API. Proof of local access is therefore filesystem access under the owner's UID, which an SSH-forwarded caller does not have. (d) POST /api/auth/local-token is removed. Anyone who can read the host-owner file already has host-level access, which section 4 excludes.
+ - Trusted-proxy handling: forwarding headers (X-Forwarded-*, Forwarded, Tailscale-User-*) are ignored unless the direct peer is in remote.trusted_proxies. They are used only for logging the client address and scheme, never for granting access.
+ - Add scope checks to every currently admin-only route, mapping /api/dashboard/* to settings:*/models:*/diagnostics:*, /api/approvals/*/resolve to approvals:*, /api/workbench/* to workbench:*, /api/lochos/* to squad:*, /api/pinax/* to pinax:*.
+ - WebSocket /api/lochos/ws and any new streaming endpoint must authenticate before accept using a one-time ticket (fixes R5).
+ - Cookie session for browsers; bearer for scripts/CLI. Remove token from localStorage; if kept for non-browser clients, show it once.
+ - CSP: remove script-src 'unsafe-inline' (move inline JS to files, use nonces). Required before any non-LAN exposure (R6).
+ - CSRF: SameSite cookie + Origin check (already present) + custom header on mutating requests.
+ - Rate limits: per source IP and per link; exponential backoff; global lockout only as last resort. Pairing credential at least 128 bits for links; codes at least 8 digits plus per-IP limit (R7).
+ - TLS: required for any non-loopback, non-tailnet route; tailnet HTTPS via tailscale serve counts as TLS. Self-signed is allowed on LAN with a fingerprint shown in Manage Devices so the phone can verify it (R10). Option for the owner to supply their own cert.
+ - High-risk remote actions step-up: approving T3-tier actions, enabling remote access, widening scopes and revoking the last Owner device require confirmation via the host-owner credential (host console or `prosopon open` session) or from an Owner device on a TLS route after fresh re-authentication. Source address is never the proof. Strictness is an optional owner choice.
+ - Remote approvals show the full action card (verb, canonical resource, arguments digest) already in Phylax's approval contract, so a phone approves a specific action, not a generic "yes".
+
+8.4 Revocation
+ - Revoke one device: invalidate sessions, close its open WebSockets/SSE within 1 second, pending pairing links it created are revoked, audit row written.
+ - Revoke all others (keep this one).
+ - Panic lockdown: one action (button + CLI prosopon device lockdown) disables remote access, revokes all non-host devices, invalidates all pairing links. Requires the host-owner credential or an Owner device with fresh re-authentication.
+ - Expired devices are marked revoked_reason=expired and listed in History for 30 days.
+ - Revoke must be race-safe with live requests (check revoked_at on each request, not only at login).
+ - What revocation can and cannot undo. Revocation stops FUTURE requests and closes streams. It cannot roll back side effects that already committed. Defined behaviour: (a) a request not yet dispatched to Kybernetes/Phylax/Hestia is cancelled; (b) an agent run the device started is, by default, stopped at the next safe point (cancel-before-dispatch applies to the next tool call), with a "keep running" option chosen at revoke time; (c) a tool call or file write already executed stays executed (the git milestone checkpoint can roll back files, but only as a separate owner action, never automatic); (d) a Phylax approval already consumed stays consumed, and a pending approval shown to that device can no longer be resolved by it; (e) the revoke dialog lists the device's running agent runs and recent actions so the owner can see what to review. Audit rows record what was cancelled and what had already executed.
+
+8.5 Auditing
+ Every access change and every remote approval is written to access_audit. Manage Devices has an Activity tab. Audit entries about approvals link to the Phylax audit record id.
+
+======================================================================
+9. MANAGE DEVICES WINDOW (PROPOSED UI)
+======================================================================
+Location: Prosopon web workbench. Opened from (a) Settings > Remote Access > "Manage devices", (b) the existing lock/pairing icon in the header (replaces the PIN-only modal), (c) command palette "MSS: Manage Devices", (d) Ctrl+Shift+D. Should be a large modal/window, not a tiny dialog. Mobile layout is single column with cards.
+
+Visibility: the full window needs access:read to list devices and access:write to change anything. A device without access:read opens a reduced "This device" page (own label, scopes, expiry, route in use, rename, sign out), served by the self endpoints, which need no access scope.
+
+Layout (desktop)
+ +------------------------------------------------------------------+
+ | Manage devices                      [ + Add device ]   [ Lockdown ]|
+ | Remote access: LAN + Tailnet   Routes: 2 verified, 1 not verified  |
+ +------------------------------------------------------------------+
+ | Tabs:  Devices (4) | Pending links (1) | Routes | Activity         |
+ +------------------------------------------------------------------+
+ | DEVICES                                              [Revoke others]|
+ | ● Example phone     Companion   mobile · Android 15 · Chrome       |
+ |   Connected now via Tailnet · last seen just now · expires in 29 d |
+ |   [Edit] [Revoke]                                                  |
+ | ○ Work laptop       Operator    desktop · Linux · Firefox          |
+ |   Last seen 2 h ago from 192.168.1.23 (LAN) · expires in 6 d       |
+ |   [Edit] [Revoke]                                                  |
+ | ● This device (host)  Owner      loopback                          |
+ +------------------------------------------------------------------+
+Row fields: label, connected dot (live), preset + scope chips, device type/OS/browser, last seen time, last IP, last route, paired date and method, expiry, "This device" marker.
+Row actions: Edit (rename, change preset/scopes, change expiry), Revoke (confirm dialog showing what drops), View permissions (read-only list of scopes with plain words), View activity (filtered).
+Live updates via an access event stream (snapshot + upsert/remove events), modelled on T3's AuthAccessStream; fall back to 10 s polling.
+
+Add device flow (step dialog)
+ 1. Name (optional) and preset. Show warnings for Operator/Owner ("can drive the coding agent, which can run shell commands").
+ 2. Choose route to put in the link (list of enabled routes with verification state; unreachable ones disabled with reason).
+ 3. Show QR + link + copy button + 8-digit code (pairing.code_digits) + countdown (5:00). Link is only shown while this dialog is open; leaving the dialog means creating a new one (T3 does the same).
+ 4. When redeemed: "Pixel 8 wants to join" confirm card if host-confirm is on, then the device appears in the list.
+ Pending links tab lists unredeemed links with label, preset, expires in, created by, [Revoke].
+
+Routes tab
+ Per route: kind, address, TLS state (and cert fingerprint), status ("Listening, host checked" / "Reached by a device at <time>" / "Disabled"), enable toggle, [Add route], learned routes marked. "Test from this device" button. No per-route permissions panel: scopes are per device (section 7).
+
+Activity tab
+ Filterable audit list (pairings, denials, revokes, remote approvals, failed logins, scope changes). Export JSON.
+
+Empty/error states
+ - Remote access OFF: show a single card "Remote access is off. Turn on to pair other devices." with button.
+ - Unverified route: amber chip "Not verified", never green.
+ - Server unreachable/audit DB locked: banner with error text, no fake data.
+
+Accessibility and style: keyboard operable, aria labels (follow the existing Prosopon theme variables), works at 360 px width.
+
+Device-side (the phone) screens
+ - "Add this MSS" screen: paste link/scan QR/enter host + code.
+ - Connection indicator showing which route is in use and Reconnect.
+ - Settings > This device: shows its own scopes, expiry, [Sign out].
+ - When revoked: clear message "This device was removed from MSS" and return to pairing screen.
+
+======================================================================
+10. SETTINGS (PROPOSED)
+======================================================================
+Add category "Remote Access & Devices" to settings.js (icon 🔐), mapped to a new Prosopon module descriptor "pyle" in the dashboard config system (mutable, schema ProsoponConfig extension). Network/security fields are in restart_required_fields and use the guarded edit modal DASHBOARD_SPEC.md already describes (diff view, owner confirmation).
+
+Fields (with proposed defaults)
+ remote.mode                         off | lan | tailnet (optional) | ssh | custom (multi)  off
+ remote.bind_interface               specific IP/interface or "all (warning)"                 none
+ remote.port                         int                                                      8000
+ remote.tls.mode                     none(lan only) | self-signed | tailscale | custom cert  self-signed
+ remote.tls.cert_path / key_path     paths                                                    unset
+ remote.trusted_proxies              list of IPs allowed to set X-Forwarded-*                 empty
+ remote.public_hostname              for custom URL route                                     unset
+ remote.allowed_hosts/origins        auto-managed from routes; shown read-only + manual extras auto
+ pairing.link_ttl_minutes            1-60                                                     5
+ pairing.require_host_confirm        bool                                                     true
+ pairing.code_digits                 8-12                                                     8
+ pairing.default_preset              viewer|companion|operator                                companion
+ session.default_ttl_days            1/7/30/90                                                30
+ session.sliding_expiry              bool                                                     false
+ session.max_devices                 int                                                      8
+ security.max_failed_attempts        int per IP                                               5
+ security.lockout_minutes            base                                                     15, exponential
+ security.remote_approval_high_tier  allow | require_host_confirm | deny                      require_host_confirm
+ security.remote_agent_operate       allow | require_owner_enable                             require_owner_enable
+ security.idle_signout_minutes       0 = off                                                  0
+ security.notify_on_new_device       bool (shows toast on host + audit)                       true
+ audit.retention_days                30-3650                                                  365
+ Actions: [Manage devices], [Create pairing link], [Lockdown], [Export audit log]
+ Per-device defaults can differ from the global ones, edited in the device's Edit dialog.
+
+Also add to General: "This device name" (label sent when pairing) and "Show my connection route in the status bar".
+
+CLI/doctor
+ prosopon device list [--json]
+ prosopon device pair [--label X] [--preset companion] [--route lan|tailnet] [--ttl 5m] [--qr]
+ prosopon device revoke <device_id> | --others | --all
+ prosopon device edit <device_id> --label --preset --scopes --expires
+ prosopon device lockdown
+ prosopon remote status|enable <mode>|disable
+ prosopon serve --remote-mode ...   (keep --lan as an alias for --remote-mode lan with a deprecation note)
+ prosopon doctor gains checks: bind address vs mode, TLS state and cert expiry, trusted proxies, allowed hosts, legacy tokens present, any unauthenticated WebSocket, CSP unsafe-inline present, file modes of access.db.
+Everything callable from the terminal must work with no browser, because the host may be headless.
+
+======================================================================
+11. API (PROPOSED, Prosopon)
+======================================================================
+Public (no credential)
+ GET  /api/health                         minimal
+ GET  /api/auth/descriptor                policy (remote-off | remote-reachable ...), supported methods, host label, MSS version (no secrets)
+ POST /api/auth/redeem                    {credential|code, client meta} -> session (cookie or bearer). Rate limited.
+Authenticated
+ GET  /api/auth/session                   current device, scopes, expiry, route in use (self, any valid credential, no scope)
+ POST /api/auth/ws-ticket                 short-lived single-use ticket
+ POST /api/auth/logout                    this device
+ PATCH /api/auth/device                   rename this device (self, no access scope)
+ GET  /api/access/devices                 (access:read)
+ PATCH /api/access/devices/{id}           (access:write) label/preset/scopes/expiry
+ DELETE /api/access/devices/{id}          revoke (access:write)
+ POST /api/access/devices/revoke-others   (access:write)
+ GET  /api/access/pairing-links           POST create / DELETE revoke (access:write)
+ GET  /api/access/routes                  POST add, PATCH reorder/enable, DELETE (remote:configure)
+ POST /api/access/lockdown                (access:write + step-up)
+ GET  /api/access/audit                   (access:read)
+ GET  /api/access/stream                  SSE or WS of snapshot + upserts/removes (access:read)
+ GET  /api/host/routes                    routes this host currently exposes, so paired devices learn them
+Host-only (requires the protected host-owner credential; never reachable with a device credential; source address is not authority)
+ POST /api/access/host-confirm/{request_id}  allow/deny a pending pairing
+
+Response rules: no tokens in lists, errors do not reveal whether a credential existed, all mutating calls write access_audit.
+
+======================================================================
+12. HOW IT FITS THE REST OF MSS
+======================================================================
+- Prosopon: owns everything above. Reuse PairingManager's hashing and file-lock ideas, but replace its storage and role model.
+- Kybernetes: keep bound to 127.0.0.1:8081; Prosopon passes the authenticated device id and scopes in a signed header or request field so Kybernetes admin routes and traces record who did what. Kybernetes should refuse unsigned requests when remote mode is on. [OPEN: signing method]
+- Phylax: remote approvals use the same approval contract. Add fields to the audit record: approver_device_id, route, remote (bool). Add an optional Phylax policy rule: "T3 tier actions cannot be approved from a remote device".
+- Lochos (squad/OpenRig-style work): squad view and attention resolution are scoped (squad:read/operate). A phone that sees "attention needed" and resolves it is the natural headline use case. Keep this separate from the OpenRig/Lochos integration proposal; just consume its endpoints.
+- Hestia: model load/unload from a phone is models:operate only.
+- Voice: browsers need a Secure Context for the microphone. Tailnet HTTPS or a trusted cert solves this; plain HTTP will not allow mic on phones, and per section 7 it is not used for authenticated access. Show that in the Routes tab.
+- Notifications: no cloud push. Phase 4 option: optional ntfy/Matrix/local webhook the owner runs, off by default. T3's push relay is not copied.
+
+======================================================================
+13. PHASES (PROPOSED ORDER)
+======================================================================
+Phase 0 - Minimal pre-exposure gate (no remote route is supported before this passes)
+ - Remove the loopback exemption and /api/auth/local-token; add host-owner credential + `prosopon open` local bootstrap (8.3).
+ - Authenticate every endpoint and WebSocket before accept (fixes R4, R5).
+ - New pairings default to least privilege, not admin (fixes R1); device ids exist.
+ - Remote off by default.
+ Gate tests: T1, T2, T3, T13 (section 14). Nothing else may be claimed passing yet.
+Phase 1 - Transport hardening and device registry (LAN only; this is the gate before any tunnel route)
+ - httpOnly cookie sessions, WebSocket tickets, CSP without unsafe-inline, per-IP/per-link rate limits, stronger pairing credentials, TLS handling and fingerprint display, trusted-proxy handling, CSRF checks (R6, R7, R10).
+ - SQLite device registry, presets/scopes, pairing links + QR, Manage Devices window (Devices, Pending, Activity), revoke one/others, CLI device commands, host-confirm, audit chain.
+ Gate tests: T4-T12, F1, F2a, F3, F6, F7, U1-U3. Until the Phase 3 gate, remote devices are denied agent operation and all approvals of T2/T3-tier actions (and all remote approvals unless explicitly enabled), so Phase 1 ships view/chat-style presets only.
+Phase 2 - Routes (only after the Phase 1 gate passes)
+ Routes tab, per-route enrolment, allowed-host auto-management, SSH instructions, reverse proxy, optional tailscale serve integration, route status honesty, learned routes. Gate tests: F4', F5, T14, T15.
+Phase 3 - Remote approvals and operations
+ Step-up, remote approval policy and approval behaviour, agent-run handling on revoke (stop at next tool call / keep running), lockdown, doctor checks, own-cert TLS. Gate tests: T12 (extended), F2 (full), T16.
+Phase 4 - Optional extras (each needs its own decision)
+ Self-hosted relay; native client with credential store and automatic route failover; DPoP-bound tokens; local push; multi-host load balancing; per-device IP pinning.
+
+======================================================================
+14. TESTS AND PASS/FAIL CRITERIA
+======================================================================
+Security
+ T1 Remote off: connect from another host to the LAN IP -> connection refused/no listener. PASS if nothing answers. (Phase 0)
+ T2 Unauthenticated request to every route (iterate the route table) from loopback, from a non-loopback address, through an SSH -L forward, and with/without X-Forwarded-For: 127.0.0.1 -> 401/403 except health, descriptor, redeem. PASS if zero exceptions. (Phase 0)
+ T3 Unauthenticated WebSocket connect to every WS route -> closed before accept. PASS. (Phase 0)
+ T13 Local bootstrap: `prosopon open` works for the owner; the host-owner file is mode 0600; a process without file access cannot obtain a session, including via SSH forward; /api/auth/local-token no longer exists. PASS. (Phase 0)
+ T14 Per-route enrolment and audience binding: copy a valid session cookie/bearer from route A and present it on route B (set manually, bypassing browser cookie scoping) -> server rejects it (audience mismatch). Enrolling B without a device-link proof creates a new device; with proof it joins the same device_id; a client-supplied device_id or label is ignored; revoking the device kills sessions on both. PASS. (Phase 2)
+ T15 Forwarding headers from a peer not in trusted_proxies are ignored for auth decisions; the mixed-content case (HTTPS page to HTTP route) is blocked and shown as such. PASS. (Phase 2)
+ T16 Agent-run handling on revoke (extra to T8): revoke while an agent run started by that device is mid-way -> stops at next tool call, or keeps running if chosen; revoke dialog lists the runs; audit records it. PASS. (Phase 3)
+ T4 Pairing link: single use, expires at TTL, revoked link fails, wrong credential fails without revealing why. PASS.
+ T5 Brute force: 50 bad codes from one IP -> blocked; another IP still unblocked until its own limit. PASS.
+ T6 Scope matrix, phase-aware: for each preset, call every route and compare with the expected allow/deny table. Phase 1 table: Viewer and Companion are grantable; Operator and remote Owner are rejected at creation; the host's own Owner device works; agent-run and approval routes deny remote devices. Final Phase 3 table: the full matrix of section 8.1 including Operator and Owner. PASS if the table for that phase is identical. (Phase 1 and re-run in Phase 3)
+ T7 A device cannot create a link or edit scopes beyond its own scopes. PASS.
+ T8 Revocation: revoke a device with an open SSE and WS and an in-flight request -> sockets close within 1 s, next request 401, undispatched work cancelled before dispatch (mandatory from Phase 1), already-executed writes/tool calls unchanged and recorded in audit. PASS. (Phase 1)
+ T9 Legacy tokens imported as scoped devices (or invalidated per decision) and visible in the list. PASS.
+ T10 Token/credential never appears in logs, audit, device list, or error bodies (grep test). PASS.
+ T11 CSRF: cross-origin POST with cookie rejected. PASS.
+ T12 Lockdown disables remote and revokes all non-host devices. PASS.
+Functional
+ F1 Pair a phone over LAN via QR, send a chat message, see it in history on the host. PASS.
+ F2a (Phase 1) Companion/Viewer devices cannot see or call Approve or agent-run endpoints; Operator/Owner presets are not grantable to remote devices until the Phase 3 gate (server rejects with a clear message). PASS.
+ F2 (Phase 3, full) Operator can approve T1/T2 but not T3 when policy says require_host_confirm; Phylax audit records approver device and route. PASS.
+ F3 Manage Devices shows connected dot flip within 3 s of connecting/disconnecting. PASS.
+ F4' Route reachability honesty: a route shows "Reached by a device" only after a real device connection; a host-only probe shows "Listening, host checked". Automatic failover is tested only if a native client is built (Phase 4). PASS.
+ F5 Host IP changes (new Wi-Fi) -> learned route updates; allowed_hosts follows; no manual edit. PASS.
+ F6 Two devices same label are distinguishable (id suffix, OS, last IP). PASS.
+ F7 Audit hash chain verifies; tampering with one row is detected. PASS.
+UI/visual
+ U1 Manage Devices at 360, 768, 1440 px: no clipped text, actions reachable by keyboard. Check with screenshots.
+ U2 Unverified route never shows a green state. PASS.
+ U3 Empty states and error states render real messages, no placeholder data.
+Claims that are NOT proven by these tests: hardware, GPU or real-model behaviour, third-party VPN behaviour, browser quirks on every phone. Those need manual verification on the owner's own devices, and no one has run them.
+
+======================================================================
+15. ACCEPTANCE CRITERIA (FEATURE COMPLETE)
+======================================================================
+1. A fresh install exposes nothing beyond loopback, and even loopback and SSH-forwarded callers must authenticate.
+2. The owner can pair a phone in under 60 seconds with a QR, with least-privilege defaults.
+3. Manage Devices lists every device with live state, scopes, last seen and route, and can revoke any of them with immediate effect.
+4. Every route and WebSocket enforces scopes through one code path.
+5. Core routes (LAN, SSH, owner-run reverse proxy) need no outside account or service. Tailscale is optional and carries its own account and service dependency.
+6. The doctor command reports each risk in 2.2 as fixed, accepted or open.
+7. All of section 14 passes.
+
+======================================================================
+16. OPTIONAL CHOICES (SPEC STANDS WITH THE PROPOSED DEFAULTS)
+======================================================================
+None of these blocks the spec or Phase 0-1. Each default is a proposal the owner can change later.
+- Reach methods first: default LAN, then SSH, then optional Tailscale.
+- Phone approval of risky actions: default Operator approves T1/T2, high tier needs host confirm.
+- Host confirmation on pairing (default on), session length (default 30 days fixed, no "never"), number of Owner devices (default one: the host's own), old tokens (default: import as scoped legacy devices flagged for review).
+- Self-signed vs owner-supplied certificate on LAN (default: self-signed with fingerprint shown; no plain-HTTP credentials).
+- Feature name ("Pyle" is only a proposal); remote file editing (default view-only); notification channel (default none in v1); second host / load balancing (default dropped).
+
+======================================================================
+17. KNOWN LIMITS OF THIS SPEC
+======================================================================
+- Reading only. I did not run T3 Code or MSS. T3 behaviours are as written in their doc and source at 9c161462; their product may change.
+- Metis findings in section 2.2 are from reading eb6920e. R4 and R5 especially should be confirmed with a test before being treated as bugs.
+- I did not check whether the workbench/settings JS now calls real backend APIs at eb6920e beyond the dashboard calls in api.js; the earlier "static shell" note was about 369939e.
+- Names of scopes, tables, endpoints and CLI flags are proposals, not existing code.

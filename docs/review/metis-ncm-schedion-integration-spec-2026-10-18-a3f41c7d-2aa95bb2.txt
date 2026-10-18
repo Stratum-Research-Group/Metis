@@ -1,0 +1,185 @@
+METIS x NCM INTEGRATION SPEC (SCHEDION) - rev 2
+Date: 2026-10-18
+Status: design spec only. Nothing built, run, purchased or integrated. NCM was not
+executed on Nick's hardware; every hardware statement below is a gate to verify, not a
+compatibility claim.
+Integration name: Schedion (proposed, pending Nick's confirmation). Ancient Greek
+schedion: a sketch, a rough draft made offhand. Fits NCM's coarse-first generation.
+Scope: Metis only. This spec adds no work items to LTHCM, Dioptra or any other project.
+
+Pinned sources inspected for this spec:
+- NCM: github.com/HazyResearch/ncm @ c70274273f489abc73832b2b98584a8483b6b203
+  (main as of 2026-10-18; last commit 2026-10-14). MIT license.
+- Metis: gitlab.com/akarta-315h/metis @ d7c5e2f15fd2023bd5a1219f0f8b553782c0bf8c
+  (2026-10-17). Components are vendored directories in this monorepo.
+
+Evidence labeling used throughout:
+  [source]  = read directly in pinned source code, with path and line.
+  [readme]  = declared in a project README at the pinned commit; not verified against
+              implementation. README statements describe intent and may drift from code.
+
+PROPOSED MAINTENANCE STRATEGY (a proposal, not a promise of zero changes)
+Pinned upstream NCM checkout, adapter code in a new schedion/ directory, no edits to the
+NCM tree. Integration may legitimately require registered touchpoints in Metis; the
+expected ones are disclosed where they arise below (Stage 1: new module plus a config
+entry; Stage 3: an optional Dokime experiment registration and an optional Kybernetes
+candidate-source registration). Each touchpoint is decided at its stage gate, not
+pre-authorized here.
+
+1. INTENT
+
+Evaluate NCM (Next-Concept Modeling, Hazy Research) as an optional candidate-generation
+engine feeding Krisis, Metis's candidate answer selector. The hypothesis: NCM's parallel
+coarse-to-fine generation can produce several draft candidates cheaply, and Krisis's
+gates and scoring can select among them, the same pattern the NCM paper uses (multiple
+candidates plus minimum-Bayes-risk selection on summarization).
+
+Hard scope line: the released NCM checkpoints make Schedion a summarization candidate
+source for a supplied document. It is not a general answer generator, not a chat model,
+and not a Hestia replacement. XSum-class behavior must not be silently generalized to
+question answering. Adoption happens only through the measured comparison in Stage 3.
+The default outcome is an experiment record, possibly a negative one.
+
+2. WHAT THE NCM RELEASE PROVIDES
+
+[source, pinned @ c702742]
+- Evaluation code only: evaluate.py, scripts/eval_shard.py, scripts/eval_merge.py,
+  models/, tokenization/, config/eval/. No training code. A new tokenizer or generator
+  cannot be trained from this release.
+- Callable generation path: load via VQVAETokenizer.from_config
+  (tokenization/vqvae_tokenizer.py:14); build NextConceptTransformer
+  (models/next_concept.py:65) with the frozen VQ-VAE and task config; load generator.pt;
+  call generate(idx, prefix_tokens, temperature, top_k, top_p, cfg_scale)
+  (models/next_concept.py:521), which returns the discrete code hierarchy; decode via
+  vq.idx_to_zhats(g, return_zlevels=True) plus the VQ-VAE decoder, as eval_shard.py
+  does. Sampling controls: temperature, top_k, top_p, classifier-free guidance (XSum,
+  WMT14), frequency and adjacency penalties, seeds.
+- Conditioning is task-fixed. XSum: document prefix of exactly 512 raw GPT-2 tokens,
+  truncated and padded (config/eval/xsum.yaml: prefix_len 512, model context_length
+  560; VQ-VAE context_length 48). No arbitrary-length document interface, no chat or
+  prompt endpoint.
+- XSum hierarchy: 9 code levels of lengths 4, 6, 10, 14, 20, 26, 32, 40, 48
+  (config/eval/xsum.yaml manual_levels). One forward pass per level.
+- evaluate.py --n is exact for conditional tasks: it evaluates the first n inputs
+  (scripts/eval_shard.py:42, items[:n]). For unconditional tasks it means n samples per
+  seed (eval_shard.py:84).
+- Dependencies: torch, transformers>=4.51, hydra-core, rouge_score, sacrebleu. The
+  released scripts call .cuda() unconditionally; no CPU path in the release.
+[readme, NCM repo] Evidence limits: headline speedups are author-reported on an H100
+against diffusion baselines, not optimized autoregressive serving; language-modeling
+quality uses an external GPT-2-large scorer; nothing independently reproduced.
+
+3. FIT POINTS IN CURRENT METIS
+
+[source, Metis @ d7c5e2f]
+- Krisis candidate ingestion is real and source-verified: class KrisisSelector,
+  evaluate(request: KrisisRequest | dict) -> KrisisDecision
+  (krisis/krisis/engine/selector.py:19 and :33). The Candidate contract requires
+  structured fields: claims with verdicts, citations, cited_passage_ids, and
+  gate_results that fail closed when absent
+  (krisis/krisis/contracts/candidate.py). Consequence for the adapter: a bare summary
+  string is not a valid Krisis candidate. Schedion must either populate claim and
+  citation fields against the conditioned source span, or expect candidates to be
+  rejected by the gates. That rejection behavior is a measurement, not a bug to patch
+  around. Provenance metadata is not a substitute for claim citations.
+[readme, Metis @ d7c5e2f, not yet checked against source]
+- Krisis scoring formula, Hestia's OpenAI-compatible serving, Kybernetes's pipeline and
+  candidate-synthesis stage, Dokime's bootstrap-CI manifests and release gates, and the
+  5060 Ti / V100 hardware partition are README-declared contracts. Before any adapter
+  binds to Dokime or Kybernetes, its interface must be confirmed from source (Stage
+  gates below); this spec does not claim they behave as described.
+
+4. PROPOSED ADAPTER: SCHEDION
+
+A thin module (schedion/, new directory) wrapping the pinned NCM checkout:
+
+  generate_candidates(document_text, n_candidates, seed) ->
+    list of candidate records:
+      {text, claims (if extractable), cited_passage_ids (against the conditioned span),
+       per_level_previews, provenance}
+
+Provenance per record: NCM commit, checkpoint SHA-256, task config, sampling parameters,
+seed, latency, peak VRAM, and the exact span conditioned on. XSum-class models truncate
+to a 512-token prefix, so the adapter records truncation explicitly and marks which span
+each candidate is grounded in. Long inputs are out of scope for v1 rather than silently
+chunked.
+
+Expected touchpoints (disclosed, decided at gates): the schedion/ directory itself; one
+config entry for checkpoint paths and defaults; at Stage 3 only, an optional Dokime
+experiment registration and an optional Kybernetes candidate-source registration.
+
+5. STAGES AND ACCEPTANCE CHECKS
+
+Stage 0 - Bring-up gate (adapter only, no Metis binding)
+  Pin NCM @ c702742. Download the XSum tokenizer and generator. Run the released
+  evaluate.py --n <small> on the 5060 Ti.
+  G-m0a: released eval path runs end to end; record peak VRAM and wall time.
+  G-m0b: if the generative-perplexity scorer path is exercised, GPT-2-large loads
+  alongside (roughly 3GB extra); record whether both fit in 16GB.
+  Both gates are measurements. Until they pass, local feasibility is unestablished.
+
+Stage 1 - Candidate adapter
+  generate_candidates over a fixed local document set, XSum task class only.
+  Checks: output schema matches the source-verified Krisis Candidate contract or
+  documents exactly which fields it cannot fill; provenance complete; per-level previews
+  produced via the released multiscale decode; no edits to the pinned NCM tree.
+
+Stage 2 - Krisis ingestion
+  Feed Schedion candidates through KrisisSelector.evaluate() (source-verified entry).
+  Checks: gate outcomes recorded per candidate, including expected citation/claim gate
+  failures; no field stuffing to force passes; comparison of gate behavior against
+  Hestia-produced candidates deferred to Stage 3.
+
+Stage 3 - Controlled comparison and decision
+  Arms: (a) Hestia-generated summary candidates + Krisis, (b) Schedion candidates +
+  Krisis. Controls, all recorded: both arms condition on the same source span (the
+  512-token prefix Schedion actually used), target comparable summary lengths, and use
+  recorded compute budgets (Hestia token budget, NCM forward-pass count and wall time).
+  Evaluation harness: Dokime [readme-declared]; gate G-m3a: confirm Dokime's run
+  manifest and baseline-pairing interface from source before building this stage; if it
+  differs from the README description, the comparison is built against the actual
+  interface and the difference is reported.
+  Decision: Schedion becomes an optional, off-by-default candidate source only on
+  measured benefit in quality, latency or candidate diversity under these controls.
+  Otherwise the experiment record is archived and nothing ships. NCM paper speed
+  numbers are not reused; only local measurements count.
+
+6. RESEARCH EXTENSIONS (explicitly not v1)
+
+- Domain adaptation of NCM to Metis text (chat, code, ingested documents). Blocked on
+  training code, absent from the release; reimplementing training is a separate
+  research decision.
+- Task classes beyond XSum-style summarization (WMT14 translation is the only other
+  released conditional task with a document-like prefix).
+- Level-forcing as candidate steering (generate() accepts caller-supplied level-0
+  codes; anything deeper belongs to the Dioptra-side research spec, not Metis).
+
+7. RISKS AND OPEN QUESTIONS
+
+1. Krisis gate friction: summaries without extracted claims and citations will likely
+   fail closed. Whether claim extraction over the conditioned span is good enough is an
+   open question Stages 1-2 measure.
+2. Domain and format gap: XSum is news summarization; Metis documents differ. Stage 3
+   measures this under controls rather than assuming transfer.
+3. VRAM unpublished; small configs (XSum generator: 12 layers, 768 dim) do not prove
+   fit. G-m0a/G-m0b decide.
+4. Dokime/Kybernetes bindings are README-declared until G-m3a checks source.
+5. NCM repo is about a week old with minimal external validation; the pin protects
+   against upstream churn.
+
+8. OUT OF SCOPE
+
+- Modifying Hestia, Krisis, Kybernetes, Dokime or LTHCM internals for this experiment.
+- Chat, voice, question answering or general instruction use of NCM.
+- Training or fine-tuning NCM. Paid APIs. Benchmark runs beyond the stage gates.
+
+9. SOURCES
+
+Blog:   https://hazyresearch.stanford.edu/blog/2026-10-12-ncm
+Paper:  https://arxiv.org/abs/2610.14162
+Code:   https://github.com/HazyResearch/ncm @ c70274273f489abc73832b2b98584a8483b6b203
+Weights: https://huggingface.co/hazyresearch/ncm-checkpoints
+Data:   https://huggingface.co/datasets/hazyresearch/ncm-datasets
+Metis:  https://gitlab.com/akarta-315h/metis @ d7c5e2f15fd2023bd5a1219f0f8b553782c0bf8c
+        (Krisis selector and candidate contract verified in source; other contracts
+        README-declared as labeled)

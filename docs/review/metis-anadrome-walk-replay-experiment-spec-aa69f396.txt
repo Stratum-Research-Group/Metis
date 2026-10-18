@@ -1,0 +1,249 @@
+ANADROME (proposed name) - Metis walk-trace replay experiment spec
+====================================================================
+Proposed Greek name: Anadrome (anadromē, "a running back / retracing a
+course"). Unconfirmed - Nick picks names. Fits the pattern: LTHCM remembers,
+dianoia thinks, anadrome retraces.
+
+Status: experiment spec only. No implementation, default adoption, or
+training authorized. Independent of the paideia GRPO plan and of every
+other project.
+
+--------------------------------------------------------------------
+1. WHAT THIS IS
+--------------------------------------------------------------------
+Test whether Dianoia's walk policy (EXPAND / BACKTRACK / ANSWER over
+LTHCM's graph) can be improved by offline replay instead of training:
+
+  - Record real walks as decision-point trees with measured outcomes.
+  - Write alternative walk controllers as small policy code (neighbour
+    ordering, when to backtrack, when to answer, budget split).
+  - Score candidates by REPLAYING them over recorded transitions where the
+    record actually supports them - never by imputing unrecorded outcomes.
+  - Only candidates that pass promotion criteria go into fresh held-out
+    live walks.
+
+Method credit: Dream-RSI paper (https://dream-rsi.com/assets/dream-rsi.pdf)
+and repo (https://github.com/zhengkid/Dream-RSI @ 4149ea9, checked
+2026-10-18; no released framework or scripts). This borrows the METHOD
+only. Nothing here integrates or waits on Dream-RSI code.
+
+--------------------------------------------------------------------
+2. GROUNDING AND PROVENANCE (verified live 2026-10-18)
+--------------------------------------------------------------------
+Interface authority for this spec: the Metis umbrella repo
+https://gitlab.com/akarta-315h/metis @ eb6920e683c01730cf3236c5eb55119acb2a721d
+(2026-10-18), fetched live today. Verified: components are vendored as
+plain in-tree copies - there are NO submodule pins (no .gitmodules, no
+gitlinks), so "check the submodule revision" is not a step; the umbrella
+tree IS the current stack.
+- Umbrella dianoia (dianoia/log.py, walk.py): walk log schema "1.0.0",
+  ~/.dianoia/walks.jsonl records per walk: walk_id, question, seeded_nodes,
+  per-step path (node, action, raw_output, reason, parse_failed),
+  verification (conflicts_found, rewalked, conflict_detail), final_answer,
+  max_steps, steps_used, model, fallback_used. WalkController defaults:
+  max_steps=8, top_k=5 seeds, temperature 0.2, parse failure -> BACKTRACK.
+- Umbrella dokime: paired 10,000-resample bootstrap CIs (default seed 42),
+  paired per-item diffs preserved, `dokime compare` exits non-zero on
+  significant regression, fixed seeds, run IDs, manifests.
+The standalone component repos (dianoia @ da7ce83, dokime @ 43c0253, both
+2026-09-26) are OLDER than the umbrella copies and are not the interface
+authority.
+From memory (not re-verified live): kleroterion = stochastic decision
+module (eligible actions + logits); rig = RTX 5060 Ti 16GB; hestia primary
+chat model Gemma 4 26B A4B abliterated Q3_K_M.
+
+--------------------------------------------------------------------
+3. CONFIGURABLE DEFAULTS (proposals, not fixed choices)
+--------------------------------------------------------------------
+- Hardware: RTX 5060 Ti 16GB (memory; confirm at run time).
+- Controller/answer model: whatever hestia actually serves at run time
+  (memory says Gemma 4 26B A4B Q3_K_M); recorded in the environment
+  identity (section 4).
+- Corpus: the made-up 9-file corpus from the generic test plan, extended
+  as needed. Any corpus change is a new environment identity.
+- Numeric proposals throughout (coverage gate, repeats, shadow caps) are
+  starting values tuned in Phase 0, not commitments.
+
+--------------------------------------------------------------------
+4. THE DATA / REPLAY CONTRACT (the core of this spec)
+--------------------------------------------------------------------
+4.1 ENVIRONMENT IDENTITY vs POLICY ID. A record's replay identity has two
+parts:
+  - ENVIRONMENT identity (immutable; shared by all candidate policies):
+    corpus_snapshot_hash, index_build_id, embedder_id,
+    controller_model_id + sampling params, prompt_template_version (step
+    prompt AND answer/synthesis prompt), answer_generator_config,
+    seeding_config (frozen for v1, see 4.6), budget_config.
+  - POLICY id: provenance only. It is NEVER part of replay equivalence.
+Two decision points are the same replayable state iff they share the
+environment identity AND the same controller-visible observation: current
+node content, formatted eligible action set, visited set, path prefix,
+remaining budget, and realization ids of recorded stochastic draws.
+Consequence: any candidate policy may be scored over any transition
+recorded under the same environment identity - the baseline's logged walks
+are shared evidence. A policy change that alters the answer generator,
+prompt templates, or model is a DIFFERENT environment and is unsupported
+by existing records, full stop.
+
+4.2 RECORDED TRANSITIONS. Per decision point, the log stores:
+  - the environment identity and the exact controller-visible observation;
+  - the full eligible action set: every EXPAND candidate (node id, edge
+    type, scores already computed), plus BACKTRACK and ANSWER availability;
+  - the taken action, raw model output, parse result;
+  - every stochastic draw with its realization id and realized value;
+  - the resulting next state (for EXPAND/BACKTRACK) or, for ANSWER, the
+    draft answer and its evaluation outcome (see 4.4).
+The log therefore defines a continuation tree keyed by state, not just the
+taken path.
+
+4.3 SUPPORT, EPISODES, AND THE COVERAGE GATE.
+  - A policy decision at a state is SUPPORTED iff a recorded transition
+    for that action exists at the identical state (per 4.1), including any
+    realization ids the policy needs. Otherwise UNSUPPORTED: never
+    imputed, never averaged in, never scored from a "similar" state.
+  - An EPISODE is a full walk from initial state to terminal (ANSWER or
+    budget exhaustion). An episode is fully supported for a policy iff
+    every decision along it is supported and the terminal outcome is
+    recorded.
+  - Offline replay metric: terminal correctness at fixed budget over
+    fully supported episodes only. No partial score for unsupported
+    episodes; they are counted and reported.
+  - Coverage gate (proposal: >= 80%): a policy is ranked only if at least
+    the gated fraction of train episodes are fully supported. Policies are
+    compared per question, using only questions where BOTH arms have
+    fully supported episodes.
+  - Baseline sanity test: replaying the recorded baseline policy with the
+    recorded realizations must reproduce the recorded traces and outcomes
+    exactly. The harness fails closed if it does not.
+
+4.4 ANSWER OUTCOMES AT INTERMEDIATE STATES. Policies may choose ANSWER
+where the original walk did not. Phase-1 instrumentation records
+answer-probe outcomes: at each visited state, a draft answer is generated
+and evaluated (real model calls, counted in the cost ledger). A policy
+answering at a state with no recorded answer outcome is UNSUPPORTED there.
+
+4.5 SHADOW EXPANSIONS. Coverage for untaken EXPAND actions comes from
+shadow walks: the walk state is cloned at the decision point (visited set,
+budget, realization state), the alternative EXPAND is actually executed as
+a real run from the clone, and its continuation is logged as a separate
+tree linked to the parent walk_id. These are real measured calls - not
+free, not "semantics-preserving logging" - and are counted in the cost
+ledger. Shadow depth and branching fraction are capped configuration
+(proposal: 1 shadow branch per walk, depth <= 3, tuned in Phase 0).
+
+4.6 SEEDING IS FROZEN FOR V1. Seeding (top_k retrieval start) is part of
+the frozen environment identity: v1 policies may NOT change seeding, and
+no seeding-optimization claim is made. Seeding becomes testable only with
+explicitly recorded seeding transitions (candidate seed sets plus outcomes
+per alternative start) in a future v2 dataset - deferred, not claimed.
+
+4.7 IMMUTABLE RAW LOG vs POLICY-VISIBLE VIEW. Raw logs are append-only and
+never mutated by replay. Policies execute against a view exposing only
+what a live controller would see at that state: no gold labels, no future
+steps, no recorded outcomes of sibling branches, no final answers from
+later states. Policies cannot "win" by reading the record.
+
+4.8 POLICY CODE EXECUTION. Candidate policy code runs sandboxed: read-only
+view access, no network, CPU/memory/time limits, no filesystem writes
+outside a scratch area. Policy code is untrusted input to the harness.
+
+--------------------------------------------------------------------
+5. LEAKAGE DISCIPLINE AND FROZEN VALIDATION
+--------------------------------------------------------------------
+- Split by question AND question template AND document family, so
+  near-duplicates cannot leak across train/dev/test.
+- train: Phase-1 logging + replay tuning (policies iterate here only).
+- dev: replay confirmation of the final zoo, repeated arms allowed
+  (proposal: 3 repeats, predeclared seeds), reported with CIs.
+- test (held-out): frozen before Phase 2 starts; LIVE walks only; ONE
+  final evaluation per arm with predeclared seeds/repeats. No replay
+  tuning on test, no re-entry after a miss.
+- Scoring protocol (metrics, confidence level, gates, budgets) frozen in
+  writing before Phase 2.
+
+--------------------------------------------------------------------
+6. METRICS, INFERENCE, AND PROMOTION CRITERIA
+--------------------------------------------------------------------
+Primary metric: terminal answer correctness at fixed step budget on
+held-out live walks, scored via dokime (per-question paired diffs).
+Secondary: steps/model-calls at fixed correctness; abstention rate;
+hard-error rate (confident wrong answer); wall-clock latency; total cost
+per correct answer.
+Inference:
+- Confidence level declared: 95%.
+- CIs: cluster bootstrap by question family (template x document family),
+  10,000 resamples, seed 42, per dokime practice; per-question paired
+  diffs; repeated runs paired by predeclared realization/seed.
+- Overlapping CIs do not falsify rankability; the paired effect and its
+  CI are the report.
+- "No zoo candidate beat baseline" means: no evidence of a better policy
+  AMONG THE TESTED CANDIDATES OVER THE SUPPORTED DATA. Finite tests do
+  not prove no better policy exists; wording kept to that.
+Promotion criteria (proposal): a candidate PASSES promotion if it beats
+the baseline on the primary metric with a paired 95% CI excluding zero on
+dev replay (over commonly supported questions) AND shows no hard-error
+regression. Passing promotion earns the Phase-3 live test - it is NOT
+adoption. Adoption as default controller, kleroterion integration, or use
+as GRPO training data each require separate authorization later.
+Test decision rule: adopt-or-keep is decided on the single frozen live
+test; tie or no evidence keeps the current controller - a recorded
+result, not a failed experiment.
+Sample sizes: proposal - dev arms 3 repeats; test sized after Phase-0
+variance measurement. All are proposals pending Phase 0.
+
+--------------------------------------------------------------------
+7. PHASES AND GO/NO-GO GATES
+--------------------------------------------------------------------
+Phase 0 - Noise floor. Repeated identical runs of the current controller;
+  measure outcome variance, per-walk call counts, answer-probe and
+  shadow-expansion cost. GO if planned sample sizes can resolve a
+  meaningful effect at that variance; otherwise resize or stop.
+Phase 1 - Logging runs. Instrumented walks (section 4) on train questions:
+  answer probes + capped shadow expansions, full cost ledger. Output:
+  versioned, hashed walk-tree dataset (dokime manifest discipline).
+Phase 2 - Controller zoo + replay. Baseline plus alternatives
+  (greedy-score EXPAND, backtrack-on-low-margin, answer-threshold
+  variants, budget splits, kleroterion-style stochastic selection).
+  Harness must pass the baseline sanity test (4.3) first. Replay on train
+  with support/coverage tables; one dev confirmation pass. GO to Phase 3
+  only for candidates passing promotion criteria (section 6); otherwise
+  stop with the recorded no-evidence result.
+Phase 3 - Frozen live test. Promoted candidate(s) and baseline, fresh live
+  walks on the frozen test set, one pass, predeclared seeds, decision rule
+  of section 6.
+Phase 4 - Cost accounting and decision point. Measured totals: Phase-1
+  logging (incl. probes + shadows) + controller-writing + replay + live
+  validation, vs. a MATCHED live-comparison baseline actually measured
+  (every zoo candidate run live on the same dev set). If that matched
+  baseline is not run, savings are labelled an estimated counterfactual.
+  Amortization: the Phase-1 dataset is reusable across future experiments;
+  report per-experiment cost with and without amortization. Adoption and
+  downstream use stay unauthorized until separately approved.
+
+Run gates: per-phase hard call budgets and stop conditions set before the
+phase starts; a phase that hits its budget reports partial results and
+stops. Read-only everywhere except the designated log/dataset paths.
+
+--------------------------------------------------------------------
+8. OUT OF SCOPE
+--------------------------------------------------------------------
+- No training, no GRPO, no model weights touched.
+- No LTHCM modification (pinned read-only).
+- No seeding optimization in v1 (frozen, section 4.6).
+- No Dream-RSI code integration (nothing released to integrate).
+- No implementation yet - this spec authorizes design discussion only.
+
+--------------------------------------------------------------------
+9. SOURCES
+--------------------------------------------------------------------
+- Dream-RSI paper: https://dream-rsi.com/assets/dream-rsi.pdf (reviewed
+  2026-10-18): replay over stored attempt trees; replay reveals only
+  recorded outcomes; reported call savings omit policy-development costs;
+  results mixed (Lasso Pro average driven by 1 of 6 datasets;
+  Autocorrelation worse than fixed baseline). Repo:
+  https://github.com/zhengkid/Dream-RSI @ 4149ea9 - no released framework.
+- Metis umbrella: https://gitlab.com/akarta-315h/metis @
+  eb6920e683c01730cf3236c5eb55119acb2a721d, fetched live 2026-10-18;
+  in-tree dianoia/dokime interfaces per section 2. Standalone component
+  repos dianoia @ da7ce83 and dokime @ 43c0253 (2026-09-26) are older.
+- Rig/model/kleroterion details: memory, labelled as such in sections 2-3.

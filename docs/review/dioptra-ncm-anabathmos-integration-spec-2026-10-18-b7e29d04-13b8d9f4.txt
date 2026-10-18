@@ -1,0 +1,156 @@
+DIOPTRA x NCM INTEGRATION SPEC (ANABATHMOS) - rev 3
+Date: 2026-10-18
+Status: design spec only. Nothing in this spec is built, run or integrated. Dioptra
+is a baseline design proposal (build spec v1, 2026-10-17). A live Dioptra repository
+now exists at https://gitlab.com/akarta-315h/dioptra (supplied by Nick, 2026-10-18);
+its implementation state is pending a separate review and is not assessed here, and
+this NCM add-on is not presumed implemented there. NCM was not executed on Nick's
+hardware; hardware statements are gates, not compatibility claims.
+Integration name: Anabathmos (proposed, pending Nick's confirmation). Ancient Greek
+anabathmos: a step, a rung of a ladder. Fits level-by-level inspection of NCM's
+coarse-to-fine hierarchy.
+Scope: Dioptra only. No work items for Metis, LTHCM or any other project.
+
+Pinned source inspected for this spec:
+- NCM: github.com/HazyResearch/ncm @ c70274273f489abc73832b2b98584a8483b6b203
+  (main as of 2026-10-18; last commit 2026-10-14). MIT license.
+All API statements below are [source]: read directly at this pin, with path and line.
+Claims about the Dioptra base spec refer to the v1 design document, itself unbuilt.
+
+PROPOSED MAINTENANCE STRATEGY (a proposal, not a promise of zero changes)
+Pinned upstream NCM checkout, unmodified; all Anabathmos code lives in Dioptra's own
+tree as wrapper modules, records and (for A4) out-of-tree patch files. Disclosed
+touchpoints: a new anabathmos/ wrapper package, a records directory under Dioptra's
+experiment-record schema, and optional patch files applied at experiment time rather
+than edits to the pinned tree. If a study later needs a registered hook inside
+Dioptra's site-ID layer or workbench, that registration is a decided change at the
+relevant stage gate, not something this spec rules out.
+
+1. INTENT
+
+Add NCM (Next-Concept Modeling, Hazy Research) to Dioptra as an inspected model family.
+NCM is unusually well suited to Dioptra's purpose: generation itself is a coarse-to-fine
+trajectory across a discrete code hierarchy, so comparing refinement levels, locating
+where facts appear or change, and intervening in coarse versus fine codes maps directly
+onto its structure.
+
+Dioptra's base build spec (LARQL foundation, CUDA backend, TL/nnsight lab layer) is
+unchanged. Anabathmos is a lab-layer work stream: NCM is a plain PyTorch nn.Module
+pair, so it enters through the Python lab side, not through LARQL's artifact path.
+
+2. WHAT THE NCM RELEASE PROVIDES FOR INSPECTION [source @ c702742]
+
+- Per-level reconstruction, released and callable:
+  VQVAETokenizer.reconstruct_multiscales(text) (tokenization/vqvae_tokenizer.py:68)
+  returns one decoded string per hierarchy level. Input limit, verified: this path does
+  NOT chunk or pad. It passes the pre-tokenized ids straight to
+  VQVAE.reconstruct_multiscales (models/vqvae.py:127), which encodes one tensor
+  directly, so the caller must supply exactly one context window: vqvae.context_length
+  raw tokens per window (48 for the XSum tokenizer; config/eval/xsum.yaml). Only the
+  encode path chunks (_adjust_length, vqvae_tokenizer.py:21). Arbitrary-length
+  inspection therefore requires caller-side windowing, recorded per window.
+- Per-level views of generated samples: decode_multiscales(idx)
+  (vqvae_tokenizer.py:75); continuous per-level quantized vectors via
+  vq.idx_to_zhats(codes, return_zlevels=True).
+- Generation with exposed internals: NextConceptTransformer.generate(idx,
+  prefix_tokens, temperature, top_k, top_p, cfg_scale) (models/next_concept.py:521)
+  returns the code hierarchy. Its first argument accepts caller-supplied level-0
+  (coarsest) codes, so forcing the coarse level and regenerating all detail is an
+  intervention the release already supports.
+- Plain PyTorch modules (Block / LayerNorm / attention in models/common.py): standard
+  torch forward hooks attach directly. Caveat: NCM is not a HuggingFace model and not a
+  TransformerLens-supported architecture, so TL hook names and nnsight's HF/diffusers/
+  vLLM wrappers do not apply out of the box. Mapping Dioptra's canonical site-ID layer
+  to NCM internals is new mapping work (same class of problem as rule R1 in the base
+  spec), starting from direct torch hooks. Not assumed to transfer.
+- Task-fixed conditioning: each checkpoint has a fixed prefix_len (XSum: 512 raw GPT-2
+  tokens; LM tasks: unconditional, prefix_len 1). No chat interface, no arbitrary-prompt
+  endpoint. XSum hierarchy: 9 levels, code lengths 4, 6, 10, 14, 20, 26, 32, 40, 48.
+  LM1B: 12 levels, vocab 8192 per level.
+- evaluate.py --n is exact for conditional tasks (scripts/eval_shard.py:42,
+  items[:n]); for unconditional tasks it is samples per seed (eval_shard.py:84).
+- Limits carried from the assessment: eval-only release, no training code; the authors'
+  "concept" reading of coarse codes is an interpretation, not established semantics;
+  results author-reported and small-scale.
+
+3. ANABATHMOS WORK ITEMS
+
+A1. Level-trajectory inspector (released capability, thin wrapper)
+    CLI plus record writer around reconstruct_multiscales and decode_multiscales:
+    one context window per call, per-level decodes and code identities, stored under
+    Dioptra's unified experiment record schema (checkpoint identity, backend,
+    precision, seed, captures) per base-spec rule R5. Window layout is part of the
+    record.
+A2. Fact-appearance localization (new analysis on released capability)
+    Probe set of windowed texts with known entities and numbers: measure at which
+    level each fact first appears and whether it later changes (entity/word
+    substitution across levels). All findings reported as measurements on released
+    checkpoints, not as semantic claims about "concepts".
+A3. Coarse intervention (released path)
+    Force level-0 codes from source A, generate detail under the conditioning of
+    source B, record what transfers. Runs on the released generate() argument.
+A4. Mid-hierarchy intervention (new research code)
+    Freezing levels 0..k and resampling k+1 onward is not in the released generate()
+    path. The generation loop is level-sequential with exposed internals, so a wrapper
+    can re-implement it with held prefixes, but this is new research code shipped as
+    out-of-tree patches, with a correctness check: no-intervention mode must reproduce
+    the released path bit-for-bit at fixed seed.
+A5. Optional later: native-path admission
+    If A1-A4 prove NCM worth deep study, admit NCM checkpoints to Dioptra's native
+    artifact path (artifact, provenance, site map). Staged only after evidence; never
+    assumed.
+
+4. STAGES AND ACCEPTANCE CHECKS
+
+Stage 0 - Bring-up gate
+  Pin NCM @ c702742; download XSum and LM1B-small checkpoints.
+  G-d0a: released evaluate.py runs with --n small on the 5060 Ti; record peak VRAM.
+  G-d0b: reconstruct_multiscales round-trips one 48-token probe window and returns one
+  string per level; level count matches the config hierarchy.
+Stage 1 - A1 inspector
+  Checks: record schema validates; per-level outputs deterministic at fixed seed;
+  windowing recorded; pinned NCM tree unmodified (strategy above, verified at gate).
+Stage 2 - A2/A3 studies
+  Checks: results reproducible from the record alone; substitution events counted with
+  explicit matching rules; intervention runs labeled with exactly which codes were
+  forced.
+Stage 3 - A4 wrapper (research)
+  Checks: no-intervention bit-exactness vs released generate() at fixed seed; full
+  level provenance on every intervened run.
+
+5. HARDWARE
+
+Small models by config (Sudoku 25M; LM1B up to 725M; XSum generator 12 layers, 768
+dim). Released scripts are CUDA-only. Gate G-d0a on the 5060 Ti is the single bring-up
+measurement; the V100 is optional and unverified until separately gated. No peak-memory
+figures are published; nothing is assumed to fit until measured.
+
+6. BOUNDARIES
+
+- No Metis imports and no Metis work items (per the Dioptra base spec's standalone
+  rule). If Metis later wants NCM candidates, that is the separate Schedion spec;
+  Anabathmos neither depends on it nor blocks it.
+- Numerics measured, never assumed (base-spec rule R3): records state backend,
+  precision and checkpoint hash.
+- Per-level decodes are data about a lossy representation. Reports must not describe
+  coarse codes as verified concepts, memories or retrieval keys.
+
+7. OUT OF SCOPE
+
+- Training or fine-tuning NCM (no training code in the release).
+- Serving, chat or product uses. Paid APIs or hosted execution (NDIF stays optional
+  client-only per the base spec).
+- Claims that Anabathmos findings transfer to other model families.
+
+8. SOURCES
+
+Blog:   https://hazyresearch.stanford.edu/blog/2026-10-12-ncm
+Paper:  https://arxiv.org/abs/2610.14162
+Code:   https://github.com/HazyResearch/ncm @ c70274273f489abc73832b2b98584a8483b6b203
+        (tokenization/vqvae_tokenizer.py, models/vqvae.py, models/next_concept.py,
+        scripts/eval_shard.py, config/eval/xsum.yaml inspected directly)
+Weights: https://huggingface.co/hazyresearch/ncm-checkpoints
+Data:   https://huggingface.co/datasets/hazyresearch/ncm-datasets
+Dioptra base build spec v1 (2026-10-17, baseline design proposal): LARQL foundation,
+rules R1-R6, lab layer. Live repo: https://gitlab.com/akarta-315h/dioptra
+(implementation state pending separate review; not assessed for this spec).

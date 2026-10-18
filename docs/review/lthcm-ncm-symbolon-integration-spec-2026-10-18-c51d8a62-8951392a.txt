@@ -1,0 +1,175 @@
+LTHCM x NCM INTEGRATION SPEC (SYMBOLON) - rev 3
+Date: 2026-10-18
+Status: design spec only. Nothing built, run or integrated. NCM was not executed on
+Nick's hardware; hardware statements are gates, not compatibility claims.
+Integration name: Symbolon (proposed, pending Nick's confirmation). Ancient Greek
+symbolon: a token broken in two, matched later to verify identity. Fits the research
+question: can NCM's discrete codes act as matchable tokens for retrieval.
+Scope: LTHCM only. No work items for Metis, Dioptra or any other project.
+
+Pinned sources inspected for this spec:
+- NCM: github.com/HazyResearch/ncm @ c70274273f489abc73832b2b98584a8483b6b203
+  (main as of 2026-10-18; last commit 2026-10-14). MIT license.
+- LTHCM via the Metis monorepo: gitlab.com/akarta-315h/metis @
+  d7c5e2f15fd2023bd5a1219f0f8b553782c0bf8c (2026-10-17).
+
+Evidence labeling:
+  [source] = read directly in pinned source code, with path and line.
+  [readme] = declared in a project README at the pinned commit; not verified against
+             implementation, and may drift from code.
+
+PROPOSED MAINTENANCE STRATEGY (a proposal, not a promise of zero changes)
+Pinned upstream NCM checkout, unmodified; Symbolon code lives in a new additive
+module with a derived index that can be deleted without losing anything. Disclosed
+touchpoints if experiments succeed: a new symbolon/ directory, a benchmark-harness
+config entry, and - only at E3, as a decided interface change - a candidate-restricted
+search adapter. E3 is a decision point, not a promise that existing code stays
+untouched.
+
+1. INTENT
+
+Research whether NCM's multiscale discrete codes are useful as an auxiliary indexing
+signal for LTHCM, alongside - never instead of - its existing pipeline. The
+hypothesis to test: coarse-level codes, as short discrete summaries, might propose
+candidate documents ahead of the verified retrieval stages. This is a hypothesis
+about a signal, not an established geometry; nothing below assumes code overlap
+implies semantic similarity.
+
+The default outcome is a research note, possibly negative. Reconstructions are never
+used as retrieval evidence or verification input; originals stay canonical and
+verification always reads originals. Codes are the only NCM artifact ever indexed.
+
+2. WHAT EACH SIDE ACTUALLY PROVIDES
+
+NCM side [source @ c702742]:
+- VQVAETokenizer.encode / encode_pre_tokenized (tokenization/vqvae_tokenizer.py:31,36)
+  map text to the discrete code hierarchy and DO chunk: _adjust_length
+  (vqvae_tokenizer.py:21) splits input into windows of vqvae.context_length raw tokens
+  (48 for the XSum tokenizer; config/eval/xsum.yaml) and pads the last window. Window
+  layout must be recorded, never silent.
+- reconstruct_multiscales (vqvae_tokenizer.py:68) does NOT chunk: it is a
+  single-window diagnostic (one 48-token window per call for XSum).
+- Per-level vectors: vq.idx_to_zhats(codes, return_zlevels=True).
+- Ordinary PyTorch stack, CUDA-only released scripts, MIT.
+- Released tokenizers are task/domain-trained (XSum news, WMT14 De-En, LM1B,
+  TinyStories, OpenWebText, Sudoku). The release has no training code, so the tokenizer
+  cannot be adapted to Nick's document domains. The domain gap is measured, not
+  assumed away.
+- Code identity rule: a code integer is meaningful only scoped by checkpoint,
+  tokenizer identity, level/codebook, and position within its window. The same
+  integer in a different codebook or level is a different token. All comparisons are
+  computed within one scope; cross-codebook or cross-level equality is never treated
+  as similarity.
+
+LTHCM side:
+- [source, Metis monorepo @ d7c5e2f] LTHCMRetriever
+  (LTHCM/lthcm/engine/retriever.py:66) with index(corpus, embeddings=None, edges=None)
+  (:101) and search(query, top_k=None, config=None, gold_pairs=None) ->
+  RetrievalResult (:176). Verified detail that shapes E2: search has NO
+  candidate-restriction parameter; it always ranks the whole indexed corpus
+  (stage 1 is dense inner-product over all doc embeddings; mode "flat" selects that
+  dense ranking directly, retriever.py:176-230). Benchmark harnesses exist in the
+  tree (lthcm/benchmarks/: beir_eval.py, hotpot_eval.py, fever_eval.py, and a
+  benchmarks/real/contradiction directory).
+- [readme, LTHCM/README.md @ d7c5e2f, not verified against implementation] The
+  documented stack includes sheaf contradiction flagging (which "does not certify
+  answers", per the README itself), wormhole graph retrieval, and a community
+  benchmark scorecard (MuSiQue, HotpotQA, 2Wiki, SciFact, VitaminC) with declared
+  scores, including honest losses. This spec relies only on the existence of the
+  harnesses [source], not on the declared scores.
+- Claims beyond these (module counts, internal guarantees, gold-free methodology
+  details) are not grounded for this spec and are deliberately omitted.
+
+3. EXPERIMENTS
+
+E1. Reconstruction-fidelity diagnostic (informs interpretation; not a pass/fail gate)
+    Probe set: windowed texts representative of LTHCM's ingested document types, with
+    known entities, numbers and rare terms. Encode with each released text tokenizer;
+    record per-level exact-preservation rates via reconstruct_multiscales
+    (single-window; windowing recorded). Purpose: calibrate how much trust the codes
+    deserve and explain E2 results. Lossy reconstruction does NOT disqualify the
+    indexing idea - a lossy code can still be a useful candidate signal - so E2 runs
+    regardless of E1's outcome. E1 thresholds are recorded in advance for
+    interpretation only.
+
+E2. Candidate-set study (offline capture and fusion; no retriever modification)
+    Corpus: an existing LTHCM benchmark corpus (SciFact or HotpotQA first; harnesses
+    verified in the tree). Documents and queries encoded into scoped code windows
+    (Section 2 identity rule).
+    Candidate signal: code-overlap counts between query windows and document windows,
+    within scope only. This overlap is the hypothesis under test, reported as such.
+    Comparator already available [source]: the retriever's own flat dense mode
+    (cfg.mode="flat") is the simple similarity baseline, so no new baseline
+    integration is invented. (BM25 is not verified in the tree and is not assumed.)
+    Method: run LTHCMRetriever.search unchanged per configuration and capture the
+    ranked candidate lists offline; compute Symbolon candidate sets separately; fuse
+    and evaluate offline. No arm requires the retriever to accept restricted
+    candidate sets, because it cannot today.
+    Metrics, kept strictly separate:
+    (a) Primary: recall against the benchmark's explicit relevance labels (gold
+        evidence), at matched candidate budgets.
+    (b) Proxy only: agreement with the current retriever's selections. Reported
+        separately and never treated as gold truth - the current pipeline can be
+        wrong, and agreement with it measures similarity to it, not relevance.
+    (c1) Uncapped additive union: every baseline candidate preserved, Symbolon
+        candidates added on top. This is the true no-loss arm; its cost is larger
+        candidate sets, so the added verification/latency cost is measured and
+        reported, not hidden.
+    (c2) Capped fusion at matched top-k budget: a separate arm that merges both
+        sources under one budget. This CAN lose baseline candidates; those losses are
+        measured explicitly (which gold-relevant and baseline-selected documents drop
+        out), never averaged away.
+    (d) Contradictory-evidence coverage: whether Symbolon candidate sets retain
+        documents relevant to contradiction checking (the tree contains a
+        benchmarks/real/contradiction harness). Measured per query, not only in
+        aggregate: a filter that drops contradicting documents weakens verification
+        invisibly in recall averages.
+    Latency and memory recorded per configuration.
+
+E3. Optional prototype module (only if E2 shows measured benefit on (a) without
+    degrading (d))
+    symbolon/ as an additive LTHCM module: derived code index with full provenance
+    back to original spans, plus a candidate-restricted search adapter in front of
+    LTHCMRetriever. That adapter is new work: the verified search API has no
+    candidate-restriction input, so this hook is designed and verified only at this
+    gate, with the E2 record in hand. Offline candidate capture and fusion (E2) comes
+    first and stays the fallback.
+
+4. ACCEPTANCE RULES
+
+- Every experiment records: NCM commit, checkpoint SHA-256, tokenizer identity,
+  codebook/level scoping, chunking parameters, corpus identity, thresholds set in
+  advance, results.
+- No silent chunking, padding or truncation.
+- Negative results reported as negative.
+- NCM stays pinned and unmodified per the maintenance strategy above.
+
+5. HARDWARE
+
+Tokenizer encode/decode is small (VQ-VAE, 6 layers, embed_dim 384 for XSum). Bring-up
+gate G-s0 before E1: load one released tokenizer on the 5060 Ti (or CPU via the
+wrapper, since released scripts are CUDA-only), encode the probe set, record memory
+and time. No fit claims before that.
+
+6. OUT OF SCOPE
+
+- Training an NCM tokenizer on Nick's documents (no training code in the release).
+- NCM codes or reconstructions as memory content, retrieval evidence or verification
+  input. Verification always reads originals.
+- Generation uses of NCM (separate Metis and Dioptra specs).
+- Changes to LTHCM's existing modules, its paper claims or its benchmark methodology,
+  beyond the disclosed E3 touchpoint decision.
+
+7. SOURCES
+
+Blog:   https://hazyresearch.stanford.edu/blog/2026-10-12-ncm
+Paper:  https://arxiv.org/abs/2610.14162
+Code:   https://github.com/HazyResearch/ncm @ c70274273f489abc73832b2b98584a8483b6b203
+        (tokenization/vqvae_tokenizer.py, models/vqvae.py, config/eval/xsum.yaml
+        inspected directly)
+Weights: https://huggingface.co/hazyresearch/ncm-checkpoints
+Data:   https://huggingface.co/datasets/hazyresearch/ncm-datasets
+LTHCM:  https://gitlab.com/akarta-315h/metis @ d7c5e2f15fd2023bd5a1219f0f8b553782c0bf8c
+        (LTHCM/lthcm/engine/retriever.py verified in source, including the absence of
+        candidate restriction in search; benchmark harness files present in tree;
+        capability descriptions from LTHCM/README.md, labeled readme-declared)

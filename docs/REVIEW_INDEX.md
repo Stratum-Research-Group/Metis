@@ -18,7 +18,15 @@ The existing core components have detailed local documentation: [Stoma](../stoma
 
 | File | Topic / Scope |
 | --- | --- |
+| [metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md](review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md) | NCM (Schedion, Symbolon, Anabathmos), Anadrome Walk Replay, and MSS Pyle Remote Access Synthesis & Roadmap |
+| [mss-pyle-remote-access-devices-spec-c949cfb0.txt](review/mss-pyle-remote-access-devices-spec-c949cfb0.txt) | MSS Pyle Remote Access, Device Identity & Management Specification |
+| [metis-anadrome-walk-replay-experiment-spec-aa69f396.txt](review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt) | Metis Anadrome Walk-Trace Replay Policy Optimization Specification |
+| [metis-ncm-schedion-integration-spec-2026-10-18-a3f41c7d-2aa95bb2.txt](review/metis-ncm-schedion-integration-spec-2026-10-18-a3f41c7d-2aa95bb2.txt) | Metis x NCM Schedion Coarse-to-Fine Candidate Generation Specification |
+| [lthcm-ncm-symbolon-integration-spec-2026-10-18-c51d8a62-8951392a.txt](review/lthcm-ncm-symbolon-integration-spec-2026-10-18-c51d8a62-8951392a.txt) | LTHCM x NCM Symbolon Discrete Code Auxiliary Indexing Specification |
+| [dioptra-ncm-anabathmos-integration-spec-2026-10-18-b7e29d04-13b8d9f4.txt](review/dioptra-ncm-anabathmos-integration-spec-2026-10-18-b7e29d04-13b8d9f4.txt) | Dioptra x NCM Anabathmos Hierarchical Interpretability Specification |
 | [01-embedder-identity-lthcm-metis-6cd9ff83.txt](review/01-embedder-identity-lthcm-metis-6cd9ff83.txt) | Exact Embedder Identity & Representation Compatibility Architecture |
+
+
 | [02-evaluation-gate-integrity-dokime-krisis-87c5fa3f.txt](review/02-evaluation-gate-integrity-dokime-krisis-87c5fa3f.txt) | Evaluation-Gate Integrity & Adversarial Fixture Discipline |
 | [03-recoverable-model-swaps-metis-a2853c8a.txt](review/03-recoverable-model-swaps-metis-a2853c8a.txt) | Recoverable Model-Swap Lifecycle for Hestia |
 | [metis-grpo-walk-policy-spec-e6633b6a.txt](review/metis-grpo-walk-policy-spec-e6633b6a.txt) | GRPO Walk Policy Optimization for Dianoia Deliberative Walks |
