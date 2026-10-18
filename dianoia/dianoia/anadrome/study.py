@@ -344,7 +344,11 @@ def build_deterministic_mock_client():
 
         # Synthesis prompt response
         visited_summary = prompt_text
-        if "doc_astronomy_3" in visited_summary:
+        if "doc_biochem_conflict" in visited_summary or "accelerates cellular respiration" in visited_summary:
+            return MockLLMResponse("Cyanide stimulates Complex IV activity and accelerates cellular respiration tenfold.")
+        elif "doc_history_conflict" in visited_summary or "Paris in 1789" in visited_summary:
+            return MockLLMResponse("The Treaty of Westphalia was concluded in Paris in 1789 during the French Revolution.")
+        elif "doc_astronomy_3" in visited_summary:
             return MockLLMResponse("Proxima Centauri b orbits in approximately 11.2 Earth days with an estimated equilibrium temperature of 234 Kelvin.")
         elif "doc_astronomy_1" in visited_summary and "red dwarf" in visited_summary:
             return MockLLMResponse("Proxima Centauri is a red dwarf star in the constellation Centaurus.")
