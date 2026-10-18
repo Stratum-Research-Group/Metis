@@ -141,6 +141,35 @@ class TestSchedionGenerator(unittest.TestCase):
         self.assertIsNotNone(decision)
         self.assertIn(decision.status, [s.value for s in DecisionStatus])
 
+    def test_stage3_controlled_comparison_study(self):
+        """
+        Schedion Stage 3 Gate: Controlled comparison between Hestia summary baseline
+        and Schedion NCM generator under KrisisSelector gating.
+        """
+        from schedion.study import SchedionStage3Study, SchedionStage3Report
+
+        study = SchedionStage3Study(schedion_generator=self.generator)
+        report = study.run_study()
+
+        self.assertIsInstance(report, SchedionStage3Report)
+        self.assertEqual(report.total_probes, 5)
+        self.assertEqual(len(report.hestia_results), 5)
+        self.assertEqual(len(report.schedion_results), 5)
+
+        # Check metrics computed
+        self.assertGreaterEqual(report.hestia_pass_rate, 0.0)
+        self.assertGreaterEqual(report.schedion_pass_rate, 0.0)
+        self.assertGreaterEqual(report.schedion_mean_grounding, 0.5)
+
+        # Check decision gate verdict string
+        self.assertIn(
+            report.decision_gate_verdict,
+            ["ADOPT_OPTIONAL_SOURCE", "PARITY_OFF_BY_DEFAULT", "ARCHIVE_NO_ADOPTION"],
+        )
+        self.assertTrue(report.decision_gate_rationale)
+        self.assertIn("delta", report.paired_pass_bootstrap)
+
 
 if __name__ == "__main__":
     unittest.main()
+

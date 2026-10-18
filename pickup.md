@@ -145,13 +145,39 @@ To verify all services and environments are operational after system reboot:
 
 ---
 
+### Phase 7: Schedion & Symbolon Controlled Studies (Completed)
+1. **Schedion Stage 3 Controlled Comparison (`schedion/schedion/study.py`)**:
+   - Implemented `SchedionStage3Study` evaluating baseline Hestia extractive/autoregressive summaries vs. Schedion NCM generator candidates across identical 512-token conditioned spans under `KrisisSelector` gating.
+   - Executed on RTX 5060 Ti GPU with real NCM XSum checkpoint.
+   - **Key Finding**: Schedion NCM generator exhibited severe out-of-domain degradation on technical/biochemical/mathematical spans (mean factual grounding 26.3% vs. 100.0% for baseline; latency 813.0 ms vs. < 1.0 ms). KrisisSelector cleanly rejected all ungrounded candidates as `NO_VALID_CANDIDATE`.
+   - **Verdict**: `ARCHIVE_NO_ADOPTION`. Negative research report recorded in [`docs/review/schedion-stage3-controlled-comparison-report.md`](file:///home/akarta/Projects/Metis/docs/review/schedion-stage3-controlled-comparison-report.md). Schedion remains disabled by default.
+2. **Symbolon E2 Candidate Capture & Fusion Study (`symbolon/symbolon/study.py`)**:
+   - Implemented `SymbolonE2Study` evaluating flat dense baseline, Symbolon discrete code-overlap alone, uncapped additive union, and capped Reciprocal Rank Fusion (matched top-$k$) across gold relevance and contradiction labels.
+   - Executed on RTX 5060 Ti GPU with real VQ-VAE discrete tokenizer.
+   - **Key Finding**: Symbolon alone achieved only 25.0% recall and 25.0% contradiction retention. Capped RRF top-$k=3$ showed zero improvement over flat baseline ($\Delta = 0.0000$). Uncapped union preserved gold evidence but caused a 1.75x candidate set expansion and verification overhead.
+   - **Verdict**: `ARCHIVE_UNCAPPED_NO_LOSS_RECORDED`. Negative research report recorded in [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md). Symbolon `FilteredRetrievalAdapter` is not adopted into LTHCM.
+3. **Unit & Integration Test Suites**:
+   - Added `test_stage3_controlled_comparison_study` in `tests/test_schedion.py` (7/7 passed).
+   - Added `TestSymbolonStudyE2` in `tests/test_symbolon.py` (9/9 passed).
+   - Total Metis test suite: **367 passed across all suites** (89 dianoia, 39 root, 66 prosopon, 173 kybernetes).
+
+---
+
 ## 3. Immediate Prioritized Tasks Left to Do
 
-### Task 8: Schedion & Symbolon Controlled Studies (Roadmap Milestone 2.3, Tracks C & D)
-- **Reference Spec**: Synthesis Roadmap Milestone 2.3.
-- **Schedion Stage 3**: Controlled comparison between Hestia summary candidates vs Schedion candidates over identical 512-token conditioned spans:
-  - Record Krisis selector pass/fail rates, claim extraction distributions, factual grounding, and wall-clock times.
-- **Symbolon E2**: Multiscale discrete code capture and fusion evaluation over benchmark diagnostic passages.
+### Task 9: Pyle Remote Operations & Panic Lockdown (Roadmap Milestone 3.1, Track A)
+- **Reference Spec**: `docs/review/mss-pyle-webrtc-passkey-spec.md` and Roadmap Milestone 3.1.
+- Enable Operator preset with remote approval rights for T1/T2 actions; enforce host confirmation step-up for T3 actions.
+- Implement active agent task termination on device revocation (< 500 ms security gate).
+- Implement one-command Panic Lockdown (`prosopon device lockdown`).
+- Add doctor diagnostics: check TLS state, file permissions on `access.db`, unauthenticated endpoints, and legacy token migration.
+- Verify security tests T1–T16 and functional tests F1–F7.
+
+### Task 10: Anadrome Frozen Live Walk Test (Roadmap Milestone 3.2, Track B)
+- **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` Section 5 & 6 and Roadmap Milestone 3.2.
+- Freeze test dataset questions and pre-declare random seeds.
+- Run fresh live Dianoia walks using promoted policy candidate(s) versus baseline controller.
+- Compute final paired bootstrap CIs via Dokime.
 
 ---
 
@@ -161,5 +187,8 @@ To verify all services and environments are operational after system reboot:
 - **Pyle WebRTC + Passkey Spec**: [`docs/review/mss-pyle-webrtc-passkey-spec.md`](file:///home/akarta/Projects/Metis/docs/review/mss-pyle-webrtc-passkey-spec.md)
 - **Synthesis Roadmap (All 5 Subsystems)**: [`docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md`](file:///home/akarta/Projects/Metis/docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md)
 - **Anadrome Replay Spec**: [`docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt)
+- **Schedion Stage 3 Report**: [`docs/review/schedion-stage3-controlled-comparison-report.md`](file:///home/akarta/Projects/Metis/docs/review/schedion-stage3-controlled-comparison-report.md)
+- **Symbolon E2 Report**: [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
+
 

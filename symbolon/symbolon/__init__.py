@@ -6,6 +6,7 @@ from symbolon.codes import (
     compute_scoped_code_overlap,
 )
 from symbolon.diagnostic import run_e1_diagnostic
+from symbolon.study import SymbolonE2Report, SymbolonE2Study
 from symbolon.tokenizer_adapter import SymbolonTokenizerAdapter
 
 __all__ = [
@@ -14,4 +15,7 @@ __all__ = [
     "compute_scoped_code_jaccard",
     "SymbolonTokenizerAdapter",
     "run_e1_diagnostic",
+    "SymbolonE2Study",
+    "SymbolonE2Report",
 ]
+

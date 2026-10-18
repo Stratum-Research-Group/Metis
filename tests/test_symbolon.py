@@ -153,5 +153,55 @@ class TestSymbolonDiagnosticE1(unittest.TestCase):
             self.assertIn("probe_scientific_biochem", content)
 
 
+class TestSymbolonStudyE2(unittest.TestCase):
+    """Test Experiment E2: Offline Candidate Capture & Fusion Study."""
+
+    def test_run_e2_study_all_arms(self):
+        from symbolon.study import SymbolonE2Study, SymbolonE2Report
+
+        adapter = SymbolonTokenizerAdapter(use_mock=True)
+        study = SymbolonE2Study(tokenizer_adapter=adapter, top_k=2)
+
+        report = study.run_study()
+
+        self.assertIsInstance(report, SymbolonE2Report)
+        self.assertEqual(report.total_queries, 4)
+        self.assertEqual(report.top_k, 2)
+        self.assertEqual(len(report.query_results), 4)
+
+        # Arm (a): Primary recall@k
+        self.assertGreaterEqual(report.mean_baseline_recall, 0.0)
+        self.assertGreaterEqual(report.mean_symbolon_recall, 0.0)
+        self.assertGreaterEqual(report.mean_capped_fusion_recall, 0.0)
+        self.assertGreaterEqual(report.mean_union_recall, report.mean_baseline_recall)
+
+        # Arm (b): Proxy agreement
+        self.assertGreaterEqual(report.mean_proxy_agreement, 0.0)
+        self.assertLessEqual(report.mean_proxy_agreement, 1.0)
+
+        # Arm (c1): Uncapped expansion
+        self.assertGreaterEqual(report.mean_union_expansion, 1.0)
+
+        # Arm (c2): Capped dropped items tracked
+        self.assertGreaterEqual(report.total_dropped_gold, 0)
+
+        # Arm (d): Contradiction coverage
+        self.assertGreaterEqual(report.baseline_contradiction_retention_rate, 0.0)
+        self.assertGreaterEqual(report.union_contradiction_retention_rate, 0.0)
+
+        # Decision verdict and paired bootstrap
+        self.assertIn("delta", report.paired_bootstrap_capped_vs_baseline)
+        self.assertIn(
+            report.decision_verdict,
+            [
+                "PROCEED_TO_E3_PROTOTYPE",
+                "ARCHIVE_UNCAPPED_NO_LOSS_RECORDED",
+                "ARCHIVE_NEGATIVE_RESULT",
+            ],
+        )
+        self.assertTrue(report.decision_rationale)
+
+
 if __name__ == "__main__":
     unittest.main()
+
