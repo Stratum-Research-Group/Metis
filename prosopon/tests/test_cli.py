@@ -59,3 +59,18 @@ def test_cli_serve_and_run(tmp_path, monkeypatch):
     assert call_kwargs["host"] == "127.0.0.1"
     assert call_kwargs["port"] == 9998
 
+
+def test_cli_open(tmp_path, monkeypatch):
+    from unittest.mock import MagicMock
+    mock_browser = MagicMock()
+    monkeypatch.setattr("webbrowser.open", mock_browser)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, ["open", "--port", "8000", "--data-dir", str(tmp_path)])
+    assert res.exit_code == 0
+    assert "Prosopon Host Bootstrap" in res.output
+    assert "bootstrap_token=" in res.output
+    assert mock_browser.call_count == 1
+    opened_url = mock_browser.call_args[0][0]
+    assert "http://127.0.0.1:8000/?bootstrap_token=" in opened_url
+

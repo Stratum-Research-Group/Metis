@@ -111,5 +111,23 @@ def doctor(data_dir: str):
     print_doctor_report(cfg)
 
 
+@cli.command("open")
+@click.option("--host", default="127.0.0.1", help="Prosopon host address")
+@click.option("--port", default=8000, type=int, help="Prosopon port")
+@click.option("--data-dir", default="./data", help="Path to data directory")
+@click.option("--no-browser", is_flag=True, help="Print URL only without launching browser")
+def open_browser(host: str, port: int, data_dir: str, no_browser: bool):
+    """Open Prosopon UI in default browser using a secure single-use bootstrap ticket."""
+    import webbrowser
+    mgr = PairingManager(Path(data_dir))
+    ticket = mgr.create_bootstrap_ticket(validity_seconds=60)
+    url = f"http://{host}:{port}/?bootstrap_token={ticket}"
+    click.echo(f"\n=== Prosopon Host Bootstrap ===")
+    click.echo(f"Single-use bootstrap ticket minted (valid 60s):")
+    click.echo(f"URL: {url}\n")
+    if not no_browser:
+        webbrowser.open(url)
+
+
 if __name__ == "__main__":
     cli()

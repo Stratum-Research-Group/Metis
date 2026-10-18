@@ -33,6 +33,8 @@ class PairingManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.tokens_file = self.data_dir / "paired_tokens.json"
         self.pin_file = self.data_dir / "pairing_pin.json"
+        self.host_owner_file = self.data_dir / ".host_owner_token"
+        self.bootstrap_tickets_file = self.data_dir / "bootstrap_tickets.json"
         self.expiry_hours = expiry_hours
         
         # In-memory ephemeral pairing code state
@@ -42,8 +44,110 @@ class PairingManager:
         self._lockout_until: float = 0.0
         self._tokens_file_sig: Optional[Tuple[int, int, int]] = None
 
+        # Ensure host-owner token exists with 0600 permissions
+        self._ensure_host_owner_token()
+
         # Load persisted tokens
         self._paired_tokens: Dict[str, PairedDevice] = self._load_tokens()
+
+    def _ensure_host_owner_token(self) -> str:
+        """Ensure host-owner token file exists with 0600 permissions."""
+        if self.host_owner_file.exists():
+            try:
+                tok = self.host_owner_file.read_text(encoding="utf-8").strip()
+                if tok:
+                    return tok
+            except Exception:
+                pass
+
+        token = secrets.token_urlsafe(32)
+        tmp = self.host_owner_file.with_suffix(".tmp")
+        tmp.write_text(token, encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except Exception:
+            pass
+        tmp.replace(self.host_owner_file)
+        try:
+            os.chmod(self.host_owner_file, 0o600)
+        except Exception:
+            pass
+        return token
+
+    def get_or_create_host_owner_token(self) -> str:
+        """Return the host-owner token (filesystem authority with 0600 permissions)."""
+        return self._ensure_host_owner_token()
+
+    def validate_host_owner_token(self, token: Optional[str]) -> bool:
+        """Validate if token matches the host-owner token on disk."""
+        if not token:
+            return False
+        expected = self.get_or_create_host_owner_token()
+        return secrets.compare_digest(token.strip(), expected.strip())
+
+    def create_bootstrap_ticket(self, validity_seconds: int = 60, role: str = "admin") -> str:
+        """Generate a short-lived single-use bootstrap ticket for launching local browser sessions."""
+        ticket = secrets.token_urlsafe(24)
+        now = time.time()
+        record = {
+            "ticket": ticket,
+            "expires_at": now + validity_seconds,
+            "role": role,
+            "created_at": now,
+        }
+        tickets = self._load_bootstrap_tickets()
+        tickets.append(record)
+        self._save_bootstrap_tickets(tickets)
+        return ticket
+
+    def consume_bootstrap_ticket(self, ticket: Optional[str], device_name: str = "Local Browser") -> Optional[str]:
+        """Validate and immediately consume a single-use bootstrap ticket, minting a session token."""
+        if not ticket:
+            return None
+        now = time.time()
+        tickets = self._load_bootstrap_tickets()
+        valid_tickets = []
+        target_record = None
+
+        for t in tickets:
+            if t.get("expires_at", 0.0) < now:
+                continue
+            if secrets.compare_digest(t.get("ticket", ""), ticket.strip()) and target_record is None:
+                target_record = t
+            else:
+                valid_tickets.append(t)
+
+        self._save_bootstrap_tickets(valid_tickets)
+
+        if not target_record:
+            return None
+
+        role = target_record.get("role", "admin")
+        return self.generate_loopback_token(device_name=device_name, role=role)
+
+    def _load_bootstrap_tickets(self) -> list:
+        if not self.bootstrap_tickets_file.exists():
+            return []
+        try:
+            with open(self.bootstrap_tickets_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _save_bootstrap_tickets(self, tickets: list) -> None:
+        tmp = self.bootstrap_tickets_file.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(tickets, f, indent=2)
+        try:
+            os.chmod(tmp, 0o600)
+        except Exception:
+            pass
+        tmp.replace(self.bootstrap_tickets_file)
+        try:
+            os.chmod(self.bootstrap_tickets_file, 0o600)
+        except Exception:
+            pass
 
     @staticmethod
     def _hash_token(token: str) -> str:
@@ -174,6 +278,10 @@ class PairingManager:
         """Verify whether token exists, has not expired, and satisfies required_role if specified."""
         if not token:
             return False
+
+        # Host-owner token satisfies any role including admin
+        if self.validate_host_owner_token(token):
+            return True
 
         # Live sync: reload tokens if disk state changed or removed
         self._sync_disk_state()

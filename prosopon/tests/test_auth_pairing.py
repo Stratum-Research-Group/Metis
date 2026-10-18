@@ -95,3 +95,44 @@ def test_cross_process_pairing_and_live_revocation(tmp_path):
     assert server_mgr.validate_token(token) is False
 
 
+def test_host_owner_token_permissions_and_validation(tmp_path):
+    import stat
+    mgr = PairingManager(tmp_path)
+    tok = mgr.get_or_create_host_owner_token()
+    assert tok is not None
+    assert len(tok) >= 32
+
+    token_file = tmp_path / ".host_owner_token"
+    assert token_file.exists()
+    mode = stat.S_IMODE(token_file.stat().st_mode)
+    assert mode == 0o600
+
+    # Validation
+    assert mgr.validate_host_owner_token(tok) is True
+    assert mgr.validate_host_owner_token("wrong-token") is False
+    assert mgr.validate_token(tok) is True
+    assert mgr.validate_token(tok, required_role="admin") is True
+
+
+def test_bootstrap_tickets_single_use_and_expiry(tmp_path):
+    import stat
+    mgr = PairingManager(tmp_path)
+    ticket = mgr.create_bootstrap_ticket(validity_seconds=60)
+    assert ticket is not None
+    assert len(ticket) >= 20
+
+    tickets_file = tmp_path / "bootstrap_tickets.json"
+    assert tickets_file.exists()
+    mode = stat.S_IMODE(tickets_file.stat().st_mode)
+    assert mode == 0o600
+
+    # First consumption succeeds and issues token
+    session_tok = mgr.consume_bootstrap_ticket(ticket, device_name="Test Browser")
+    assert session_tok is not None
+    assert mgr.validate_token(session_tok, required_role="admin") is True
+
+    # Single-use: second consumption fails
+    reused = mgr.consume_bootstrap_ticket(ticket)
+    assert reused is None
+
+

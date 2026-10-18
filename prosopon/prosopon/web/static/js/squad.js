@@ -99,7 +99,9 @@ const MetisSquad = {
     }
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/lochos/ws`;
+    const token = typeof API !== "undefined" && API.getAuthToken ? API.getAuthToken() : (localStorage.getItem("prosopon_token") || "");
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+    const wsUrl = `${protocol}//${host}/api/lochos/ws${tokenParam}`;
 
     try {
       this.ws = new WebSocket(wsUrl);

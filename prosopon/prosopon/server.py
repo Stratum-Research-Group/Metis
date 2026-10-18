@@ -52,6 +52,12 @@ class PairingRequest(BaseModel):
     device_name: Optional[str] = "Mobile Browser"
 
 
+class LocalTokenExchangeRequest(BaseModel):
+    ticket: Optional[str] = None
+    host_owner_token: Optional[str] = None
+    device_name: Optional[str] = "Local Browser"
+
+
 class ApprovalResolveRequest(BaseModel):
     decision: str  # "allow_once" | "deny"
 
@@ -176,22 +182,19 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     # Auth dependencies
     async def require_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
         _validate_host_header(request)
-        client_host = request.client.host if request.client else "127.0.0.1"
-        is_loopback = client_host in ("127.0.0.1", "localhost", "::1", "testclient")
-
-        # In local-only mode, loopback callers are exempt from token requirement
-        if is_loopback and not cfg.is_lan():
-            return True
-
-        # In LAN mode or remote access: require valid paired bearer token
         token = None
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer "):].strip()
 
+        # Check X-Host-Owner-Token header as filesystem authority
+        host_owner_hdr = request.headers.get("x-host-owner-token")
+        if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            return True
+
         if not token or not pairing_mgr.validate_token(token):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized: Device pairing required for LAN access.",
+                detail="Unauthorized: Valid authentication token required.",
             )
         return True
 
@@ -201,6 +204,11 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         token = None
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer "):].strip()
+
+        # Check X-Host-Owner-Token header as filesystem authority
+        host_owner_hdr = request.headers.get("x-host-owner-token")
+        if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            return True
 
         if not token or not pairing_mgr.validate_token(token, required_role="admin"):
             raise HTTPException(
@@ -221,27 +229,19 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     @app.post("/api/auth/pin")
     async def generate_pin(request: Request, authorization: Optional[str] = Header(None)):
         _validate_host_header(request)
-        client_host = request.client.host if request.client else "127.0.0.1"
-        is_loopback = client_host in ("127.0.0.1", "localhost", "::1", "testclient")
-
         token = None
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer "):].strip()
 
-        # Reject unauthenticated remote callers
-        if not is_loopback:
-            if not token or not pairing_mgr.validate_token(token):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Unauthorized: Remote generation of pairing PINs is prohibited. Generate PIN via terminal ('prosopon pair').",
-                )
-        else:
-            # Over loopback in LAN mode, reject unauthenticated generation to prevent SSRF bypass
-            if cfg.is_lan() and (not token or not pairing_mgr.validate_token(token)):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Unauthorized: In LAN mode, pairing PIN must be viewed at terminal ('prosopon pair') or via authenticated session.",
-                )
+        host_owner_hdr = request.headers.get("x-host-owner-token")
+        is_host_owner = bool(host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr))
+        is_admin_paired = bool(token and pairing_mgr.validate_token(token, required_role="admin"))
+
+        if not (is_host_owner or is_admin_paired):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Pairing PIN generation requires host owner credential or admin session.",
+            )
 
         pin = pairing_mgr.generate_pairing_pin()
         return {"pin": pin, "expires_in_seconds": 300}
@@ -251,20 +251,46 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         return Response(status_code=204)
 
     @app.post("/api/auth/local-token")
-    async def get_local_token(request: Request):
-        """Auto-provision local bearer token for loopback sessions in local mode."""
+    @app.post("/api/auth/exchange-ticket")
+    async def get_local_token(
+        request: Request,
+        req: Optional[LocalTokenExchangeRequest] = None,
+    ):
+        """Exchange single-use bootstrap ticket or host-owner credential for an active session token."""
         _validate_host_header(request)
-        client_host = request.client.host if request.client else "127.0.0.1"
-        is_loopback = client_host in ("127.0.0.1", "localhost", "::1", "testclient")
 
-        if not is_loopback or cfg.is_lan():
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Forbidden: Auto-provisioning only permitted on local loopback.",
+        # 1. Check ticket exchange
+        ticket = req.ticket if req else None
+        if not ticket:
+            ticket = request.query_params.get("ticket") or request.query_params.get("bootstrap_token")
+
+        if ticket:
+            token = pairing_mgr.consume_bootstrap_ticket(
+                ticket, device_name=req.device_name if req and req.device_name else "Local Browser"
             )
+            if not token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Unauthorized: Invalid or expired bootstrap ticket.",
+                )
+            return {"status": "ok", "token": token}
 
-        token = pairing_mgr.generate_loopback_token(device_name="Local Browser", role="admin")
-        return {"status": "ok", "token": token}
+        # 2. Check host-owner token from header or body
+        host_tok = request.headers.get("x-host-owner-token")
+        if not host_tok and req and req.host_owner_token:
+            host_tok = req.host_owner_token
+
+        if host_tok and pairing_mgr.validate_host_owner_token(host_tok):
+            token = pairing_mgr.generate_loopback_token(
+                device_name=req.device_name if req and req.device_name else "Host Owner Browser",
+                role="admin",
+            )
+            return {"status": "ok", "token": token}
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Host owner token or valid bootstrap ticket required to provision session token.",
+        )
 
     @app.post("/api/auth/pair")
     async def pair_device(req: PairingRequest, request: Request):
@@ -942,6 +968,23 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     @app.websocket("/api/lochos/ws")
     async def lochos_ws_endpoint(websocket: WebSocket) -> None:
         """WebSocket bridge streaming Lochos squad state updates and task events."""
+        token = websocket.query_params.get("token") or websocket.query_params.get("ticket")
+        if not token and "authorization" in websocket.headers:
+            auth_hdr = websocket.headers.get("authorization", "")
+            if auth_hdr.startswith("Bearer "):
+                token = auth_hdr[len("Bearer "):].strip()
+
+        host_owner_hdr = websocket.headers.get("x-host-owner-token")
+        is_authed = False
+        if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            is_authed = True
+        elif token and (pairing_mgr.validate_token(token) or pairing_mgr.validate_host_owner_token(token)):
+            is_authed = True
+
+        if not is_authed:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Unauthorized: Valid authentication token required")
+            return
+
         await websocket.accept()
         try:
             if hasattr(kybernetes, "get_lochos_squad"):
@@ -1047,7 +1090,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
 
     # 13. Health
     @app.get("/api/health")
-    async def health():
+    async def health(request: Request):
+        _validate_host_header(request)
         return {"status": "ok", "app": "prosopon", "version": "0.1.0"}
 
     return app

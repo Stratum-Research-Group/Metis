@@ -17,17 +17,33 @@ const API = {
   async ensureAuthToken() {
     const existing = this.getAuthToken();
     if (existing) return existing;
+
+    // Check for single-use bootstrap token in URL parameters (from `prosopon open`)
     try {
-      const res = await fetch("/api/auth/local-token", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.token) {
-          this.setAuthToken(data.token);
-          return data.token;
+      if (typeof window !== "undefined" && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const bootstrapToken = urlParams.get("bootstrap_token") || urlParams.get("ticket");
+        if (bootstrapToken) {
+          const res = await fetch("/api/auth/exchange-ticket", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket: bootstrapToken }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.token) {
+              this.setAuthToken(data.token);
+              urlParams.delete("bootstrap_token");
+              urlParams.delete("ticket");
+              const cleanSearch = urlParams.toString() ? `?${urlParams.toString()}` : "";
+              window.history.replaceState({}, "", window.location.pathname + cleanSearch + window.location.hash);
+              return data.token;
+            }
+          }
         }
       }
     } catch {
-      // Remote or offline
+      // Offline or bootstrap exchange failed
     }
     return "";
   },
