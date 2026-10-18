@@ -1,0 +1,243 @@
+mini-AGI (volotat/mini-AGI) - repo review
+HEAD verified: 574a397ea87fda83f056f42b436f9175568231b9 (main, committed 2026-10-17,
+confirmed current via the GitHub API the same day). ~11,400 lines of Python. License:
+MIT. Single-maintainer project, first commit 2026-09-19, 41 commits, no CI, no test
+suite. The README's AI usage section states Claude models wrote much of the code under
+the author's direction.
+
+VERDICT
+Worth your time. mini-AGI is a byte-level language model trained from scratch on one
+8 GB GPU, designed to keep learning from a batch-1 stream of text, with its weights
+stored as one file per expert on disk and paged disk -> RAM -> VRAM as the text asks
+for them. Whether it escapes catastrophic forgetting is conditional, and the author
+says so himself: his own probe shows measurable forgetting under massed single-domain
+exposure (+0.13 nats averaged over 8 domains) and no forgetting he could measure under
+interleaved exposure. Those are his numbers from his runs, not mine. The model is
+openly toy-scale (his own samples still produce "the other cherry has wings"), but the
+engineering discipline is real and the continual-learning measurement is carefully
+packaged: four arms, an interleaved control, shipped probe code, shipped results, and
+a pinned replication checkpoint on Hugging Face.
+
+Framing for you: not a product to adopt, and not a rival approach to LTHCM. It is one
+working implementation of the parametric-memory approach - knowledge kept in the
+weights and updated continually - which makes it a candidate comparison point and
+baseline for the LTHCM paper, and a source of patterns for Metis components.
+
+WHAT I VERIFIED MYSELF
+Review environment: CPU-only Linux machine, torch 2.14.1+cpu, no GPU. The repo ships
+no test suite and no CI, so everything in this section comes from ad-hoc test scripts
+I wrote for this review, run against a tiny config (d_model 64, 8 initial experts,
+block 128). Reproduced, not just read:
+  - create -> read -> checkpoint -> resume works end to end. train.py read auto-creates
+    the pool from config.yaml when the weights directory holds no model (train.py:680).
+    Held-out loss fell 5.58 -> 4.83 -> 4.52 across three sessions over ~12k characters;
+    the second session resumed its step counter (64 -> 95), printed "optimiser moments
+    restored (64 steps of history)", and its opening held-out check exactly equalled
+    the first session's closing value.
+  - Adam moments genuinely persist per expert: expert files hold non-zero moments after
+    training, and PagedPool._own_moments copies each resident expert's own moments from
+    its file into the optimiser slots before the step (verified tensor-equal for two
+    loaded experts). The "moments belong to the expert, not the slot" claim is true in
+    code, not just in prose.
+  - Growth works live: with growth enabled the pool went 8 -> 18 experts during a
+    6k-char read, new experts written as new files named by uid, manifest consistent,
+    optimiser resynced, no crash.
+  - Prune works: with staleness forced, prune deleted 16 of 18 experts, deleted exactly
+    their files (uid naming survives renumbering as designed), shrank the router rows,
+    and the result saved and reloaded cleanly.
+  - Generation works and is deterministic (same prompt twice -> identical output), as
+    the greedy design claims, and works from a read-only load.
+  - The custom blocked-attention fallback for GPUs without fused kernels
+    (minagi/model.py, _BlockedAttention) matches a naive fp64 causal-attention
+    reference to ~3e-7 in the forward and ~6e-7 in its hand-written backward.
+So the plumbing is genuinely sound at toy scale on CPU. What I did NOT verify is
+listed under TEST GATES.
+
+REVIEW METHOD (so the results above are inspectable)
+  pip install torch numpy pyyaml     # CPU wheel; the review machine has no GPU
+  # shrink config.yaml to d_model 64, 8 initial experts, block 128
+  python3 train.py read <corpus_dir> --save --weights-dir /tmp/w1 --held-out <val_dir>
+  # repeat the same command for sessions 2 and 3 (bounded with --minutes/--passes):
+  #   resume behaviour, step counter, held-out chaining, moment restore message
+  # moments: load two resident experts; compare optimiser slot tensors against the
+  #   moments stored in each expert's file (allclose, True for slots 0 and 1)
+  # growth: rerun the read with --grow-k 1 and watch the pool file count and manifest
+  # prune: force expert staleness, run prune, compare deleted files against surviving
+  #   uids, then save and rebuild the paged pool
+  # generation: load read-only, generate twice from one prompt, diff the outputs
+  # attention: run _BlockedAttention forward and backward against an fp64 naive
+  #   causal-attention reference and take max abs error
+  # defect 1: python3 -c "from minagi.decode import contrastive_generate; ..." on a
+  #   tiny model -> TypeError: forward() got an unexpected keyword argument
+  #   'return_hidden'
+  # defect 2: python3 -c "from minagi.report import weight_stats; weight_stats(model)"
+  #   -> AttributeError: 'RecurCoder' object has no attribute 'blocks'
+
+WHAT IT IS, BY COMPONENT (reviewed by purpose, not by name)
+  - minagi/model.py - a tidy modern trunk: RMSNorm, RoPE, SwiGLU, flash attention, plus
+    a blocked-attention fallback with its own backward for GPUs without fused kernels
+    (RDNA2, CPU). Cache masking with causal_lower_right is handled correctly (the
+    classic off-by-P bug is explicitly avoided).
+  - minagi/recur.py - the architecture: 2 dense prelude blocks, then ONE recurrent
+    block applied up to 24 times per character with PonderNet halting (each character
+    decides its own depth), plus an adapter that re-injects the input each row so the
+    latent cannot drift off the text. Truncated BPTT through the last 24 rows.
+  - minagi/pool.py + minagi/paged.py - the core of the design. A self-growing pool of
+    SwiGLU experts (340 in the current run, 3.15M params each, ~25 MB on disk with
+    moments). Routing is "the text chooses": every character ranks the whole pool, the
+    forward is admitted the 32 most-voted experts, and everything a training forward
+    used stays on the card through its backward. Adam moments travel with the expert
+    across disk/RAM/VRAM. Growth is by RECOMBINATION (a new expert is assembled from
+    whole hidden units of up to 16 parents, with its router row the unit-weighted
+    average of theirs), gated near zero, pruned after a survival window purely on
+    "nothing admitted you lately" - deliberately never on gate magnitude, with an
+    argued case (the gate is anti-predictive: sinks read as dead).
+  - minagi/stream.py - the read path. FileReader re-forwards the whole context window
+    per 2,048-char chunk so gradient reaches everything the model attends to (cost:
+    every character forwarded context/chunk times - stated honestly). Held-out
+    evaluation is paired (same blocks every time) with spread block sampling and a
+    level correction, so checks report at the level of a 4x larger evaluation.
+  - minagi/plasticity.py - no LR schedule at all; a controller nudges the rate at every
+    held-out check from two exponentially weighted fits (effect size, not t-statistic,
+    with the reasoning written out), with spike, no-progress, restart and regime-change
+    guards, each citing the incident that motivated it.
+  - minagi/live.py + serve.py - a localhost Flask chat UI whose LiveLearner takes an
+    optimiser step per chunk of the conversation itself: the model trains from talking
+    to you, through the same code path as corpus reading. The file's own comments mark
+    the self-training cost as unknown and report that an earlier, denser variant cost
+    +0.65 nats held-out.
+  - train.py - the read loop: lanes per subject, passages rotated to avoid massed
+    exposure, growth/prune cadence, atomic checkpoints, Ctrl-C checkpointing,
+    plasticity restore, and per-restart optimiser-moment restore (a bug they found by
+    noticing Adam's step counter read 2,381 at run step 458,000).
+  - corpora/ - builds the 8-subject corpus (TinyStories, OpenHermes, OpenThoughts,
+    Lichess, Wikipedia, code, arithmetic, self-knowledge).
+  - replication/ - the continual-learning probe with all four arms and shipped results.
+
+USEFULNESS FOR YOUR PROJECTS
+  LTHCM / the arXiv paper:
+    - A candidate baseline and contrast. LTHCM is external, inspectable, topological
+      memory; mini-AGI is parametric memory updated continually. The paper could use
+      it as a concrete comparison of the two approaches, and its probe numbers give a
+      cited cost model for the parametric end (author-reported): massed single-domain
+      exposure still costs +0.13 nats across 8 domains even with his mitigation;
+      interleaved exposure costs nothing measurable. If LTHCM keeps knowledge outside
+      the weights, it sidesteps this failure mode by construction - that is a
+      conditional statement about the design, not a claim about your results.
+    - The headline mechanism is falsifiable and worth engaging: the author reports the
+      TRUNK carries 98% of the squared gradient norm, and that forgetting is controlled
+      by running the trunk at 0.1x the experts' rate - NOT by the expert pool (freezing
+      experts changed forgetting by 0.0035 nats). His summary: where the damage lands
+      is where representations overlap (prose lanes forgot, chess/arithmetic did not).
+    - The probe design (worst-case massed PG19 read + interleaved control + a recovery
+      phase separating displaced from destroyed knowledge) is a plausible shape for
+      evaluating any continual-learning claim, LTHCM's included.
+  Dokime:
+    - Directly adaptable machinery: replication/forgetting_probe.py is a clean template
+      for a Dokime continual-learning eval; FolderEvaluator's paired blocks, spread
+      block sampling, stderr reporting and level correction are reusable as-is;
+      GradSNR (two-scalar gradient noise scale) is a cheap add.
+  Paideia:
+    - A hypothesis to test, not a result: would slowing shared weights the way
+      trunk_lr_mult=0.1 does reduce forgetting in QLoRA-style fine-tuning? Their probe
+      ran on full training of this architecture; nothing in it demonstrates the effect
+      transfers to your setting. Worth a Dokime arm before you trust fine-tune
+      defaults.
+  Hestia:
+    - The three-tier paging (one disk file per expert with its own Adam moments, LRU
+      RAM cache, 32 VRAM slots; the author measures ~2.4 expert loads per training
+      step) is a candidate pattern for serving models bigger than VRAM. My
+      verification was toy-scale CPU only, so nothing here proves it fits or performs
+      on your 5060 Ti 16 GB - treat it as a benchmarking lead, not a result.
+  Kybernetes / Metis live learning:
+    - Conditional application only: if Metis ever includes learning from live chat,
+      live.py is a reference implementation with two warnings already measured and
+      written into its comments - self-training on chat is a far denser diet than
+      corpus reading (earlier denser variant: +0.65 nats held-out), and a smaller LR
+      alone was not the fix. I have no evidence such chat training is currently
+      planned; this is here in case it ever is.
+    - The balance term (router pays per-expert probability in proportion to recent
+      admission share) is a tested approach to expert collapse, reusable in MoE
+      experiments.
+  MSS: nothing direct; this is a training system, not a coding-agent environment.
+  Stoma: if Stoma ever needs corpus ingestion, minagi/ingest.py's content-sampling
+    binary detection and its verdict cache keyed on size+mtime are reusable patterns.
+
+ISSUES FOUND (numbered; file:line; severity)
+  1. minagi/decode.py:150 and :165 - contrastive_generate is broken. It calls
+     RecurCoder.forward(..., return_hidden=True), which does not accept that kwarg;
+     any call raises TypeError. REPRODUCED on CPU at this HEAD. The README's
+     acknowledgments describe contrastive search as "implemented as an alternative
+     decoder" - it is not usable; only the default greedy path works. Low severity
+     (nothing calls it), but the README overstates it.
+  2. minagi/report.py:43 - weight_stats() iterates model.blocks, which RecurCoder does
+     not have (it has prelude/recur/coda); raises AttributeError. REPRODUCED. Dead code
+     (nothing in the repo calls it), but it is a shipped module the README's Layout
+     section advertises ("the model reading statistics off its own weights").
+  3. No guard against two writers on one weights directory. Learning is ON by default
+     in serve.py (serve.py:838, --no-learn); /api/chat (serve.py:379) feeds the
+     LiveLearner (serve.py:356) and saves checkpoints (serve.py:368-369, via
+     minagi/live.py:168), while train.py read checkpoints the same directory
+     (train.py:1098). Both default to "weights" (serve.py:831, train.py:2130). Writes
+     are atomic per file but not across files, and a prune in one process deletes
+     expert files under the other. The code clearly expects train and serve to run
+     simultaneously on one card (the OOM fallback says so), so the learning mode needs
+     a lockfile or a documented "never both write" rule. Medium severity if you
+     actually run it that way.
+  4. serve.py:834,900,384 - unauthenticated Flask dev server; --host accepts 0.0.0.0,
+     which would expose /api/chat (serve.py:379), an endpoint that by default TRAINS
+     the model and writes checkpoints, with no auth and client-supplied max_new
+     unbounded (serve.py:384). Fine on the 127.0.0.1 default; a warning belongs next
+     to --host. Hardening note.
+  5. minagi/__init__.py:21,24 - the module docstring lists minagi/schedule.py and
+     minagi/notify.py; neither file exists. Documentation drift only.
+  6. train.py:678 (comment) - claims the repository ships weights/manifest.json; it
+     does not (nothing under weights/ is tracked). Behaviour is unaffected (the
+     missing-model path is handled, train.py:680); the comment is stale.
+  7. replication/results/*.json - the shipped probe results embed an absolute path
+     from the author's machine in the "weights" field (e.g. trunk01.json:11).
+     Harmless, but machine-specific provenance: the path resolves nowhere else, which
+     hurts portability of the results files.
+  8. train.py:1264 and siblings - float(loss) on a grad-tracking tensor raises a
+     UserWarning every chunk. Cosmetic; float(loss.detach()).
+  9. minagi/ingest.py:221-222 - corpus "characters" are counted as file BYTES
+     (os.path.getsize), so multibyte UTF-8 and marker tokens slightly inflate reported
+     progress/percentages. Negligible.
+ 10. train.py:2077 (via minagi/tokenizer.py:88) - the ponder-probe path imports the HF
+     `tokenizers` package, which is not in the README's install lines
+     (README.md:443-446). Only hit on that path; `read` does not need it.
+     Documentation gap.
+
+No correctness defects found in the core training/paging/routing path within this
+review's scope; the two reproduced breakages are both in unused auxiliary modules.
+
+TEST GATES STILL OPEN (honest limits of this review)
+  - The repo ships no test suite and no CI. The verifications in this review come from
+    ad-hoc scripts I wrote and ran for this review, not from any repo tests.
+  - Every "measured" number in the README (held-out 0.5976 nats, 2.091 BPB on PG19, the
+    forgetting table, scaling exponent -0.203, speed table) is author-reported from his
+    runs. I verified the MECHANISMS (training, resume, moments, growth, prune,
+    generation, attention math) on a tiny CPU model; I did not reproduce any headline
+    number.
+  - The continual-learning probe was not re-run: it needs the 174-expert replication
+    checkpoint from Hugging Face plus multi-hour GPU runs. The shipped results JSONs
+    are present and internally consistent with the README table, and the probe code
+    matches its description, but that is provenance, not reproduction.
+  - serve.py was reviewed in source only; I did not run the Flask app (flask not
+    installed in the review environment). The generation path it uses was exercised
+    directly instead.
+  - The 24-row PonderNet depth policy and the plasticity controller were exercised only
+    at toy settings (max_steps 4); their long-run behaviour is unverified by me.
+  - GPU-specific paths (fused attention selection, bf16 autocast, fused AdamW,
+    expandable segments) were read, not run - the review environment has no GPU.
+
+LICENSE
+MIT. The README's AI usage section states Claude models wrote much of the code under
+the author's direction.
+
+BOTTOM LINE
+Study it. Take the probe design for Dokime, the trunk-LR finding as a citable
+contrast candidate for the LTHCM paper, the paging tiers as a benchmarking lead for
+Hestia, and live.py's warnings as requirements if Metis ever plans to learn from
+chat. Do not expect a usable chat model: its own samples show limited quality. The
+instrumentation is the valuable part.

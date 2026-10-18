@@ -101,3 +101,20 @@ def test_tool_registry_active_timeout_enforcement():
     assert "execution timed out" in res.error
     # Should terminate well before the full 400ms sleep
     assert elapsed < 300
+
+
+def test_tool_registry_catalogue_probe():
+    """Verify ToolRegistry catalogue_probe tool correctly invokes Pinax prober."""
+    registry = ToolRegistry()
+    tool = registry.get_tool("catalogue_probe")
+    assert tool is not None
+    assert tool.name == "catalogue_probe"
+
+    # Probe a registered tool in the catalogue (e.g. calculator, file_search, or git)
+    req = ToolCallRequest(tool_id="catalogue_probe", arguments={"tool_name": "calculator"})
+    res = registry.execute(req)
+    assert res.success is True
+    assert "status" in res.data
+    assert res.data["status"] == "ok"
+    assert "duration_ms" in res.data
+

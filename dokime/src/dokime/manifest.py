@@ -70,6 +70,30 @@ def get_git_sha(repo_root: Path | None = None) -> str | None:
     return None
 
 
+def get_git_dirty(repo_root: Path | None = None) -> bool | None:
+    """Check if Dokime's source checkout has uncommitted changes.
+
+    Never inspects or uses the caller's working directory.
+    Returns True if dirty, False if clean, None if unavailable.
+    """
+    root = repo_root or find_dokime_repo_root()
+    if root is None:
+        return None
+
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5.0,
+        )
+        return bool(res.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
 def capture_hardware() -> dict[str, Any]:
     """Capture hardware environment via platform module and nvidia-smi if present."""
     hw: dict[str, Any] = {
@@ -115,6 +139,10 @@ def create_manifest(
     output_path: Path | None = None,
     repo_root: Path | None = None,
     model_identities: dict[str, Any] | None = None,
+    parent_run_id: str | None = None,
+    branch_point: str | None = None,
+    parameter_diff: dict[str, Any] | None = None,
+    dataset_boms: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build and write the run manifest JSON file."""
     checksums: dict[str, str] = {}
@@ -141,14 +169,20 @@ def create_manifest(
         prompt_hash = sha256_text(prompt_template)
         checksums["prompt_template"] = prompt_hash
 
-    # Resolve git sha
+    # Resolve git sha & dirty status
     git_sha = get_git_sha(repo_root)
     git_sha_record = git_sha if git_sha is not None else "unavailable"
+    git_dirty = get_git_dirty(repo_root)
 
     manifest = {
         "run_id": run_id,
         "dokime_version": __version__,
         "git_sha": git_sha_record,
+        "git_dirty": git_dirty,
+        "parent_run_id": parent_run_id,
+        "branch_point": branch_point,
+        "parameter_diff": parameter_diff,
+        "dataset_boms": dataset_boms or {},
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "model_ids": model_ids,
         "model_identities": model_identities or {},

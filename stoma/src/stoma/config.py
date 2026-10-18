@@ -353,7 +353,6 @@ def verify_runtime_dependencies(
     lthcm_file = Path(lthcm_raw).resolve()
     dianoia_file = Path(dianoia_raw).resolve()
 
-
     # Check origin
     if expected_lthcm_root not in lthcm_file.parents and lthcm_file != expected_lthcm_root:
         raise DependencyOriginError(

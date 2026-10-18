@@ -37,6 +37,8 @@ class RunConfig:
     max_tokens: int | None = None
     url: str | None = None
     output_dir: str = "runs"
+    parent_run_id: str | None = None
+    branch_point: str | None = None
 
     def __post_init__(self) -> None:
         validate_unique_ids(self.models, "model")
@@ -112,6 +114,8 @@ class RunConfig:
             max_tokens=int(data["max_tokens"]) if data.get("max_tokens") is not None else None,
             url=data.get("url") or data.get("hestia_url"),
             output_dir=str(data.get("output_dir", "runs")),
+            parent_run_id=data.get("parent_run_id") or data.get("parent_run"),
+            branch_point=data.get("branch_point"),
         )
 
     def merge_cli_args(
@@ -124,6 +128,8 @@ class RunConfig:
         max_tokens: int | None = None,
         url: str | None = None,
         output_dir: str | None = None,
+        parent_run_id: str | None = None,
+        branch_point: str | None = None,
     ) -> RunConfig:
         """Override configuration with explicit CLI flags."""
         merged_models = models if models is not None else self.models
@@ -133,6 +139,8 @@ class RunConfig:
         merged_max_tokens = max_tokens if max_tokens is not None else self.max_tokens
         merged_url = url if url is not None else self.url
         merged_output_dir = output_dir if output_dir is not None else self.output_dir
+        merged_parent_run_id = parent_run_id if parent_run_id is not None else self.parent_run_id
+        merged_branch_point = branch_point if branch_point is not None else self.branch_point
 
         merged_template = self.prompt_template
         merged_template_path = self.prompt_template_path
@@ -162,4 +170,6 @@ class RunConfig:
             max_tokens=merged_max_tokens,
             url=merged_url,
             output_dir=merged_output_dir,
+            parent_run_id=merged_parent_run_id,
+            branch_point=merged_branch_point,
         )

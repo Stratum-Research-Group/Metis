@@ -1,0 +1,217 @@
+WALDO repo review - github.com/openwaldo/waldo
+Reviewed at commit e4b49d7d295c1c68fc9ad50c1933311da424378a (main HEAD, pushed 2026-10-17,
+confirmed current against the GitHub API at review time). License: Apache-2.0.
+Method: read-only source inspection in the review environment (Go 1.26.6, linux/amd64),
+plus the test runs itemized below. Nothing installed system-wide, no credentials used,
+no repository files changed.
+
+=====================================================================
+VERDICT
+=====================================================================
+Good repo. gofmt, go vet, the Python worker tests, and two end-to-end lifecycles
+(ingest publish/audit/export, and a simulated model lifecycle through training,
+export and disclosure) were executed here and pass at this commit. The full Go test
+suite gave mixed results across repeated executions: it passed 3 of 5 runs, and both
+failures were the same flaky multinode test, detailed as issue 1.
+
+Worth your time in two ways: (1) as a design reference for dataset governance - the
+corpus-to-BOM-to-training provenance chain is carefully worked out; (2) potentially as
+an actual tool for producing hash-pinned, auditable training/eval datasets for LTHCM
+and Dokime. That second option is a proposal to evaluate, not an established fit; see
+the recommendation. Early stage: created 2026-08-04, about 2.5 months old, 44 stars,
+509 commits of which about 96% are one author. Treat formats as unstable outside its
+documented compatibility contract and pin any use to a commit.
+
+What it is: a Go CLI that builds auditable AI training datasets and models. A
+git-governed corpus index plus content-addressed Parquet objects (local file or S3
+lookaside) plus provenance records: corpus BOMs, training-run records, model records,
+release BOMs, and EU GPAI disclosure drafts. Trains via MLX, PyTorch, or TorchTitan
+(single and multi-host) when the runtime is present; exports native, Hugging Face, MLX,
+GGUF and Ollama packages.
+
+=====================================================================
+SCOPE OF INSPECTION (by component purpose)
+=====================================================================
+All 27 internal packages plus cmd/waldo and the composes were inspected; depth varied
+by risk. Reads by purpose:
+
+- CLI surface and command wiring        internal/cli (23 files, ~9.3k lines): skimmed
+  broadly, read closely around credentials, advisor, hostfile/multinode, index git ops.
+- Ingestion (untrusted input boundary)  internal/ingest (~8.4k lines): close read of
+  path containment, contribution staging, PDF/EPUB/mbox adapters, probe size limits,
+  content assessment, privacy redaction.
+- Object storage and credentials        internal/lookaside (~1.8k lines): close read of
+  file publish/copy verification, credential store, cache eviction.
+- Corpus/BOM/policy                     internal/corpus, internal/record, internal/canon,
+  internal/provenance: read; license policy (HEAD commit) read in full.
+- Training/inference execution          internal/training (~5.5k lines), internal/
+  inference, internal/host: read for exec boundaries, argument construction, env
+  handling; python worker staging read.
+- Model pull/export/weights             internal/model (~7.2k lines), modelexport,
+  modelquant, modelweights: pull path read closely (URL construction, size/hash
+  checks, shard index validation); export/quant skimmed.
+- Git management of the index           internal/git: read (clone/fetch/pull of the
+  managed checkout, remote URL pinning).
+- Supporting (tokenizer, shard, disclosure, evaluation, status, ai, calibration,
+  signing, mlxruntime/pytorchruntime embeds): read; signing read in full.
+- CI and test harness                   .github/workflows/ci.yml, testing/*.sh,
+  testing/e2e scripts: read; two e2e scripts executed.
+- Docs (docs/, 25 files): contracts skimmed for claim-vs-code consistency
+  (ARCHITECTURE, COMPATIBILITY, INGESTION family, MODEL-LIFECYCLE, TESTING, BOM).
+
+Exclusions and limits, stated honestly: no line-by-line read of every file (deepest on
+the boundaries above); S3 paths reviewed in code only (no credentials); GPU/MLX/
+TorchTitan runtime paths reviewed in code only (no hardware here); the composes'
+Python scoring scripts skimmed, not audited; docs checked for spot consistency, not
+exhaustively.
+
+=====================================================================
+WHY IT COULD BE USEFUL FOR YOUR PROJECTS (proposals, not established fits)
+=====================================================================
+1. LTHCM / Dokime. Every corpus selection compiles to an immutable BOM pinned by
+   SHA-256 (docs/OPENWALDO-BOM.md), and exported shards are hash-verified on read (the
+   ingest e2e validates exports byte-for-byte). That directly addresses the "which
+   data produced this number" ambiguity problem in eval work - it does not eliminate
+   the whole class (the BOM pins identity, not data quality), but it makes dataset
+   identity auditable. For the arXiv paper, WALDO-produced corpora plus BOMs could
+   give experiments a citable dataset identity a reviewer can re-verify. The EU GPAI
+   disclosure drafter (internal/disclosure) is adjacent to paper documentation
+   artifacts and labels its own output honestly: the e2e run printed "incomplete
+   draft; this is not a compliance finding".
+2. Stoma. Its ingestion boundary is a manifest-backed raw directory; acquisition tools
+   stop at the manifest and WALDO refuses to run any fetcher/converter named by one
+   (enforced by the adapter design in internal/ingest). Built-in adapters: text,
+   separated text, JSONL, mbox, PDF (text layer only, no OCR, parser panics contained -
+   internal/ingest/pdf.go:44-50), EPUB (expansion-size guarded -
+   internal/ingest/epub.go:226-230). Also Gopher-style repetition/boilerplate
+   detection (internal/ingest/content_assessment.go) and heuristic privacy redaction
+   for emails/IPs/phones/credentials (internal/ingest/privacy_redaction.go). Patterns
+   worth comparing against stoma's adapters.
+3. Paideia / Hestia. The training lifecycle (forecast -> compose -> train ->
+   checkpoint -> evaluate -> export -> disclose) with persisted run records is a
+   working reference for training-run metadata. GGUF export (internal/modelexport) is
+   adjacent to hestia's llama.cpp serving path. The TorchTitan multi-host-over-SSH
+   launcher is a reference for multi-host training design in general; whether it fits
+   any specific rig is untested here and would need its own evaluation.
+4. Phylax / Metis architecture. License policy is enforced as a plan-time gate
+   (internal/corpus/policy.go - the HEAD commit hardened its compound-expression
+   parsing). Index contributions apply through staging with symlink rejection, full
+   validation, and per-file rollback (internal/ingest/stage_contribution.go:36-135) -
+   a gate-then-apply pattern. The "one fact, one authoritative type and owner" rule in
+   its architecture docs mirrors the submodule discipline you already use.
+
+=====================================================================
+TEST GATES - WHAT WAS ACTUALLY RUN
+=====================================================================
+Executed here at e4b49d7d:
+- go build ./...: clean.
+- go test ./... (all 35 packages; 30 with tests, 5 without test files): executed 5
+  times; 3 passed, 2 failed, both failures on the same flaky test - see issue 1. Of
+  the 5 executions, 2 ran with caching disabled (-count=1): 1 pass, 1 fail. The other
+  3 ran with default caching (2 pass, 1 fail), so cached results cannot be ruled out
+  for those 2 passes. Separately, the source contains 721 Test functions (counted
+  from *_test.go, not a runner-reported total).
+- gofmt -l . : clean. go vet ./...: clean.
+- testing/python.sh: 13 Python worker unit tests PASS.
+- testing/e2e/ingest-direct.sh (local transport): PASS - generate/publish/apply/audit/
+  export/byte-compare/cache lifecycle.
+- testing/e2e/model-fake.sh: PASS - ingest, audit, forecast, simulated train, compose,
+  export, EU GPAI draft disclosure.
+
+NOT run here (environment limits):
+- MLX/PyTorch/TorchTitan e2e lifecycles and the numerical conformance gate: require
+  Apple silicon / CUDA / PyTorch; they self-skip without the hardware. In the inspected
+  CI config (.github/workflows/ci.yml), the gates are gofmt, vet, go test ./..., and
+  the ingest e2e on ubuntu+macOS, so the GPU training paths are not covered by that
+  CI. CI config read, not observed green.
+- S3 lookaside e2e (needs a bucket); the remaining e2e scripts; testing/docs.sh.
+
+=====================================================================
+SECURITY POSTURE - VERIFIED POSITIVES
+=====================================================================
+- Local subprocesses are argv-form exec.CommandContext throughout (training, inference,
+  cosign signing, probes) - no local shell invocation. The multi-host path is the
+  exception by design: ssh receives a remote command string, built with per-argument
+  single-quote escaping (internal/cli/ingest.go:323-325, used at model_hostfile.go:
+  934-940); hostfile entries reject leading dashes and slashes (model_hostfile.go:
+  170-172); ssh runs BatchMode with "--".
+- Embedded Python workers are staged as temp files with fixed content; no user-
+  controlled code string is executed.
+- Model pull is safetensors-only (no pickle surface), downloads verified against hub-
+  declared sizes, SHA-256 recorded into origin provenance (internal/model/pull.go).
+- Tokenizer BPE loader pinned offline (internal/tokenizer/tokenizer.go:65-71).
+- Secrets: S3 credentials stored 0600 in a 0700 dir (internal/lookaside/credentials.go:
+  99,124); config file 0600 (internal/config/config.go:158,173); access keys redacted
+  in output; secret key read via terminal password prompt.
+- Ingest path containment: contribution/manifest paths reject absolute, "..", symlink
+  parents and symlink files; writes are temp-file + rename with rollback
+  (internal/ingest/stage_contribution.go:137-180).
+- Local lookaside publish re-verifies digest and size after copy and links atomically
+  (internal/lookaside/file.go:60-118).
+- Size limits and LimitReaders on probe sampling, EPUB expansion, credentials JSON,
+  HTTP error bodies.
+
+=====================================================================
+NUMBERED ISSUES AND OBSERVATIONS (exact refs at e4b49d7d)
+=====================================================================
+1. REPRODUCED - Flaky multinode launcher test; underlying race between worker exit and
+   stage acknowledgement. TestHostfileSessionLaunchesAndPublishesPlans failed in 2 of
+   5 full-suite executions and 1 of 160 cache-disabled isolated executions with:
+   "host train-1 exited before acknowledging stage 2/2: <nil>"
+   (internal/cli/model_hostfile_test.go:407). The production select at
+   internal/cli/model_hostfile.go:705-729 treats worker-done as failure even when the
+   worker exited cleanly (worker.err is nil); if a worker sends its stage ack and then
+   exits before the session consumes the ack, the run aborts. Impact in production
+   depends on whether real launchers stay resident between stages (the design intends
+   they do), but the ordering assumption is unenforced and the test demonstrates it
+   breaks under timing pressure.
+
+2. MINOR - S3 access key echoed on the terminal during `waldo lookaside login`.
+   internal/cli/lookaside_credentials.go:28-31 reads it with fmt.Fscanln (visible
+   echo); only the secret key is masked via term.ReadPassword at :34. Access keys are
+   semi-secret; shoulder-surfable.
+
+3. MINOR - Download size check skipped when hub metadata declares 0 bytes.
+   internal/model/pull.go:521 guards `if expected > 0 && bytes != expected`; a sibling
+   with a missing/zero declared size gets no truncation check at download time. The
+   SHA-256 is still recorded into provenance, so integrity is pinned after the fact,
+   but a short read is not rejected at the boundary.
+
+4. GAP - The AI advisor is cloud-only today. internal/ai/provider.go:88-89: the "local"
+   provider returns "reserved but not yet implemented"; selecting OpenAI/Anthropic
+   sends compose plus index metadata (paths, totals, corpus summaries -
+   internal/cli/advisor.go advisorIndexEvidence) to api.openai.com /
+   api.anthropic.com. Opt-in and key-gated; among several designed off-machine data
+   paths (GitHub index clone, S3 lookaside, Hugging Face model pulls), this is the
+   optional LLM-advisor disclosure path, and the only one that sends your corpus
+   metadata to a third-party model API - relevant if you want the advisor pattern
+   with local models only.
+
+5. BEHAVIOR - First read-only index command auto-clones github.com/openwaldo/
+   waldo-index over HTTPS into ~/.waldo/index (internal/git/managed.go:25; auto-pull
+   at internal/cli/index.go:683). Documented in the README, and `waldo index verify
+   --offline` is the integrity gate - but plain `waldo status` does network I/O
+   against GitHub by default.
+
+6. COVERAGE - internal/status (107 lines) and internal/canon (38 lines) have no test
+   files. Small packages, but the only two internal packages without tests (cmd/waldo
+   and two helper mains also lack them).
+
+7. GOVERNANCE - Single-author concentration: 488 of 509 commits are one person; the
+   project is about 2.5 months old; the README states interfaces outside the
+   documented compatibility contract will evolve. Pin to a commit and vendor
+   expectations accordingly.
+
+8. PLATFORM - Unix-only in practice (build-tagged host detection in internal/host, no
+   Windows files, no Windows CI). Not a defect; noted for completeness.
+
+=====================================================================
+RECOMMENDATION
+=====================================================================
+Study the corpus/BOM/provenance design for LTHCM and Dokime regardless. Separately, a
+real trial is defensible: build the binary (Go 1.25+), run testing/all.sh on your own
+machine, and try it on one small made-up corpus - if the BOM and audit output hold up,
+it is a candidate dataset-provenance layer under Dokime and a reproducibility artifact
+for the paper. This was a review, not an integration spec: nothing here is wired into
+Metis, and the hardware-gated training paths still need a GPU-host run before trusting
+them.

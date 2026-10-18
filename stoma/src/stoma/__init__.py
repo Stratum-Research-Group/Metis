@@ -25,6 +25,25 @@ try:
 except (ImportError, ModuleNotFoundError):
     StomaIndexer = None  # type: ignore
 
+from stoma.manifest_staging import (
+    ManifestStagingGate,
+    SecurityPathError,
+    StagedFileRecord,
+    StagingGate,
+    StagingManifest,
+    StagingValidationError,
+)
+from stoma.redaction import (
+    ContentAssessment,
+    PrivacyRedactor,
+)
+from stoma.safe_extract import (
+    ArchiveBombError,
+    ArchiveSafetyError,
+    ArchiveSafetyGuard,
+    SafeExtractor,
+)
+
 # Enforce exact submodule origins and commit pins on runtime import
 verify_runtime_dependencies()
 
@@ -39,4 +58,16 @@ __all__ = [
     "PassageProvenance",
     "SourceFileRecord",
     "ProvenanceManifest",
+    "StagingGate",
+    "ManifestStagingGate",
+    "StagingManifest",
+    "StagedFileRecord",
+    "SecurityPathError",
+    "StagingValidationError",
+    "PrivacyRedactor",
+    "ContentAssessment",
+    "ArchiveSafetyGuard",
+    "ArchiveBombError",
+    "ArchiveSafetyError",
+    "SafeExtractor",
 ]

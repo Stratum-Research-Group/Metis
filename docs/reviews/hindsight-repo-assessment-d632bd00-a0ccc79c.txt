@@ -1,0 +1,131 @@
+HINDSIGHT (vectorize-io/hindsight) - ASSESSMENT
+Prepared for Nick, 2026-10-17. Assessment only - no implementation, install, or integration is authorized or proposed here.
+
+Inspected code at commit 5331da2f4db369528bb122075341a7de9c3df6df (main, 2026-10-16).
+Read-only inspection; nothing installed or run locally.
+
+Repo:   https://github.com/vectorize-io/hindsight/tree/5331da2f4db369528bb122075341a7de9c3df6df
+Paper:  https://arxiv.org/abs/2512.12818 ("Hindsight is 20/20"; Table 3 has the LongMemEval numbers cited below)
+Harness: https://github.com/vectorize-io/agent-memory-benchmark (publishes to agentmemorybenchmark.ai)
+
+
+VERDICT
+
+Worth your time. The repo is a real, substantive implementation, not README vapor: the memory
+mechanisms are all present in code with considerable engineering depth. For your work it is a
+well-documented agent-memory system to study and benchmark against LTHCM, not a replacement.
+Where claims are vendor-reported, that is stated below. Nothing here was tested locally.
+
+
+WHAT THE CODE ACTUALLY DOES
+
+All paths under hindsight-api-slim/hindsight_api/engine/.
+
+Retain
+- retain/fact_extraction.py: "Fact extraction from text using LLM" - an LLM extracts facts,
+  entities and temporal information per write. retain/orchestrator.py (~230 KB) coordinates;
+  memories/pg/retain.py handles documents/chunks/memory_units rows.
+- Retain is LLM-backed extraction per write; the number of calls and any batching
+  depends on input and configuration.
+
+Recall
+- memories/pg/recall.py: dense vector + BM25 combined in one SQL UNION over Postgres
+  (partial HNSW indexes per fact_type), a temporal arm with spreading activation, and a graph
+  arm (memories/pg/link_expansion.py).
+- Arms merged by reciprocal rank fusion (k=60) in search/fusion.py, then cross-encoder reranked
+  (cross_encoder.py; jina_mlx_reranker.py for local inference).
+- The "4 parallel strategies + RRF + rerank" claim matches the code.
+
+Observations (consolidation)
+- consolidation/consolidator.py runs as a background job after retain. Observations are
+  memory_units rows with fact_type='observation', carrying proof_count, source_memory_ids
+  (UUID provenance to supporting memories) and a history JSONB tracking changes -
+  refine-not-overwrite is real, in code.
+- consolidation/triage.py separates easy cases (restates/new/chatter) through a typed
+  decision step so they can avoid unnecessary consolidation LLM rewrites; facts that change
+  an existing observation are the ones that get an LLM rewrite. The exact split of which
+  cases cost a model call was not fully pinned down.
+- reflect/observations.py requires each evidence item to carry an exact quote + source
+  memory_id, and computes trend labels (stable/strengthening/weakening/new/stale)
+  algorithmically from evidence timestamps.
+
+Mental models
+- Distinct from observations (their own docstring says so): user-defined standing questions in
+  a mental_models table, refreshed via reflect on demand or schedule. mental_model_refresh.py
+  has full-vs-delta refresh, structured delta ops, and recorded failure outcomes (dry-run support).
+
+Reflect
+- reflect/agent.py is an agentic LLM loop with native tool calling and hierarchical retrieval:
+  mental models first, then observations, then raw recall over the underlying source
+  memories.
+
+Overall shape: a Postgres-backed memory service, not a vector store with a chat wrapper.
+Retain, recall and reflect are separate operations.
+
+
+BENCHMARK CLAIMS - EXACT SOURCING AND LIMITS
+
+Source of the numbers
+- All headline numbers are from the vendor's own paper (arXiv 2512.12818) and their benchmark
+  site. LongMemEval S split: 500 questions, ~115k tokens, ~50 sessions; judge = GPT-OSS-120B
+  at temperature 0 (LLM-as-judge).
+- Table 3: full-context GPT-OSS-20B 39.0% vs Hindsight+GPT-OSS-20B 83.6% overall;
+  Hindsight+GPT-OSS-120B 89.0%; Hindsight+Gemini-3 Pro 91.4%.
+- LoCoMo: 89.61% vs 75.78% cited for the strongest prior open system.
+
+Limits on those numbers
+- The same-backbone 39.0 -> 83.6 delta shows the whole pipeline (extraction, indexing,
+  retrieval, rerank, prompts) outperforms full-context on the same model. It does NOT isolate
+  which component carries the gain - no ablation of extraction vs retrieval vs rerank was
+  found in what was reviewed.
+- Zep/Supermemory baselines are taken from Supermemory's own tech report, not rerun -
+  cross-paper comparison caveat.
+- The benchmark harness is a separate vendor repo (vectorize-io/agent-memory-benchmark,
+  publishing to agentmemorybenchmark.ai). The repo's own hindsight-system-evals covers
+  internal metrics (retrieval, consolidation, refresh cost, a BEIR/SciFact fixture).
+- The published headline scores are vendor-run. The README's "independently reproduced by
+  Virginia Tech / Washington Post" is vendor attribution - independent artifacts were not
+  reviewed. VT and WaPo staff being paper co-authors does not establish independent
+  reproduction.
+- The 83.6% at GPT-OSS-20B is a paper result on the vendor's setup. It is NOT a prediction of
+  what your hardware achieves: model fit, runtime and extraction quality on the RTX 5060 Ti
+  are untested. Local providers exist in code (providers/llamacpp_llm.py, plus
+  ollama/lmstudio via litellm), so local operation is implemented, but retain/reflect are LLM
+  calls per operation and quality depends on the local model's extraction ability. Memory
+  quality is not free just because it runs locally.
+
+
+IDEAS WORTH STUDYING FOR METIS / LTHCM
+
+Observations from the code, not an integration proposal.
+
+- Observation consolidation with proof_count + source_memory_ids provenance +
+  refine-not-overwrite + algorithmic trend labels: a pragmatic design addressing the same
+  "beliefs that update without silent overwrite" problem LTHCM's contradiction checking
+  targets.
+- The triage step: separating easy cases from ones that need an LLM rewrite aims to avoid
+  unnecessary consolidation calls - a cost pattern relevant to running memory on local
+  models (how many calls it actually saves was not measured).
+- Temporal as a first-class retrieval arm, and reflect (a reasoning pass) kept separate from
+  recall (lookup) - the same split you have between dianoia and LTHCM.
+- Hierarchical reflect reading order: curated pages, then consolidated observations, then the
+  underlying source memories (the base records it reasons over - not a guarantee of factual
+  truth).
+- One caution: ten supporting memories are not necessarily ten independent pieces of evidence.
+  Provenance and counts help but do not establish truth by themselves.
+
+Possible MSS relevance (to investigate, not a claim): consolidation could help preserve project
+decisions, recurring failures and what an agent learned across sessions.
+
+
+BENCHMARK COMPARISON NOTE
+
+LongMemEval and LoCoMo are conversational long-term memory benchmarks - a different task from
+LTHCM's multi-hop factual benchmarks (HotpotQA, 2Wiki). Hindsight's scores neither confirm nor
+challenge LTHCM's numbers.
+
+If you want a comparison, AMB is runnable against a local server:
+  uv run run-amb --dataset longmemeval --split s
+That would be a concrete dokime-style experiment, and only your own run would give numbers you
+can trust - controlled models and inference budgets, since ingestion and reflection spend LLM
+work.

@@ -41,6 +41,51 @@ class InstallState(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ProbeStatus(str, Enum):
+    """
+    Status of an active, executed health probe (Phase 1 / Agent-Reach model).
+    OK: Binary launched successfully and returned exit code 0.
+    MISSING: File not found or unresolvable on PATH.
+    BROKEN: File exists but cannot launch (e.g. stale venv shim with missing interpreter).
+    TIMEOUT: Probe command exceeded strict timeout budget.
+    ERROR: Binary launched but exited non-zero or crashed.
+    UNKNOWN: Tool has not yet been probed.
+    """
+    OK = "ok"
+    MISSING = "missing"
+    BROKEN = "broken"
+    TIMEOUT = "timeout"
+    ERROR = "error"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ProbeResult:
+    """Outcome of executing a curated, side-effect-free health probe on a tool."""
+    tool_id: str
+    status: ProbeStatus
+    exit_code: Optional[int] = None
+    stdout: str = ""
+    stderr: str = ""
+    duration_ms: float = 0.0
+    detail: str = ""
+    is_stale_shim: bool = False
+    probed_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "tool_id": self.tool_id,
+            "status": self.status.value if isinstance(self.status, ProbeStatus) else str(self.status),
+            "exit_code": self.exit_code,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "duration_ms": self.duration_ms,
+            "detail": self.detail,
+            "is_stale_shim": self.is_stale_shim,
+            "probed_at": self.probed_at,
+        }
+
+
 @dataclass
 class ToolRecord:
     """Canonical representation of an inventoried tool in Pinax."""
@@ -65,6 +110,9 @@ class ToolRecord:
     first_seen: float = field(default_factory=time.time)
     last_verified: float = field(default_factory=time.time)
     notes: Optional[str] = None
+    probe_status: ProbeStatus = ProbeStatus.UNKNOWN
+    last_probed: float = 0.0
+    probe_detail: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -89,6 +137,9 @@ class ToolRecord:
             "first_seen": self.first_seen,
             "last_verified": self.last_verified,
             "notes": self.notes,
+            "probe_status": self.probe_status.value if isinstance(self.probe_status, ProbeStatus) else str(self.probe_status),
+            "last_probed": self.last_probed,
+            "probe_detail": self.probe_detail,
         }
 
 

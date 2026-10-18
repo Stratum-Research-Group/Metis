@@ -5,6 +5,8 @@ Named after ancient Greek 'pinax' (tablet, register, catalogue).
 from kybernetes.pinax.models import (
     EntryKind,
     InstallState,
+    ProbeResult,
+    ProbeStatus,
     RiskTier,
     ToolCapability,
     ToolDoc,
@@ -14,11 +16,13 @@ from kybernetes.pinax.models import (
     ToolSignature,
 )
 from kybernetes.pinax.db import PinaxDatabase
+from kybernetes.pinax.probe import PinaxProber
 from kybernetes.pinax.scanner import PinaxScanner
 from kybernetes.pinax.catalogue import PinaxCatalogue
 
 __all__ = [
     "PinaxCatalogue",
+    "PinaxProber",
     "PinaxScanner",
     "PinaxDatabase",
     "ToolRecord",
@@ -26,6 +30,8 @@ __all__ = [
     "ToolCapability",
     "ToolRiskOverride",
     "ToolSignature",
+    "ProbeResult",
+    "ProbeStatus",
     "RiskTier",
     "ToolKind",
     "EntryKind",

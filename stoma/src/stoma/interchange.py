@@ -90,8 +90,16 @@ def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = Tr
         cmd.append("--allow-trusted-pickle")
     cmd.extend(["--index", str(path), "interchange_verification_ping"])
     status_override: Optional[str] = None
+    subproc_env = os.environ.copy()
+    metis_root = Path(__file__).resolve().parents[3]
+    dianoia_root = metis_root / "dianoia"
+    existing_pp = subproc_env.get("PYTHONPATH", "")
+    paths = [str(dianoia_root), str(metis_root)]
+    if existing_pp:
+        paths.append(existing_pp)
+    subproc_env["PYTHONPATH"] = os.pathsep.join(paths)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        proc = subprocess.run(cmd, env=subproc_env, capture_output=True, text=True, timeout=20)
         cli_returncode = proc.returncode
         cli_stdout = proc.stdout
         cli_stderr = proc.stderr

@@ -170,6 +170,34 @@ class ToolRegistry:
             ),
         )
 
+        probe_def = ToolDefinition(
+            name="catalogue_probe",
+            version="1.0.0",
+            description="Actively probe local tool execution health and return 5-state health machine status.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Exact name or ID of tool to probe (e.g. 'curl', 'git', 'rg')",
+                    },
+                    "timeout_seconds": {
+                        "type": "number",
+                        "description": "Timeout in seconds for probe execution (default 5.0)",
+                    },
+                },
+                "required": ["tool_name"],
+            },
+            side_effect=ToolSideEffectClass.READ_ONLY,
+        )
+        self.register(
+            probe_def,
+            lambda args: self.pinax_catalogue.probe_tool(
+                name_or_id=args.get("tool_name", ""),
+                timeout_seconds=float(args.get("timeout_seconds", 5.0)),
+            ),
+        )
+
 
 
     def register(self, definition: ToolDefinition, handler: Callable[[Dict[str, Any]], Any]) -> None:

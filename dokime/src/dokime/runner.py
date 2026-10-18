@@ -9,8 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from dokime.bom import generate_dataset_bom
 from dokime.client import HestiaAPIError, HestiaClient
 from dokime.config import RunConfig, validate_unique_ids
+from dokime.lineage import compute_parameter_diff, load_manifest
 from dokime.manifest import create_manifest, sha256_text
 from dokime.stats import single_run_bootstrap
 from dokime.tasks.protocol import (
@@ -66,6 +68,7 @@ def run_evaluation(
     # Preload tasks and resolve dataset paths (Item 3)
     instantiated_tasks: dict[str, Task] = {}
     dataset_paths: dict[str, Path | None] = {}
+    dataset_boms: dict[str, Any] = {}
     loaded_queries_by_task: dict[str, list[Any]] = {}
 
     for tid in config.tasks:
@@ -83,6 +86,9 @@ def run_evaluation(
             materialized_path = output_dir / f"dataset_{tid}.json"
             materialize_dataset(queries, materialized_path)
             dataset_paths[tid] = materialized_path
+
+        # Generate cryptographic Dataset BOM
+        dataset_boms[tid] = generate_dataset_bom(tid, queries, dataset_paths[tid]).to_dict()
 
     results_count = 0
     scores_by_cell: dict[tuple[str, str], list[float]] = {}
@@ -187,6 +193,23 @@ def run_evaluation(
         for mid in config.models:
             model_identities[mid] = {"name": mid, "state": "unresolved"}
 
+    # Resolve parameter diff if parent_run_id was provided
+    parameter_diff: dict[str, Any] | None = None
+    if config.parent_run_id:
+        parent_manifest_path = Path(config.output_dir) / config.parent_run_id / "manifest.json"
+        parent_m = load_manifest(parent_manifest_path)
+        if parent_m:
+            candidate_m = {
+                "model_ids": config.models,
+                "task_ids": config.tasks,
+                "seed": config.seed,
+                "temperature": config.temperature,
+                "max_tokens": config.max_tokens,
+                "prompt_template_hash": sha256_text(config.prompt_template) if config.prompt_template else None,
+                "checksums": {f"dataset_{k}": v["sha256"] for k, v in dataset_boms.items()},
+            }
+            parameter_diff = compute_parameter_diff(parent_m, candidate_m)
+
     # Item 7: Finalize manifest.json including summary.json checksum
     manifest = create_manifest(
         run_id=run_id,
@@ -203,6 +226,10 @@ def run_evaluation(
         prompt_template_artifact_path=prompt_template_artifact_path,
         output_path=manifest_path,
         model_identities=model_identities,
+        parent_run_id=config.parent_run_id,
+        branch_point=config.branch_point,
+        parameter_diff=parameter_diff,
+        dataset_boms=dataset_boms,
     )
 
     return {

@@ -13,6 +13,8 @@ from kybernetes.pinax.db import PinaxDatabase
 from kybernetes.pinax.models import (
     EntryKind,
     InstallState,
+    ProbeResult,
+    ProbeStatus,
     RiskTier,
     ToolCapability,
     ToolDoc,
@@ -21,6 +23,7 @@ from kybernetes.pinax.models import (
     ToolRiskOverride,
     ToolSignature,
 )
+from kybernetes.pinax.probe import PinaxProber
 from kybernetes.pinax.scanner import PinaxScanner
 from kybernetes.pinax.seed import CURATED_TOOLS
 
@@ -340,3 +343,62 @@ class PinaxCatalogue:
             invocation_path=tool.invocation_path,
             expected_sha256=tool.sha256,
         )
+
+    def probe_tool(
+        self,
+        name_or_id: str,
+        args: Optional[List[str]] = None,
+        timeout_seconds: float = 2.0,
+    ) -> Dict[str, Any]:
+        """
+        Executes a controlled, side-effect-free health probe on a tool and updates DB state.
+        Detects broken binaries, missing tools, and stale venv shims.
+        """
+        tool = self.db.get_tool(name_or_id)
+        if not tool:
+            return {
+                "tool": name_or_id,
+                "status": ProbeStatus.MISSING.value,
+                "detail": f"Tool '{name_or_id}' not found in catalogue",
+                "install_state": InstallState.NOT_INSTALLED.value,
+            }
+
+        # For structured tools (in-process Python classes), probe is trivial
+        if tool.kind == ToolKind.STRUCTURED:
+            return {
+                "tool": tool.name,
+                "tool_id": tool.id,
+                "status": ProbeStatus.OK.value,
+                "detail": "In-process structured tool verified",
+                "install_state": InstallState.INSTALLED.value,
+                "duration_ms": 0.0,
+            }
+
+        res = PinaxProber.probe_command(
+            tool_id=tool.id,
+            invocation_path=tool.invocation_path,
+            args=args,
+            timeout_seconds=timeout_seconds,
+        )
+
+        # Derive updated install state
+        new_state = tool.install_state
+        if res.status == ProbeStatus.OK:
+            new_state = InstallState.INSTALLED
+        elif res.status in (ProbeStatus.BROKEN,):
+            new_state = InstallState.BROKEN
+        elif res.status == ProbeStatus.MISSING:
+            new_state = InstallState.NOT_INSTALLED
+
+        self.db.update_probe_result(tool.id, res, new_install_state=new_state)
+
+        return {
+            "tool": tool.name,
+            "tool_id": tool.id,
+            "status": res.status.value,
+            "exit_code": res.exit_code,
+            "detail": res.detail,
+            "is_stale_shim": res.is_stale_shim,
+            "duration_ms": res.duration_ms,
+            "install_state": new_state.value,
+        }

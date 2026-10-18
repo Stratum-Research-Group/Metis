@@ -478,11 +478,16 @@ def test_r4_item3_offline_cache_miss_exception():
 
 def test_r4_item3_embedder_inspect_cli(shared_embedder):
     """Run python -m stoma.embedder inspect and verify output format."""
+    env = os.environ.copy()
+    extra_paths = [str(Path(p).resolve()) for p in sys.path if p]
+    existing_pp = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join(extra_paths + ([existing_pp] if existing_pp else []))
     res = subprocess.run(
         [sys.executable, "-m", "stoma.embedder", "inspect"],
         capture_output=True,
         text=True,
         timeout=15,
+        env=env,
     )
     assert res.returncode == 0
     out = res.stdout

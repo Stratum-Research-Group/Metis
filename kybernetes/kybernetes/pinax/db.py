@@ -10,6 +10,8 @@ from typing import Any, Dict, Iterator, List, Optional
 from kybernetes.pinax.models import (
     EntryKind,
     InstallState,
+    ProbeResult,
+    ProbeStatus,
     RiskTier,
     ToolCapability,
     ToolDoc,
@@ -150,6 +152,19 @@ class PinaxDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tools_tier ON tools(risk_tier);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tools_state ON tools(install_state);")
 
+            # Check / migrate probe columns
+            for col_name, col_type in [
+                ("probe_status", "TEXT DEFAULT 'unknown'"),
+                ("last_probed", "REAL DEFAULT 0.0"),
+                ("probe_detail", "TEXT DEFAULT ''"),
+            ]:
+                try:
+                    cursor.execute(f"ALTER TABLE tools ADD COLUMN {col_name} {col_type};")
+                except sqlite3.OperationalError:
+                    pass
+
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tools_probe ON tools(probe_status);")
+
             # Check FTS5 support
             try:
                 cursor.execute("CREATE VIRTUAL TABLE IF NOT EXISTS tools_fts USING fts5(id, name, summary, category, notes);")
@@ -165,8 +180,9 @@ class PinaxDatabase:
                     id, host_id, name, kind, entry_kind, summary, category,
                     invocation_path, resolved_path, env_identity, interpreter,
                     sha256, version, package, package_manager, install_state,
-                    risk_tier, discovered_by, first_seen, last_verified, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    risk_tier, discovered_by, first_seen, last_verified, notes,
+                    probe_status, last_probed, probe_detail
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     host_id=excluded.host_id,
                     name=excluded.name,
@@ -186,7 +202,10 @@ class PinaxDatabase:
                     risk_tier=excluded.risk_tier,
                     discovered_by=excluded.discovered_by,
                     last_verified=excluded.last_verified,
-                    notes=excluded.notes;
+                    notes=excluded.notes,
+                    probe_status=excluded.probe_status,
+                    last_probed=excluded.last_probed,
+                    probe_detail=excluded.probe_detail;
             """, (
                 tool.id, tool.host_id, tool.name,
                 tool.kind.value if isinstance(tool.kind, ToolKind) else str(tool.kind),
@@ -197,6 +216,8 @@ class PinaxDatabase:
                 tool.install_state.value if isinstance(tool.install_state, InstallState) else str(tool.install_state),
                 tool.risk_tier.value if isinstance(tool.risk_tier, RiskTier) else str(tool.risk_tier),
                 tool.discovered_by, tool.first_seen, tool.last_verified, tool.notes,
+                tool.probe_status.value if isinstance(tool.probe_status, ProbeStatus) else str(tool.probe_status),
+                tool.last_probed, tool.probe_detail or "",
             ))
 
             if self.fts5_enabled:
@@ -217,8 +238,9 @@ class PinaxDatabase:
                         id, host_id, name, kind, entry_kind, summary, category,
                         invocation_path, resolved_path, env_identity, interpreter,
                         sha256, version, package, package_manager, install_state,
-                        risk_tier, discovered_by, first_seen, last_verified, notes
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        risk_tier, discovered_by, first_seen, last_verified, notes,
+                        probe_status, last_probed, probe_detail
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         host_id=excluded.host_id,
                         name=excluded.name,
@@ -238,7 +260,10 @@ class PinaxDatabase:
                         risk_tier=excluded.risk_tier,
                         discovered_by=excluded.discovered_by,
                         last_verified=excluded.last_verified,
-                        notes=excluded.notes;
+                        notes=excluded.notes,
+                        probe_status=excluded.probe_status,
+                        last_probed=excluded.last_probed,
+                        probe_detail=excluded.probe_detail;
                 """, (
                     tool.id, tool.host_id, tool.name,
                     tool.kind.value if isinstance(tool.kind, ToolKind) else str(tool.kind),
@@ -249,6 +274,8 @@ class PinaxDatabase:
                     tool.install_state.value if isinstance(tool.install_state, InstallState) else str(tool.install_state),
                     tool.risk_tier.value if isinstance(tool.risk_tier, RiskTier) else str(tool.risk_tier),
                     tool.discovered_by, tool.first_seen, tool.last_verified, tool.notes,
+                    tool.probe_status.value if isinstance(tool.probe_status, ProbeStatus) else str(tool.probe_status),
+                    tool.last_probed, tool.probe_detail or "",
                 ))
                 if self.fts5_enabled:
                     cursor.execute("DELETE FROM tools_fts WHERE id = ?;", (tool.id,))
@@ -475,7 +502,41 @@ class PinaxDatabase:
                 run.get("added", 0), run.get("removed", 0), run.get("changed", 0),
             ))
 
+    def update_probe_result(
+        self,
+        tool_id: str,
+        result: ProbeResult,
+        new_install_state: Optional[InstallState] = None,
+    ) -> None:
+        """Persists probe result and updates tool status/verification timestamp."""
+        with self._get_connection() as conn:
+            now = time.time()
+            st_val = result.status.value if isinstance(result.status, ProbeStatus) else str(result.status)
+            if new_install_state is not None:
+                inst_val = new_install_state.value if isinstance(new_install_state, InstallState) else str(new_install_state)
+                conn.execute("""
+                    UPDATE tools
+                    SET probe_status = ?, last_probed = ?, probe_detail = ?, install_state = ?, last_verified = ?
+                    WHERE id = ?;
+                """, (st_val, result.probed_at or now, result.detail, inst_val, now, tool_id))
+            else:
+                conn.execute("""
+                    UPDATE tools
+                    SET probe_status = ?, last_probed = ?, probe_detail = ?, last_verified = ?
+                    WHERE id = ?;
+                """, (st_val, result.probed_at or now, result.detail, now, tool_id))
+
     def _row_to_tool(self, r: sqlite3.Row) -> ToolRecord:
+        keys = r.keys()
+        probe_val = r["probe_status"] if "probe_status" in keys and r["probe_status"] else "unknown"
+        try:
+            probe_status = ProbeStatus(probe_val)
+        except ValueError:
+            probe_status = ProbeStatus.UNKNOWN
+
+        last_probed = r["last_probed"] if "last_probed" in keys and r["last_probed"] is not None else 0.0
+        probe_detail = r["probe_detail"] if "probe_detail" in keys else None
+
         return ToolRecord(
             id=r["id"],
             host_id=r["host_id"],
@@ -498,4 +559,7 @@ class PinaxDatabase:
             first_seen=r["first_seen"],
             last_verified=r["last_verified"],
             notes=r["notes"],
+            probe_status=probe_status,
+            last_probed=last_probed,
+            probe_detail=probe_detail,
         )
