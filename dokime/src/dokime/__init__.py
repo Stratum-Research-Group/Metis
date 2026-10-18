@@ -1,5 +1,12 @@
-"""Dokime: evaluation harness and measurement layer for local AI stack."""
-
+from dokime.adversarial import (
+    AdversarialGateAuditor,
+    AuditFailure,
+    AuditGateResult,
+    ExecutionKind,
+    ReconciliationRecord,
+    SelectiveRiskReport,
+    TaskDataKind,
+)
 from dokime.bom import DatasetBOM, generate_dataset_bom
 from dokime.lineage import (
     ExperimentNode,
@@ -19,5 +26,12 @@ __all__ = [
     "compute_parameter_diff",
     "evaluate_lineage_regressions",
     "get_lineage_path",
+    "AdversarialGateAuditor",
+    "AuditFailure",
+    "AuditGateResult",
+    "ExecutionKind",
+    "TaskDataKind",
+    "ReconciliationRecord",
+    "SelectiveRiskReport",
 ]
 

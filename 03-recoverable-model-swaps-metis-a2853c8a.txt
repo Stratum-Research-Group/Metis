@@ -1,0 +1,206 @@
+RECOVERABLE MODEL-SWAP LIFECYCLE FOR METIS
+Design proposal v1 | 13 October 2026 | Item 3 of 5
+
+Decision
+--------
+Adapt Calyx's prepare/promote/rollback/commit pattern to real model serving. Persist
+intent before changing process state, compare active generations at every transition,
+retain a verified recovery bundle and reconcile after crashes. A durable pointer swap is
+not an atomic swap of GPU processes, requests and memory indexes.
+
+This is a proposed lifecycle, not an automatic upgrade service. It does not authorize
+selecting or activating a model or claim that Hestia currently lacks these features. No
+owner repo was modified; Calyx was not run.
+
+1. Ownership and boundaries
+----------------------------
+Hestia owns serving/process readiness. A Metis coordinator requests changes through a
+narrow API. Dokime supplies evaluation evidence; a UI shows state. Neither rewrites
+Hestia's registry behind its back. Saved settings are not effective runtime state.
+
+LTHCM remains a separate pinned, read-only dependency. An embedding-model swap needs a
+compatible index bundle; a chat-model swap need not rebuild retrieval. If an API change
+is needed, make it in the dependency's own repository, then review/release/update its
+pin explicitly. WCSP and Stratum do not participate.
+
+Start locally, without a distributed control service or compulsory new database. Roles
+are based on dated project context, not fresh code inspection.
+
+2. Calyx reference and limits
+----------------------------
+At fe1d796a55c96bc161ea872daf9b1db56accd3be, crates/calyx-anneal/src/rollback.rs stores
+snapshots/live pointers through Aster write_cf_batch before updating in-memory maps. It
+supports prepare, promote, rollback, commit and rejection.
+
+The stale live-pointer check is in rollback(), NOT promote(). The inspected promote()
+does not implement the generation CAS proposed here. install_live_ptr bypasses the
+snapshot lifecycle. Other helpers have different persistence behaviour. This source is a
+state-management reference, not proof of model-server readiness or crash recovery.
+
+3. Durable contracts
+--------------------
+ModelBundle:
+  immutable bundle_id, schema_version, asset hashes
+  tokenizer/config hashes, runtime build ID, quantization
+  generation/template settings hash, capabilities
+  embedding_space_id/index_build_id when applicable
+  compatibility constraints, verified recovery instructions
+
+ActiveRecord:
+  slot, monotonic generation, bundle_id, activated_change_id
+  effective_runtime_instance
+
+ChangeRecord:
+  change_id, idempotency_key, expected_generation
+  prior_bundle_id, candidate_bundle_id, state
+  evidence_hashes, authorization_reference, readiness_result
+  failure_reason, retention_deadline, timestamps
+
+Persist pointer/generation and transition together where a transaction applies. Retry an
+idempotency key returns the original status, not a second swap. Pin admitted requests to
+a generation. Do not store credentials/private prompts in manifests.
+
+4. State machine
+----------------
+Proposed successful path:
+  PREPARED -> VALIDATED -> STAGED -> ACTIVATING -> ACTIVE_PENDING -> COMMITTED
+
+Other paths:
+  PREPARED/VALIDATED/STAGED -> REJECTED
+  ACTIVATING -> RECOVERING -> ACTIVE_PENDING or ROLLED_BACK or FAILED_CLOSED
+  ACTIVE_PENDING -> ROLLING_BACK -> ROLLED_BACK
+
+PREPARED captures a stable incumbent. VALIDATED means eligible tests and compatibility
+checks passed. STAGED means immutable assets passed the validation available in the
+chosen staging mode. Side-by-side mode can test live readiness; maintenance mode cannot
+yet do so. ACTIVATING is durable intent, not active service. ACTIVE_PENDING is verified
+effective serving with recovery retained. COMMITTED closes the acceptance period but
+does not automatically delete prior assets.
+
+A later rollback after COMMITTED is a new explicitly authorized change. Terminal history
+is not rewritten. In a maintenance-window mode, STAGED means offline artifact
+validation; final live readiness cannot be asserted until ACTIVATING.
+
+5. Preconditions and concurrency
+--------------------------------
+Verify candidate AND prior asset hashes/readability. Require eligible real evidence for
+quality claims; separate health from quality. Check model/index, protocol and policy
+compatibility.
+
+At activation require active generation == expected_generation through a
+transaction/CAS, not an unguarded read-then-write. A generation prevents ABA: pointer
+A->B->A is not the original A. Require a fresh condition for rollback and commit too.
+
+Allow one lifecycle operation per slot. A lease helps contention but cannot replace the
+durable generation guard. An expired lease never authorizes stale writes. An
+owner-approved candidate and limits are needed before activation; reports/manifests do
+not approve themselves.
+
+6. Resource-constrained staging
+-------------------------------
+Recorded hardware is an RTX 5060 Ti 16GB and a V100 16GB. Live availability,
+connection topology and usable headroom are unverified. Do not assume either
+GPU is offline, both are available, or two models fit together. Select staging
+mode from measured availability and compatibility, not stale hardware notes.
+
+Mode A: side-by-side staging after measured headroom and bounded allocation checks.
+Mode B: declared maintenance replacement. Stop admission, finish/cancel streams within a
+known deadline, stop incumbent, start candidate, verify health/identity, reopen
+admission.
+
+Mode B has downtime. Recovery also takes time. Retaining a file does not mean instant
+rollback. Measure recovery duration separately. Do not evict unrelated models without
+policy. Bound restarts; exhausted recovery leaves a clear unavailable state, not endless
+crash loops.
+
+7. Activation and requests
+--------------------------
+1. Persist ACTIVATING intent with candidate/prior references.
+2. Control admission for selected mode.
+3. Start candidate and verify actual served identity, not only HTTP 200.
+4. Recheck expected generation before installing routing.
+5. Persist effective pointer/generation and ACTIVE_PENDING together.
+6. Expose the route and acknowledge only verified readiness.
+
+There is no transaction spanning a durable store and a GPU process. Crashes between
+steps require reconciliation against intent, pointer and actual processes. Admission
+should remain closed when these disagree.
+
+A stream admitted under A remains under A until completion or disclosed cancellation.
+Never continue half a stream on B. Session/context compatibility is a separate declared
+policy; changing a server pointer does not convert cached context safely.
+
+8. Restart and rollback
+-----------------------
+Rollback requires the generation installed by this change still to be active. A later
+change makes the old rollback stale; it must not overwrite the newer model. Commit needs
+the same guard so a stale candidate cannot be blessed as effective success.
+
+Startup reconciliation:
+- PREPARED/VALIDATED: no routing change expected; resume only within approval.
+- STAGED: reverify artifacts; do not treat staging as active.
+- ACTIVATING: close admission until intent/process/pointer agree.
+- ACTIVE_PENDING: confirm real served bundle; apply recovery policy if needed.
+- ROLLING_BACK: finish prior restoration or fail closed after bounded attempts.
+- COMMITTED: load committed identity, not any process that responds.
+
+Ambiguous/corrupt state is not guessed. Preserve diagnostics, stop admission and surface
+the recovery choice. A bounded recovery record distinguishes failed candidate,
+successful prior reload and total service failure.
+
+9. Storage, retention and security
+----------------------------------
+Prefer existing durable transactional storage when guarantees fit. For files, sync
+immutable content, replace on the same filesystem using the supported platform route,
+then sync the parent directory. Check errors. POSIX replacement semantics do not
+automatically cover Windows or remote storage.
+
+Never delete assets referenced by rollback, active/in-flight requests or retention.
+Garbage collection is a separate bounded dry-run/reportable operation. Check capacity
+before staging. Pin actual executable/config identity; a mutable path alone is not a
+bundle.
+
+Administrative APIs need authentication, scoped permissions and expected-generation
+arguments. Loopback is not authorization. Audit attempts/outcomes without tokens or
+private prompts. Provide read-only status to separate desired, durable and effective
+state.
+
+10. Required tests
+------------------
+- Valid/invalid transitions and terminal records.
+- Concurrent promotions against one generation: one winner.
+- A->B->A: stale generation still rejected.
+- Stale rollback/commit cannot replace or approve a later active bundle.
+- Idempotent retries create one operation.
+- Kill at each storage/process/routing boundary; restart reconciles.
+- Disk full/fsync failure yields no success acknowledgement.
+- Health passes but wrong model serves: reject identity.
+- Candidate OOM: bounded prior reload with measured downtime.
+- A stream never silently changes model mid-request.
+- Embedder B with index A rejected before admission.
+- Missing/corrupt prior bundle refuses activation before losing incumbent.
+- GC preserves all recovery/in-flight references.
+- Unauthorized and wrong-generation requests fail.
+
+Acceptance means real serving on target hardware, fault-injected recovery, honest
+downtime, effective identity and measured restoration time. Mock lifecycle tests alone
+do not prove usable recovery.
+
+11. Rollout and coding handoff
+------------------------------
+Inventory current APIs/storage. Implement pure transitions and generation tests. Add
+durable intent/read-only status. Integrate a disposable model pair, then
+reconciliation/fault injection. Only then offer an explicitly selected real swap.
+
+Work in the chosen owner repo, never pinned submodules. Deliver transition table,
+API/schema, migration notes, recovery runbook and tests. Keep automatic promotion
+disabled. Do not auto-delete models or claim uninterrupted service without measured
+evidence.
+
+Sources and limits
+------------------
+https://github.com/ChrisRoyse/Calyx (static commit/path above).
+https://www.man7.org/linux/man-pages/man2/fsync.2.html (file/directory sync).
+Generation CAS, runtime reconciliation, constrained staging and request pinning are
+proposed improvements beyond inspected Calyx. Owner implementation and live hardware
+state have not been verified.

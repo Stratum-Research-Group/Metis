@@ -60,6 +60,16 @@ class StomaLTHCMAdapter:
             d_model=embedder.d_model,
             num_facets=1,
         )
+        self.space_spec = (
+            embedder.get_embedding_space_spec()
+            if hasattr(embedder, "get_embedding_space_spec")
+            else None
+        )
+        self.producer_spec = (
+            embedder.get_producer_build_spec()
+            if hasattr(embedder, "get_producer_build_spec")
+            else None
+        )
         self.validate_shapes()
 
     @classmethod
@@ -225,21 +235,38 @@ class StomaLTHCMAdapter:
 
     def query(
         self,
-        query_text: str,
+        query_text: str = "",
         top_k: int = 5,
         domain: str = "general",
         query_timestamp: Optional[float] = None,
         enforce_causality: bool = True,
+        envelope: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Query LTHCM topological memory and attach Stoma provenance to every returned candidate.
         Fails closed with UnresolvedProvenanceError if any candidate lacks matching provenance.
         Crucial: passes query_timestamp = current epoch seconds (time.time()) so past documents
         are inside the Lorentzian light cone and causal_fallback is False!
+        Validates mathematical integrity of query vector (rejects NaN, Inf, zero-norm).
         """
         self.validate_shapes()
 
-        q_vec = self.embedder.encode_single(query_text)
+        if envelope is not None:
+            envelope.validate_or_raise(
+                expected_space_id=self.space_spec.space_id if self.space_spec else None,
+                expected_role="query",
+            )
+            q_vec = torch.from_numpy(envelope.vectors[0]).float()
+        else:
+            q_vec = self.embedder.encode_single(query_text)
+
+        if torch.isnan(q_vec).any() or torch.isinf(q_vec).any():
+            from stoma.identity import InvalidVectorPayloadError
+            raise InvalidVectorPayloadError("Query vector contains NaN or Infinity")
+        if torch.norm(q_vec).item() < 1e-9:
+            from stoma.identity import InvalidVectorPayloadError
+            raise InvalidVectorPayloadError("Query vector has zero norm. Cosine similarity undefined.")
+
         q_time = query_timestamp if query_timestamp is not None else time.time()
 
         raw_result = self.engine.retrieve_and_verify(
@@ -310,6 +337,7 @@ class StomaLTHCMAdapter:
         """
         Serialize engine using pickle.dump, matching dianoia's persistence pattern.
         Atomically writes via temporary file and replace.
+        Also persists companion .space.json containing the canonical EmbeddingSpaceSpec.
         """
         index_path = Path(index_path).resolve()
         index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -318,6 +346,13 @@ class StomaLTHCMAdapter:
             with open(tmp_path, "wb") as f:
                 pickle.dump(self.engine, f)
             os.replace(tmp_path, index_path)
+            
+            # Persist companion .space.json
+            if self.space_spec is not None:
+                import json
+                space_file = index_path.with_suffix(".space.json")
+                with open(space_file, "w", encoding="utf-8") as sf:
+                    json.dump(self.space_spec.to_dict(), sf, indent=2)
         finally:
             if tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
@@ -329,12 +364,14 @@ class StomaLTHCMAdapter:
         embedder: StomaEmbedder,
         manifest: Optional[ProvenanceManifest] = None,
         expected_index_hash: Optional[str] = None,
+        expected_space_id: Optional[str] = None,
         allow_trusted_pickle: bool = False,
     ) -> StomaLTHCMAdapter:
         """
         Load a persisted engine and validate d_model and num_facets before serving.
         Validates generation-wide ID equality if manifest is provided.
-        Fails closed before loading if untrusted pickle is forbidden or if expected_index_hash mismatches.
+        Fails closed before loading if untrusted pickle is forbidden, if expected_index_hash mismatches,
+        or if embedding space identity mismatches.
         """
         if not allow_trusted_pickle and not os.environ.get("STOMA_ALLOW_TRUSTED_PICKLE"):
             raise PermissionError("Untrusted pickle deserialization is prohibited without explicit authorization.")
@@ -368,6 +405,28 @@ class StomaLTHCMAdapter:
 
         adapter = cls(engine=engine, embedder=embedder, manifest=manifest)
         adapter.validate_shapes()
+
+        # Check companion .space.json if present
+        space_file = index_path.with_suffix(".space.json")
+        if space_file.is_file() and adapter.space_spec is not None:
+            import json
+            from stoma.identity import EmbeddingSpaceSpec, IncompatibleSpaceError
+            with open(space_file, "r", encoding="utf-8") as sf:
+                persisted_data = json.load(sf)
+                persisted_spec = EmbeddingSpaceSpec.from_dict(persisted_data)
+                if persisted_spec.space_id != adapter.space_spec.space_id:
+                    raise IncompatibleSpaceError(
+                        f"Index embedding space ID mismatch: index has {persisted_spec.space_id}, "
+                        f"but current embedder provides {adapter.space_spec.space_id}"
+                    )
+
+        if expected_space_id and adapter.space_spec is not None:
+            from stoma.identity import IncompatibleSpaceError
+            if adapter.space_spec.space_id != expected_space_id:
+                raise IncompatibleSpaceError(
+                    f"Expected space ID mismatch: expected {expected_space_id}, got {adapter.space_spec.space_id}"
+                )
+
         if manifest is not None:
             adapter.validate_generation_integrity()
         return adapter

@@ -1,0 +1,206 @@
+EXACT EMBEDDER IDENTITY FOR LTHCM / METIS
+Design proposal v1 | 13 October 2026 | Item 1 of 5
+
+Decision
+--------
+Take Calyx's content-addressed embedding-instrument idea, then make the identity cover
+the complete representation contract. Put the contract at producer, cache and index
+boundaries. Do not import Calyx's database or assume the current LTHCM implementation
+lacks these checks. This is an independent proposed design, not an implementation audit.
+
+The practical gain is preventing silently incompatible vectors from looking valid
+because they have the same length. A model swap, tokenizer change or altered query
+prefix can change retrieval without changing dimensions. An exact identity makes that
+change visible and lets experiments explain which representation produced a result. It
+does not prove the representation is good.
+
+1. Scope and ownership
+----------------------
+LTHCM remains the memory/retrieval project. Metis is the surrounding stack; Hestia
+supplies serving capabilities and Stoma supplies ingestion. These roles come from dated
+project context, not a fresh review of their current code.
+
+The LTHCM project owns its index acceptance rules and any change to its own public API.
+A parent component must not patch its pinned, read-only LTHCM submodule. If a needed API
+is absent, propose it in LTHCM's own repository, review it there, release it, and
+explicitly update the pin later. An adapter in the consumer may carry metadata without
+modifying the dependency.
+
+No WCSP or Stratum dependency is needed. No shared identity server is needed. The first
+version can be a small local schema and validator with language-neutral fixtures.
+
+2. What is actually worth taking from Calyx
+------------------------------------------
+Static source at fe1d796a55c96bc161ea872daf9b1db56accd3be:
+- crates/calyx-registry/src/frozen.rs:217-225 builds lens_id from name, weights SHA256,
+  corpus hash and an output-shape fingerprint.
+- runtime/static_lookup.rs checks the matrix header, dimensions, finite scale and exact
+  size, with spec/hash checks elsewhere in that runtime. This is a useful example of
+  rejecting malformed or mismatched assets.
+- runtime/external_cmd.rs:60-61 hashes command text plus arguments, not the executable
+  bytes or all external resources. An executable replaced at the same path can keep that
+  identity.
+
+The proposal below is stronger than those inspected identity paths. Full preprocessing,
+execution and paired query/document identity are additions, not claims that Calyx
+already does them.
+
+3. Separate the identities instead of one enormous hash
+-------------------------------------------------------
+Use three records:
+
+A. EmbeddingSpaceSpec: what mathematical representation a query and document inhabit.
+B. ProducerBuildSpec: which concrete implementation produced the bytes.
+C. IndexBuildSpec: which corpus snapshot and index configuration consumed them.
+
+This separation prevents unnecessary invalidation. Adding a new document does not change
+the embedding space. Rebuilding an ANN graph does not change the document vector. Moving
+an unchanged model file does not change its content identity. A corpus-trained
+projection, however, belongs in the space identity because it changes the
+transformation.
+
+Proposed EmbeddingSpaceSpec fields:
+  schema_version
+  model_assets: ordered relative-name/content-hash pairs
+  tokenizer_assets and tokenizer_configuration_hash
+  text_preprocessing_spec_hash
+  query_encoder_spec_hash
+  document_encoder_spec_hash
+  pooling_spec_hash
+  projection_or_adapter_assets_hash, or explicit "none"
+  dimension: positive integer
+  dtype and quantization_spec_hash
+  normalization: none, unit_l2, or a named validated transform
+  allowed_similarity: cosine, dot, or explicitly named metric
+  truncation_length and truncation_policy
+  modality
+
+Include prefixes/prompts, Unicode handling, casing and special-token behaviour in the
+relevant specs. Do not silently normalize all text to one casing or Unicode form merely
+to simplify hashing. Define the actual producer behaviour, then fingerprint it.
+
+ProducerBuildSpec includes the embedding-space ID, executable/container digest, library
+versions, backend/precision settings, and reproducibility profile. Paths and display
+labels are annotations, not identity. For an external command, pin executable and loaded
+weights/configs. A command string alone is not sufficient. For an opaque remote service,
+require a verifiable immutable model revision; otherwise mark identity UNVERIFIED and
+keep its output out of exact-reproducibility promotion gates.
+
+IndexBuildSpec includes embedding-space ID, corpus-snapshot ID, chunking-spec hash,
+vector-set manifest hash, index algorithm/config hash, build seed and producer-build
+IDs. Different producer builds may be permitted only by a recorded compatibility
+decision backed by parity tests. Do not conflate semantic compatibility with
+byte-for-byte reproducibility.
+
+4. Canonical encoding and trust
+-------------------------------
+Choose one specified canonical encoding, such as RFC 8785 JSON within its numeric
+limits. Reject duplicate keys, unknown schema versions and non-finite numbers. Store
+large counters as decimal strings if needed to avoid cross-language numeric loss. Do not
+approximate JCS with a generic sorted-key serializer and call it compliant.
+
+Compute IDs with domain separation:
+  embedding_space_id = SHA256("embedding-space/v1" || canonical_spec)
+  producer_build_id  = SHA256("embedding-producer/v1" || canonical_build)
+  index_build_id     = SHA256("retrieval-index/v1" || canonical_index)
+
+Use a defined byte encoding and fixed delimiter or length framing. Keep approved golden
+bytes and their expected hashes. Hash assets after resolving and opening the intended
+files; prevent a mutable path from being swapped between verification and loading by
+using immutable content-addressed storage or a platform-appropriate handle strategy.
+
+A hash establishes equality with expected bytes, not trusted authorship. If a manifest
+comes from outside the trusted build process, separately verify its approved origin. Do
+not let a self-described remote model authorize its own compatibility.
+
+5. Runtime envelopes and validation
+-----------------------------------
+A document batch returns:
+  space_id, producer_build_id, role="document", dimension, dtype,
+  vector_count, input_manifest_hash, vector_payload_hash, vectors.
+
+A query returns the same representation fields with role="query". The paired space spec
+records BOTH query and document transformations; the query prefix need not equal the
+document prefix. Reject an envelope whose claimed role does not match its actual
+producer configuration.
+
+Validation order:
+1. Bound lengths/counts before allocating; verify schema and IDs.
+2. Check batch count, vector width, dtype and payload checksum.
+3. Reject NaN/infinity. Apply the declared zero-vector policy.
+4. Check normalization within a documented numerical tolerance.
+5. Match the paired space ID to the index. Reject mismatches before search.
+6. Apply any separate producer-build compatibility policy.
+
+Cosine with a zero vector is undefined. Reject or return a typed invalid-query result;
+do not report it as an ordinary zero-score match. For unit-normalized embeddings, dot
+and cosine can agree numerically within tolerance, but this does not make all
+dot-product indexes compatible with unnormalized input.
+
+Do not pad, truncate, rename or re-normalize a mismatched vector to make it fit without
+a new representation contract and an explicit transformation.
+
+6. Cache, migration and rollback
+-------------------------------
+Cache keys must include space ID, role and exact post-preprocessing input identity.
+Include producer-build ID when strict reproducibility is required. Document IDs alone
+are insufficient because content can change under an ID. Query/document caches cannot
+share an unqualified key.
+
+Maintain immutable indexes by build ID. When an embedder changes:
+- Preserve the old model assets, vectors and index.
+- Build new vectors/index into a separate namespace.
+- Verify counts, document-version mapping and eligible corpus snapshot.
+- Compare on frozen held-out queries.
+- Activate a compatible model/index bundle, never the model alone.
+
+For legacy vectors without provenance, label them UNKNOWN. Do not assign the current
+model ID by guess. Re-embed from known source content or retain a clearly isolated
+legacy index. A dual-index period must record which bundle answered each request; never
+fuse incompatible vectors as if they shared coordinates.
+
+7. Minimum tests and acceptance
+--------------------------------
+- Two equal-dimensional models with different weights are rejected as a mix.
+- Changing only query prompt, tokenizer, pooling or projection changes space ID.
+- Same assets at a different file path preserve content identity.
+- Replacing an external binary changes producer-build ID.
+- Adding documents changes corpus/index ID, not space ID.
+- Query/document roles are distinct but accepted as an approved pair.
+- NaN, infinity, zero vector, wrong width and oversized batch fail safely.
+- JSON key order yields identical canonical bytes; duplicate keys fail.
+- Python and a second independent implementation match golden hashes.
+- Reusing a cached vector after a preprocessing change is impossible.
+- An asset modified during loading is rejected or cannot be selected.
+- Partial migration never exposes mixed-space results.
+- Strict reproducibility and tolerance-based parity are tested separately.
+
+Acceptance means failures are typed and explicit, IDs survive save/reload, and search
+logs can reconstruct the selected corpus/model/index bundle. It does not mean retrieval
+quality improved. Measure index growth, validation overhead and re-embedding cost rather
+than predicting them.
+
+8. Implementation sequence
+--------------------------
+First inventory existing contracts without changing code. Then add canonical fixtures
+and a validator in the owning project. Start in read-only inspection mode for legacy
+artifacts, with explicit warnings rather than fabricated IDs. Enforce identity for new
+builds, migrate one tiny disposable corpus, prove rejection and recovery, then expand.
+
+Coding handoff: implement this only in the selected owning repository after checking its
+current interfaces. Do not edit pinned submodules. Provide schema, golden fixtures,
+validation tests, a legacy-artifact report and a migration dry run. Do not auto-rebuild
+a user's real index or auto-promote a new bundle.
+
+Sources and limits
+------------------
+Calyx: https://github.com/ChrisRoyse/Calyx (commit and paths above; source read only,
+not run).
+Sentence Transformers API:
+https://www.sbert.net/docs/package_reference/sentence_transformer/model.html
+Semantic search roles:
+https://www.sbert.net/examples/sentence_transformer/applications/semantic-search/README.html
+Canonical JSON standard text: https://www.hjp.at/doc/rfc/rfc8785.html
+These sources support the underlying settings/encoding. The architecture, schema and
+tests here are recommendations. Current owner repositories have not been re-audited for
+implementation status.

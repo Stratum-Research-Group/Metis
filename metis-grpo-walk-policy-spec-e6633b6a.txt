@@ -1,0 +1,422 @@
+METIS - GRPO WALK-POLICY TRAINING SPEC (PLANNING ONLY)
+Basis: gitlab.com/akarta-315h/metis, commit aacb3e58 (main). Static read only.
+No code edited, nothing installed, no training run, no model downloaded.
+Status of every item below is tagged:
+  [EXISTS]   present in the code at aacb3e58 (file noted). Where an item
+             says something is absent, it is worded "not found".
+  [PROPOSED] not found in the repo, this spec proposes it
+  [UNVERIFIED] depends on software/hardware behaviour I did not test
+
+======================================================================
+0. SCOPE
+======================================================================
+Goal: use GRPO to train Dianoia's walk policy (the per-step choice of
+EXPAND <id> / BACKTRACK / ANSWER while walking the LTHCM graph).
+Out of scope: router training (start with plain supervised learning
+there), pretraining, changing LTHCM, changing Dianoia's verification.
+
+PROPOSED IMPLEMENTATION BOUNDARIES (my proposal, not constraints Nick
+issued; accept or change them)
+ D1. Keep LTHCM/ source unchanged. The reviewed repo at aacb3e58 is a
+     vendored monorepo (LTHCM/ is a directory, no .gitmodules found), so
+     this is a boundary on the training work, not a submodule rule.
+ D2. Keep dianoia/ and dokime/ source unchanged by the Paideia work. Any
+     change Dianoia needs (see 3.3) is a separate, deliberately reviewed
+     change, not folded into the training work.
+ D3. Proposed: do not weaken or delete existing Paideia tests. Adding tests or
+     updating one for a deliberate contract change is fine.
+ D4. Proposed: do not train or evaluate against Kybernetes adapters. At aacb3e58
+     they are stubs (hardcoded keyword corpus, simulated walk).
+ D5. Proposed: test-split questions are never used for training, reward tuning,
+     prompt tuning or checkpoint selection (see 7).
+ D6. Proposed: no secrets, model weights, .venv or caches in the repo.
+ D7. Nothing in this spec promises a model improvement. Promotion is
+     decided only by section 8.
+
+======================================================================
+1. WHAT GRPO DOES HERE (and what it does not)
+======================================================================
+GRPO samples a group of G outputs for the same prompt, scores each with
+a reward, and uses (reward - group mean) as the advantage. No learned
+value/critic model. It updates model weights (here a LoRA adapter).
+It is not "pick the best of G at inference time".
+Sources: https://arxiv.org/abs/2402.03300
+         https://huggingface.co/docs/trl/main/en/grpo_trainer
+Note on TRL: current docs say advantages are divided by group std unless
+scale_rewards=False, beta defaults to 0.0 (no KL), and loss_type options
+include "dapo" and "dr_grpo". The docs page is the "main" branch, so it
+can change. Pin an exact TRL version and re-read its docs for that
+version before implementing. [UNVERIFIED for any specific release]
+
+======================================================================
+2. THE KEY DESIGN DECISION: TOKEN-LEVEL vs WALK-LEVEL
+======================================================================
+A Dianoia walk is multi-step: the model emits an action, the graph
+returns a new passage and neighbours, the model acts again, up to
+max_steps, then an answer is synthesised. Reward is only known at the end
+(answer correct? evidence supported?). Two ways to use GRPO:
+
+ Option A - Single-step GRPO (RECOMMENDED FIRST).
+   Training example = one decision state (question, visited summary,
+   current passage, neighbours, steps remaining). Model emits the two-line
+   ACTION/REASON output. Sample G completions for that same state. Reward
+   each by a step-level check (3.2, rewards R1-R4). Simple, fits the
+   standard single-completion GRPO trainer. Weakness: the reward for a
+   step cannot see the future. It scores action validity and local
+   quality, not "did this lead to the right answer".
+
+ Option B - Rollout-level GRPO (LATER, only if A is stable).
+   Training example = whole walk. Sample G complete walks per question,
+   score each walk's final outcome, give every step in a walk that walk's
+   advantage. Needs an environment loop. TRL docs describe an
+   environment_factory / tools mechanism for stateful multi-turn
+   rollouts with an environment-owned reward (get_reward) and a cap on
+   tool-calling iterations. [UNVERIFIED that it fits Dianoia's prompt
+   format, and its chat-template requirements need checking for the
+   chosen base model]. Credit assignment is coarse: one good final
+   outcome rewards bad steps in the same walk, and vice versa.
+
+Do not describe Option A results as "the walk got better". They show
+the step policy got better on step-level checks only; the end-to-end
+claim needs the Dokime test in section 8.
+
+======================================================================
+3. WHAT EXISTS vs WHAT MUST BE BUILT
+======================================================================
+3.1 Existing at aacb3e58
+ - paideia/training/runner.py (~lines 125-190) [EXISTS, NOT A TRAINER]:
+   after preflight and "import torch" it writes
+   checkpoints/adapter_config.json, sets status COMPLETED, records an
+   adapter digest. Comment says "simulate or invoke backend". There is no
+   optimizer step. Its manifest fields (run_id, git commit, split
+   checksums, hardware line, seed, hyperparameters) are worth reusing.
+   Its COMPLETED status must not be trusted as training evidence.
+ - paideia/training/config.py [EXISTS]: task "router"|"walk_policy",
+   default Llama-3.1-8B-Instruct, lr 2e-4, 3 epochs, 4bit, LoRA fields.
+   These are SFT-style settings. GRPO needs its own config (3.4).
+ - paideia/pyproject.toml gpu extra [EXISTS]: torch, transformers, peft,
+   bitsandbytes, accelerate, datasets. No trl. No unsloth.
+ - paideia/contracts/dianoia_schema.py [EXISTS]: DianoiaStep (node,
+   action in EXPAND/BACKTRACK/ANSWER, raw_output, reason, parse_failed),
+   DianoiaVerification (conflicts_found, rewalked, report,
+   conflict_detail), DianoiaWalkRecord (walk_id, question, seeded_nodes,
+   path, verification, final_answer, max_steps, steps_used, model,
+   fallback_used, initial_path, privacy_label) and
+   is_defensible_gold_trajectory().
+ - paideia/data/walk_loader.py, data/splitter.py [EXISTS]: loads walk
+   logs, builds PolicyStepSample rows from defensible walks, splits by
+   question family key (first ~4 content tokens).
+ - paideia/evaluation/promotion.py, bootstrap.py, null_test.py,
+   dokime_bundle.py [EXISTS]: paired bootstrap CI, permutation test,
+   guardrails, replayable bundle. See section 8.
+ - dianoia/walk.py [EXISTS]: WalkController with a prompt that asks for
+   exactly "ACTION: ..." and "REASON: ...", temperature 0.2, top_p 0.9,
+   max_steps default 8, and run() = walk + NLI verification + at most
+   one re-walk, logging both attempts to JSONL.
+
+3.2 Gaps found that block GRPO (all [PROPOSED] fixes)
+ G1. No GRPO code, no reward code, no TRL dependency anywhere in
+     paideia (grep for grpo/reward finds nothing).
+ G2. No real trainer: runner.py is a marker writer (see above).
+ G3. Walk logs do not store the decision state. DianoiaStep keeps node,
+     action, raw_output, reason only. The prompt a step saw (current
+     passage text, neighbour list, visited summary, steps remaining) is
+     not logged, and no logits/probabilities are logged. To build GRPO
+     states you must either replay each walk against the same LTHCM graph
+     snapshot, or extend Dianoia's log (see 3.3).
+ G4. Possible schema mismatch: dianoia/log.py has SCHEMA_VERSION = 1
+     (an int) while Paideia's DianoiaWalkRecord.schema_version is a str
+     defaulting to "1.0.0". A real Dianoia log line may fail Paideia
+     validation and be counted as a schema violation. [UNVERIFIED: I did
+     not run it.] Check with a real log before anything else.
+ G5. No ground truth. GRPO needs questions whose correct answers (and
+     ideally supporting passage IDs) are known independently of the model
+     being trained. The repo has no such set that I saw. It must be built.
+ G6. Kybernetes default adapters are simulated (D4), so real walks must
+     come from Dianoia against real LTHCM.
+
+3.3 Minimal Dianoia log extension (only if replay is impractical)
+ Separate reviewed change in this vendored monorepo, not folded into the training work (D2). Per step, add: the rendered
+ user prompt hash or full text, neighbour IDs offered, steps_remaining,
+ and a graph/index snapshot ID. Bump the schema version deliberately and
+ keep the old reader working. Do not log secrets or private passages
+ without setting privacy_label correctly.
+
+3.4 New Paideia pieces [PROPOSED]
+ - paideia/training/grpo_config.py: GRPOTrainConfig (G, max new tokens,
+   lr, LoRA rank, beta, loss_type, scale_rewards, seed, base model,
+   quantisation, reward weights, step budget, early-stop rules).
+ - paideia/training/rewards.py: pure functions, one per reward term,
+   each unit-tested with fixed inputs. No network, no model calls inside.
+ - paideia/training/grpo_runner.py: a real runner that writes a manifest
+   status of COMPLETED only if optimizer steps actually occurred, and
+   records steps taken, mean reward, reward_std, fraction of zero-variance
+   groups, KL/clip metrics if available, peak VRAM, package versions.
+ - paideia/data/grpo_states.py: builds decision-state rows from replayed
+   walks, deduplicated, grouped by question family.
+ Do not rename or reshape existing contracts without a contract bump.
+
+======================================================================
+4. ENVIRONMENT / STATE DEFINITION
+======================================================================
+State s = (question, visited summary, current passage, neighbour list
+with IDs and previews, steps remaining), formatted exactly as
+dianoia/prompts.py formats it, using the same system prompt. Recommend
+matched, versioned prompt templates between training and inference, and
+an explicit test that renders a state through both paths and fails on any
+mismatch, so a deliberate difference is a recorded decision. (Prompt
+mismatch is a risk to check, not something I showed to break transfer.)
+Action a = the two-line ACTION/REASON completion.
+Valid actions: EXPAND <id> where id is in the offered neighbour list;
+BACKTRACK only when a previous node exists; ANSWER at any time.
+Validity must be checked against the offered neighbours, not just
+against the text pattern.
+
+======================================================================
+5. REWARDS (all [PROPOSED])
+======================================================================
+Principle: rewards come from checks the policy cannot influence.
+The policy never sees or writes the reward code, the gold labels, or the
+verifier configuration.
+
+Option A step-level rewards are HEURISTIC PROXIES. They encode
+assumptions about good steps that can be wrong (multi-hop questions may
+need several passages; moving away from one gold node can be useful).
+Treat them as shaping signals to test on dev, not as optimal-action
+definitions. Weights are starting guesses to tune on the
+DEV split only):
+ R1 format/validity (small, dense): 1 if output matches the two-line
+    format AND the action is valid for this state (EXPAND id in the
+    offered list; BACKTRACK legal), else 0. Parse failures are 0, never
+    silently repaired. The real parser's fallback behaviour must not turn
+    garbage into reward.
+ R2 progress toward gold evidence (proxy): where gold supporting
+    passage IDs exist, EXPAND toward uncovered gold passages may score
+    higher. Account for questions needing several passages; do not
+    penalise a move solely for leaving one gold node. Needs a graph
+    distance computed from LTHCM neighbours (read-only).
+ R3 answer readiness (proxy): ANSWER scores positive only if the
+    visited set covers the gold evidence the question needs (all of it,
+    or a defined minimum for multi-hop items); ANSWER with none scores
+    zero or negative. Aim: discourage premature answering.
+ R4 backtrack sanity (weakest proxy): consider a small positive for
+    BACKTRACK from a clearly unhelpful dead end and no bonus from a gold
+    node. Drop R4 if dev shows it distorts behaviour.
+ Keep R2-R4 tied to gold annotations, not to the model's own REASON text.
+ The REASON line is not rewarded for content (hard to verify, easy to
+ game); it may be required only to be non-empty and one sentence.
+
+Option B walk-level rewards (final outcome, per walk):
+ W1 final answer correct against independent gold (exact/normalised match
+    or a fixed deterministic checker; if an LLM judge is ever used, it is
+    a different model, frozen, and its agreement with human labels on a
+    sample is measured and reported).
+ W2 evidence coverage: whether the walk visited the gold supporting
+    passages. This is coverage, NOT proof that the final answer is
+    supported by them. Either add claim-to-evidence validation (each
+    claim in the answer checked against visited passages by a stated,
+    tested method) or label W2 plainly as a coverage proxy in configs and
+    reports.
+ W3 verification: Dianoia's NLI result (no conflict) may add a SMALL
+    bonus or a penalty for conflicts. It is not truth. NLI "no conflict"
+    can pass a wrong answer, and a policy can learn to produce vague
+    answers that never conflict. Cap its weight well below W1 and never
+    let it be the only positive signal.
+ W4 invalid-action penalty (per invalid step) and mild step-cost, applied
+    only AFTER correctness is satisfied, so shortness cannot beat being
+    right. Rewarding short walks too hard teaches early ANSWER.
+ W5 abstention: include questions that have NO answer in the graph.
+    Correct abstention is rewarded only on those; abstaining on
+    answerable questions scores zero. Without this, "I don't know" becomes
+    a safe local optimum, or never gets learned at all.
+ W1 (final-answer correctness) must dominate the weighted total, with an explicit correctness gate: other terms (W2 coverage/support, W3, W4) may only add or subtract secondary amounts and must not make an incorrect answer outscore a correct one. State the weights
+ in grpo_config and in the manifest.
+
+======================================================================
+6. ANTI-REWARD-HACKING CONTROLS
+======================================================================
+ H1. Gold labels and supporting IDs are held outside the prompt and the
+     model's reachable files.
+ H2. Reward functions are deterministic and unit-tested; include
+     adversarial tests: always-ANSWER, always-BACKTRACK, loop between two
+     nodes, repeat the question, emit extra text, emit two actions, emit
+     an out-of-list neighbour ID. Each must score at or below a stated
+     bound.
+ H3. Loop/repeat detection: revisiting a node counts against the policy
+     after the allowed BACKTRACK.
+ H4. Log reward components separately (not only the sum) so a rise in
+     total reward can be traced to a term.
+ H5. Periodically sample rollouts for human reading (e.g. 20 per
+     checkpoint) and record what was read.
+ H6. Track degenerate behaviour on dev: share of ANSWER-at-step-1, mean
+     steps used, share of invalid output, abstention rate on answerable
+     questions. A big shift in any is a stop signal even if reward rises.
+ H7. If KL is used (beta > 0) keep a frozen reference adapter; if beta is
+     0.0 (TRL default per current docs) watch drift via H6 and a
+     dev-set comparison to the starting checkpoint.
+ H8. Contamination: dedupe questions across train/dev/test using the
+     family key AND an exact/near-duplicate check. The existing family key
+     takes only the first ~4 content tokens, so check it does not group
+     unrelated questions or miss paraphrases. Report counts.
+
+======================================================================
+7. DATA AND SPLITS
+======================================================================
+ S1. Source: real Dianoia walks over real LTHCM content, with gold
+     answers (and supporting passage IDs) written or verified
+     independently of the model being trained.
+ S2. Split by question family, then freeze train/dev/test with
+     checksums (the existing splitter and manifest already record
+     these). Use DEV for all tuning and checkpoint selection. Freeze the final
+     TEST holdout. Each extra look at TEST, especially to choose between
+     candidates, erodes it as an unbiased estimate. Plan a fresh reserve
+     holdout (not yet seen) for the final claim, or apply and report a
+     multiple-comparison adjustment, and log every TEST run.
+ S3. Record the LTHCM index/graph snapshot ID and Dianoia/Paideia commit
+     in every run manifest. A graph that changes between runs makes
+     comparisons invalid.
+ S4. Minimum size: do not pick a number from this document. Decide it
+     from a pilot: you need enough test questions that the paired
+     bootstrap CI can exclude zero for a plausible effect. If the test set
+     is small, say so in the verdict instead of reading noise as signal.
+ S5. Optional warm start: SFT on is_defensible_gold_trajectory() steps
+     to teach the format, then GRPO. Gold-trajectory filtering keeps
+     only walks that passed verification, which biases toward easy
+     questions. Report that.
+
+======================================================================
+8. PROMOTION VIA HELD-OUT DOKIME COMPARISON
+======================================================================
+ P1. Baseline = the current Dianoia policy (same base model, same
+     prompt, same graph). Candidate = base model + new adapter.
+ P2. Run both through the real Dianoia pipeline on the untouched TEST
+     split, end to end (walk + answer + verification), not just
+     step-level rewards.
+ P3. Produce a DokimeRunBundle (exists in paideia/evaluation/
+     dokime_bundle.py) with item-level scores so Dokime can recompute the
+     verdict independently.
+ P4. Use evaluate_promotion() criteria as they exist: delta > 0, paired
+     95% bootstrap CI excluding zero, paired null test p < 0.05,
+     guardrails. NOTE: default guardrail max_p95_latency_ms is 50 ms,
+     which was written for a router. A multi-step LLM walk will not meet
+     it. Set a latency/memory guardrail appropriate for walks BEFORE
+     seeing results, and record it. [PROPOSED]
+ P5. Also report: invalid-action rate, steps used, abstention precision
+     and recall, answer correctness by question type, wall-clock per
+     question.
+ P6. A candidate that fails any criterion is REJECTED. Do not rerun with
+     different seeds until it passes without disclosing the number of
+     attempts; if several candidates are compared, correct for it or
+     state that no correction was applied.
+
+======================================================================
+9. FAILURE AND ZERO-VARIANCE CASES
+======================================================================
+ F1. If all G samples for a state get the same reward, the advantage is
+     zero, so that state gives no reward-driven gradient (TRL logs
+     reward_std). It may still change the model if a KL term is enabled
+     (beta > 0), which pulls toward the reference policy. Track the fraction of such groups. If it is
+     high: raise sampling temperature within reason, raise G, or drop
+     states the base policy always gets right/wrong. Do not "fix" it by
+     adding noise to the reward.
+ F2. Reward collapse (mean reward flat or falling): stop, inspect H4/H5.
+ F3. Policy collapse to one action: stop at the H6 trigger and revert to
+     the last checkpoint that passed dev.
+ F4. Parse failures rising: stop; fall back to the starting adapter.
+ F5. OOM: reduce G, max completion length or batch first. Do not
+     truncate prompts so the training state no longer matches the
+     inference state. If full evidence states do not fit, record that and
+     choose a smaller model or shorter walks deliberately; do not cap
+     sequence length to hide it.
+ F6. Environment failure (LTHCM or graph unavailable) during Option B
+     rollouts: the rollout is discarded and counted, not scored as zero.
+ F7. A run that errors must leave status FAILED with a reason in the
+     manifest. A run that did no optimizer steps must not read COMPLETED.
+
+======================================================================
+10. REPRODUCIBILITY
+======================================================================
+Every run records: git commits of metis, paideia, dianoia, LTHCM; LTHCM
+graph snapshot ID; dataset/split checksums; seed; full config incl.
+reward weights; package versions (torch, transformers, peft, trl,
+bitsandbytes, CUDA build); GPU model and driver; per-step metrics
+including reward components; the adapter digest; the exact prompt
+template hash. Note that full bit-for-bit GPU determinism is not
+guaranteed; record what was fixed (seeds) and report run-to-run variance
+over at least a few seeds before claiming an effect. [UNVERIFIED how much
+variance there will be]
+
+======================================================================
+11. HARDWARE: BOUNDED PILOT (NO PROMISE OF FIT)
+======================================================================
+Cards: RTX 5060 Ti 16GB (Blackwell) and V100 16GB SXM2 on a custom PCIe
+adapter. Nothing below was tested.
+ - VRAM does not pool. Two 16GB cards are two separate 16GB budgets, not
+   32GB for one model. Using both for one run needs a distributed setup
+   and is not assumed here.
+ - Mixed-architecture risk: Blackwell and Volta may need different
+   PyTorch CUDA builds, and I could not find a single build listed for
+   both (earlier review, from PyTorch's RELEASE.md). So plan on separate
+   environments per card, selected explicitly, until proven otherwise.
+   [UNVERIFIED]
+ - Backend support for 4-bit training, bitsandbytes and any
+   unsloth/vLLM path on each card is unchecked. Volta lacks some newer
+   precision features (e.g. bf16); expect fp16 there. [UNVERIFIED]
+ - GRPO costs more than SFT: each step generates G completions per
+   prompt. Memory is for weights + adapter + optimizer state +
+   generation KV cache.
+ Pilot plan (all [PROPOSED]):
+  Stage 0: before any training, run a hardware/software smoke test per
+    card: import torch, report CUDA build and visible device, run a tiny
+    forward/backward on a toy LoRA. Record versions.
+  Stage 1: proposed starting scale is a small base model, roughly
+    0.5-1.5B parameters, small G, a few dozen optimizer steps on the 5060 Ti
+    only. Record peak VRAM and seconds per step. The goal is to measure,
+    not to improve.
+  Stage 2: only if Stage 1 is stable, scale G, steps and model size one
+    knob at a time, stopping at the first OOM or instability.
+  Stage 3: evaluate with section 8.
+  I suggest not starting with an 8B model or both cards. The V100 is offered as
+  a second, separately-run environment, not a pooled resource.
+ Inference side: Hestia serves via llama.cpp (GGUF). A LoRA trained with
+ HF/PEFT must be converted/merged to a format the serving path accepts.
+ That path is unchecked. [UNVERIFIED] Evaluation in section 8 must use
+ the same serving path that will be used for real, or state the mismatch.
+
+======================================================================
+12. IMPLEMENTATION ORDER (numbered, paste-ready)
+======================================================================
+ 1. Take a few real Dianoia walk log lines and load them through
+    paideia/data/walk_loader.py. Confirm or refute G4 (schema_version
+    int vs string). Report the result; fix only the confirmed side, in a
+    contract-versioned change.
+ 2. Decide replay vs log extension (G3). If replay: write a read-only
+    replay tool that reconstructs the prompt for each logged step against a
+    named graph snapshot and verifies the replayed action choices are
+    still valid actions. If extension: 3.3, separate change.
+ 3. Build the gold set (S1) and freeze splits with checksums (S2). Report
+    counts, family-key collisions and near-duplicates (H8).
+ 4. Write rewards.py with R1-R4 and their adversarial tests (H2). No
+    trainer yet.
+ 5. Fix runner semantics: a runner may only report COMPLETED after real
+    optimizer steps (F7). Add a regression test that a no-op run is not
+    COMPLETED. Do not weaken existing tests.
+ 6. Add trl (pinned) to a new optional extra, not to the base install.
+    Add grpo_config.py and grpo_runner.py. Run the Stage 0 smoke test per
+    card.
+ 7. Pilot Stage 1 on the 5060 Ti. Report VRAM, speed, zero-variance
+    fraction, H6 indicators.
+ 8. Optional SFT warm start (S5) if format validity is poor.
+ 9. Decide Option B only after A is stable (section 2).
+10. Run the section 8 evaluation and report the verdict file, bundle
+    hash and number of candidates tried.
+
+======================================================================
+13. OPEN QUESTIONS FOR NICK
+======================================================================
+ Q1. Where do gold questions/answers/supporting passages come from
+     (hand-written, derived from documents Stoma ingested, other)?
+ Q2. Is the training model the same one Dianoia serves via Hestia, and
+     which size? Needed for the pilot.
+ Q3. Is Option A first acceptable, given its limited credit assignment?
+ Q4. Should abstention on unanswerable questions be in scope for v1?

@@ -13,6 +13,14 @@ from paideia.training.runner import (
     compute_dir_sha256,
 )
 
+from paideia.training.grpo import (
+    CandidateCompletion,
+    DianoiaStateReconstructor,
+    GRPOConfig,
+    GRPORewardEngine,
+    GroupEvaluation,
+)
+
 __all__ = [
     "TrainingConfig",
     "HardwareProfile",
@@ -22,4 +30,9 @@ __all__ = [
     "QLoRATrainingRunner",
     "TrainingPreflightError",
     "compute_dir_sha256",
+    "GRPOConfig",
+    "GRPORewardEngine",
+    "DianoiaStateReconstructor",
+    "CandidateCompletion",
+    "GroupEvaluation",
 ]

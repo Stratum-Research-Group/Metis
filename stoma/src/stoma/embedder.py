@@ -230,6 +230,70 @@ class StomaEmbedder:
             embs = torch.tensor(embs, dtype=torch.float32)
         return embs
 
+    def get_embedding_space_spec(self) -> Any:
+        """Return canonical EmbeddingSpaceSpec for this embedder."""
+        from stoma.identity import EmbeddingSpaceSpec
+        model_assets = [("state_dict", self.weights_checksum)]
+        tok_hash = hashlib.sha256(self.tokenizer_name.encode("utf-8")).hexdigest()
+        tokenizer_assets = [("tokenizer", tok_hash)]
+        return EmbeddingSpaceSpec(
+            schema_version="1.0.0",
+            model_assets=model_assets,
+            tokenizer_assets=tokenizer_assets,
+            tokenizer_configuration_hash=hashlib.sha256(
+                f"{self.tokenizer_name}:{self.special_tokens_overhead}:{self.max_seq_length}".encode("utf-8")
+            ).hexdigest(),
+            text_preprocessing_spec_hash=hashlib.sha256(b"standard_whitespace_trim").hexdigest(),
+            query_encoder_spec_hash=self.weights_checksum,
+            document_encoder_spec_hash=self.weights_checksum,
+            pooling_spec_hash=hashlib.sha256(b"mean_pooling").hexdigest(),
+            projection_or_adapter_assets_hash="none",
+            dimension=self.d_model,
+            dtype="float32",
+            quantization_spec_hash="none",
+            normalization="unit_l2",
+            allowed_similarity="cosine",
+            truncation_length=self.max_seq_length,
+            truncation_policy="truncate_right",
+            modality="text",
+        )
+
+    def get_producer_build_spec(self) -> Any:
+        """Return ProducerBuildSpec for this embedder execution environment."""
+        from stoma.identity import ProducerBuildSpec
+        space_spec = self.get_embedding_space_spec()
+        import torch
+        return ProducerBuildSpec(
+            schema_version="1.0.0",
+            embedding_space_id=space_spec.space_id,
+            executable_digest=hashlib.sha256(f"python:{self.device}".encode("utf-8")).hexdigest(),
+            library_versions={
+                "torch": str(torch.__version__),
+            },
+            backend_precision="fp32",
+            reproducibility_profile="strict_deterministic",
+        )
+
+    def encode_envelope(
+        self,
+        texts: List[str],
+        role: Literal["document", "query"],
+    ) -> Any:
+        """Encode texts and return a verified VectorBatchEnvelope."""
+        import numpy as np
+        from stoma.identity import create_vector_envelope
+        embs = self.encode(texts)
+        embs_np = embs.detach().cpu().numpy()
+        norms = np.linalg.norm(embs_np, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        embs_np = embs_np / norms
+        return create_vector_envelope(
+            vectors=embs_np,
+            role=role,
+            space_spec=self.get_embedding_space_spec(),
+            producer_spec=self.get_producer_build_spec(),
+        )
+
     def create_facet_vector(self, embedding: torch.Tensor) -> torch.Tensor:
         """
         Produce single-facet tensor [1, d_model] as required by LTHCMEngine(num_facets=1).

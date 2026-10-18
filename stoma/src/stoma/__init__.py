@@ -44,6 +44,19 @@ from stoma.safe_extract import (
     SafeExtractor,
 )
 
+from stoma.identity import (
+    EmbeddingSpaceSpec,
+    IdentityValidationError,
+    IncompatibleSpaceError,
+    IndexBuildSpec,
+    InvalidVectorPayloadError,
+    ProducerBuildSpec,
+    VectorBatchEnvelope,
+    canonical_jcs_serialize,
+    create_vector_envelope,
+    domain_separated_hash,
+)
+
 # Enforce exact submodule origins and commit pins on runtime import
 verify_runtime_dependencies()
 
@@ -70,4 +83,14 @@ __all__ = [
     "ArchiveBombError",
     "ArchiveSafetyError",
     "SafeExtractor",
+    "EmbeddingSpaceSpec",
+    "ProducerBuildSpec",
+    "IndexBuildSpec",
+    "VectorBatchEnvelope",
+    "canonical_jcs_serialize",
+    "domain_separated_hash",
+    "create_vector_envelope",
+    "IdentityValidationError",
+    "IncompatibleSpaceError",
+    "InvalidVectorPayloadError",
 ]

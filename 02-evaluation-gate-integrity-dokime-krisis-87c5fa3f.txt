@@ -1,0 +1,203 @@
+EVALUATION-GATE INTEGRITY FOR DOKIME / KRISIS
+Design proposal v1 | 13 October 2026 | Item 2 of 5
+
+Decision
+--------
+Use Calyx's evaluation failure modes as adversarial fixtures, rather than treating its
+green reports as quality evidence. Add a chain from eligible data to genuine
+measurements to a decision. A checksum proves a report did not change; it cannot prove
+its numbers were measured, its test was independent, or its thresholds used the right
+units.
+
+This is not a claim that Dokime or Krisis currently has the defects below. Existing
+run/checksum and abstention designs remain useful. Inspect current code before deciding
+which additions are missing. No owner repository was changed and no Calyx code was run.
+
+1. Separate ownership
+---------------------
+Dokime owns experiments, perturbations, measurement and comparison. Krisis owns runtime
+eligibility/selection/abstention. A trusted Dokime report may inform a versioned Krisis
+policy; it must not directly rewrite the active policy. Promotion is a separate reviewed
+action.
+
+Do not put benchmark tuning inside Krisis, add an evaluator to its critical path, or
+modify pinned LTHCM/Dianoia/Hestia submodules. Use a narrow versioned report contract.
+Standalone use remains possible. These roles are from dated project context, not a fresh
+implementation audit.
+
+2. Calyx motivation, precisely scoped
+-------------------------------------
+Static source at fe1d796a55c96bc161ea872daf9b1db56accd3be:
+- crates/calyx-anneal/src/tune/ab_runner.rs:176-179 passes candidate.p99_latency_ns into
+  SearchP99; tripwire.rs defines a default bound of 200.0 without a unit in
+  that comparison. Use unit-bearing metrics.
+- calyx-cli anneal_soak.rs/runner.rs and soak_harness.rs include seeded/simulated
+  numbers and a refused live mode. The text identifies simulation; do not infer
+  concealed intent. Machine-readable provenance still matters.
+- calyx-cli/src/cmd/kernel_build.rs:498-575 and calyx-lodestar
+  typed_kernel_index.rs:1183-1240,1320-1345 refine using exact neighbours for queries
+  then evaluate those queries. Warnings disclose refinement. Such a score is not an
+  untouched generalization test. Corpus-derived queries can also retrieve themselves.
+
+These are Calyx-specific observations. The design below prevents that class of weak
+evidence, without importing its engine.
+
+3. Proposed data contract
+-------------------------
+RunManifest:
+  schema_version, run_id, timestamps, code_commit, dirty_tree_hash
+  config_hash, environment_manifest_hash, hardware_manifest
+  model_ids, corpus_snapshot_id, index_build_ids
+  task_definition_hash, split_manifest_hash, evaluator_version
+  execution_kind: REAL | SYNTHETIC | MOCK | REPLAY
+  task_data_kind: REAL_WORLD | GENERATED | FIXTURE
+  status: COMPLETE | FAILED | CANCELLED | INCOMPLETE
+  seeds, tuning_history_id, candidate_selection_count
+  metric_records, raw_observation_manifest_hash
+
+Required provenance fields cannot default to REAL. REPLAY retains original execution
+provenance and cannot impersonate a fresh run. A real model can run on a synthetic task;
+keep those facts separate. Legacy unknown provenance is INELIGIBLE for promotion, not
+retroactively guessed.
+
+MetricRecord:
+  name, unit, estimator_version, cohort
+  value, sample_count, numerator, denominator where applicable
+  exclusions, missing_count, uncertainty_method, interval
+
+ComparisonRecord:
+  candidate_id, incumbent_id, paired_sample_ids
+  declared_direction, threshold_policy_hash
+  eligibility, verdict, reason_codes
+
+Retain per-example observations or a privacy-safe verifiable measurement record.
+Reproducibility does not justify exposing private prompts. A producer can fabricate
+self-consistent numbers and hashes: instrument the actual backend and validate
+observation origin, not only file integrity.
+
+4. Eligibility and leakage
+---------------------------
+Freeze splits before fitting or tuning. Split by the real independence unit: source
+document, conversation, person, event or time period. Randomly splitting chunks from one
+document can leak near-duplicates.
+
+Development data may tune prompts, fusion weights, thresholds and indexes. Final test
+data evaluates a frozen candidate. If test outcomes inform another candidate, record
+exposure and treat that test as development thereafter; use a fresh holdout for a new
+final claim.
+
+A retrieval corpus legitimately contains evidence documents. That is not automatically
+leakage. Leakage includes using test labels/exact neighbours to specialize the index,
+putting gold answers into generated ingestion text, or counting a query's own vector as
+success when the task is generalization.
+
+Record forbidden self-match and equivalent-duplicate IDs. Exclude before truncating or
+consistently overfetch. Do not remove legitimate supporting documents merely because
+they contain an answer. Define the task first. Keep qrels/gold answers outside candidate
+generation.
+
+Separate ANN exact-neighbour recall from relevance recall and answer correctness.
+Perfect reproduction of a poor embedding's neighbours says little about useful evidence.
+Inspect dataset overlap using identifiers, content hashes and declared near-duplicate
+rules.
+
+5. Measurement semantics
+-------------------------
+Use canonical internal latency units, for example integer nanoseconds. Thresholds carry
+the same explicit unit. 200 ms is 200,000,000 ns, not an unlabeled 200. Choose the
+actual budget for the task, not from Calyx.
+
+Use a monotonic duration clock. Record cold/warm start, concurrency, queue inclusion,
+batch size and cancellation. Separate end-to-end from backend time. GPU timing needs
+documented completion synchronization, not only launch timing.
+
+Compute global p99 from raw request samples with a named quantile definition. A mean of
+per-batch p99 values is not global p99. Count timeouts as failures; where relevant,
+report censored latency. Never drop failures and report only successful requests.
+
+Reconcile attempted, completed, timed-out, invalid and abstained counts. Require a clear
+denominator. Compare arms on the same eligible workload or disclose selection changes.
+Less work cannot masquerade as a speed improvement. Measure memory with a documented
+scope rather than a guessed estimate.
+
+6. Decisions and uncertainty
+----------------------------
+Predeclare gates before final outcomes. Keep evidence eligibility, safety, quality and
+resources separate. INCONCLUSIVE is valid.
+
+Illustrative policy, not an approved deployment threshold:
+- Incomplete, provenance-unknown or synthetic-only evidence cannot support a real-use
+  promotion claim.
+- Critical safety fixtures pass.
+- Paired quality confidence bound exceeds an agreed non-inferiority margin.
+- Failure-rate upper bound and latency/memory satisfy agreed constraints.
+
+Set margins from failure costs and sample size; there is no universal acceptable number.
+For correlated data, resample independent clusters, not individual chunks. Record
+uncertainty assumptions. Keep repeated candidate search on development data or account
+for multiple comparisons.
+
+For n independent Bernoulli trials with zero failures, a one-sided exact 95% upper bound
+is 1 - 0.05^(1/n). At n=100 this is about 2.95%, not zero. Correlated or
+outcome-selected examples invalidate that simple interpretation.
+
+7. Krisis-specific evaluation
+------------------------------
+Correctness, support and consistency are separate. No contradiction does not establish
+support. A confidence-shaped score is not automatically calibrated probability.
+
+Report selective risk and coverage together: how often the system answers, and how often
+answered outputs are wrong/unsupported. Include a declared reference arm and rejected
+cases. Total abstention cannot look like universal success.
+
+Measure support-verifier false positives, source mismatch, malformed evidence and
+malicious passages. Check generator/verifier independence according to the actual
+design; different prompt strings alone do not prove it. Keep calibration data separate
+from final test data.
+
+A policy bundle pins threshold config, calibration provenance, eligible run IDs and
+policy hash. Runtime verifies schema and approved origin, then applies policy
+deterministically. Missing required evidence leads to the existing typed
+refusal/abstention path, not a quiet weaker fallback.
+
+8. Adversarial tests
+---------------------
+- Plausible constants without observations: INELIGIBLE.
+- Mock/seeded backend COMPLETE: remains MOCK/SYNTHETIC, not real evidence.
+- Missing execution kind: schema failure.
+- 150 ms labeled 150 ns: conversion/units fixture fails.
+- Averaged batch p99s: rejected for global-p99 metric.
+- Dropped timeouts: count reconciliation fails.
+- Tuning on test neighbours: exposure ledger marks ineligible.
+- Duplicate sources across splits: validation fails.
+- Changed report bytes: integrity failure, distinct from provenance failure.
+- NaN/infinity/empty samples: invalid, never green.
+- Abstain on everything: coverage zero, no correctness claim.
+- Unsupported evidence accepted: false-support rate increases.
+- Cohort regression hidden by aggregate: cohort gate/report reveals it.
+- Cancel halfway: INCOMPLETE even if completed examples look good.
+
+Acceptance requires metric recomputation from observations, stable failure reasons,
+visibility of ineligible runs and no automatic policy mutation. Plumbing tests do not
+prove model quality.
+
+9. Rollout and implementation handoff
+-------------------------------------
+Inventory existing schemas first. Add legacy unknown-provenance handling and golden
+fixtures. Add eligibility validation, then actual backend instrumentation. Run tiny
+known-real and known-mock cases and reconcile raw observations. Only then compare frozen
+candidates on held-out data.
+
+Implement in the selected owner repository. Leave read-only submodules untouched.
+Deliver schema, count reconciliation, unit tests, exposure validation, paired
+comparison, migration notes and separate eligibility/verdict outputs. Do not change
+active Krisis thresholds or announce a real quality improvement as part of implementing
+this harness.
+
+Sources and limits
+------------------
+https://github.com/ChrisRoyse/Calyx (static commit/path evidence above).
+https://scikit-learn.org/stable/common_pitfalls.html (split-before-fitting and leakage).
+Schemas, policies and tests are proposals. Owner-project implementation status has not
+been re-audited. Calyx defects belong in its separate audit, not in an owner-project bug
+list.
