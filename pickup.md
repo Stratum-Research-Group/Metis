@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-18  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `63f8d1af3b6b15e35dd48911a15bdcdb59dae60c` (`feat(ncm): implement Schedion and Symbolon offline adapters and execute E1 diagnostic`)  
+**Current HEAD Commit:** `47b40c6e0f20a4ffb5eeddf6e230750356bad920` (`feat(anadrome): harden canonical JSON normalization against mock OOM and execute Milestone 3.2 frozen live walk test`)  
 **Working Tree Status:** Clean, all tests passing.
 
 ---
@@ -186,17 +186,35 @@ To verify all services and environments are operational after system reboot:
    - **Legacy Token Migration**: Validates that all active credentials use SHA-256 hash chaining.
 5. **Unit & Integration Test Suite (`prosopon/tests/test_pyle_devices.py`, `prosopon/tests/test_pyle_webrtc.py`)**:
    - Added tests covering Operator approval of T1/T2, T3 step-up rejection, Owner approval of T3, active task cancellation, `stop_runs=False` preservation, panic lockdown termination, and doctor diagnostics.
-   - Total Metis test suite: **371 passed across all suites** (70 prosopon, 173 kybernetes, 89 dianoia, 39 root).
+    - Total Metis test suite: **371 passed across all suites** (70 prosopon, 173 kybernetes, 89 dianoia, 39 root).
 
 ---
 
-## 3. Immediate Prioritized Tasks Left to Do
+### Phase 9: Anadrome Frozen Live Walk Test & Policy Decision Gate (Completed)
+1. **Live Walk Study Harness (`dianoia/dianoia/anadrome/study.py`)**:
+   - Implemented `AnadromeLiveStudy` with 10 pre-declared frozen benchmark questions spanning 4 leakage-isolated families (multi-hop entity tracking, single-hop precision, contradiction resolution, temporal reasoning) and pre-declared random seeds (`[42, 137, 2026]`, 30 runs per arm).
+   - Evaluated baseline LLM controller against candidate walk policies (`greedy_similarity`, `early_exit_answer`, `sheaf_contradiction_backtrack`, `stochastic_softmax`).
+   - Wired into Dokime paired bootstrap analysis (10,000 resamples, 95% CI, seed 42).
+2. **Empirical Findings & Decision Gate**:
+   - Executed live evaluation and published report: [`docs/review/anadrome-frozen-live-walk-milestone3-report.md`](file:///home/akarta/Projects/Metis/docs/review/anadrome-frozen-live-walk-milestone3-report.md).
+   - **Verdict**: `NO_EVIDENCE`. None of the candidate policies exceeded baseline controller correctness with a paired 95% CI excluding zero.
+   - **Action**: Per Spec Section 6 ("tie or no evidence keeps the current controller - a recorded result, not a failed experiment"), `baseline_llm` remains the production default. All candidates remain registered in `APPROVED_CONTROLLER_POLICIES` (`dianoia/dianoia/walk.py`) for specialized use cases.
+3. **Antigravity IDE Stability Hardening**:
+   - Hardened `_normalize_for_canonical_json` in `dianoia/dianoia/anadrome/canonical.py` with cycle detection and explicit mock-safety to prevent infinite recursion and explosive 48GB OOM kills during test runs.
+   - Added type-safe attribute and score extraction in `WalkController._get_neighbours`.
+4. **Unit & Integration Test Suite (`dianoia/tests/test_live_walk_study.py`)**:
+   - 4 comprehensive tests passing covering dataset integrity, single-query execution, sheaf contradiction conflict rejection, and full bootstrap evaluation.
+   - Dianoia test suite: **93 passed** (up from 89).
+   - Total Metis test suite: **375 passed across all suites** (70 prosopon, 173 kybernetes, 93 dianoia, 39 root).
 
-### Task 10: Anadrome Frozen Live Walk Test (Roadmap Milestone 3.2, Track B)
-- **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` Section 5 & 6 and Roadmap Milestone 3.2.
-- Freeze test dataset questions and pre-declare random seeds.
-- Run fresh live Dianoia walks using promoted policy candidate(s) versus baseline controller.
-- Compute final paired bootstrap CIs via Dokime.
+---
+
+## 3. Implementation Status Summary
+
+All 10 prioritized synthesis roadmap tasks across all 5 tracks are now **fully completed and verified**:
+- **Track A (Pyle)**: Loopback closure, SQLite device registry, WebAuthn RP, WebRTC DataChannel engine, Operator remote approvals, panic lockdown, doctor diagnostics (Phases 0, 1, 2, 8).
+- **Track B (Anadrome)**: Canonical JSON observation hashing, decision tree logging harness, in-process probe cache, zero imputation replay engine, policy zoo, Dokime paired bootstrap evaluation, frozen live walk test (Phases 4, 6, 9).
+- **Tracks C & D (Schedion & Symbolon)**: 5060 Ti hardware validation, candidate generation & code identity adapters, E1 diagnostic, Stage 3 and E2 controlled empirical comparisons, negative research reports and archival verdicts (Phases 3, 5, 7).
 
 ---
 
@@ -206,8 +224,10 @@ To verify all services and environments are operational after system reboot:
 - **Pyle WebRTC + Passkey Spec**: [`docs/review/mss-pyle-webrtc-passkey-spec.md`](file:///home/akarta/Projects/Metis/docs/review/mss-pyle-webrtc-passkey-spec.md)
 - **Synthesis Roadmap (All 5 Subsystems)**: [`docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md`](file:///home/akarta/Projects/Metis/docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md)
 - **Anadrome Replay Spec**: [`docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt)
+- **Anadrome Milestone 3.2 Report**: [`docs/review/anadrome-frozen-live-walk-milestone3-report.md`](file:///home/akarta/Projects/Metis/docs/review/anadrome-frozen-live-walk-milestone3-report.md)
 - **Schedion Stage 3 Report**: [`docs/review/schedion-stage3-controlled-comparison-report.md`](file:///home/akarta/Projects/Metis/docs/review/schedion-stage3-controlled-comparison-report.md)
 - **Symbolon E2 Report**: [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
+
 
 

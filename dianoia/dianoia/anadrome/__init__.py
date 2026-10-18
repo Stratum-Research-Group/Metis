@@ -26,6 +26,8 @@ from dianoia.anadrome.policies import (
 from dianoia.anadrome.probe_cache import AnswerProbeCache
 from dianoia.anadrome.replay import AnadromeReplayEngine, EpisodeReplayResult
 
+from dianoia.anadrome.study import AnadromeLiveStudy, AnadromeStudyReport
+
 __all__ = [
     "canonical_json_dumps",
     "compute_observation_hash",
@@ -48,5 +50,7 @@ __all__ = [
     "PolicyEvaluationSummary",
     "PairedComparisonResult",
     "PolicyEpisodeScore",
+    "AnadromeLiveStudy",
+    "AnadromeStudyReport",
 ]
 

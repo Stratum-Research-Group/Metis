@@ -286,6 +286,7 @@ class TestWalkControllerAnadromeIntegration(unittest.TestCase):
         mock_graph.__contains__.side_effect = lambda k: k in ["node_1", "node_2", "node_3"]
         mock_graph.successors.side_effect = lambda k: ["node_2", "node_3"] if k == "node_1" else []
         mock_graph.number_of_edges.return_value = 2
+        mock_graph.get_edge_data.return_value = {"weight": 0.5, "edge_type": "directed"}
         self.mock_engine.wormhole.graph = mock_graph
         self.mock_engine.wormhole.node_metadata = {
             "node_1": {"content": "Node 1 content."},

@@ -1,0 +1,136 @@
+AGENT SUBSTRATE FOR METIS: SOURCE REVIEW
+18 October 2026 | Review only, no implementation
+
+VERDICT
+Good infrastructure engineering to study, but not the right default foundation for today's single-owner local Metis. Borrow the security boundary and lifecycle ideas now; defer the complete Kubernetes platform until there is a measured need for many isolated, mostly idle execution environments.
+
+It is not an agent brain, retriever, coding harness or task manager. It runs workloads in gVisor/Cloud Hypervisor sandboxes, maps durable actors onto reusable workers, and snapshots idle environments. Its Metis fit is beneath MSS/Lochos as an optional execution backend. It does not replace Kybernetes, Phylax, Hestia or LTHCM.
+
+The immediate lesson: Metis's shell 'sandbox' is not filesystem/kernel isolation. Fix execution mediation and choose a real local isolation design first. A distributed substrate cannot repair application-level approvals or replay by itself.
+
+BASELINE AND COVERAGE
+Upstream: https://github.com/agent-substrate/substrate
+Commit: d2b97509984c4dc2df75f128a05f221a7cf98107
+Metis: https://gitlab.com/akarta-315h/metis
+Commit: e7593466496b493c744a936dccc3793930f9fcbc
+Remotes rechecked during review. Current Metis has Lochos/Pinax source; proposed roadmap entries are not implementation evidence.
+
+Inspected selected actor workflows, runtime workers, network/DNS policies, credential broker, authz and installer defaults, security/API docs and selected tests. Compared MSS shell, registry, harness and Lochos adapters. This is a targeted adoption review, not an exhaustive audit of all upstream or Metis code.
+
+No cluster, container, VM, privileged network test or benchmark was deployed. A narrow Go policy test stopped before compiling: upstream requires Go >=1.27.0; available local Go is 1.26.6. GOTOOLCHAIN=local prevented download. No Substrate tests are claimed passed. Source/test inspection is not a security certification.
+
+NUMBERED FINDINGS
+
+1. REAL LIFECYCLE IMPLEMENTATION [source]
+Logical actors outnumber workers. Requests resume actors onto ready workers; idle actors checkpoint and workers can be reused. Actor leases, persisted workflow state, worker assignment, volume attachment, restore, upload and teardown paths exist, along with gVisor runsc and Cloud Hypervisor implementations. This is substantial infrastructure, not a prompt wrapper. [S1-S3]
+
+2. PROCESS PERSISTENCE IS NOT COGNITIVE MEMORY [architecture]
+Snapshots preserve execution state, not reliable facts, citations, permission or reasoning quality. Restoring old RAM does not refresh external reality. LTHCM evidence, Stoma provenance, Dianoia walks, Phylax approvals and Dokime evaluation stay separate. Lochos owns tasks/claims/completion; Substrate owns execution placement. A suspended actor is not automatically a durable work item or a successfully completed task. [S1-S3, M1]
+
+3. METIS NEEDS A REAL EXECUTION BOUNDARY [Metis source]
+Exact locations at Metis e7593466:
+- kybernetes/kybernetes/tools/sandboxed_bash.py:154-164,171-183: cwd-only boundary and host shell launch. Environment whitelist at :117-129 retains HOME.
+- kybernetes/kybernetes/lochos/adapters.py:213-231: TerminalSeatAdapter direct command extraction and host subprocess launch.
+- kybernetes/kybernetes/engine/terminal_agent.py:376-387: verification hook launches subprocess directly, outside registry dispatch at :357-359.
+SafeSandboxedBash validates cwd, sanitizes environment and sets timeouts, then calls subprocess.Popen(shell=True). A permitted cwd does not prevent absolute-path reads, network use or access under host filesystem permissions. Keeping HOME does not isolate the home directory.
+Lochos TerminalSeatAdapter.launch_harness directly calls subprocess.run(shell=True), not the registry/Phylax gateway described in its docstring. The terminal harness test-command hook also runs a host shell directly. These are mediation gaps; path-aware read/edit tools have separate checks. No private-host escape test was run.
+Any backend must cover all execution paths, including tests and terminal seats. Containment does not replace approval checks. [M1]
+
+4. KEEP PHYLAX AND HESTIA OUTSIDE UNTRUSTED JOBS [recommendation]
+Authorize scoped jobs before dispatch. Mount only the workspace/required assets, not home directories or credentials. Carry immutable invocation ID, canonical arguments, policy version, actor/workspace identity and a receipt. Revocation/cancel must stop future dispatch and active processes where supported. A snapshot cannot grant permission or resurrect an expired approval. [M1, S4]
+
+5. DO NOT MOVE THE GPU MODEL INTO AN ACTOR [current limitation]
+The upstream API guide explicitly says actor device/GPU passthrough is temporarily unsupported. nvidia.com/gpu reserves a worker pod device but does not pass it into the actor. GKE docs separately say gVisor cannot snapshot live CUDA contexts.
+This is not a supported way to snapshot Hestia's model, multiply VRAM or fit more models on Nick's 5060 Ti. A CPU coding sandbox could call trusted Hestia through a separately secured interface. Host RAM/disk fit was not measured. [S5, V1]
+
+6. INGRESS DEFAULTS ARE DEVELOPMENT-FRIENDLY, NOT A PRODUCTION PERIMETER [source]
+Empty ingress auth mode means deprecated-insecure. It keeps plaintext listeners and lets clients reaching them target actors. static-mtls exists and requires an allowed SPIFFE identity; the installer exposes it but does not default to it. Do not expose the default router to LAN/Internet as a production boundary. Workload authentication also does not replace human/device action authorization. [S6]
+
+7. AUTHZ BINARY AND INSTALLER DEFAULTS DIFFER [source]
+ateapi's --experimental-enable-authz binary flag defaults false. Current ate-setup, however, defaults ateapi.authz.enabled=true and renders enforcement on. It would be wrong to report the normal current installer as shipping authorization off.
+OpenFGA checks, interceptors and policy storage exist. The installer defaults a shared client ServiceAccount to global bootstrap owner for demos, and warns anyone who can mint its token is a global owner. Shared deployments need explicit operator principals and tested per-resource permissions. Manual launches must enable intended enforcement. [S7-S9]
+
+8. SECURITY DOCUMENTATION LAGS SOURCE [reconciliation]
+security.md still labels DNS filtering/UDP fail-closed behavior unfinished. Current source has DNS PolicySource, denies queries when the source is absent/unavailable, private network namespaces and a test asserting UDP has no route beyond the namespace pair. The low-level DNS handler's nil callback is permissive, so correct policy wiring matters.
+Privileged tests were not run and every route was not audited. Do not report a proven current UDP exfiltration vulnerability from stale prose, or claim all networking proven fail-closed because tests exist. [S4, S10]
+
+9. CREDENTIAL ISOLATION DOES NOT PREVENT ALL MISUSE [source/consequence]
+The broker keeps actor private keys in atunnel outside guest code and uses short-lived certificates. External egress credential injection is useful. But a guest allowed to use a credentialed API can still misuse permitted operations or disclose data via permitted destinations. A secret-bearing mounted file bypasses the boundary.
+Metis needs narrow request-level rights, controlled redirects, no broad wildcard destinations and audit of actual egress behavior. These are proposed requirements, not claims every upstream deployment already enforces them. [S4, S10]
+
+10. SUSPENDED DOES NOT MEAN DURABLE [source]
+Unset suspend mode is asynchronous. The snapshot may be node-local while durable upload is pending. A SUSPENDED actor alone does not prove a portable completed copy. Resume tracks runtime compatibility, template identity, worker assignment and lifecycle state.
+UI/receipts should distinguish suspended-local from durable, resuming, failed and recovery-needed. Node loss before upload cannot be presented as recoverable from object storage without a completed copy. [S2-S3]
+
+11. RESTORE IS NOT EXACTLY-ONCE EXTERNAL EXECUTION [design consequence]
+Actor leases and persisted workflow steps support idempotent control-plane recovery. They do not make a send, git push or other external effect exactly-once across snapshot replay. Keep an execution ledger/idempotency boundary outside guest RAM and reconcile uncertain effects before retrying.
+Reconnect network sessions after restore. Revalidate permissions, model/workspace/policy versions. Captured state may be stale or revoked. [S2-S3, V1]
+
+12. REAL LOCAL DEPLOYMENT EXISTS, BUT IS HEAVY [source/judgment]
+The stack needs Kubernetes, control-plane services, PostgreSQL, object storage and sandbox runtimes; microVMs add virtualization needs. Local kind deployment exists, so cloud is NOT mandatory. This is still more operating work than a scoped local execution service for a few seats.
+Adopt the platform when idle-environment count, restart/restore and isolation needs justify it. A few Python processes waiting on one GPU are not evidence that density orchestration pays off. [S1, S11]
+
+13. PERFORMANCE CLAIMS ARE NOT METIS RESULTS [qualification]
+README claims <400ms resume, >1,500 activations/sec and 10x density; a demo describes about 250 actors on eight pods. Benchmark workloads/automation/telemetry exist. Independent reproduction and target-hardware results were not established here.
+Actor activation is not model throughput; oversubscribing idle actors does not multiply Hestia tokens/sec or VRAM. Measure real job dispatch/restore, RAM/CPU/disk, p50/p95/p99 latency and failure rate. [S11]
+
+14. OSS AND GKE PRODUCT CAPABILITIES DIFFER [vendor docs]
+The GKE page allows evaluation/non-production generally, with production support through a private allowlist. It lists GPU, open-connection and egress-policy restrictions. Those product restrictions are not automatically the newer OSS source's capability matrix; OSS contains egress policy/credential implementation. Nor does source presence prove the managed deployment enables it.
+For Nick, evaluate self-hosted OSS, not a dependency on Google Cloud or its support program. [V1-V2]
+
+15. ADOPTION PATH [proposal, not built]
+A. Route all shell/test/seat execution through one trusted gateway. Remove credential-bearing host access; add bounded resources/network/artifacts. Compare a real local sandbox with the supervised host-process baseline. AST/cwd checks are not hostile-code isolation.
+B. Define an ExecutionBackend under Kybernetes/Lochos: create, run scoped job, cancel, collect artifacts, inspect, dispose. Track runtime/image/policy/workspace versions. These are proposed semantics, not upstream API names.
+C. Add an optional Substrate backend only for a measured need. Keep Hestia/credentials outside and ownership in Lochos. No new named component is needed just to evaluate it.
+D. Add snapshot acceleration only after durable job state and uncertain-effect recovery work without it.
+
+16. RELEASE GATES [proposal]
+G1: Same CPU coding job passes through current and isolated backends. No host home, credentials or unrelated workspace visible.
+G2: Approved path/args cannot be swapped after approval; every terminal/test route uses mediation. Missing authorization fails closed.
+G3: Denied DNS/TCP/UDP/IPv6/direct-IP/redirect targets cannot exfiltrate seeded markers. Loss of egress policy blocks traffic. Run tests, do not trust manifest intent.
+G4: No cross-actor workspace/snapshot access. Delete/reset is tested before reusing workers. Validate snapshot authorization and storage encryption for the chosen deployment.
+G5: Cancel kills active job descendants; timeouts, CPU/RAM/process/output/disk limits hold. No orphan process or job remains.
+G6: Kill worker/node before and after durable upload; status honestly distinguishes loss/recovery. No duplicate external effects on resume.
+G7: Revoke device/action/credential while suspended; restored job cannot reuse revoked authority.
+G8: Explicit static-mtls ingress, enforced API authz, operator-specific bootstrap principals and application-level human authorization. Test invalid/expired identities.
+G9: Measure resource/latency/density against the simpler backend on actual hardware; include idle overhead and storage growth. Keep Hestia independently functional.
+G10: Pin runtime/image/API dependencies, backup/recovery and upgrades. Pre-1.0 API compatibility is not guaranteed by upstream.
+
+17. BOTTOM LINE
+Worth learning from, and potentially a later execution backend. The useful immediate work is real isolation plus consistent Phylax mediation, not moving Metis wholesale into Kubernetes. Establish a safe local job boundary first; adopt distributed snapshots when measurements justify them.
+
+SOURCES
+All source at the pin above. Mainly first-party primary code/docs, not independent benchmark proof. GitLab blob fetches failed; Metis source was inspected in the read-only clone.
+
+[S1] Repository/README; inspected cmd/ateworker-gvisor/runsc.go, cmd/ateworker-microvm/checkpoint.go and docs/architecture.md (which warns parts are aspirational):
+https://github.com/agent-substrate/substrate
+[S2] Resume workflow:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/cmd/ateapi/internal/controlapi/workflow_resume.go
+[S3] Suspend workflow:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/cmd/ateapi/internal/controlapi/workflow_suspend.go
+[S4] Security scope/status (cross-checked against implementation, not treated as current proof):
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/docs/security.md
+[S5] GPU/device limitation:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/docs/api-guide.md
+[S6] Ingress defaults:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/cmd/atenet/internal/router/config.go
+Also inspected manifests/ate-install/atenet-router.yaml and router-static-mtls component.
+[S7] Binary flag/enforcement wiring:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/cmd/ateapi/main.go
+[S8] Installer defaults:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/cmd/ate-setup/internal/config/setting.go
+[S9] Rendered authz flags and shared-owner warning:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/cmd/ate-setup/internal/steps/apienv.go
+Also inspected cmd/ateapi/internal/authz/{authorizer,interceptor}.go.
+[S10] DNS policy:
+https://github.com/agent-substrate/substrate/blob/d2b97509984c4dc2df75f128a05f221a7cf98107/internal/atunnel/dns/policy.go
+Also inspected internal/ateworker/actornet/{sandbox.go,sandbox_linux_test.go}, internal/atunnel/egress/credential.go, internal/egresspolicy/egresspolicy.go and selected e2e networking/security tests.
+[S11] README/performance claims and benchmarking/README.md, local-kind quickstart, go.mod; source entry point:
+https://github.com/agent-substrate/substrate
+[V1] GKE product requirements and limitations, fetched 18 October 2026:
+https://docs.cloud.google.com/kubernetes-engine/ai-ml/about-agent-substrate
+[V2] Vendor announcement, not an independent review:
+https://cloud.google.com/blog/products/containers-kubernetes/bringing-you-agent-sandbox-on-gke-and-agent-substrate
+[M1] Metis e7593466: kybernetes/kybernetes/tools/{sandboxed_bash,registry}.py; engine/{terminal_agent,coding_agent}.py; lochos/{adapters,queue,squad}.py; docs/STACK_BUILD_CONTRACT.md. Current synthesis roadmap read as proposal context only.
+https://gitlab.com/akarta-315h/metis
+

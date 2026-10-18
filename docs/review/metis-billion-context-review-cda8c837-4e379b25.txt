@@ -1,0 +1,129 @@
+BILLION-CONTEXT FOR METIS: SOURCE REVIEW
+18 October 2026 | Review only, no implementation
+
+VERDICT
+Worth studying and testing for MSS. Do not replace LTHCM with it or put the entire proxy in front of Metis by default.
+
+The useful contribution is a working conversation-context manager: retain originals, replace consumed ranges with model-written summaries, protect recent work and tool pairs, and restore old material. This addresses a real weakness in MSS. It does not create a billion-token attention window, prove faithful memory, or improve reasoning by itself.
+
+Recommendation: a small opt-in Kybernetes experiment, compared with simple context policies through Dokime. Prefer a narrow adapter to the pinned kernel over importing the provider/client interception stack. LTHCM remains evidence memory; Phylax remains authority. A recap is neither evidence of truth nor permission to act.
+
+BASELINE AND COVERAGE
+Upstream: https://github.com/ranxianglei/billion-context
+Commit: cda8c837add8d702638afa076515ce02c8281153
+Manifest versions: billion-context 0.1.201; in-tree acp-kernel 0.0.133.
+Metis: https://gitlab.com/akarta-315h/metis
+Commit: e7593466496b493c744a936dccc3793930f9fcbc
+Remotes rechecked during review. Metis is an in-tree monorepo here, not the historical submodule arrangement.
+
+Inspected kernel compression, range validation, rendering, protection, original storage, restoration, token estimation and persistence; selected proxy configuration, persistence and locks; paper and selected tests. Compared current MSS terminal history, tools, Lochos adapters and stack contracts. This is a targeted adoption review, NOT an exhaustive security audit of either repository.
+
+Executed: 138 selected upstream kernel tests passed, zero failures/skips; two small direct-kernel probes. No model inference, provider calls, dependency installation, full suite, proxy deployment or Metis integration. Tests do not establish quality or transport compatibility.
+
+NUMBERED FINDINGS
+
+1. REAL IMPLEMENTATION, NOT A NEW MEMORY MODEL [source]
+createCore() returns processTurn(), applyCompression(), retrieve(), search(), decompress() and status(). The host supplies messages/state/config; the model supplies summaries and ranges. Blocks track original message coverage, child blocks and tiers. Pruning builds a smaller model-facing view. This is systems work around a model, not an attention extension. It is TypeScript/Node, not a directly importable Python component. [B1-B4]
+
+2. BILLIONS MEANS CUMULATIVE TRAFFIC [claim qualification]
+The paper reports 174,327 calls and 18.76B cumulative input tokens on one host, about 24.7B across hosts. Of the 18.76B, 17.01B is cache reads and 1.75B fresh input. Re-accounting for a prefix is not retaining that many unique facts.
+The bounded-window result is 42,986 calls on 204,800-token models with zero reported violations. This is authors' operational evidence, not proof of perfect far recall or a billion-token simultaneous context. [B5]
+
+3. INTERESTING PILOT, NOT A UNIVERSAL FIVEFOLD WIN [authors' results]
+The pilot reports 31-54% lower billed tokens than retention. Its repetitive workload has default BC at 3,936,749 versus 5,746,120 tokens for retention; deterministic cadence is cheaper at 2,475,567.
+The authors explicitly report:
+- The main threshold-compaction baseline never fired.
+- The retention baseline never overflowed its window.
+- Doctrine plus reference tags/layout explain the re-fetch reduction in a quiescent-compression control. Do not credit compression policy alone.
+- At a 16K window, doctrine overhead was large and one-shot compaction was cheaper.
+- Controlled experiments did not exercise tier-2+ compression.
+- Aggressive tuning hurt phase-structured tasks: 75.7% probes/three execution errors versus default's 81.6%/one error in the table.
+- Restore probes worked when instructed; spontaneous restoration was zero at the tested model scale.
+These are first-party results. Independent reproduction and gains on Nick's Hestia model/hardware remain unverified. [B5]
+
+4. MSS NEEDS EVENT RETENTION BEFORE COMPRESSION [Metis source]
+Exact locations at Metis e7593466:
+- kybernetes/kybernetes/engine/terminal_agent.py:216,230,236-242,259: history initialization, initial-only goal prompt, six-entry view and assistant-only append.
+- kybernetes/kybernetes/engine/terminal_agent.py:365-374,402: clipped result and replacement next-step prompt.
+- kybernetes/kybernetes/lochos/adapters.py:168-178: native harness and default no-action generator.
+terminal_agent.py builds prompts from history[-6:], but that list receives assistant responses, not each user/tool-result exchange. Tool output is placed in current_prompt and clipped to 500-character head + 500-character tail. On the next step that result is no longer retained there as a tool event. The original goal starts in current_prompt, not a permanently pinned per-step task-state record.
+A proxy cannot restore data the harness never stores or sends. First retain ordered events, full bounded output artifacts, stable IDs, goal/plan/restrictions, unresolved failures and verified milestones. This finding is about this terminal path, not all Metis memory.
+Lochos's native coding adapter also expects an action-generator callback; absent one its default returns None. Installing a compression package does not wire a live model host into every seat. [M1]
+
+5. CORRECT OWNER IS KYBERNETES/MSS [recommendation]
+Kybernetes owns active session context and restoration. LTHCM/Stoma own durable indexed evidence and provenance. Dianoia reasons over eligible evidence. Phylax checks authorization from original trusted records. Hestia owns model identity/inference/GPU admission. Dokime measures results; Prosopon exposes folding/restoration state.
+Summaries can become labeled retrieval candidates, never authoritative replacements for original evidence. This does not replace Pinax discovery, Lochos owned work, proposed Pyle device access or proposed Anadrome replay. Those solve different problems. [M1]
+
+6. SUMMARY MEANING IS NOT VALIDATED [source + direct probe]
+applyCompression validates coverage, structural protection and summary length, not factual entailment. A direct tiny-fixture probe supplied a summary falsely asserting publishing approval over an offline-only source. With recent protection and minimum range/summary gates relaxed for the fixture, the primitive accepted it. This was a supplied string, NOT a model-produced attack or demonstrated end-to-end exploit.
+prune.ts renders summaries as role='system'. Provider adapters can remap formats, but the core view gives recap text that role. Metis must preserve source trust and never recover permission from a recap. External instructions remain untrusted after summarization; dispatch must consult original authorization. [B1-B2]
+
+7. RESTORATION MUST WORK END TO END [source]
+The content store deduplicates originals by SHA-256 and maps refs to them. Hosts must persist it and reset it together with a generation reset. collectBlockContent() needs originals; core.decompress() returns block metadata, not reconstructed missing text.
+CCR is opt-in in the current config. Support for restoration does not make every installed lane lossless by default. Persist originals before folding; refuse folds if the lane cannot retrieve them. Recoverability does not prove faithful summarization or spontaneous restore-tool use. [B3, B6]
+
+8. BORROW THE TOOL/REF GUARDS [source + tests]
+Recent/latest-tool protection, stable refs, consumed-range handling, tool/reasoning pairs and shared recommendation/application range projection are useful details missing from simplistic rolling summaries.
+The 138 tests covered compression, message protection, restore reporting, recommendation/apply consistency, original storage, persistence, token estimation, tool pairs, turn integrity and reasoning pairs. They are a selected kernel subset, not all client/provider/streaming paths. [B1-B4, B6]
+
+9. TOKEN COUNTERS ARE NOT NET SAVINGS [source + direct probe]
+The default tokenizer is a CJK-aware character heuristic plus about one token per four other characters. Optional BPE does not establish Nick's exact served tokenizer/template overhead.
+applySingleRange records covered input mass in tokensCompressed; it does not subtract summary size. A direct probe accepted a 2,400-character recap over a tiny 20-estimated-token span under relaxed fixture gates and reported tokensCompressed=20. This demonstrates counter semantics, not default-workflow efficiency.
+Measure complete serialized requests before/after with tools, metadata, output reserve, summaries and restoration cost. Reject non-shrinking folds or label explicit rewrites. Never present covered mass as money, latency or VRAM saved. [B1, B4]
+
+10. USE ONE WRITER PER STORE [source]
+Persistence has atomic rename, debounce, per-record sequencing, retries/spill recovery and corrupt-record handling. Kernel-store default debounce is 500ms. Source documents absent fsync durability and residual shared-directory multi-process coherence limits.
+Current session.ts DOES implement withSessionLock(), used by HTTP/plugin/relay paths. persist.ts contains a stale comment saying request serialization is absent. That comment is not a valid current finding. Every path/whole-request serializability was not audited.
+Use one writer, scoped seat/session/generation IDs and crash tests between original write, block write and view update. An acknowledged fold must not erase the only original before storage commit. [B6-B7]
+
+11. AVOID THE WHOLE PROXY AS A DEFAULT DEPENDENCY [source/recommendation]
+The package includes client adapters, HTTP rewriting, MITM capability, provider discovery, retry/replay, updates, storage migration and a web UI. Source config defaults autoUpdate on and MITM capability on; listener defaults loopback. This does not mean every launch intercepts every HTTPS domain.
+A Metis experiment should pin source/dependencies, disable automatic updates/downloads and unused network paths, and explicitly use the selected local model. No auto-discovered cloud summarizer. A stdin/stdout Node sidecar is a proposed narrow adapter, NOT a shipped upstream Metis API. Bound requests/timeouts/cancellation and grant it no tool-execution authority. [B8]
+
+12. PRIVACY AND DISK GROWTH NEED GATES [source]
+Session payloads are plaintext unless optional at-rest encryption is enabled. AES-256-GCM support exists; it does not protect a live-compromised host. Original retention grows with unique content. Diagnostic dumps can be unbounded unless configured. The documented SQLite migration is disabled with encryption active to avoid cleartext payload ingestion.
+Set storage permissions, backup/key recovery, deletion/retention and disk quotas. Keep secrets out of transcripts/dumps. Storage quota failure must stop a fold clearly, not discard originals. [B6, B8]
+
+13. FIRST EXPERIMENT [proposal, not built]
+A. Repair MSS event/task-state capture and artifact restoration.
+B. Add a Kybernetes ContextManager boundary: append event, build view, fold range, restore, checkpoint. These are proposed semantics, not upstream API names.
+C. Compare deterministic bounded history, rolling summary with originals and pinned acp-kernel.
+D. Consider the full proxy only for a measured native-hosting gap.
+Use Hestia initially, not another GPU summarizer. Count summary inference in the task budget and GPU plan. A CPU Node adapter needs no extra GPU weights; the model writing summaries still costs inference. No training/LTHCM replacement is required.
+
+14. ACCEPTANCE GATES [proposal]
+G1: At least 50 tool steps preserve goal, constraints, plan, failures and exact stored output refs.
+G2: Matched model/hardware/budget, multiple seeds, task success/recall, total tokens, wall time and restoration cost. Baseline must actually compact.
+G3: Once-stated restrictions, changed numbers, revoked approvals and injection payloads survive multi-tier folds without gaining authority. Original approval is rechecked.
+G4: Exact old code/error restores after restart; missing/corrupt originals return unavailable, not invented detail.
+G5: Seat/fork/generation isolation; serialized mutations; safe writer configuration.
+G6: Cancel/crash/disk-full/unavailable-model/context-overflow paths stay bounded and recoverable; replay cannot repeat side effects.
+G7: Exact served-tokenizer budget and net reduction, including overhead.
+G8: No seeded secrets in logs/config/backups; no unapproved network; updates pinned and opt-in.
+Ship only if this beats the strongest simple baseline on Nick's MSS tasks without safety regressions.
+
+15. BOTTOM LINE
+Good systems reference, plausible MSS addition. Honest transcript/task-state retention comes first. Keep LTHCM as evidence memory, Phylax as authority and Dokime as the judge of value.
+
+SOURCES
+All code at the pins above. GitLab blob fetches failed; Metis paths were inspected in the read-only clone. No unverified deep links are supplied. Public sources are mainly primary code/docs and authors' experiments, not independent benchmark proof.
+
+[B1] Application/validation:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/kernel/src/compress.ts
+[B2] Summary rendering:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/kernel/src/prune.ts
+[B3] Original content store:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/kernel/src/content-store.ts
+[B4] Token estimator:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/kernel/src/tokenize.ts
+[B5] Authors' paper and limitations:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/paper/model-driven-incremental-hierarchical-compression-training-free-multi-generational-context-management-for-long-lived-coding-agents.md
+[B6] Persistence policy/limitations:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/src/persist.ts
+[B7] Current lock implementation:
+https://github.com/ranxianglei/billion-context/blob/cda8c837add8d702638afa076515ce02c8281153/src/session.ts
+[B8] Repo entry point. Additional inspected paths: CONFIGURATION.md, src/config.ts, src/encrypt.ts, kernel/src/{config,protected,decompress}.ts, kernel/src/persist/store.ts and selected kernel/tests/*.test.ts.
+https://github.com/ranxianglei/billion-context
+[M1] Metis e7593466: kybernetes/kybernetes/engine/{terminal_agent,coding_agent}.py; lochos/{adapters,queue,squad}.py; tools/{registry,sandboxed_bash}.py; docs/STACK_BUILD_CONTRACT.md. Latest synthesis roadmap treated as proposal context, not implemented capability.
+https://gitlab.com/akarta-315h/metis
+

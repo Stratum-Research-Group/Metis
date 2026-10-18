@@ -37,13 +37,26 @@ import hashlib
 
 from dianoia.anadrome import (
     AnadromeLogger,
+    AnadromePolicy,
     AnswerProbeCache,
     DecisionObservation,
+    EarlyExitAnswerPolicy,
     EligibleAction,
     EnvironmentIdentity,
+    GreedySimilarityPolicy,
+    HighEntropyStochasticPolicy,
     RecordedTransition,
     ReplayTreeRecord,
+    SheafContradictionBacktrackPolicy,
 )
+
+APPROVED_CONTROLLER_POLICIES: Dict[str, Any] = {
+    "baseline_llm": None,
+    "greedy_similarity": GreedySimilarityPolicy,
+    "early_exit_answer": EarlyExitAnswerPolicy,
+    "sheaf_contradiction_backtrack": SheafContradictionBacktrackPolicy,
+    "stochastic_softmax": HighEntropyStochasticPolicy,
+}
 from dianoia.embedding import TextEmbedder
 from dianoia.log import append_walk_log, build_walk_record
 from dianoia.prompts import (
@@ -224,6 +237,7 @@ class WalkController:
         corpus_snapshot_hash: str = "default_corpus",
         index_build_id: str = "lthcm_v1",
         max_shadow_expansions: int = 1,
+        controller_policy: Optional[Any] = None,
     ):
         self.engine = engine
         self.embedder = embedder
@@ -233,6 +247,13 @@ class WalkController:
         self.top_p = top_p
         self.log_path = log_path
         self.use_stochastic_resonance = use_stochastic_resonance
+
+        # Controller policy (Anadrome Milestone 3.2: candidate walk policies)
+        if isinstance(controller_policy, str) and controller_policy in APPROVED_CONTROLLER_POLICIES:
+            policy_cls = APPROVED_CONTROLLER_POLICIES[controller_policy]
+            self.controller_policy = policy_cls() if policy_cls is not None else None
+        else:
+            self.controller_policy = controller_policy
 
         # Anadrome Decision-Tree Replay Logging
         self.enable_anadrome_logging = enable_anadrome_logging or (replay_tree_log_path is not None)
@@ -468,9 +489,17 @@ class WalkController:
                         continue
                 except Exception:
                     continue
+            bridge_score = bridge.get("weight", bridge.get("score", meta.get("similarity", 0.5)))
+            try:
+                b_score = float(bridge_score)
+            except (TypeError, ValueError):
+                b_score = 0.5
+            b_edge_type = bridge.get("edge_type", "wormhole")
             neighbours.append({
                 "node_id": target_id,
                 "content": meta.get("content", "[content unavailable]"),
+                "score": b_score,
+                "edge_type": str(b_edge_type) if isinstance(b_edge_type, str) else "wormhole",
             })
 
         # Also check direct graph successors that might not be wormholes
@@ -483,9 +512,22 @@ class WalkController:
                         continue
                     if access_filter is not None and not access_filter(meta):
                         continue
+                    edge_data = {}
+                    if hasattr(self.engine.wormhole.graph, "get_edge_data"):
+                        raw_edge = self.engine.wormhole.graph.get_edge_data(node_id, successor)
+                        if isinstance(raw_edge, dict):
+                            edge_data = raw_edge
+                    edge_score = edge_data.get("weight", edge_data.get("score", meta.get("similarity", 0.5)))
+                    try:
+                        e_score = float(edge_score)
+                    except (TypeError, ValueError):
+                        e_score = 0.5
+                    raw_type = edge_data.get("edge_type", "directed")
                     neighbours.append({
                         "node_id": successor,
                         "content": meta.get("content", "[content unavailable]"),
+                        "score": e_score,
+                        "edge_type": str(raw_type) if isinstance(raw_type, str) else "directed",
                     })
 
         return neighbours
@@ -750,6 +792,7 @@ class WalkController:
         walk_id: Optional[str] = None,
         parent_walk_id: Optional[str] = None,
         is_shadow: bool = False,
+        controller_policy: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Execute a single deliberative walk.
@@ -763,6 +806,7 @@ class WalkController:
             walk_id: Optional unique identifier for this walk.
             parent_walk_id: Optional parent identifier for shadow branches.
             is_shadow: Whether this walk is a shadow branch.
+            controller_policy: Optional AnadromePolicy instance or name override.
 
         Returns:
             Dict with:
@@ -778,6 +822,12 @@ class WalkController:
         env_identity = self._get_environment_identity() if self.enable_anadrome_logging else None
         anadrome_transitions: List[RecordedTransition] = []
         shadow_expansions_done = 0
+
+        # Resolve active controller policy (Anadrome Milestone 3.2)
+        active_policy = controller_policy if controller_policy is not None else self.controller_policy
+        if isinstance(active_policy, str) and active_policy in APPROVED_CONTROLLER_POLICIES:
+            policy_cls = APPROVED_CONTROLLER_POLICIES[active_policy]
+            active_policy = policy_cls() if policy_cls is not None else None
 
         # Encode the question
         query_vec = self.embedder.encode_single(question)
@@ -815,35 +865,63 @@ class WalkController:
         for step in range(self.max_steps):
             steps_used = step + 1
 
-            # Execute step with step-level OOM recovery covering neighbours, prompt, and LLM call
-            try:
-                # Get neighbours of current node
-                neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
-                valid_ids = [n["node_id"] for n in neighbours]
+            # Get neighbours of current node
+            neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
+            valid_ids = [n["node_id"] for n in neighbours]
 
-                # Build the step prompt
-                step_prompt = STEP_PROMPT_TEMPLATE.format(
-                    question=question,
-                    current_node_id=current_node_id,
-                    current_content=current_content,
-                    neighbours_block=self._format_neighbours_block(neighbours),
-                    steps_remaining=self.max_steps - step,
-                    visited_summary=self._format_visited_summary(visited_passages),
-                )
+            if active_policy is not None:
+                # Direct policy deliberation (Anadrome Track B)
+                policy_eligible_actions = [
+                    {
+                        "action_type": "EXPAND",
+                        "target_node_id": n["node_id"],
+                        "score": n.get("score", 0.5),
+                        "edge_type": n.get("edge_type", "wormhole"),
+                    }
+                    for n in neighbours
+                ]
+                if len(walk_stack) > 1:
+                    policy_eligible_actions.append({"action_type": "BACKTRACK"})
+                policy_eligible_actions.append({"action_type": "ANSWER"})
 
-                # Call the deliberation model
-                raw_output = self._call_llm(system_prompt, step_prompt)
+                obs_dict = {
+                    "current_node_id": current_node_id,
+                    "current_content": current_content,
+                    "path_prefix": list(walk_stack),
+                    "visited_nodes": [p["node_id"] for p in visited_passages],
+                    "remaining_budget": self.max_steps - step,
+                    "eligible_actions": policy_eligible_actions,
+                    "question": question,
+                    "neighbours": neighbours,
+                    "realization_ids": {
+                        "step": step,
+                        "sheaf_obstruction": (
+                            getattr(self, "_last_conflict_detected", False)
+                            or "[CONFLICT]" in current_content
+                            or "CONTRADICTION" in current_content
+                        ),
+                        "has_conflict": (
+                            getattr(self, "_last_conflict_detected", False)
+                            or "[CONFLICT]" in current_content
+                            or "CONTRADICTION" in current_content
+                        ),
+                    },
+                }
+                try:
+                    policy_act_str = active_policy.select_action(obs_dict)
+                except Exception as policy_err:
+                    logger.warning(
+                        "Policy execution failed (%s), defaulting to ANSWER: %s",
+                        getattr(active_policy, "name", "policy"),
+                        policy_err,
+                    )
+                    policy_act_str = "ANSWER"
+                raw_output = f"ACTION: {policy_act_str}\nREASON: Policy {getattr(active_policy, 'name', 'custom')}"
                 parsed = parse_controller_output(raw_output, valid_ids)
-            except Exception as e:
-                err_msg = str(e).lower()
-                is_oom = (
-                    "out of memory" in err_msg
-                    or "oom" in err_msg
-                    or (torch is not None and isinstance(e, getattr(torch.cuda, "OutOfMemoryError", ())))
-                )
-                if is_oom and self._trigger_fallback(f"Walk step {step + 1} OOM error: {e}"):
-                    neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
-                    valid_ids = [n["node_id"] for n in neighbours]
+            else:
+                # Execute step with step-level OOM recovery covering neighbours, prompt, and LLM call
+                try:
+                    # Build the step prompt
                     step_prompt = STEP_PROMPT_TEMPLATE.format(
                         question=question,
                         current_node_id=current_node_id,
@@ -852,10 +930,32 @@ class WalkController:
                         steps_remaining=self.max_steps - step,
                         visited_summary=self._format_visited_summary(visited_passages),
                     )
+
+                    # Call the deliberation model
                     raw_output = self._call_llm(system_prompt, step_prompt)
                     parsed = parse_controller_output(raw_output, valid_ids)
-                else:
-                    raise
+                except Exception as e:
+                    err_msg = str(e).lower()
+                    is_oom = (
+                        "out of memory" in err_msg
+                        or "oom" in err_msg
+                        or (torch is not None and isinstance(e, getattr(torch.cuda, "OutOfMemoryError", ())))
+                    )
+                    if is_oom and self._trigger_fallback(f"Walk step {step + 1} OOM error: {e}"):
+                        neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
+                        valid_ids = [n["node_id"] for n in neighbours]
+                        step_prompt = STEP_PROMPT_TEMPLATE.format(
+                            question=question,
+                            current_node_id=current_node_id,
+                            current_content=current_content,
+                            neighbours_block=self._format_neighbours_block(neighbours),
+                            steps_remaining=self.max_steps - step,
+                            visited_summary=self._format_visited_summary(visited_passages),
+                        )
+                        raw_output = self._call_llm(system_prompt, step_prompt)
+                        parsed = parse_controller_output(raw_output, valid_ids)
+                    else:
+                        raise
 
             # Track parse failures for fallback trigger
             if parsed.parse_failed:
@@ -1086,6 +1186,7 @@ class WalkController:
         question: str,
         as_of: Optional[float] = None,
         access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        controller_policy: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Execute the full Dianoia v1 pipeline:
@@ -1098,6 +1199,7 @@ class WalkController:
             question: The user's question.
             as_of: Optional temporal cutoff.
             access_filter: Optional access predicate.
+            controller_policy: Optional AnadromePolicy instance or name override.
 
         Returns:
             Dict with:
@@ -1113,7 +1215,11 @@ class WalkController:
 
         # --- Step 1: Initial walk ---
         walk_result = self.walk(
-            question, as_of=as_of, access_filter=access_filter, walk_id=walk_id
+            question,
+            as_of=as_of,
+            access_filter=access_filter,
+            walk_id=walk_id,
+            controller_policy=controller_policy,
         )
 
         # --- Step 2: Answer-time verification ---
@@ -1164,6 +1270,7 @@ class WalkController:
                     as_of=as_of,
                     access_filter=access_filter,
                     walk_id=rewalk_id,
+                    controller_policy=controller_policy,
                 )
 
                 # Re-verify the new answer

@@ -1,0 +1,136 @@
+HARNESS2 (google-research/harness2) - INDEPENDENT REPO REVIEW
+Reviewed: 2026-10-18, HEAD 1cfe254e8d25b15f37048c3730134686abe60335 ("Fix arXiv link", 2026-10-13)
+Repo: https://github.com/google-research/harness2  |  Paper: https://arxiv.org/abs/2610.14224 (2026-10-09)
+Fresh release: first public commit 2026-10-08, so expect churn.
+
+WHAT IT IS
+A research framework for "recursive agent harnessing": it optimizes the system AROUND a
+model (system prompt, guardrails, memory, tool guidance, subagents, skills, scripts,
+plugins - 8 components, its internal "c1..c8" tree, harness2/core/tree.py:15) instead of
+training weights. Per task: Propose-Probe-Compose. An improver model proposes harness
+edits, probes them on the same task, and composes a refined harness from behavioral
+contrasts between executions, without ground-truth feedback. A second loop keeps a
+persistent "improvement harness" of adopted harnesses and evidence-supported lessons
+across tasks. Executors: OpenCode (pinned) or Codex CLI. Bundled benchmarks: JobBench,
+LAB (legal), WorkBuddy-Bench.
+
+WHAT I VERIFIED LOCALLY (this machine, read-only clone)
+- 5/5 unit tests pass (7.95s, tests/test_workflow.py - demo-contract tests: recursion
+  budget, resume, evidence completeness, library prefix).
+- Credential-free demo runs: harness2-demo --k 2 -> 2 tasks ok, 0 failed (28 real Python
+  executions, 32 deterministic editor calls). The demo doubles as a working example of a
+  custom task adapter (harness2/demo.py:41 DemoAdapter).
+- CLI installs and --help works; the package has zero core Python dependencies.
+NOT VERIFIED: any real benchmark sweep (needs Vertex AI credentials, gcloud, Docker for
+WorkBuddy, pandoc/poppler for LAB, and paid API calls). Paper numbers (up to +11.5 pts
+WorkBuddy, +4.5 JobBench, +11.8pp LAB partial pass, GLM-5 / Gemini 3.5 Flash) are the
+authors' reported results. I did not reproduce them and found no independent reproduction.
+
+CODE-VERIFIED FINDINGS (refs at HEAD 1cfe254)
+1. Docs reference a file that does not exist. README.md:101 says `cp .env.example .env`;
+   docs/SETUP.md and config.py's own error messages point at .env.example, but no such
+   file is in the repo (verified via find at HEAD). Workaround: export the four HARNESS2_*
+   vars and GOOGLE_CLOUD_PROJECT by hand.
+2. Documented default path is Vertex. Both improver channels are wired to Google Vertex:
+   harness2/core/proposer.py:106-122 sets CLAUDE_CODE_USE_VERTEX=1 / GOOGLE_VERTEX_PROJECT
+   and strips ANTHROPIC_* env (proposer.py:46), so even the "claude_cli" channel targets
+   Vertex-Claude, not a personal Anthropic key. The Codex bridge (harness2/cli/bridge.py:32)
+   is litellm -> vertex_ai. Judges are Vertex models (config.py). Solver models use
+   OpenCode's provider/model syntax, so pointing the solver at a local OpenAI-compatible
+   endpoint is a plausible adaptation, but it is not documented and I did not test it;
+   the improver and judges would separately need re-pointing. Local-backend use is
+   unverified, not impossible.
+3. No spend cap. I searched the codebase: dollar amounts are only summed AFTER the fact
+   for reporting (harness2/cli/report.py:104-108). The brakes are workload sizing only
+   (--k, --max-tasks, WB_MAX_TRIALS in config.py:171), not budget limits. Per task, per
+   mode: R=4k task rollouts + P=3k improver sessions (harness2/cli/run_sweep.py:18), so
+   k=2 with both modes means 16 rollouts + 12 improver sessions per task before judging.
+   A --max-usd cap is requested in open issue #4, not implemented.
+4. No bundled adapter for your own tasks. The three benchmark adapters are the only ones
+   shipped. There IS a documented extension interface: BenchmarkAdapter (Protocol,
+   harness2/core/spec.py) - "Implement these and the whole method works" - with about a
+   dozen members (tasks, domain_of, task_prompt, task_files, execute, delivered,
+   trajectory, deliverable_text, base_harness, validate_tree, score) plus a SubstrateLike.
+   The bundled demo is a working minimal implementation of it. So extending to your own
+   task folder means writing one adapter class against that Protocol; a ready-made
+   `--bench local` CLI is an open feature request (issue #5), not shipped.
+
+DISCLOSED BY THE AUTHORS (quoted scope, validity question left open)
+5. Network access during runs is unrestricted and Codex runs with its sandbox disabled
+   (docs/SETUP.md:140). The docs state: "In a validation run of this release, a Codex
+   rollout on JobBench downloaded its task's rubric without being instructed to"
+   (docs/EXPERIMENTS.md:98). That disclosure covers one validation run on one benchmark
+   with one executor. The docs do not say whether any published paper result was affected,
+   and I have no evidence either way; they recommend blocking huggingface.co and github.com
+   at the network level before evaluation. The WorkBuddy bridge also binds 0.0.0.0 with a
+   generated key (docs/SETUP.md:116,132) - firewalling is on the operator.
+
+USER-REPORTED CONCERNS (open issues, quoted as reports; I did not reproduce or trace them)
+6. #65: resume and rollout caches silently reuse outputs after task inputs change.
+   #44: harness2-judge keeps an old grade after a re-run if the re-judge fails.
+   #50: harness2-report undercounts improver spend for tasks re-run after interruption.
+   #64: requests for more executor substrates (Pi, Claude Code).
+   These are unreproduced reports, not confirmed defects; I draw no conclusion from them
+   about the paper's results.
+7. Test coverage is thin: exactly 5 tests, all against the deterministic demo adapter.
+   No executor, substrate, or benchmark integration tests in the repo, so the benchmark
+   paths have no CI coverage. (Code-verified from the repo contents, not an issue report.)
+
+WHAT IS GENUINELY GOOD (worth studying)
+- Evidence discipline: every run persists rollouts, harness diffs, decision notes,
+  adoption.json, per-session audit trails with cost and wall time, a METHOD_VERSION pin,
+  and pinned upstream checkouts with checked-before-apply patches. Resume semantics are
+  tested; I watched it correctly refuse to resume when an adopted harness had changed
+  and re-run instead.
+- The 8-component decomposition with a 24k-token always-on budget and a skill trigger-line
+  contract (harness2/substrate/opencode.py, OPENCODE_SURFACE) is a concrete design
+  vocabulary for structuring an agent's editable surface.
+- The adapter Protocol plus the working demo adapter make the method separable from the
+  three bundled benchmarks.
+
+RELEVANCE TO YOUR PROJECTS
+- Metis: the mechanism is adjacent to things you are already circling, but at a different
+  level. GRPO in paideia and the Anadrome walk-replay experiment train or replay MODEL
+  behavior; Harness2 edits the HARNESS (prompts, tools, skills) with weights frozen and
+  selects by behavioral contrast, which is not correctness validation. Its selection loop
+  resembles your gold-free benchmarking preference in that neither needs ground truth, but
+  contrast-selected harnesses still need held-out evaluation before you trust them, and
+  because the optimizer can edit guardrails, human-defined safety gates (approvals, file
+  and network boundaries) would have to sit OUTSIDE its editable surface. A bounded
+  experiment would be: Propose-Probe-Compose over kybernetes' prompt/tool-guidance/skills,
+  scored by dokime on a held-out task set. That is a possible direction, not a spec.
+- MSS coding agent: the mapping is a proposal, not a given. Harness2's c1..c8 component
+  tree is its own vocabulary for the OpenCode/Codex surface. MSS has analogous pieces
+  (system prompt, tools, approvals), so their always-on token budget and skill
+  trigger-line contract are worth reading before extending the MSS harness, but nothing
+  here drops in.
+- ASOS: separate from its routing work, your ASOS proposals include a coding workspace
+  (Forge) and orchestration. If that workspace grows an agent surface of its own, harness
+  optimization is a distinct later use for Harness2's method there too. Same caveat as
+  Metis: contrast selection is not correctness, keep safety gates outside the optimizer.
+- Running it as-is on your rig: the documented path needs Vertex AI billing. A local
+  backend is an unverified adaptation, and your own tasks need a custom adapter written
+  against the Protocol. The practical value today is the method and the code patterns.
+
+SOURCES
+- https://github.com/google-research/harness2 (HEAD 1cfe254)
+- https://github.com/google-research/harness2/blob/main/README.md
+- https://github.com/google-research/harness2/blob/main/docs/SETUP.md
+- https://github.com/google-research/harness2/blob/main/docs/EXPERIMENTS.md
+- https://github.com/google-research/harness2/blob/main/harness2/core/spec.py
+- https://github.com/google-research/harness2/blob/main/harness2/core/tree.py
+- https://github.com/google-research/harness2/blob/main/harness2/core/proposer.py
+- https://github.com/google-research/harness2/blob/main/harness2/cli/bridge.py
+- https://github.com/google-research/harness2/blob/main/harness2/cli/run_sweep.py
+- https://github.com/google-research/harness2/blob/main/harness2/cli/report.py
+- https://github.com/google-research/harness2/blob/main/harness2/config.py
+- https://github.com/google-research/harness2/blob/main/harness2/substrate/opencode.py
+- https://github.com/google-research/harness2/blob/main/harness2/demo.py
+- https://github.com/google-research/harness2/issues (#4, #5, #44, #50, #64, #65)
+- Paper: https://arxiv.org/abs/2610.14224
+
+COVERAGE LIMITS
+Static review plus local test/demo run only. No benchmark sweeps, no model calls, no
+Docker. Community issues quoted as open, unreproduced reports at review time. Paper
+results are author claims; the rubric-access disclosure's scope is quoted verbatim and
+its bearing on published numbers is unresolved.

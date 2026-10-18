@@ -40,5 +40,13 @@ The existing core components have detailed local documentation: [Stoma](../stoma
 | [metis-repo-wide-round2-45f0e72-fixes-be5f1a23.txt](review/metis-repo-wide-round2-45f0e72-fixes-be5f1a23.txt) | Round 2 Review Findings & Remediations |
 | [metis-round2-bcac410-fixes-002bd2aa.txt](review/metis-round2-bcac410-fixes-002bd2aa.txt) | Round 2 Delta Fixes |
 | [metis-review-aacb3e58-71bc604c.txt](review/metis-review-aacb3e58-71bc604c.txt) | Initial Foundation Review |
+| [anadrome-frozen-live-walk-milestone3-report.md](review/anadrome-frozen-live-walk-milestone3-report.md) | Anadrome Milestone 3.2: Frozen Live Walk Test & Policy Decision Gate Report |
+| [schedion-stage3-controlled-comparison-report.md](review/schedion-stage3-controlled-comparison-report.md) | Schedion Stage 3: Controlled Comparison & Krisis Gate Report (ARCHIVE) |
+| [symbolon-candidate-fusion-e2-report.md](review/symbolon-candidate-fusion-e2-report.md) | Symbolon E2: Candidate Capture & Fusion Study Report (ARCHIVE) |
+| [symbolon-reconstruction-fidelity-e1-report.md](review/symbolon-reconstruction-fidelity-e1-report.md) | Symbolon E1: Multiscale Discrete Reconstruction Fidelity Diagnostic Report |
+| [ncm-hardware-validation-rtx5060ti-report.md](review/ncm-hardware-validation-rtx5060ti-report.md) | NCM Hardware & Memory Validation on RTX 5060 Ti 16GB Report |
+| [metis-substrate-review-d2b97509-f9bb42d2.txt](review/metis-substrate-review-d2b97509-f9bb42d2.txt) | Agent Substrate (gVisor/Cloud Hypervisor) for Metis: Source Review & Execution Boundary Analysis |
+| [metis-billion-context-review-cda8c837-4e379b25.txt](review/metis-billion-context-review-cda8c837-4e379b25.txt) | Billion-Context (acp-kernel) for Metis: Source Review & Context Management Analysis |
+| [harness2-repo-review-1cfe254-38994399.txt](review/harness2-repo-review-1cfe254-38994399.txt) | Google Research Harness2 (Recursive Agent Harnessing): Source Review & Guardrail Safety Analysis |
 | [LTHCM-recovery-application-plan-356cbcd7.txt](review/LTHCM-recovery-application-plan-356cbcd7.txt) | LTHCM Topology & Sheaf Recovery Plan |
 

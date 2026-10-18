@@ -12,8 +12,22 @@ import json
 from typing import Any
 
 
-def _normalize_for_canonical_json(obj: Any) -> Any:
+try:
+    import unittest.mock as _mock
+    _MOCK_TYPES = (_mock.Base,)
+except Exception:
+    _MOCK_TYPES = ()
+
+
+def _is_mock(obj: Any) -> bool:
+    return bool(_MOCK_TYPES and isinstance(obj, _MOCK_TYPES)) or hasattr(obj, "_mock_return_value")
+
+
+def _normalize_for_canonical_json(obj: Any, seen: set | None = None) -> Any:
     """Recursively normalize objects for canonical JSON serialization."""
+    if _is_mock(obj):
+        return str(obj)
+
     if isinstance(obj, float):
         # Round floats to 4 decimal places to prevent representation drift
         rounded = round(obj, 4)
@@ -21,18 +35,34 @@ def _normalize_for_canonical_json(obj: Any) -> Any:
             rounded = 0.0
         return rounded
     elif isinstance(obj, dict):
+        if seen is None:
+            seen = set()
+        obj_id = id(obj)
+        if obj_id in seen:
+            return str(obj)
+        seen.add(obj_id)
         return {
-            str(k): _normalize_for_canonical_json(v)
+            str(k): _normalize_for_canonical_json(v, seen)
             for k, v in sorted(obj.items(), key=lambda item: str(item[0]))
         }
     elif isinstance(obj, (list, tuple)):
-        return [_normalize_for_canonical_json(x) for x in obj]
+        return [_normalize_for_canonical_json(x, seen) for x in obj]
     elif isinstance(obj, (int, str, bool)) or obj is None:
         return obj
     else:
         # Fallback for dataclasses or custom types
-        if hasattr(obj, "to_dict"):
-            return _normalize_for_canonical_json(obj.to_dict())
+        if hasattr(obj, "to_dict") and not _is_mock(obj):
+            if seen is None:
+                seen = set()
+            obj_id = id(obj)
+            if obj_id in seen:
+                return str(obj)
+            seen.add(obj_id)
+            to_dict_fn = getattr(obj, "to_dict")
+            if callable(to_dict_fn):
+                res = to_dict_fn()
+                if not _is_mock(res):
+                    return _normalize_for_canonical_json(res, seen)
         return str(obj)
 
 
