@@ -305,5 +305,39 @@ const API = {
       body: JSON.stringify({ tool_name: toolName, args: args }),
     });
   },
+
+  // --- Pyle Device & Access API ---
+  async listDevices(includeRevoked = false) {
+    return this.request(`/api/devices?all=${includeRevoked ? "true" : "false"}`);
+  },
+
+  async pairDevice(label = "Companion Device", preset = "companion", validitySeconds = 300) {
+    return this.request("/api/devices/pair", {
+      method: "POST",
+      body: JSON.stringify({ label, preset, validity_seconds: validitySeconds }),
+    });
+  },
+
+  async revokeDevice(deviceId, reason = "owner") {
+    return this.request(`/api/devices/${encodeURIComponent(deviceId)}/revoke`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async panicLockdown(reason = "panic") {
+    return this.request("/api/devices/lockdown", {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async getDeviceAudit(limit = 50) {
+    return this.request(`/api/devices/audit?limit=${limit}`);
+  },
+
+  async getCurrentDevice() {
+    return this.request("/api/devices/me");
+  },
 };
 

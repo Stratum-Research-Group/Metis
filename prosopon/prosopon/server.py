@@ -36,6 +36,19 @@ from prosopon.contracts.session import ChatMessage, SessionRecord
 from prosopon.contracts.kybernetes import Citation, TurnEvent
 from prosopon.contracts.phylax import ApprovalResponse
 from prosopon.storage.session_store import SessionStore
+from prosopon.storage.access_store import AccessStore
+from prosopon.auth.webauthn import WebAuthnManager
+from prosopon.auth.scopes import get_scopes_for_preset, has_scope
+from prosopon.contracts.access import (
+    DeviceRecord,
+    PairDeviceRequest,
+    PairDeviceResponse,
+    RevokeDeviceRequest,
+    LockdownResponse,
+)
+from webauthn import base64url_to_bytes
+import hashlib
+import secrets
 from prosopon.client.kybernetes_client import KybernetesClient
 from prosopon.client.mock_kybernetes import MockKybernetesClient
 from prosopon.voice.transcoder import AudioTranscodingError, transcode_to_wav
@@ -74,6 +87,11 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     # State singletons
     pairing_mgr = PairingManager(data_dir=cfg.data_dir, expiry_hours=cfg.session_expiry_hours)
     session_store = SessionStore(storage_dir=cfg.data_dir)
+    access_store = AccessStore(db_path=cfg.data_dir / "access.db")
+    webauthn_mgr = WebAuthnManager(
+        rp_id=getattr(cfg, "webauthn_rp_id", "localhost"),
+        allowed_origins=list(cfg.allowed_origins),
+    )
     
     if cfg.mock_kybernetes:
         kybernetes = MockKybernetesClient()
@@ -97,6 +115,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     app.state.config = cfg
     app.state.pairing_mgr = pairing_mgr
     app.state.session_store = session_store
+    app.state.access_store = access_store
+    app.state.webauthn_mgr = webauthn_mgr
     app.state.kybernetes = kybernetes
 
     # CORS & Origin protection
@@ -189,13 +209,26 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         # Check X-Host-Owner-Token header as filesystem authority
         host_owner_hdr = request.headers.get("x-host-owner-token")
         if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            request.state.caller_device_id = "host_owner"
+            request.state.caller_scopes = get_scopes_for_preset("owner")
             return True
+
+        # Check access_store device session token
+        if token:
+            res = access_store.validate_session_token(token)
+            if res:
+                dev, sess = res
+                request.state.caller_device_id = dev.device_id
+                request.state.caller_scopes = dev.scopes
+                return True
 
         if not token or not pairing_mgr.validate_token(token):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Unauthorized: Valid authentication token required.",
             )
+        request.state.caller_device_id = "legacy_token"
+        request.state.caller_scopes = get_scopes_for_preset("companion")
         return True
 
     async def require_admin_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
@@ -208,13 +241,27 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         # Check X-Host-Owner-Token header as filesystem authority
         host_owner_hdr = request.headers.get("x-host-owner-token")
         if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            request.state.caller_device_id = "host_owner"
+            request.state.caller_scopes = get_scopes_for_preset("owner")
             return True
+
+        # Check access_store device session token
+        if token:
+            res = access_store.validate_session_token(token)
+            if res:
+                dev, sess = res
+                if "access:write" in dev.scopes or "owner" in dev.scopes or dev.preset == "owner":
+                    request.state.caller_device_id = dev.device_id
+                    request.state.caller_scopes = dev.scopes
+                    return True
 
         if not token or not pairing_mgr.validate_token(token, required_role="admin"):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Unauthorized: Admin-scoped paired token required for sensitive operations.",
             )
+        request.state.caller_device_id = "legacy_admin"
+        request.state.caller_scopes = get_scopes_for_preset("owner")
         return True
 
     # 1. Frontend Entrypoint
@@ -318,6 +365,294 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         else:
             count = 1 if pairing_mgr.revoke_token(token) else 0
         return {"status": "ok", "revoked_count": count}
+
+    # 2.1 Device Registry & WebAuthn RP Endpoints
+    @app.get("/api/devices")
+    async def list_devices(
+        all: bool = False,
+        _: bool = Depends(require_auth),
+    ) -> List[Dict[str, Any]]:
+        devs = access_store.list_devices(include_revoked=all)
+        return [d.model_dump() for d in devs]
+
+    @app.post("/api/devices/pair")
+    async def create_pairing_invitation(
+        req: PairDeviceRequest,
+        request: Request,
+        _: bool = Depends(require_admin_auth),
+    ) -> PairDeviceResponse:
+        client_ip = request.client.host if request.client else None
+        pairing_id, secret, record = access_store.create_pairing_link(
+            label=req.label,
+            preset=req.preset,
+            scopes=req.scopes,
+            validity_seconds=req.validity_seconds,
+            ip=client_ip,
+        )
+        host_header = request.headers.get("host") or f"{cfg.host}:{cfg.port}"
+        proto = "https" if cfg.enable_tls else "http"
+        pairing_url = f"{proto}://{host_header}/?pairing_id={pairing_id}&secret={secret}"
+        return PairDeviceResponse(
+            pairing_id=pairing_id,
+            pairing_secret=secret,
+            pairing_url=pairing_url,
+            expires_at_utc=record.expires_at_utc,
+            preset=record.preset,
+            scopes=record.scopes,
+        )
+
+    @app.post("/api/devices/{device_id}/revoke")
+    async def revoke_device(
+        device_id: str,
+        req: Optional[RevokeDeviceRequest] = None,
+        request: Request = None,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        client_ip = request.client.host if request and request.client else None
+        reason = req.reason if req else "owner"
+        success = access_store.revoke_device(
+            device_id=device_id,
+            reason=reason,
+            ip=client_ip,
+        )
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Device '{device_id}' not found, already revoked, or protected.",
+            )
+        return {"status": "ok", "revoked": True, "device_id": device_id}
+
+    @app.post("/api/devices/lockdown")
+    async def panic_lockdown(
+        request: Request,
+        req: Optional[RevokeDeviceRequest] = None,
+        _: bool = Depends(require_admin_auth),
+    ) -> LockdownResponse:
+        client_ip = request.client.host if request.client else None
+        reason = req.reason if req else "panic"
+        rev_devs, rev_sess = access_store.lockdown_all(reason=reason, ip=client_ip)
+        return LockdownResponse(
+            revoked_devices_count=rev_devs,
+            revoked_sessions_count=rev_sess,
+            message="Panic lockdown executed. All remote devices and active sessions revoked.",
+        )
+
+    @app.get("/api/devices/me")
+    async def get_current_device(
+        request: Request,
+        authorization: Optional[str] = Header(None),
+        _: bool = Depends(require_auth),
+    ) -> Dict[str, Any]:
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer "):].strip()
+        host_owner_hdr = request.headers.get("x-host-owner-token")
+        if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            dev = access_store.get_device("host_owner")
+            return dev.model_dump() if dev else {"device_id": "host_owner", "preset": "owner"}
+
+        if token:
+            res = access_store.validate_session_token(token)
+            if res:
+                dev, sess = res
+                return dev.model_dump()
+
+        return {
+            "device_id": "legacy_client",
+            "label": "Authorized Client",
+            "preset": "companion",
+            "scopes": get_scopes_for_preset("companion"),
+            "is_active": True,
+        }
+
+    @app.get("/api/devices/audit")
+    async def get_device_audit(
+        limit: int = 50,
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        is_valid, count = access_store.verify_audit_chain()
+        logs = access_store.list_audit_logs(limit=limit)
+        return {
+            "chain_valid": is_valid,
+            "total_records": count,
+            "logs": [l.model_dump() for l in logs],
+        }
+
+    @app.post("/api/auth/webauthn/register/options")
+    async def webauthn_register_options(
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        _validate_host_header(request)
+        pairing_id = data.get("pairing_id")
+        pairing_secret = data.get("pairing_secret")
+        if not pairing_id or not pairing_secret:
+            raise HTTPException(status_code=400, detail="pairing_id and pairing_secret required.")
+
+        cred_hash = hashlib.sha256(pairing_secret.encode("utf-8")).hexdigest()
+        conn = access_store._get_connection()
+        row = conn.execute(
+            "SELECT * FROM pairing_links WHERE id = ? AND credential_hash = ? AND consumed_at_utc IS NULL AND revoked_at_utc IS NULL",
+            (pairing_id, cred_hash),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid or expired pairing invitation.")
+
+        device_user_id = pairing_id.encode("utf-8")
+        raw_host = request.headers.get("host", "localhost").split(":")[0].strip()
+        options, challenge_b64 = webauthn_mgr.create_registration_options(
+            user_id=device_user_id,
+            user_name=row["label"],
+            user_display_name=row["label"],
+            rp_id=raw_host if raw_host in allowed_hosts else "localhost",
+        )
+        webauthn_mgr.record_challenge(
+            challenge_key=pairing_id,
+            challenge_bytes=base64url_to_bytes(challenge_b64),
+            metadata={"pairing_id": pairing_id, "preset": row["preset"], "label": row["label"]},
+        )
+        return {"options": options, "challenge_key": pairing_id}
+
+    @app.post("/api/auth/webauthn/register/verify")
+    async def webauthn_register_verify(
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        _validate_host_header(request)
+        pairing_id = data.get("pairing_id")
+        pairing_secret = data.get("pairing_secret")
+        credential = data.get("credential")
+        if not pairing_id or not pairing_secret or not credential:
+            raise HTTPException(status_code=400, detail="pairing_id, pairing_secret, and credential required.")
+
+        challenge_data = webauthn_mgr.pop_challenge(pairing_id)
+        if not challenge_data:
+            raise HTTPException(status_code=400, detail="Challenge expired or not found. Please retry registration.")
+        challenge_bytes, meta = challenge_data
+
+        client_ip = request.client.host if request.client else None
+        origin = request.headers.get("origin")
+        raw_host = request.headers.get("host", "localhost").split(":")[0].strip()
+
+        try:
+            cred_id_b64, pubkey_b64, sign_count, aaguid_b64 = webauthn_mgr.verify_registration(
+                credential_payload=credential,
+                expected_challenge=challenge_bytes,
+                rp_id=raw_host if raw_host in allowed_hosts else "localhost",
+                origin=origin,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"WebAuthn registration verification failed: {e}")
+
+        # Redeem pairing link and create device
+        device_id = f"dev_{secrets.token_hex(8)}"
+        redeemed = access_store.redeem_pairing_link(pairing_id, pairing_secret, device_id, ip=client_ip)
+        if not redeemed:
+            raise HTTPException(status_code=400, detail="Failed to redeem pairing link.")
+
+        access_store.create_device(
+            device_id=device_id,
+            label=meta.get("label", redeemed.label),
+            paired_via="qr_passkey",
+            preset=redeemed.preset,
+            scopes=redeemed.scopes,
+            ip=client_ip,
+        )
+        access_store.register_passkey(
+            credential_id=cred_id_b64,
+            device_id=device_id,
+            public_key_cbor=pubkey_b64,
+            sign_count=sign_count,
+            aaguid=aaguid_b64,
+            ip=client_ip,
+        )
+        raw_token, session = access_store.create_session(device_id, method="bearer", ip=client_ip)
+        return {
+            "status": "ok",
+            "token": raw_token,
+            "device_id": device_id,
+            "preset": redeemed.preset,
+            "scopes": redeemed.scopes,
+        }
+
+    @app.post("/api/auth/webauthn/auth/options")
+    async def webauthn_auth_options(
+        data: Optional[Dict[str, Any]] = None,
+        request: Request = None,
+    ) -> Dict[str, Any]:
+        _validate_host_header(request)
+        device_id = (data or {}).get("device_id")
+        allow_ids = None
+        if device_id:
+            passkeys = access_store.get_passkeys_for_device(device_id)
+            allow_ids = [base64url_to_bytes(pk.credential_id) for pk in passkeys]
+
+        raw_host = request.headers.get("host", "localhost").split(":")[0].strip()
+        options, challenge_b64 = webauthn_mgr.create_authentication_options(
+            rp_id=raw_host if raw_host in allowed_hosts else "localhost",
+            allow_credential_ids=allow_ids,
+        )
+        challenge_key = f"auth_{secrets.token_hex(12)}"
+        webauthn_mgr.record_challenge(
+            challenge_key=challenge_key,
+            challenge_bytes=base64url_to_bytes(challenge_b64),
+            metadata={"device_id": device_id},
+        )
+        return {"options": options, "challenge_key": challenge_key}
+
+    @app.post("/api/auth/webauthn/auth/verify")
+    async def webauthn_auth_verify(
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        _validate_host_header(request)
+        challenge_key = data.get("challenge_key")
+        credential = data.get("credential")
+        if not challenge_key or not credential:
+            raise HTTPException(status_code=400, detail="challenge_key and credential required.")
+
+        challenge_data = webauthn_mgr.pop_challenge(challenge_key)
+        if not challenge_data:
+            raise HTTPException(status_code=400, detail="Challenge expired or not found.")
+        challenge_bytes, meta = challenge_data
+
+        cred_raw_id = credential.get("id") or credential.get("rawId")
+        if not cred_raw_id:
+            raise HTTPException(status_code=400, detail="Missing credential id in authentication response.")
+
+        passkey = access_store.get_passkey(cred_raw_id)
+        if not passkey:
+            raise HTTPException(status_code=401, detail="Passkey not recognized or revoked.")
+
+        device = access_store.get_device(passkey.device_id)
+        if not device or not device.is_active:
+            raise HTTPException(status_code=403, detail="Device has been revoked or expired.")
+
+        client_ip = request.client.host if request.client else None
+        origin = request.headers.get("origin")
+        raw_host = request.headers.get("host", "localhost").split(":")[0].strip()
+
+        try:
+            new_sign_count = webauthn_mgr.verify_authentication(
+                credential_payload=credential,
+                expected_challenge=challenge_bytes,
+                credential_public_key_b64=passkey.public_key_cbor,
+                current_sign_count=passkey.sign_count,
+                rp_id=raw_host if raw_host in allowed_hosts else "localhost",
+                origin=origin,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"WebAuthn authentication verification failed: {e}")
+
+        access_store.update_passkey_sign_count(passkey.credential_id, new_sign_count, ip=client_ip)
+        raw_token, session = access_store.create_session(device.device_id, method="bearer", ip=client_ip)
+        return {
+            "status": "ok",
+            "token": raw_token,
+            "device_id": device.device_id,
+            "preset": device.preset,
+            "scopes": device.scopes,
+        }
 
     # 3. Session Endpoints
     @app.get("/api/sessions")

@@ -129,5 +129,110 @@ def open_browser(host: str, port: int, data_dir: str, no_browser: bool):
         webbrowser.open(url)
 
 
+@cli.group("device")
+def device_group():
+    """Manage registered devices, WebAuthn passkeys, and remote access."""
+    pass
+
+
+@device_group.command("list")
+@click.option("--data-dir", default="./data", help="Path to data directory")
+@click.option("--all", "show_all", is_flag=True, help="Include revoked and expired devices")
+def list_devices_cmd(data_dir: str, show_all: bool):
+    """List registered devices and their access scopes."""
+    from tabulate import tabulate
+    from prosopon.storage.access_store import AccessStore
+
+    store = AccessStore(Path(data_dir) / "access.db")
+    devices = store.list_devices(include_revoked=show_all)
+
+    if not devices:
+        click.echo("No registered devices found.")
+        return
+
+    table_data = []
+    for d in devices:
+        status_str = "ACTIVE" if d.is_active else f"REVOKED ({d.revoked_reason or 'unknown'})"
+        scopes_str = ", ".join(d.scopes[:3])
+        if len(d.scopes) > 3:
+            scopes_str += f" (+{len(d.scopes)-3} more)"
+        table_data.append([
+            d.device_id,
+            d.label,
+            d.preset.upper(),
+            d.passkey_count,
+            status_str,
+            d.created_at_utc[:19],
+            scopes_str,
+        ])
+
+    headers = ["Device ID", "Label", "Preset", "Passkeys", "Status", "Created (UTC)", "Scopes"]
+    click.echo("\n" + tabulate(table_data, headers=headers, tablefmt="github") + "\n")
+
+
+@device_group.command("pair")
+@click.option("--data-dir", default="./data", help="Path to data directory")
+@click.option("--label", default="Companion Device", help="Device friendly label")
+@click.option(
+    "--preset",
+    default="companion",
+    type=click.Choice(["viewer", "companion", "operator", "owner"]),
+    help="Role preset (viewer|companion|operator|owner)",
+)
+@click.option("--validity", default=300, type=int, help="Link validity in seconds (default 300)")
+@click.option("--host", default="127.0.0.1", help="Host address for pairing URL")
+@click.option("--port", default=8000, type=int, help="Port for pairing URL")
+@click.option("--qr", is_flag=True, help="Print terminal ASCII QR code if supported")
+def pair_device_cmd(data_dir: str, label: str, preset: str, validity: int, host: str, port: int, qr: bool):
+    """Generate a single-use pairing link or QR invitation for an enrolled companion device."""
+    from prosopon.storage.access_store import AccessStore
+
+    store = AccessStore(Path(data_dir) / "access.db")
+    pairing_id, secret, record = store.create_pairing_link(
+        label=label, preset=preset, validity_seconds=validity
+    )
+    url = f"http://{host}:{port}/?pairing_id={pairing_id}&secret={secret}"
+
+    click.echo(f"\n=== Pyle Device Pairing Invitation ===")
+    click.echo(f"Label:       {label}")
+    click.echo(f"Preset:      {preset}")
+    click.echo(f"Pairing ID:  {pairing_id}")
+    click.echo(f"Secret:      {secret}")
+    click.echo(f"Valid For:   {validity} seconds")
+    click.echo(f"Pairing URL: {url}\n")
+
+
+@device_group.command("revoke")
+@click.argument("device_id")
+@click.option("--data-dir", default="./data", help="Path to data directory")
+@click.option("--reason", default="owner", help="Reason for revocation")
+def revoke_device_cmd(device_id: str, data_dir: str, reason: str):
+    """Revoke a device and immediately terminate all its active sessions."""
+    from prosopon.storage.access_store import AccessStore
+
+    store = AccessStore(Path(data_dir) / "access.db")
+    success = store.revoke_device(device_id=device_id, reason=reason)
+    if success:
+        click.echo(f"\nDevice '{device_id}' successfully revoked (reason: {reason}).\n")
+    else:
+        click.echo(f"\nFailed to revoke device '{device_id}' (not found, already revoked, or protected).\n")
+
+
+@device_group.command("lockdown")
+@click.option("--data-dir", default="./data", help="Path to data directory")
+@click.option("--reason", default="panic", help="Lockdown reason")
+@click.confirmation_option(prompt="Are you sure you want to execute panic lockdown on all remote devices?")
+def lockdown_cmd(data_dir: str, reason: str):
+    """Panic lockdown: immediately revoke all remote devices and active sessions."""
+    from prosopon.storage.access_store import AccessStore
+
+    store = AccessStore(Path(data_dir) / "access.db")
+    rev_devs, rev_sess = store.lockdown_all(reason=reason)
+    click.echo(f"\n=== Panic Lockdown Executed ===")
+    click.echo(f"Revoked Devices:  {rev_devs}")
+    click.echo(f"Revoked Sessions: {rev_sess}")
+    click.echo(f"Host owner credentials preserved. All remote companion access halted.\n")
+
+
 if __name__ == "__main__":
     cli()

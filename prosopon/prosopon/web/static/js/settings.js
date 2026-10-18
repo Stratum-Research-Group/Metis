@@ -11,6 +11,7 @@ const MetisSettings = {
 
   categories: [
     { id: "general", label: "General & Workbench", icon: "⚙️", moduleId: null },
+    { id: "devices", label: "Devices & Security (Pyle)", icon: "📱", moduleId: null },
     { id: "hestia", label: "Hestia (Local Models)", icon: "🧠", moduleId: "hestia" },
     { id: "kybernetes", label: "Kybernetes (Engine & Budget)", icon: "⚡", moduleId: "kybernetes" },
     { id: "phylax", label: "Phylax (Guardrails & Policies)", icon: "🛡️", moduleId: "phylax" },
@@ -388,6 +389,11 @@ const MetisSettings = {
     groupHeader.appendChild(groupDesc);
     panel.appendChild(groupHeader);
 
+    if (this.activeCategory === "devices" && !this.searchQuery) {
+      this.renderDevicesCategory(panel);
+      return;
+    }
+
     // Filter settings based on active category & search query
     let settingsToRender = [];
     if (this.searchQuery) {
@@ -572,6 +578,223 @@ const MetisSettings = {
       el.textContent = "Settings saved automatically to local sovereign vault";
       el.classList.remove("saved-flash");
     }, 2000);
+  },
+
+  async renderDevicesCategory(panel) {
+    const container = document.createElement("div");
+    container.className = "devices-workbench-panel";
+
+    // Top action bar
+    const toolbar = document.createElement("div");
+    toolbar.className = "devices-toolbar";
+    toolbar.style.display = "flex";
+    toolbar.style.gap = "12px";
+    toolbar.style.marginBottom = "16px";
+
+    const pairBtn = document.createElement("button");
+    pairBtn.className = "btn primary-btn btn-sm";
+    pairBtn.textContent = "+ Pair Companion Device";
+
+    const lockdownBtn = document.createElement("button");
+    lockdownBtn.className = "btn btn-danger btn-sm";
+    lockdownBtn.style.backgroundColor = "#dc2626";
+    lockdownBtn.style.color = "#ffffff";
+    lockdownBtn.textContent = "Panic Lockdown";
+
+    toolbar.appendChild(pairBtn);
+    toolbar.appendChild(lockdownBtn);
+    container.appendChild(toolbar);
+
+    // Inline pairing creator form (initially hidden)
+    const pairForm = document.createElement("div");
+    pairForm.className = "setting-card";
+    pairForm.style.display = "none";
+    pairForm.style.marginBottom = "16px";
+    pairForm.style.border = "1px solid var(--accent-color, #0ea5e9)";
+    pairForm.innerHTML = `
+      <div style="font-weight: 600; margin-bottom: 8px;">Mint New Pairing Invitation</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+        <input type="text" id="pyle-pair-label" placeholder="Device Label (e.g. Pixel 9 Pro)" style="flex: 2; padding: 6px 10px; background: rgba(0,0,0,0.3); border: 1px solid #334155; border-radius: 4px; color: #fff;" />
+        <select id="pyle-pair-preset" style="flex: 1; padding: 6px 10px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #fff;">
+          <option value="companion" selected>Companion (Voice/Chat)</option>
+          <option value="viewer">Viewer (Read Only)</option>
+          <option value="operator">Operator (Agent Control)</option>
+          <option value="owner">Owner (Full Admin)</option>
+        </select>
+        <button id="pyle-submit-pair" class="btn primary-btn btn-sm">Generate Link</button>
+        <button id="pyle-cancel-pair" class="btn secondary-btn btn-sm">Cancel</button>
+      </div>
+      <div id="pyle-pair-result" style="display: none; padding: 8px; background: rgba(14, 165, 233, 0.1); border-radius: 4px; font-size: 12px; margin-top: 8px;">
+        <div><strong>Invitation Created!</strong> Valid for 5 minutes.</div>
+        <div style="margin-top: 4px;"><strong>Pairing URL:</strong> <input type="text" id="pyle-res-url" readonly style="width: 100%; padding: 4px; background: #0f172a; border: 1px solid #334155; color: #38bdf8; font-family: monospace;" /></div>
+      </div>
+    `;
+    container.appendChild(pairForm);
+
+    pairBtn.addEventListener("click", () => {
+      pairForm.style.display = pairForm.style.display === "none" ? "block" : "none";
+    });
+
+    const cancelBtn = pairForm.querySelector("#pyle-cancel-pair");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => {
+        pairForm.style.display = "none";
+      });
+    }
+
+    const submitBtn = pairForm.querySelector("#pyle-submit-pair");
+    if (submitBtn) {
+      submitBtn.addEventListener("click", async () => {
+        const labelInput = pairForm.querySelector("#pyle-pair-label");
+        const presetSelect = pairForm.querySelector("#pyle-pair-preset");
+        const resBox = pairForm.querySelector("#pyle-pair-result");
+        const urlInput = pairForm.querySelector("#pyle-res-url");
+        const label = labelInput ? labelInput.value.trim() || "Companion Device" : "Companion Device";
+        const preset = presetSelect ? presetSelect.value : "companion";
+
+        try {
+          const res = await window.API.pairDevice(label, preset, 300);
+          if (resBox && urlInput) {
+            urlInput.value = res.pairing_url;
+            resBox.style.display = "block";
+            urlInput.select();
+          }
+          this.loadDevicesTable(tableContainer);
+        } catch (err) {
+          alert(`Failed to create pairing invitation: ${err.message}`);
+        }
+      });
+    }
+
+    lockdownBtn.addEventListener("click", async () => {
+      if (confirm("DANGER: Panic Lockdown will immediately revoke all remote companion devices and active sessions. Continue?")) {
+        try {
+          const res = await window.API.panicLockdown();
+          alert(`Lockdown completed: ${res.revoked_devices_count} devices and ${res.revoked_sessions_count} sessions revoked.`);
+          this.loadDevicesTable(tableContainer);
+        } catch (err) {
+          alert(`Lockdown failed: ${err.message}`);
+        }
+      }
+    });
+
+    // Devices table container
+    const tableContainer = document.createElement("div");
+    tableContainer.className = "devices-table-wrap";
+    tableContainer.style.marginBottom = "20px";
+    container.appendChild(tableContainer);
+
+    // Cryptographic audit chain card
+    const auditCard = document.createElement("div");
+    auditCard.className = "setting-card";
+    auditCard.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: 600;">Cryptographic Audit Chain Integrity</span>
+        <span id="pyle-audit-status" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #065f46; color: #34d399;">VERIFYING...</span>
+      </div>
+      <div id="pyle-audit-detail" style="font-size: 12px; color: var(--text-dim, #94a3b8); margin-top: 6px;">
+        Checking SHA-256 forward-linked audit chain records...
+      </div>
+    `;
+    container.appendChild(auditCard);
+
+    panel.appendChild(container);
+
+    // Fetch and populate table and audit
+    this.loadDevicesTable(tableContainer);
+    this.loadAuditStatus(auditCard);
+  },
+
+  async loadDevicesTable(container) {
+    container.innerHTML = `<div style="padding: 12px; color: #94a3b8;">Loading enrolled devices...</div>`;
+    try {
+      const devices = await window.API.listDevices(true);
+      if (!devices || devices.length === 0) {
+        container.innerHTML = `<div style="padding: 12px; color: #94a3b8;">No registered devices found.</div>`;
+        return;
+      }
+
+      let html = `
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+          <thead>
+            <tr style="border-bottom: 1px solid #334155; color: #94a3b8;">
+              <th style="padding: 8px 6px;">Label</th>
+              <th style="padding: 8px 6px;">Device ID</th>
+              <th style="padding: 8px 6px;">Preset</th>
+              <th style="padding: 8px 6px;">Passkeys</th>
+              <th style="padding: 8px 6px;">Status</th>
+              <th style="padding: 8px 6px;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      devices.forEach((d) => {
+        const isOwner = d.device_id === "host_owner";
+        const statusBadge = d.is_active
+          ? `<span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 6px; border-radius: 3px;">ACTIVE</span>`
+          : `<span style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 6px; border-radius: 3px;">REVOKED</span>`;
+
+        html += `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding: 8px 6px; font-weight: 500;">${d.label}</td>
+            <td style="padding: 8px 6px; font-family: monospace; color: #94a3b8;">${d.device_id.substring(0, 16)}</td>
+            <td style="padding: 8px 6px; text-transform: uppercase;">${d.preset}</td>
+            <td style="padding: 8px 6px;">${d.passkey_count}</td>
+            <td style="padding: 8px 6px;">${statusBadge}</td>
+            <td style="padding: 8px 6px;">
+              ${
+                !isOwner && d.is_active
+                  ? `<button class="btn secondary-btn btn-xs btn-revoke-dev" data-id="${d.device_id}" style="padding: 2px 8px; font-size: 11px;">Revoke</button>`
+                  : ""
+              }
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+
+      container.querySelectorAll(".btn-revoke-dev").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          const devId = e.target.getAttribute("data-id");
+          if (confirm(`Revoke device ${devId}?`)) {
+            try {
+              await window.API.revokeDevice(devId);
+              this.loadDevicesTable(container);
+            } catch (err) {
+              alert(`Revocation failed: ${err.message}`);
+            }
+          }
+        });
+      });
+    } catch (err) {
+      container.innerHTML = `<div style="padding: 12px; color: #ef4444;">Failed to load devices: ${err.message}</div>`;
+    }
+  },
+
+  async loadAuditStatus(card) {
+    try {
+      const data = await window.API.getDeviceAudit(10);
+      const statusEl = card.querySelector("#pyle-audit-status");
+      const detailEl = card.querySelector("#pyle-audit-detail");
+      if (statusEl && detailEl) {
+        if (data.chain_valid) {
+          statusEl.textContent = "VERIFIED INTACT";
+          statusEl.style.background = "#065f46";
+          statusEl.style.color = "#34d399";
+          detailEl.textContent = `SHA-256 hash-chain verified across all ${data.total_records} audit ledger entries.`;
+        } else {
+          statusEl.textContent = "CHAIN CORRUPTED";
+          statusEl.style.background = "#7f1d1d";
+          statusEl.style.color = "#f87171";
+          detailEl.textContent = `Hash-chain mismatch detected! Audit ledger integrity may be compromised.`;
+        }
+      }
+    } catch {
+      // offline or not admin
+    }
   },
 };
 

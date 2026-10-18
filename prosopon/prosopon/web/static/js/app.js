@@ -112,6 +112,13 @@ class App {
     this.btnClosePairing.onclick = () => this.pairingModal.classList.remove("active");
     this.btnSubmitPairing.onclick = () => this.handlePairingSubmit();
 
+    // Devices Modal
+    const devicesModal = document.getElementById("devices-modal");
+    const btnCloseDevices = document.getElementById("btn-close-devices");
+    if (btnCloseDevices && devicesModal) {
+      btnCloseDevices.onclick = () => devicesModal.classList.remove("active");
+    }
+
     window.addEventListener("prosopon:unauthorized", () => {
       this.pairingModal.classList.add("active");
     });

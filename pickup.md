@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-18  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `a7cf34079815049a4641cb482ba3627bfd02f5a6` (`feat(pyle): implement Phase 0 perimeter hardening and host-owner bootstrap`)  
+**Current HEAD Commit:** `fed42ca2385982e3701fcede1f23260ff84ea949` (`feat(pyle): implement Phase 1 SQLite Device Registry, WebAuthn RP, and management endpoints`)  
 **Working Tree Status:** Clean, all tests passing.
 
 ---
@@ -12,19 +12,20 @@
 To verify all services and environments are operational after system reboot:
 
 ```bash
-# 1. Run Prosopon test suite (49 tests)
+# 1. Run Prosopon test suite (58 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests
 
 # 2. Run Kybernetes test suite (173 tests)
 ./kybernetes/.venv/bin/pytest kybernetes/tests
 
-# Total: 222 tests passing
+# Total: 231 tests passing
 ```
 
 ---
 
-## 2. Completed in Last Session (Phase 0)
+## 2. Completed Sessions (Phase 0 & Phase 1)
 
+### Phase 0: Perimeter Hardening
 1. **Perimeter Hardening**:
    - Loopback exemptions eliminated in `prosopon/prosopon/server.py`.
    - All HTTP endpoints strictly require a valid bearer token or host-owner credential.
@@ -39,23 +40,27 @@ To verify all services and environments are operational after system reboot:
 4. **WebSocket Gate**:
    - `/api/lochos/ws` validates auth tokens *before* `websocket.accept()`. Unauthorized clients receive `WS_1008_POLICY_VIOLATION`.
 
+### Phase 1: SQLite Device Registry & WebAuthn RP (Completed)
+1. **SQLite Access Store (`prosopon/storage/access_store.py`)**:
+   - Persistent store `prosopon/data/access.db` managing `devices`, `passkeys`, `device_sessions`, `pairing_links`, `routes`, and `access_audit`.
+   - SHA-256 cryptographic hash-chaining across all access audit rows with verification.
+   - Default `host_owner` device provisioned automatically.
+2. **W3C WebAuthn Relying Party (`prosopon/auth/webauthn.py`)**:
+   - Implemented `WebAuthnManager` utilizing `webauthn>=2.0.0` for registration & authentication ceremonies.
+3. **Device Management REST Endpoints (`prosopon/server.py`)**:
+   - `GET /api/devices`, `POST /api/devices/pair`, `POST /api/devices/{id}/revoke`, `POST /api/devices/lockdown`, `GET /api/devices/me`, `GET /api/devices/audit`.
+   - WebAuthn registration/authentication challenge endpoints: `/api/auth/webauthn/register/options`, `/api/auth/webauthn/register/verify`, `/api/auth/webauthn/auth/options`, `/api/auth/webauthn/auth/verify`.
+   - Extended `require_auth` & `require_admin_auth` to validate `access.db` session tokens with role/scope enforcement.
+4. **CLI Device Commands (`prosopon/cli.py`)**:
+   - `prosopon device list`, `prosopon device pair`, `prosopon device revoke`, `prosopon device lockdown`.
+5. **Workbench Settings UI**:
+   - Added `Devices & Security (Pyle)` tab in Prosopon Settings with live device table, pairing link generator, panic lockdown button, and cryptographic hash chain verification badge.
+6. **Documentation Update**:
+   - Updated `docs/MSS.md` Section 3.5 and Section 11.8.
+
 ---
 
 ## 3. Immediate Prioritized Tasks Left to Do
-
-### Task 1: Update `docs/MSS.md` (Quick Win)
-- Document the new `prosopon open` command in Section 11.8.
-- Document the zero-loopback security model and `.host_owner_token` filesystem authority in Section 3.
-- Reference the WebRTC + Passkey remote architecture.
-
-### Task 2: Pyle Phase 1 — SQLite Device Registry & WebAuthn RP
-- **Reference Spec**: `docs/review/mss-pyle-webrtc-passkey-spec.md` (`METIS-SPEC-PYLE-WEBRTC-001`)
-- **Action Items**:
-  1. Create SQLite schema `prosopon/data/access.db` (`devices`, `device_sessions`, `pairing_links`, `routes`, `access_audit` with SHA-256 hash chaining).
-  2. Implement local FIDO2 WebAuthn Relying Party (`fido2` / `py_webauthn`) in `prosopon`.
-  3. Implement device management REST endpoints (`/api/devices`, `/api/devices/{id}/revoke`, `/api/devices/lockdown`).
-  4. Add CLI commands: `prosopon device list`, `prosopon device pair`, `prosopon device revoke`, `prosopon device lockdown`.
-  5. Add *Manage Devices* modal to Prosopon settings.
 
 ### Task 3: Pyle Phase 2 — WebRTC DataChannel Engine (`aiortc`)
 - Implement WebRTC signaling (`/api/webrtc/offer`, `/api/webrtc/ice-candidate`).
