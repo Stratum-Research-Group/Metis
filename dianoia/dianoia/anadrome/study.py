@@ -195,6 +195,7 @@ FROZEN_TEST_QUESTIONS: List[Dict[str, Any]] = [
         "target_nodes": ["doc_biochem_1", "doc_biochem_2"],
         "has_contradiction": True,
         "conflict_node": "doc_biochem_conflict",
+        "contradicted_terms": ["accelerates cellular respiration", "stimulates Complex IV"],
     },
     {
         "qid": "Q06_biochem_singlehop",
@@ -214,6 +215,7 @@ FROZEN_TEST_QUESTIONS: List[Dict[str, Any]] = [
         "target_nodes": ["doc_history_1", "doc_history_2"],
         "has_contradiction": True,
         "conflict_node": "doc_history_conflict",
+        "contradicted_terms": ["Paris in 1789", "French Revolution"],
     },
     {
         "qid": "Q08_history_singlehop",
@@ -494,7 +496,11 @@ class AnadromeLiveStudy:
                 for p in res.get("walk_path", [])
             ):
                 # If walk accepted conflict node and produced contradicted claim
-                if "accelerates cellular respiration" in ans or "Paris in 1789" in ans:
+                bad_terms = q_spec.get(
+                    "contradicted_terms",
+                    ["accelerates cellular respiration", "Paris in 1789"],
+                )
+                if any(bad.lower() in ans.lower() for bad in bad_terms):
                     hard_error = True
 
         return ArmResult(
@@ -673,3 +679,31 @@ class AnadromeLiveStudy:
 
         lines.append("")
         return "\n".join(lines)
+
+
+def main() -> None:
+    """CLI runner executing the frozen live walk study and printing the markdown report."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Anadrome Milestone 3.2 Frozen Live Walk Study")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Optional path to write generated markdown report.",
+    )
+    args = parser.parse_args()
+
+    study = AnadromeLiveStudy()
+    report = study.execute_study()
+    md_report = study.generate_markdown_report(report)
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(md_report)
+        print(f"Report written to: {args.output}")
+    else:
+        print(md_report)
+
+
+if __name__ == "__main__":
+    main()
