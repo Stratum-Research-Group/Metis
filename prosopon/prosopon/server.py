@@ -1,4 +1,5 @@
 import asyncio
+from collections import defaultdict
 import json
 import os
 from pathlib import Path
@@ -74,6 +75,7 @@ class LocalTokenExchangeRequest(BaseModel):
 
 class ApprovalResolveRequest(BaseModel):
     decision: str  # "allow_once" | "deny"
+    risk_tier: Optional[str] = "T1"
 
 
 class SynthesisRequest(BaseModel):
@@ -125,6 +127,37 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     )
     app.state.webrtc_gateway = webrtc_gateway
     app.state.kybernetes = kybernetes
+
+    # Active device agent run & turn tracking for instant cancellation (<500ms)
+    app.state.active_device_tasks = defaultdict(set)
+    app.state.active_device_turns = defaultdict(set)
+
+    async def cancel_device_runs(device_id: str, stop_runs: bool = True) -> Dict[str, Any]:
+        tasks = list(app.state.active_device_tasks.get(device_id, set()))
+        turns = list(app.state.active_device_turns.get(device_id, set()))
+        cancelled_tasks = 0
+        cancelled_turns = 0
+        if stop_runs:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+                    cancelled_tasks += 1
+            for tid in turns:
+                try:
+                    await kybernetes.cancel_turn(tid)
+                    cancelled_turns += 1
+                except Exception:
+                    pass
+            app.state.active_device_tasks.get(device_id, set()).clear()
+            app.state.active_device_turns.get(device_id, set()).clear()
+        return {
+            "device_id": device_id,
+            "stop_runs": stop_runs,
+            "cancelled_tasks": cancelled_tasks,
+            "cancelled_turns": cancelled_turns,
+        }
+
+    app.state.cancel_device_runs = cancel_device_runs
 
     # CORS & Origin protection
     app.add_middleware(
@@ -408,6 +441,19 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             scopes=record.scopes,
         )
 
+    @app.get("/api/devices/{device_id}/runs")
+    async def get_device_runs(
+        device_id: str,
+        _: bool = Depends(require_auth),
+    ) -> Dict[str, Any]:
+        turns = list(app.state.active_device_turns.get(device_id, set()))
+        tasks_count = len([t for t in app.state.active_device_tasks.get(device_id, set()) if not t.done()])
+        return {
+            "device_id": device_id,
+            "active_turns": turns,
+            "active_tasks_count": tasks_count,
+        }
+
     @app.post("/api/devices/{device_id}/revoke")
     async def revoke_device(
         device_id: str,
@@ -417,6 +463,7 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     ) -> Dict[str, Any]:
         client_ip = request.client.host if request and request.client else None
         reason = req.reason if req else "owner"
+        stop_runs = req.stop_runs if req is not None else True
         success = access_store.revoke_device(
             device_id=device_id,
             reason=reason,
@@ -429,7 +476,29 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             )
         # Immediately terminate active WebRTC PeerConnections (<500ms)
         await webrtc_gateway.close_device_connections(device_id)
-        return {"status": "ok", "revoked": True, "device_id": device_id}
+
+        # Cancel active agent runs & in-flight turns
+        runs_status = await cancel_device_runs(device_id, stop_runs=stop_runs)
+
+        # Audit run termination
+        access_store.log_audit(
+            action="device_runs_terminated" if stop_runs else "device_runs_continued",
+            actor_device_id=getattr(request.state, "caller_device_id", "host_owner") if request else "host_owner",
+            target_device_id=device_id,
+            detail={
+                "stop_runs": stop_runs,
+                "cancelled_tasks": runs_status["cancelled_tasks"],
+                "cancelled_turns": runs_status["cancelled_turns"],
+            },
+            ip=client_ip,
+        )
+
+        return {
+            "status": "ok",
+            "revoked": True,
+            "device_id": device_id,
+            "runs": runs_status,
+        }
 
     @app.post("/api/devices/lockdown")
     async def panic_lockdown(
@@ -437,15 +506,27 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         req: Optional[RevokeDeviceRequest] = None,
         _: bool = Depends(require_admin_auth),
     ) -> LockdownResponse:
-        client_ip = request.client.host if request.client else None
+        client_ip = request.client.host if request and request.client else None
         reason = req.reason if req else "panic"
+        stop_runs = req.stop_runs if req is not None else True
+
+        # Cancel all active remote device tasks/turns
+        all_cancelled_tasks = 0
+        all_cancelled_turns = 0
+        for dev_id in list(app.state.active_device_tasks.keys()):
+            if dev_id != "host_owner":
+                status_info = await cancel_device_runs(dev_id, stop_runs=stop_runs)
+                all_cancelled_tasks += status_info["cancelled_tasks"]
+                all_cancelled_turns += status_info["cancelled_turns"]
+
         rev_devs, rev_sess = access_store.lockdown_all(reason=reason, ip=client_ip)
         # Terminate all active WebRTC sessions
         await webrtc_gateway.close_all()
+
         return LockdownResponse(
             revoked_devices_count=rev_devs,
             revoked_sessions_count=rev_sess,
-            message="Panic lockdown executed. All remote devices and active sessions revoked.",
+            message=f"Panic lockdown executed. All remote devices ({rev_devs}) and active sessions ({rev_sess}) revoked. Cancelled {all_cancelled_tasks} tasks and {all_cancelled_turns} turns.",
         )
 
     @app.get("/api/devices/me")
@@ -772,11 +853,14 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     async def stream_turn(
         session_id: str,
         req: ChatQueryRequest,
+        request: Request,
         _: bool = Depends(require_auth),
     ):
         session = session_store.get_session(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+
+        caller_device_id = getattr(request.state, "caller_device_id", "host_owner")
 
         # Record user message
         user_msg = ChatMessage(
@@ -791,9 +875,15 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             citations: list = []
             route_summary: Optional[Dict[str, Any]] = None
             final_status = "draft"
+            current_task = asyncio.current_task()
+            if current_task:
+                app.state.active_device_tasks[caller_device_id].add(current_task)
+            current_turn_id = None
 
             try:
                 async for event in kybernetes.submit_turn_stream(session_id, req.query):
+                    current_turn_id = event.turn_id
+                    app.state.active_device_turns[caller_device_id].add(current_turn_id)
                     # Intercept deltas and citations
                     if event.event_type == "delta":
                         full_response_text += event.payload.get("text", "")
@@ -817,23 +907,75 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 )
                 session_store.append_message(session_id, asst_msg)
 
+            except asyncio.CancelledError:
+                err_event = TurnEvent(
+                    turn_id=current_turn_id or str(uuid.uuid4()),
+                    seq_num=999,
+                    event_type="cancelled",
+                    payload={"error": "Turn cancelled due to device revocation or operator abort"},
+                    status="failed",
+                )
+                yield f"data: {err_event.model_dump_json()}\n\n"
+                raise
             except Exception as exc:
                 err_event = TurnEvent(
-                    turn_id=str(uuid.uuid4()),
+                    turn_id=current_turn_id or str(uuid.uuid4()),
                     seq_num=999,
                     event_type="failed",
                     payload={"error": str(exc)},
                     status="failed",
                 )
                 yield f"data: {err_event.model_dump_json()}\n\n"
+            finally:
+                if current_task:
+                    app.state.active_device_tasks[caller_device_id].discard(current_task)
+                if current_turn_id:
+                    app.state.active_device_turns[caller_device_id].discard(current_turn_id)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     # 5. Phylax Approval Resolution
     @app.post("/api/approvals/{approval_id}/resolve")
-    async def resolve_approval(approval_id: str, req: ApprovalResolveRequest, _: bool = Depends(require_admin_auth)):
+    async def resolve_approval(
+        approval_id: str,
+        req: ApprovalResolveRequest,
+        request: Request,
+        _: bool = Depends(require_auth),
+    ):
         if req.decision not in ("allow_once", "deny"):
             raise HTTPException(status_code=400, detail="Decision must be 'allow_once' or 'deny'")
+
+        caller_scopes = getattr(request.state, "caller_scopes", [])
+        risk_tier = (req.risk_tier or "T1").upper()
+
+        if not has_scope(caller_scopes, "approvals:resolve"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Device missing 'approvals:resolve' scope.",
+            )
+
+        # Enforce host confirmation step-up for T3 actions
+        if risk_tier == "T3" and not has_scope(caller_scopes, "approvals:resolve_high"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Host confirmation step-up required for T3 actions (missing 'approvals:resolve_high' scope).",
+            )
+
+        caller_dev_id = getattr(request.state, "caller_device_id", "unknown")
+        client_ip = request.client.host if request.client else None
+        access_store.log_audit(
+            action="approval_resolved_remote",
+            actor_device_id=caller_dev_id,
+            target_device_id=None,
+            detail={
+                "approval_id": approval_id,
+                "decision": req.decision,
+                "risk_tier": risk_tier,
+                "endpoint": "/api/approvals/resolve",
+            },
+            ip=client_ip,
+        )
+
         res = await kybernetes.resolve_approval(approval_id, req.decision)
         return res
 

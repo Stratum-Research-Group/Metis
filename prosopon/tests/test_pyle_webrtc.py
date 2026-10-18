@@ -221,24 +221,25 @@ async def test_phylax_action_approval_scope_enforcement(webrtc_gateway, access_s
     webrtc_gateway._channels[s2] = {"control": ch2}
     webrtc_gateway._session_devices[s2] = "dev_op_ltd"
 
-    # T2 request fails for operator lacking approvals:resolve_high
-    req_t2 = json.dumps({
+    # T3 request fails for operator lacking approvals:resolve_high (host confirmation step-up required)
+    req_t3 = json.dumps({
         "jsonrpc": "2.0",
         "method": "phylax.sign_approval",
         "params": {
-            "approval_id": "app_002",
+            "approval_id": "app_003",
             "action_digest": "abcdef123456",
-            "risk_tier": "T2",
+            "risk_tier": "T3",
             "decision": "allow_once",
         },
         "id": 202,
     })
-    await webrtc_gateway._handle_control_rpc(s2, req_t2)
+    await webrtc_gateway._handle_control_rpc(s2, req_t3)
     res2 = json.loads(ch2.sent_messages[-1])
     assert "error" in res2
     assert "approvals:resolve_high" in res2["error"]["message"]
+    assert "host confirmation step-up" in res2["error"]["message"].lower()
 
-    # Operator has both scopes and succeeds for T1
+    # Operator succeeds for T1 and T2 with approvals:resolve
     dev_op = access_store.create_device("dev_op", "Operator Laptop", "link", preset="operator")
     s3 = "sess_op"
     ch3 = MockDataChannel("control")
@@ -251,11 +252,30 @@ async def test_phylax_action_approval_scope_enforcement(webrtc_gateway, access_s
         lambda aid, dec, dev_id, tier: approved_actions.append((aid, dec, dev_id, tier))
     )
 
+    # T1 approval succeeds
     await webrtc_gateway._handle_control_rpc(s3, req_t1)
-    res3 = json.loads(ch3.sent_messages[-1])
-    assert res3.get("result", {}).get("status") == "approved"
-    assert len(approved_actions) == 1
+    res3_t1 = json.loads(ch3.sent_messages[-1])
+    assert res3_t1.get("result", {}).get("status") == "approved"
+
+    # T2 approval succeeds
+    req_t2 = json.dumps({
+        "jsonrpc": "2.0",
+        "method": "phylax.sign_approval",
+        "params": {
+            "approval_id": "app_002",
+            "action_digest": "abcdef123456",
+            "risk_tier": "T2",
+            "decision": "allow_once",
+        },
+        "id": 203,
+    })
+    await webrtc_gateway._handle_control_rpc(s3, req_t2)
+    res3_t2 = json.loads(ch3.sent_messages[-1])
+    assert res3_t2.get("result", {}).get("status") == "approved"
+
+    assert len(approved_actions) == 2
     assert approved_actions[0] == ("app_001", "allow_once", "dev_op", "T1")
+    assert approved_actions[1] == ("app_002", "allow_once", "dev_op", "T2")
 
     # Check cryptographic audit log
     is_valid, _ = access_store.verify_audit_chain()

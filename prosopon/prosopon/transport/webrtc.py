@@ -305,12 +305,15 @@ class WebRTCGateway:
             )
             return
 
-        # For T2/T3, enforce high approval scope
-        if risk_tier in ("T2", "T3") and not has_scope(dev.scopes, "approvals:resolve_high"):
+        # For T3 actions, enforce high approval scope (host confirmation step-up required)
+        if risk_tier == "T3" and not has_scope(dev.scopes, "approvals:resolve_high"):
             channel.send(
                 json.dumps({
                     "jsonrpc": "2.0",
-                    "error": {"code": -32004, "message": "Missing 'approvals:resolve_high' scope for T2/T3"},
+                    "error": {
+                        "code": -32004,
+                        "message": "Missing 'approvals:resolve_high' scope for T3 (host confirmation step-up required)",
+                    },
                     "id": msg_id,
                 })
             )

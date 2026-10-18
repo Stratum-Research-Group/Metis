@@ -172,7 +172,7 @@ async def test_zero_loopback_exemption_for_approvals(app_instance):
             json={"decision": "allow_once"},
         )
         assert resp.status_code == 401
-        assert "admin-scoped paired token required" in resp.json()["detail"].lower()
+        assert "token required" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

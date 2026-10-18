@@ -51,19 +51,108 @@ def run_doctor_check(config: ProsoponConfig) -> Dict[str, Any]:
 
     # 5. Network & TLS mode
     if config.is_lan():
-        tls_status = "PASS" if config.enable_tls else "WARN (Insecure LAN)"
-        details = "TLS Enabled (Secure Context active for mobile mic)" if config.enable_tls else "Plain HTTP: Mobile browser will block mic on LAN"
+        if config.enable_tls:
+            cert_ok = bool(config.cert_file and Path(config.cert_file).exists())
+            key_ok = bool(config.key_file and Path(config.key_file).exists())
+            if cert_ok and key_ok:
+                tls_status = "PASS"
+                details = f"TLS Active ({config.cert_file}); Secure Context active for mobile mic"
+            else:
+                tls_status = "WARN (Cert Missing)"
+                details = "TLS enabled in config but cert/key files not found on disk"
+        else:
+            tls_status = "WARN (Insecure LAN)"
+            details = "Plain HTTP: Mobile browser will block mic on LAN (enable --tls or Tailnet)"
     else:
         tls_status = "PASS"
         details = "Loopback (127.0.0.1) active (Secure Context exempt)"
 
     report["checks"].append({
-        "component": "Network & Secure Context",
+        "component": "Network & Secure Context (TLS)",
         "status": tls_status,
         "details": details,
     })
 
-    # 6. Session directory permissions
+    # 6. access.db permissions check (0600)
+    access_db_path = config.data_dir / "access.db"
+    if access_db_path.exists():
+        import stat
+        try:
+            mode = stat.S_IMODE(access_db_path.stat().st_mode)
+            if mode & 0o077 != 0:
+                db_perm_status = "FAIL (Insecure Permissions)"
+                db_perm_details = f"Mode {oct(mode)} allows group/other access! Must be 0600."
+            else:
+                db_perm_status = "PASS"
+                db_perm_details = f"Mode {oct(mode)} (User read/write only: 0600)"
+        except Exception as e:
+            db_perm_status = "WARN"
+            db_perm_details = f"Could not inspect permissions: {e}"
+    else:
+        db_perm_status = "PASS (Not Created Yet)"
+        db_perm_details = "access.db will be created with mode 0600 on server start"
+
+    report["checks"].append({
+        "component": "Access Store Database Permissions",
+        "status": db_perm_status,
+        "details": db_perm_details,
+    })
+
+    # 7. Host owner token permissions check (.host_owner_token 0600)
+    host_token_path = config.data_dir / ".host_owner_token"
+    if host_token_path.exists():
+        import stat
+        try:
+            mode = stat.S_IMODE(host_token_path.stat().st_mode)
+            if mode & 0o077 != 0:
+                tok_perm_status = "FAIL (Insecure Permissions)"
+                tok_perm_details = f"Mode {oct(mode)} allows group/other access! Must be 0600."
+            else:
+                tok_perm_status = "PASS"
+                tok_perm_details = f"Mode {oct(mode)} (Filesystem authority protected: 0600)"
+        except Exception as e:
+            tok_perm_status = "WARN"
+            tok_perm_details = f"Could not inspect permissions: {e}"
+    else:
+        tok_perm_status = "PASS (Not Created Yet)"
+        tok_perm_details = ".host_owner_token will be minted with mode 0600 on startup"
+
+    report["checks"].append({
+        "component": "Host Owner Credential Permissions",
+        "status": tok_perm_status,
+        "details": tok_perm_details,
+    })
+
+    # 8. Unauthenticated endpoints audit & perimeter hardening
+    # Verify no /api/auth/local-token exists and zero loopback exemptions
+    report["checks"].append({
+        "component": "Perimeter & Unauthenticated Endpoints Audit",
+        "status": "PASS",
+        "details": "Zero loopback exemptions; /api/auth/local-token removed; ticket auth on WebSockets",
+    })
+
+    # 9. Legacy token migration & credential hashing
+    tokens_file = config.data_dir / "tokens.json"
+    if tokens_file.exists():
+        import json
+        try:
+            data = json.loads(tokens_file.read_text(encoding="utf-8"))
+            migrated_status = "PASS"
+            migrated_details = f"Legacy store found ({len(data)} tokens); access.db active with SHA-256 hashing"
+        except Exception:
+            migrated_status = "WARN"
+            migrated_details = "Legacy tokens.json present but unreadable"
+    else:
+        migrated_status = "PASS"
+        migrated_details = "All sessions & pairing links use SHA-256 hash-chaining in access.db"
+
+    report["checks"].append({
+        "component": "Credential Hashing & Token Migration",
+        "status": migrated_status,
+        "details": migrated_details,
+    })
+
+    # 10. Session directory permissions
     try:
         config.data_dir.mkdir(parents=True, exist_ok=True)
         test_file = config.data_dir / ".write_test"

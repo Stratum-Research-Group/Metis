@@ -107,6 +107,7 @@ class PairDeviceResponse(BaseModel):
 
 class RevokeDeviceRequest(BaseModel):
     reason: str = Field(default="owner", description="Revocation reason (owner|panic|policy)")
+    stop_runs: bool = Field(default=True, description="Whether to stop active agent runs / turns started by this device")
 
 
 class LockdownResponse(BaseModel):

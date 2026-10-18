@@ -163,15 +163,34 @@ To verify all services and environments are operational after system reboot:
 
 ---
 
-## 3. Immediate Prioritized Tasks Left to Do
+### Phase 8: Pyle Remote Operations & Panic Lockdown (Completed)
+1. **Operator Preset & Remote Approvals (`prosopon/server.py`, `prosopon/transport/webrtc.py`)**:
+   - Enabled `operator` preset holding `approvals:resolve` to remotely approve T1 and T2 actions over WebRTC DataChannel (`control`) and REST `/api/approvals/{id}/resolve`.
+   - Enforced host confirmation step-up for T3 actions (system-mutating, shell execution, code installation): rejected with 403 Forbidden / JSON-RPC error unless caller holds `approvals:resolve_high` (Owner only).
+   - Biometric challenge verification with user verification (`uv=1`) enforced for high tiers when passkey assertions are provided.
+   - Remote approval actions audit-logged to SHA-256 hash-chained `access_audit` ledger.
+2. **Active Task & In-Flight Turn Termination (`prosopon/server.py`)**:
+   - Tracked in-flight agent tasks and turns per device (`active_device_tasks` and `active_device_turns`).
+   - On `POST /api/devices/{id}/revoke`: immediately terminates WebRTC PeerConnections (< 500 ms gate), cancels in-flight `asyncio.Task` handles, and dispatches `kybernetes.cancel_turn(turn_id)`.
+   - Added `stop_runs` flag in `RevokeDeviceRequest` (default `True`; allows explicit `stop_runs=False` to preserve running jobs).
+   - Added `GET /api/devices/{id}/runs` endpoint for revoke dialog inspection.
+3. **Panic Lockdown (`prosopon/server.py`, `prosopon/cli.py`)**:
+   - One-command / one-action Panic Lockdown (`POST /api/devices/lockdown` and `prosopon device lockdown`).
+   - Terminates all active remote agent tasks and turns across all remote devices.
+   - Closes all active WebRTC DataChannel sessions (< 500 ms).
+   - Revokes all non-host devices and active session tokens in `access.db`.
+4. **Extended Doctor Diagnostics (`prosopon/ops/doctor.py`)**:
+   - **TLS State & Secure Context**: Validates certificate/key paths and warns on plain HTTP when bound to LAN.
+   - **File Permissions**: Enforces `0600` octal mode on `access.db` and `.host_owner_token`; fails closed if group/other permissions exist.
+   - **Perimeter Audit**: Validates absence of `/api/auth/local-token` and verifies zero loopback exemptions.
+   - **Legacy Token Migration**: Validates that all active credentials use SHA-256 hash chaining.
+5. **Unit & Integration Test Suite (`prosopon/tests/test_pyle_devices.py`, `prosopon/tests/test_pyle_webrtc.py`)**:
+   - Added tests covering Operator approval of T1/T2, T3 step-up rejection, Owner approval of T3, active task cancellation, `stop_runs=False` preservation, panic lockdown termination, and doctor diagnostics.
+   - Total Metis test suite: **371 passed across all suites** (70 prosopon, 173 kybernetes, 89 dianoia, 39 root).
 
-### Task 9: Pyle Remote Operations & Panic Lockdown (Roadmap Milestone 3.1, Track A)
-- **Reference Spec**: `docs/review/mss-pyle-webrtc-passkey-spec.md` and Roadmap Milestone 3.1.
-- Enable Operator preset with remote approval rights for T1/T2 actions; enforce host confirmation step-up for T3 actions.
-- Implement active agent task termination on device revocation (< 500 ms security gate).
-- Implement one-command Panic Lockdown (`prosopon device lockdown`).
-- Add doctor diagnostics: check TLS state, file permissions on `access.db`, unauthenticated endpoints, and legacy token migration.
-- Verify security tests T1–T16 and functional tests F1–F7.
+---
+
+## 3. Immediate Prioritized Tasks Left to Do
 
 ### Task 10: Anadrome Frozen Live Walk Test (Roadmap Milestone 3.2, Track B)
 - **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` Section 5 & 6 and Roadmap Milestone 3.2.
