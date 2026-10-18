@@ -300,6 +300,11 @@ def build_frozen_test_graph():
 def build_deterministic_mock_client():
     """Deterministic mock deliberation client adhering to baseline prompt format."""
     mock_client = MagicMock()
+    mock_client.base_url = "http://127.0.0.1:8000/v1"
+    mock_client.models.list.return_value = [
+        MagicMock(id="qwen2.5-7b-instruct"),
+        MagicMock(id="llama-3.1-8b-instruct"),
+    ]
 
     def generate_response(*args, **kwargs):
         messages = kwargs.get("messages", [])
