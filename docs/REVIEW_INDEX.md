@@ -17,6 +17,10 @@ The existing core components have detailed local documentation: [Stoma](../stoma
 
 | File | Topic / Scope |
 | --- | --- |
+| [01-embedder-identity-lthcm-metis-6cd9ff83.txt](review/01-embedder-identity-lthcm-metis-6cd9ff83.txt) | Exact Embedder Identity & Representation Compatibility Architecture |
+| [02-evaluation-gate-integrity-dokime-krisis-87c5fa3f.txt](review/02-evaluation-gate-integrity-dokime-krisis-87c5fa3f.txt) | Evaluation-Gate Integrity & Adversarial Fixture Discipline |
+| [03-recoverable-model-swaps-metis-a2853c8a.txt](review/03-recoverable-model-swaps-metis-a2853c8a.txt) | Recoverable Model-Swap Lifecycle for Hestia |
+| [metis-grpo-walk-policy-spec-e6633b6a.txt](review/metis-grpo-walk-policy-spec-e6633b6a.txt) | GRPO Walk Policy Optimization for Dianoia Deliberative Walks |
 | [metis-repo-wide-round4-369939e-findings-7ced56a6.txt](review/metis-repo-wide-round4-369939e-findings-7ced56a6.txt) | Round 4 Repo-wide Review (v6) Findings & Verification |
 | [metis-openrig-lochos-integration-spec-a41d7c29-fb788990.txt](review/metis-openrig-lochos-integration-spec-a41d7c29-fb788990.txt) | Lochos Multi-Agent Squad & Durable Work Queue Specification |
 | [metis-pinax-tool-catalogue-spec-83941186.txt](review/metis-pinax-tool-catalogue-spec-83941186.txt) | Pinax System Tool Catalogue & FTS5 Discovery Specification |
