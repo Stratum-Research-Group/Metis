@@ -77,19 +77,27 @@ To verify all services and environments are operational after system reboot:
 4. **Test Suite (`prosopon/tests/test_pyle_webrtc.py`)**:
    - 8 comprehensive tests covering negotiation, unauthorized rejection, ICE candidates, JSON-RPC ping/auth, Phylax approval scope enforcement, SSE/terminal dispatch, and instant revocation.
 
+### Phase 3: NCM Hardware & Memory Validation (Completed)
+1. **Pinned NCM Checkout (`.metis/scratch/ncm`)**:
+   - Pinned upstream `github.com/HazyResearch/ncm` @ `c70274273f489abc73832b2b98584a8483b6b203`.
+   - Downloaded XSum tokenizer (`tokenizer.pt`, 286 MB), generator (`generator.pt`, 338 MB), and test sets.
+2. **Empirical Benchmarks on RTX 5060 Ti 16GB**:
+   - **Peak VRAM (Standalone)**: `0.78 GB allocated` (`0.80 GB reserved`). Gate G-m0a ($\le 6.5\text{ GB}$) **PASSED**.
+   - **Peak VRAM (Co-loaded with GPT-2 Large Scorer)**: `3.67 GB allocated` (`3.77 GB reserved`). Gate G-m0b **PASSED**.
+   - **Throughput & Latency**: `122.3 ms/doc` generation; `6.74 ms` for 48-token multiscale VQ-VAE decode (148 windows/s).
+   - **Concurrency Verdict**: Peak footprint $< 1.0\text{ GB}$ allows NCM to reside concurrently in VRAM with Hestia; **no sequential unloading required**.
+   - **Report**: Recorded in [`docs/review/ncm-hardware-validation-rtx5060ti-report.md`](file:///home/akarta/Projects/Metis/docs/review/ncm-hardware-validation-rtx5060ti-report.md).
+
 ---
 
 ## 3. Immediate Prioritized Tasks Left to Do
 
-### Task 4: NCM Hardware Validation (Schedion & Symbolon)
-- **Reference Spec**: `docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md`
-- Clone pinned NCM checkout (`c702742`) to scratch space.
-- Benchmark peak VRAM on the RTX 5060 Ti 16GB.
-- If peak VRAM $> 10\text{ GB}$, enforce sequential unloading when switching between Hestia and NCM.
-
 ### Task 5: Anadrome Decision-Tree Logging Harness
+- **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` and synthesis roadmap Section 2.4.
 - Extend Dianoia walk logger to capture continuation trees, eligible actions, and RFC 8785 canonical observation hashes to `~/.dianoia/replay_trees.jsonl`.
-- Verify bit-exact replay over baseline controller before evaluating candidate policy zoo.
+- Restrict intermediate answer probes to path depth $\ge 2$ with in-process SQLite cache.
+- Bound shadow expansions to exactly 1 branch per walk with depth $\le 2$.
+- Verify bit-exact replay over baseline controller (100% agreement sanity check) before evaluating candidate policy zoo.
 
 ---
 
