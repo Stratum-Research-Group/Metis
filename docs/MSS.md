@@ -75,7 +75,7 @@ Rather than relying on naive prompt loops or unverified diffs, MSS synthesizes t
 
 MSS provides granular configuration via CLI options, environment variables, configuration files, and the Prosopon GUI Settings Panel.
 
-### 3.1 CLI Options (`kybernetes code`)
+### 3.1 Sovereign Coding Agent Options (`kybernetes code`)
 
 | Option | Short Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -88,7 +88,20 @@ MSS provides granular configuration via CLI options, environment variables, conf
 | `--max-steps` | `-s` | Integer | `20` | Maximum autonomous turns before halting. |
 | `--auto-approve` | `-y` | Flag | `False` | Auto-approve mutating file/shell operations without interactive prompt cards. |
 
-### 3.2 Environment Variables
+### 3.2 Orchestrator & Server CLI Commands (`kybernetes`)
+
+Beyond the coding agent, `kybernetes` provides full service control commands:
+
+| Command | Arguments / Flags | Description |
+| :--- | :--- | :--- |
+| `kybernetes doctor` | None | Verify readiness of Hestia, LTHCM/Stoma, Dianoia, Phylax, and Krisis subsystems. |
+| `kybernetes demo` | None | Run the 5 canonical multi-hop reasoning, capability gating, and budget scenarios. |
+| `kybernetes chat` | `-q, --query TEXT` | Run an interactive single-turn query through the de-siloed 7-stage orchestrator pipeline. |
+| `kybernetes serve` | `--host TEXT` (default `127.0.0.1`)<br/>`--port INT` (default `8081`)<br/>`--db-path PATH` (default `kybernetes_budget.db`)<br/>`--memory-root PATH`<br/>`--config PATH`<br/>`--admin-token TEXT`<br/>`--service-token TEXT` | Start the FastAPI SSE orchestrator server and `/v1/admin` control plane. |
+| `kybernetes lochos` | `ps`, `queue`, `dispatch`, `transfer`, `resolve`, `run` | Manage multi-agent squad seats and durable work queue (see Section 7). |
+| `kybernetes pinax` | `scan`, `lookup`, `docs`, `detail`, `evaluate` | Tool inventory discovery, FTS5 lookups, and risk evaluation (see Section 8). |
+
+### 3.3 Environment Variables
 
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
@@ -99,7 +112,7 @@ MSS provides granular configuration via CLI options, environment variables, conf
 | `LOCHOS_DB_PATH` | `lochos.sqlite` | Path to the SQLite database storing the Lochos work queue and seat state. |
 | `PINAX_INDEX_PATH` | `~/.metis/pinax_catalogue.db` | Path to the SQLite FTS5 database storing the Pinax tool catalogue. |
 
-### 3.3 Prosopon Workbench Settings Panel
+### 3.4 Prosopon Workbench Settings Panel
 
 In the Prosopon Web Workbench (`http://127.0.0.1:8000`), pressing `Ctrl+,` opens the centralized Settings Panel containing categories aligned with the MSS runtime:
 - **General & Workbench**: Theme (`theme-obsidian`, `theme-linear`), editor font size, minimap, and breadcrumbs.
@@ -107,6 +120,7 @@ In the Prosopon Web Workbench (`http://127.0.0.1:8000`), pressing `Ctrl+,` opens
 - **Kybernetes (Engine & Budget)**: Kalman filter budget smoothing $\alpha$, tool timeout bounds, max Dianoia tree depth, and milestone checkpoint toggle.
 - **Phylax (Guardrails & Policies)**: Strict default-deny toggle, approval token TTL (seconds), auto-allow safe reads, and cryptographic audit hash-chaining.
 - **Memory (LTHCM & Stoma)**: Light-cone horizon (seconds), Poincaré manifold dimension (default 384), and Stoma AST chunk token bound ($\le 254$).
+
 
 ---
 
@@ -337,3 +351,130 @@ Before deploying MSS on production repositories:
 - [ ] Always provide a reliable `--test-cmd` so the agent cannot exit successfully while leaving breaking changes.
 - [ ] For sensitive projects, run without `--auto-approve` to interactively inspect every unified diff before it is applied to disk.
 - [ ] Check `.phylax/audit.jsonl` to inspect the complete cryptographic audit trail of all actions executed by the agent.
+
+---
+
+## 11. Metis Monorepo Subsystem CLI Master Directory
+
+In addition to `kybernetes` (the orchestrator and home of MSS, Lochos, and Pinax), the Metis monorepo contains 8 other standalone subsystem CLIs. All 9 CLIs can be invoked directly from their virtual environments or when installed in editable mode:
+
+### 11.1 `hestia` — Local Model Serving Layer
+```bash
+# Start OpenAI-compatible API server on port 8080
+hestia serve --host 127.0.0.1 --port 8080 --config models.yaml
+
+# List registered models and their residency state
+hestia list
+
+# Show detailed GPU utilisation and VRAM consumption per model
+hestia status
+
+# Explicitly load or unload model weights from GPU memory
+hestia load qwen2.5-coder-32b-instruct
+hestia unload qwen2.5-coder-32b-instruct
+```
+
+### 11.2 `phylax` — Guarded Capability Gateway
+```bash
+# Validate and lint YAML capability policies
+phylax validate policies/coding_agent.yaml
+
+# Run health diagnostics on policy files, directories, and audit hash chains
+phylax doctor
+
+# Inspect and verify cryptographic integrity of the audit ledger
+phylax audit verify
+
+# List and resolve pending interactive human approvals
+phylax approvals list
+phylax approvals approve <APPROVAL_ID>
+```
+
+### 11.3 `stoma` — Memory Mouth & Ingestion
+```bash
+# Ingest single file or recursive directory into LTHCM memory
+stoma ingest /path/to/docs/
+
+# Query LTHCM topological memory directly with provenance verification
+stoma query "What is Dianoia sheaf contradiction re-walk?" --top-k 5
+
+# Start real-time filesystem watcher for automated incremental indexing
+stoma watch /path/to/code/ --debounce 0.5
+
+# Reconcile disk files against Stoma generational index manifest
+stoma reconcile
+
+# Display index status, active generation, and model metadata
+stoma status
+
+# Verify direct index interchange compatibility with Dianoia
+stoma interchange
+```
+
+### 11.4 `dianoia` — Deliberative Thought-Graph Walks
+```bash
+# Execute a deliberative graph walk over documents or pre-built index
+dianoia --docs /path/to/corpus/ -q "Trace token approval lifecycle in Phylax"
+dianoia --index /path/to/lthcm.idx -q "Explain Kalman budget engine" --max-steps 12
+```
+
+### 11.5 `dokime` — Evaluation & Release Gates
+```bash
+# List discovered evaluation benchmarks and tasks
+dokime tasks
+
+# Execute benchmark evaluation across models
+dokime run --model qwen2.5-coder-32b-instruct --task arc_easy_25 --seed 42
+
+# Compare candidate model against baseline with 10k paired bootstrap CIs
+dokime compare <BASELINE_RUN_ID> <CANDIDATE_RUN_ID>
+```
+
+### 11.6 `paideia` — Training & Policy Evidence Pipeline
+```bash
+# Verify environment, CUDA toolchains, and dependencies
+paideia doctor
+
+# Audit and validate LTHCM router datasets
+paideia dataset validate-router /path/to/router_data.jsonl
+
+# Validate Dianoia walk logs and extract gold policy trajectories
+paideia dataset validate-walk ~/.dianoia/walks.jsonl
+
+# Run baseline ladder (Majority -> Regex -> Lexical -> Embedding) on frozen splits
+paideia baseline /path/to/router_data.jsonl --task best_route --seed 42
+```
+
+### 11.7 `krisis` — Candidate Answer Selector & Verification Gate
+```bash
+# Validate policy JSON against JSON Schema
+krisis validate-schema --policy krisis-policy-0.1.json --schema krisis-policy.schema.json
+
+# Replay deterministic pure-policy fixtures and verify Half-Even scores
+krisis replay --fixtures krisis-fixtures-0.1.json --policy krisis-policy-0.1.json
+
+# Evaluate candidate answer JSON bundle directly
+krisis evaluate request_turn.json --policy krisis-policy-0.1.json
+
+# Inspect rules, tau thresholds, and reason precedence in a policy manifest
+krisis inspect-policy --policy krisis-policy-0.1.json
+```
+
+### 11.8 `prosopon` — Web Workbench & Sovereign Voice Client
+```bash
+# Start Prosopon web server (http://127.0.0.1:8000)
+prosopon serve --host 127.0.0.1 --port 8000
+
+# Start in LAN mode with self-signed TLS and phone pairing enabled
+prosopon serve --lan --tls
+
+# Generate 6-digit phone device pairing PIN (valid 5 min)
+prosopon pair
+
+# Immediately revoke all paired mobile browser sessions
+prosopon revoke
+
+# Diagnostic check for local STT (Whisper), TTS (Piper), and audio devices
+prosopon doctor
+```
+
