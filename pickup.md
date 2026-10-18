@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-18  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `948ebd8474d6b112e5d0fd3863ff9ce912175485` (`feat(anadrome): implement decision-tree logging harness and offline replay engine`)  
+**Current HEAD Commit:** `63f8d1af3b6b15e35dd48911a15bdcdb59dae60c` (`feat(ncm): implement Schedion and Symbolon offline adapters and execute E1 diagnostic`)  
 **Working Tree Status:** Clean, all tests passing.
 
 ---
@@ -112,18 +112,21 @@ To verify all services and environments are operational after system reboot:
 
 ---
 
-## 3. Immediate Prioritized Tasks Left to Do
+### Phase 5: Schedion & Symbolon Offline Adapters (Completed)
+1. **Schedion Adapter (`schedion/schedion/`)**:
+   - **Candidate Generator (`generator.py`)**: Wraps NCM generation path (`NextConceptTransformer` + `VQVAETokenizer`) with strict 512-token GPT-2 truncation discipline and complete provenance metadata (`SchedionProvenance`).
+   - **Deterministic Sentence-Boundary Claim Mapper (`claim_mapper.py`)**: `SentenceBoundaryClaimMapper` segmenting decoded summary sentences into structured `Claim` objects anchored to the 512-token conditioned source span with default `verdict="unverified"`.
+   - **Krisis Ingestion Gate**: Emits fully validated `Candidate` instances processed cleanly by `KrisisSelector.evaluate()` without schema errors.
+   - **Unit Tests (`tests/test_schedion.py`)**: 6/6 tests passing.
+2. **Symbolon Adapter (`symbolon/symbolon/`)**:
+   - **Scoped Code Identity (`codes.py`)**: Enforces expanded 6-tuple identity rule `(checkpoint_id, tokenizer_id, level, window_idx, pos, code_int)`. Strict scope matching functions `compute_scoped_code_overlap` and `compute_scoped_code_jaccard`.
+   - **Multi-Window Tokenizer Adapter (`tokenizer_adapter.py`)**: `SymbolonTokenizerAdapter` chunking arbitrary passages into 48-token context windows, extracting multiscale discrete codes across all 9 levels, and decoding per-level reconstructions.
+   - **Experiment E1 Diagnostic Report (`docs/review/symbolon-reconstruction-fidelity-e1-report.md`)**: Executed on RTX 5060 Ti over representative entity, topological, numerical, and biochemical probes. Calibrated monotonic reconstruction fidelity from L0 (4 codes, 1.2% word overlap) to L8 (48 codes, 82.8% word overlap, 87.5% key term preservation).
+   - **Unit Tests (`tests/test_symbolon.py`)**: 8/8 tests passing.
 
-### Task 6: Schedion & Symbolon Offline Adapters (Roadmap Milestone 1.3, Tracks C & D)
-- **Reference Spec**: `docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md` Section 2.1, 2.2, and Milestone 1.3.
-- **Schedion Adapter**:
-  - Implement isolated adapter wrapping NCM generation path.
-  - Implement deterministic sentence-boundary claim mapper for Krisis: each sentence in the decoded summary is treated as an unverified candidate claim anchored directly to the 512-token source span.
-- **Symbolon Adapter**:
-  - Implement isolated adapter wrapping VQ-VAE tokenizer.
-  - Implement multi-window code extraction with passage-relative window indexes: `(checkpoint_id, tokenizer_id, level, window_idx, pos, code_int)`.
-- **Diagnostic E1**:
-  - Evaluate reconstruction exact-preservation rates across probe texts.
+---
+
+## 3. Immediate Prioritized Tasks Left to Do
 
 ### Task 7: Anadrome Policy Zoo & Offline Replay (Roadmap Milestone 2.2, Track B)
 - **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` Section 5 and Roadmap Milestone 2.2.

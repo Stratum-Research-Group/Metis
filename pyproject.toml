@@ -73,5 +73,7 @@ pythonpath = [
     "prosopon",
     "phylax",
     "krisis",
+    "schedion",
+    "symbolon",
     ".",
 ]
