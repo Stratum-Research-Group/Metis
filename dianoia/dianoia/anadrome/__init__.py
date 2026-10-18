@@ -16,6 +16,7 @@ from dianoia.anadrome.evaluator import (
 )
 from dianoia.anadrome.logger import AnadromeLogger
 from dianoia.anadrome.policies import (
+    APPROVED_CONTROLLER_POLICIES,
     AnadromePolicy,
     BaselineReplayPolicy,
     EarlyExitAnswerPolicy,

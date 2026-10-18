@@ -36,6 +36,7 @@ except ImportError:
 import hashlib
 
 from dianoia.anadrome import (
+    APPROVED_CONTROLLER_POLICIES,
     AnadromeLogger,
     AnadromePolicy,
     AnswerProbeCache,
@@ -50,13 +51,6 @@ from dianoia.anadrome import (
     SheafContradictionBacktrackPolicy,
 )
 
-APPROVED_CONTROLLER_POLICIES: Dict[str, Any] = {
-    "baseline_llm": None,
-    "greedy_similarity": GreedySimilarityPolicy,
-    "early_exit_answer": EarlyExitAnswerPolicy,
-    "sheaf_contradiction_backtrack": SheafContradictionBacktrackPolicy,
-    "stochastic_softmax": HighEntropyStochasticPolicy,
-}
 from dianoia.embedding import TextEmbedder
 from dianoia.log import append_walk_log, build_walk_record
 from dianoia.prompts import (

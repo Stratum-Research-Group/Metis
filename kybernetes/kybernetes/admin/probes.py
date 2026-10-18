@@ -185,16 +185,18 @@ class ProbeRegistry:
 
         if component_id == "dianoia":
             is_sim = getattr(self.dianoia, "is_simulated", True) if self.dianoia else True
+            detail = "flat retrieval fallback / simulated graph walk" if is_sim else "live walk engine loaded (unprobed)"
+            evidence = "Adapter runs zero-edge fallback and simulated deliberation" if is_sim else "WalkController attached; unprobed"
             return ComponentStatus(
-                state=ComponentState.SIMULATED,
-                detail="flat retrieval fallback / simulated graph walk",
-                freshness=Freshness.FRESH,
+                state=ComponentState.SIMULATED if is_sim else ComponentState.UNKNOWN,
+                detail=detail,
+                freshness=Freshness.FRESH if is_sim else Freshness.UNKNOWN,
                 version="0.1.0",
                 checked_at=checked_at,
-                evidence="Adapter runs zero-edge fallback and simulated deliberation",
-                is_simulated=True,
-                status="simulated",
-                mode="simulated",
+                evidence=evidence,
+                is_simulated=is_sim,
+                status="simulated" if is_sim else "unknown",
+                mode="simulated" if is_sim else "live",
             )
 
         if component_id == "phylax":
@@ -518,17 +520,18 @@ class ProbeRegistry:
                         # Non-mutating fallback deliberation probe
                         res = self.dianoia.deliberate(query="canary", seed_citations=[], force_zero_edges=True)
                         latency = int((time.monotonic() - start_time) * 1000)
+                        is_sim = getattr(res, "is_simulated", True)
                         status = ComponentStatus(
-                            state=ComponentState.SIMULATED,
-                            detail="Dianoia zero-edge fallback verified",
+                            state=ComponentState.SIMULATED if is_sim else ComponentState.LIVE,
+                            detail="Dianoia zero-edge fallback verified" if is_sim else "Dianoia live engine verified",
                             freshness=Freshness.FRESH,
                             version="0.1.0",
                             checked_at=checked_at,
                             latency_ms=latency,
-                            evidence=f"Deliberation probe confirmed flat fallback ({latency}ms)",
-                            is_simulated=True,
-                            status="simulated",
-                            mode="simulated",
+                            evidence=f"Deliberation probe confirmed {'flat fallback' if is_sim else 'live engine'} ({latency}ms)",
+                            is_simulated=is_sim,
+                            status="simulated" if is_sim else "ready",
+                            mode="simulated" if is_sim else "live",
                         )
                     except Exception as exc:
                         latency = int((time.monotonic() - start_time) * 1000)

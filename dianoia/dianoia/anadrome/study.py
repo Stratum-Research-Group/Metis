@@ -19,10 +19,14 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None  # type: ignore
 
 from dianoia.anadrome.contracts import EnvironmentIdentity
 from dianoia.anadrome.policies import (
+    APPROVED_CONTROLLER_POLICIES,
     AnadromePolicy,
     EarlyExitAnswerPolicy,
     GreedySimilarityPolicy,
@@ -30,7 +34,6 @@ from dianoia.anadrome.policies import (
     SheafContradictionBacktrackPolicy,
 )
 from dianoia.embedding import TextEmbedder
-from dianoia.walk import APPROVED_CONTROLLER_POLICIES, WalkController
 
 # Try importing dokime statistical functions
 try:
@@ -476,6 +479,8 @@ class AnadromeLiveStudy:
         engine.superposition.retrieve.side_effect = lambda *args, **kwargs: list(start_payload)
 
         controller_policy = None if policy_name == "baseline_llm" else policy_name
+
+        from dianoia.walk import WalkController
 
         controller = WalkController(
             engine=engine,

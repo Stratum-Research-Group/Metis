@@ -378,3 +378,12 @@ class BaselineReplayPolicy(AnadromePolicy):
         obs_hash = obs.get("observation_hash", "")
         return self.step_action_map.get(obs_hash, "ANSWER")
 
+
+APPROVED_CONTROLLER_POLICIES: Dict[str, Any] = {
+    "baseline_llm": None,
+    "greedy_similarity": GreedySimilarityPolicy,
+    "early_exit_answer": EarlyExitAnswerPolicy,
+    "sheaf_contradiction_backtrack": SheafContradictionBacktrackPolicy,
+    "stochastic_softmax": HighEntropyStochasticPolicy,
+}
+

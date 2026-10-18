@@ -113,7 +113,72 @@ def test_terminal_agent_autonomous_run(tmp_path: Path):
     assert result.success is True
     assert result.total_steps == 2
     assert "return 'hello world'" in test_file.read_text(encoding="utf-8")
+    assert len(result.history) == 1
+    assert result.history[0].tool_name == "edit_file_block"
+    assert result.history[0].passed_validation is True
     assert (tmp_path / ".metis" / "skills").exists()
+
+
+def test_terminal_agent_artifact_spillover_and_context_retention(tmp_path: Path):
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Metis Test"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@metis.local"], cwd=str(tmp_path), check=True)
+
+    large_file = tmp_path / "large.txt"
+    large_text = "LINE " * 400  # ~2000 chars
+    large_file.write_text(large_text, encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "Init"], cwd=str(tmp_path), check=True)
+
+    captured_prompts = []
+    turn_count = 0
+
+    mock_hestia = MagicMock()
+
+    async def mock_stream(*args, **kwargs):
+        nonlocal turn_count
+        captured_prompts.append(kwargs.get("prompt", ""))
+        turn_count += 1
+        if turn_count == 1:
+            payload = (
+                "```tool_call\n"
+                "{\n"
+                '  "tool_name": "read_file_range",\n'
+                '  "arguments": {"path": "large.txt", "start_line": 1, "end_line": 400}\n'
+                "}\n"
+                "```"
+            )
+        else:
+            payload = "```done\nTask complete: inspected large file\n```"
+        yield {"delta": payload}
+
+    mock_hestia.stream_chat = mock_stream
+    mock_hestia.default_model = "gemma-4-26b"
+
+    agent = TerminalCodingAgent(
+        workspace_root=tmp_path,
+        hestia_adapter=mock_hestia,
+        auto_approve=True,
+        max_steps=5,
+    )
+
+    res = agent.run("Inspect large file")
+    assert res.success is True
+    assert len(res.history) == 1
+    assert res.history[0].tool_name == "read_file_range"
+
+    # Verify artifact was persisted on disk due to truncation
+    artifacts_dir = tmp_path / ".metis" / "artifacts"
+    assert artifacts_dir.exists()
+    artifact_files = list(artifacts_dir.glob("tool_out_*.txt"))
+    assert len(artifact_files) == 1
+    assert "LINE " in artifact_files[0].read_text(encoding="utf-8")
+
+    # Verify turn 2 prompt contained full conversation context including previous tool execution
+    assert len(captured_prompts) == 2
+    turn2_prompt = captured_prompts[1]
+    assert "Tool 'read_file_range' executed with result:" in turn2_prompt
+    assert "tool_out_" in turn2_prompt
 
 
 def test_cli_code_help():

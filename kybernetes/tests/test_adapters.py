@@ -54,6 +54,78 @@ def test_dianoia_multi_edge_deliberation():
     assert res.walk_steps > 0
 
 
+def test_dianoia_live_walk_delegation():
+    class MockLiveWalkController:
+        def walk(self, question: str, controller_policy=None):
+            return {
+                "answer": "Synthesized answer from live thought graph.",
+                "path": [{"step": 1}, {"step": 2}, {"step": 3}],
+                "visited_passages": [
+                    {"doc_id": "live-p1", "source_title": "Live Doc 1", "content": "Live snippet 1", "score": 0.95},
+                    {"doc_id": "live-p2", "source_title": "Live Doc 2", "content": "Live snippet 2", "score": 0.88},
+                ],
+                "steps_used": 3,
+                "conflicted": False,
+            }
+
+    live_ctrl = MockLiveWalkController()
+    dianoia = DianoiaAdapter(walk_controller=live_ctrl)
+    assert dianoia.is_simulated is False
+
+    seed_citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="T1", score=0.9)
+    ]
+    res = dianoia.deliberate(query="live multi-hop query", seed_citations=seed_citations)
+    assert res.success is True
+    assert res.is_simulated is False
+    assert res.walk_steps == 3
+    assert res.edges_traversed == 2
+    assert res.zero_edge_fallback_used is False
+    assert len(res.refined_citations) == 2
+    assert res.refined_citations[0].passage_id == "live-p1"
+    assert res.refined_citations[0].is_simulated is False
+    assert res.deliberation_summary == "Synthesized answer from live thought graph."
+
+
+def test_dianoia_live_zero_edge_fallback():
+    class MockLiveWalkController:
+        def walk(self, question: str, controller_policy=None):
+            return {"answer": "Should not be called on force zero edge"}
+
+    live_ctrl = MockLiveWalkController()
+    dianoia = DianoiaAdapter(walk_controller=live_ctrl)
+    assert dianoia.is_simulated is False
+
+    seed_citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="T1", score=0.9)
+    ]
+    res = dianoia.deliberate(query="fallback query", seed_citations=seed_citations, force_zero_edges=True)
+    assert res.success is True
+    assert res.is_simulated is False
+    assert res.zero_edge_fallback_used is True
+    assert res.edges_traversed == 0
+    assert "live engine fallback" in res.deliberation_summary
+
+
+def test_dianoia_live_walk_error_graceful_degradation():
+    class BrokenWalkController:
+        def walk(self, question: str, controller_policy=None):
+            raise RuntimeError("Engine memory corruption")
+
+    dianoia = DianoiaAdapter(walk_controller=BrokenWalkController())
+    assert dianoia.is_simulated is False
+
+    seed_citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="T1", score=0.9)
+    ]
+    res = dianoia.deliberate(query="broken graph query", seed_citations=seed_citations)
+    assert res.success is True
+    assert res.is_simulated is False
+    assert res.zero_edge_fallback_used is True
+    assert "Engine memory corruption" in res.fallback_reason
+    assert res.refined_citations == seed_citations
+
+
 @pytest.mark.asyncio
 async def test_phylax_interactive_approval():
     phylax = PhylaxAdapter()

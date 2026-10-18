@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import difflib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -232,14 +233,14 @@ class TerminalCodingAgent:
         for step in range(1, self.max_steps + 1):
             click.echo(click.style(f"\n[Step {step}/{self.max_steps}] Generating next action...", fg="blue", bold=True))
 
-            # Query Hestia model
-            full_prompt = current_prompt
-            if history:
-                conversation_context = "\n\n".join([
-                    f"### {item['role'].upper()}:\n{item['content']}"
-                    for item in history[-6:]
-                ])
-                full_prompt = f"{conversation_context}\n\n### USER:\n{current_prompt}"
+            # Append user / tool observation turn to conversation history
+            history.append({"role": "user", "content": current_prompt})
+
+            # Format active conversation prompt (windowed to last 10 turns to preserve token limits)
+            full_prompt = "\n\n".join([
+                f"### {item['role'].upper()}:\n{item['content']}"
+                for item in history[-10:]
+            ])
 
             response_chunks: List[str] = []
             click.echo(click.style("MSS Reasoning: ", fg="cyan"), nl=False)
@@ -366,25 +367,66 @@ class TerminalCodingAgent:
             if result.output is not None:
                 out_str = str(result.output)
                 if len(out_str) > 1000:
-                    out_str = out_str[:500] + f"\n... [truncated {len(out_str) - 1000} bytes] ...\n" + out_str[-500:]
+                    h = hashlib.sha256(out_str.encode("utf-8")).hexdigest()[:16]
+                    artifacts_dir = self.workspace_root / ".metis" / "artifacts"
+                    try:
+                        artifacts_dir.mkdir(parents=True, exist_ok=True)
+                        (artifacts_dir / f"tool_out_{h}.txt").write_text(out_str, encoding="utf-8")
+                        out_str = (
+                            out_str[:500]
+                            + f"\n... [truncated {len(out_str) - 1000} bytes; full output preserved in .metis/artifacts/tool_out_{h}.txt] ...\n"
+                            + out_str[-500:]
+                        )
+                    except Exception:
+                        out_str = out_str[:500] + f"\n... [truncated {len(out_str) - 1000} bytes] ...\n" + out_str[-500:]
                 click.echo(out_str)
                 output_summary = out_str
             if result.error:
                 click.echo(click.style(f"Error: {result.error}", fg="red"))
                 output_summary += f"\nError: {result.error}"
 
+            # Append structured turn to turn_history
+            turn_history.append(
+                CodingTurnState(
+                    step=step,
+                    tool_name=tool_name,
+                    arguments=args,
+                    result=result,
+                    passed_validation=result.success,
+                    error=result.error,
+                    semantic_state=self.state_machine.current_state,
+                )
+            )
+
             # Optional Verification Hook
             if is_mutating and self.test_command and result.success:
                 click.echo(click.style(f"-> Running Verification: `{self.test_command}`...", fg="cyan"))
                 self.state_machine.transition(AgentSemanticState.VERIFYING, reason="Running verification test command")
                 import subprocess
-                test_proc = subprocess.run(
-                    self.test_command,
-                    shell=True,
-                    cwd=self.workspace_root,
-                    capture_output=True,
-                    text=True,
-                )
+                sanitized_env = {
+                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                    "HOME": str(self.workspace_root),
+                    "LANG": "C.UTF-8",
+                    "PYTHONPATH": str(self.workspace_root),
+                }
+                try:
+                    test_proc = subprocess.run(
+                        self.test_command,
+                        shell=True,
+                        cwd=self.workspace_root,
+                        capture_output=True,
+                        text=True,
+                        env=sanitized_env,
+                        timeout=60,
+                    )
+                except subprocess.TimeoutExpired:
+                    test_proc = subprocess.CompletedProcess(
+                        args=self.test_command,
+                        returncode=124,
+                        stdout="",
+                        stderr="Verification test command timed out after 60s.",
+                    )
+
                 if test_proc.returncode != 0:
                     click.echo(click.style(f"[✗] Verification failed (exit code {test_proc.returncode})! Rolling back checkpoint...", fg="red", bold=True))
                     self.checkpointer.rollback(active_checkpoint)

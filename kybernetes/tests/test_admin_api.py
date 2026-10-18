@@ -55,6 +55,44 @@ async def test_false_live_guard_unprobed_injected_adapter():
 
 
 @pytest.mark.asyncio
+async def test_true_live_guard_functional_injected_dianoia_adapter():
+    """Verify an injected functional adapter with live WalkController reports live state on health probe."""
+    from kybernetes.adapters.dianoia import DianoiaAdapter
+
+    class LiveWalkController:
+        def walk(self, question: str, controller_policy=None):
+            return {
+                "answer": "Live answer",
+                "path": [{"step": 1}],
+                "visited_passages": [],
+                "steps_used": 1,
+            }
+
+    live_adapter = DianoiaAdapter(walk_controller=LiveWalkController())
+    app = create_app(dianoia_adapter=live_adapter)
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8081") as client:
+        # Before functional probe, unprobed live adapter correctly reports unknown
+        resp_before = await client.get("/v1/health")
+        assert resp_before.status_code == 200
+        assert resp_before.json()["dependencies"]["dianoia"]["state"] == "unknown"
+
+        # Execute functional probe
+        probe_res = await app.state.probe_registry.run_functional_probe("dianoia")
+        assert probe_res.state == ComponentState.LIVE
+        assert probe_res.is_simulated is False
+
+        # Post-probe, /v1/health honestly reports live state
+        resp_after = await client.get("/v1/health")
+        assert resp_after.status_code == 200
+        data = resp_after.json()
+        assert data["dependencies"]["dianoia"]["state"] == "live"
+        assert data["dependencies"]["dianoia"]["mode"] == "live"
+        assert data["dependencies"]["dianoia"]["status"] == "ready"
+
+
+@pytest.mark.asyncio
 async def test_admin_auth_matrix():
     """Verify admin endpoints enforce strict token authentication even from loopback."""
     # 1. Admin token unconfigured -> 403 Forbidden
