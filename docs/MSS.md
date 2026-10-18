@@ -121,6 +121,16 @@ In the Prosopon Web Workbench (`http://127.0.0.1:8000`), pressing `Ctrl+,` opens
 - **Phylax (Guardrails & Policies)**: Strict default-deny toggle, approval token TTL (seconds), auto-allow safe reads, and cryptographic audit hash-chaining.
 - **Memory (LTHCM & Stoma)**: Light-cone horizon (seconds), Poincaré manifold dimension (default 384), and Stoma AST chunk token bound ($\le 254$).
 
+### 3.5 Perimeter Hardening, Filesystem Authority & Pyle Remote Architecture
+
+To guarantee sovereign isolation against unauthorized local processes and establish friction-free companion access:
+- **Zero-Loopback Security Model**: Loopback (`127.0.0.1` / `::1`) exemptions are completely eliminated across Prosopon and Kybernetes. All HTTP endpoints, REST control routes, and WebSocket gateways (`/api/lochos/ws`) strictly mandate bearer token or host-owner credential verification before admitting requests or accepting connections. Unauthorized WebSocket connections are rejected pre-handshake with `WS_1008_POLICY_VIOLATION`.
+- **Filesystem Authority (`.host_owner_token`)**: The server initializes `data_dir / ".host_owner_token"` with strict POSIX `0600` permissions on startup. Local CLI commands (`prosopon open`, test suites, and internal daemons) authenticate seamlessly via filesystem ownership without storing shared static passwords or hardcoded keys.
+- **Single-Use Browser Launch (`prosopon open`)**: Operators launch the workbench via `prosopon open`, which reads the filesystem token, generates an ephemeral 60-second single-use bootstrap ticket (`/?bootstrap_token=<ticket>`), and opens the default browser. The client frontend (`api.js`) exchanges this ticket for an in-memory session token and immediately strips the ticket from the browser address bar.
+- **Pyle WebRTC + Passkey Remote Architecture**: As specified in [`docs/review/mss-pyle-webrtc-passkey-spec.md`](file:///home/akarta/Projects/Metis/docs/review/mss-pyle-webrtc-passkey-spec.md) (`METIS-SPEC-PYLE-WEBRTC-001`), remote companion access (iOS/Android/remote laptops) replaces brittle self-signed TLS certificates and static bearer tokens with:
+  1. **Hardware-Bound Passkeys (W3C WebAuthn / FIDO2)**: Asymmetric P-256 keypairs generated inside device Secure Enclaves; private keys never leave the hardware.
+  2. **WebRTC DataChannels (`aiortc`)**: In-band DTLS 1.3 encryption and SCTP multiplexing (`control`, `stream`, `terminal`, `audio`) avoiding browser CA trust warnings and cellular NAT hurdles.
+  3. **Biometric Phylax Approvals**: Remote biometric challenge-signing (FaceID/TouchID/Android Biometrics) for high-risk T2/T3 agent tool invocations.
 
 ---
 
@@ -464,6 +474,9 @@ krisis inspect-policy --policy krisis-policy-0.1.json
 ```bash
 # Start Prosopon web server (http://127.0.0.1:8000)
 prosopon serve --host 127.0.0.1 --port 8000
+
+# Open workbench in default browser with single-use bootstrap ticket (zero-loopback auth)
+prosopon open [--host 127.0.0.1] [--port 8000]
 
 # Start in LAN mode with self-signed TLS and phone pairing enabled
 prosopon serve --lan --tls
