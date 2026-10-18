@@ -219,7 +219,7 @@ FROZEN_TEST_QUESTIONS: List[Dict[str, Any]] = [
     },
     {
         "qid": "Q08_history_singlehop",
-        "family": "single_hop_precision",
+        "family": "temporal_reasoning",
         "question": "What political principle did the 1648 Treaty of Westphalia establish?",
         "start_node": "doc_history_1",
         "gold_key_terms": ["sovereign", "statehood", "Westphalia"],

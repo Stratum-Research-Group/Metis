@@ -29,6 +29,7 @@ class TestAnadromeLiveStudy(unittest.TestCase):
         self.assertIn("multi_hop_entity", families)
         self.assertIn("single_hop_precision", families)
         self.assertIn("contradiction_resolution", families)
+        self.assertIn("temporal_reasoning", families)
 
         # Check graph nodes exist
         for q in FROZEN_TEST_QUESTIONS:
