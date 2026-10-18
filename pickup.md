@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-18  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `90ddb918f0376cb42e92c2df9e5fe982b6c7aeb8` (`feat(pyle): implement Phase 2 WebRTC DataChannel engine, signaling, and client controller`)  
+**Current HEAD Commit:** `948ebd8474d6b112e5d0fd3863ff9ce912175485` (`feat(anadrome): implement decision-tree logging harness and offline replay engine`)  
 **Working Tree Status:** Clean, all tests passing.
 
 ---
@@ -90,14 +90,49 @@ To verify all services and environments are operational after system reboot:
 
 ---
 
+### Phase 4: Anadrome Decision-Tree Logging & Offline Replay Engine (Completed)
+1. **RFC 8785 Canonical JSON Serialization & Hashing (`dianoia/dianoia/anadrome/canonical.py`)**:
+   - Deterministic canonical formatting, lexicographical key ordering, and float stabilization (`round(score, 4)`).
+   - Bit-exact `compute_observation_hash()` SHA-256 digests invariant to dict ordering and floating-point drift.
+2. **Replay Data Contracts (`dianoia/dianoia/anadrome/contracts.py`)**:
+   - `EnvironmentIdentity`, `EligibleAction`, `DecisionObservation`, `RecordedTransition`, `ReplayTreeRecord`.
+3. **In-Process SQLite Answer Probe Cache (`dianoia/dianoia/anadrome/probe_cache.py`)**:
+   - `AnswerProbeCache` storing draft answer, verification status, and conflict detail keyed by `(state_id_hash, model_id, prompt_hash)`.
+4. **Append-Only Tree Logger (`dianoia/dianoia/anadrome/logger.py`)**:
+   - `AnadromeLogger` writing and streaming `~/.dianoia/replay_trees.jsonl`.
+5. **WalkController Continuation Tree & Shadow Branch Harness (`dianoia/dianoia/walk.py`)**:
+   - Unified `walk_id` tracking across `walks.jsonl` and `replay_trees.jsonl`.
+   - Intermediate answer probes restricted to path depth $\ge 2$ with SQLite caching.
+   - Bounded shadow branch expansion: $\le 1$ alternate branch per walk with depth $\le 2$, logged with `is_shadow=True` and `parent_walk_id`.
+6. **Offline Replay Engine (`dianoia/dianoia/anadrome/replay.py`)**:
+   - Strict **Zero Imputation Invariant**: unsupported transitions are never smoothed or fabricated.
+   - Baseline Sanity Check: `verify_baseline_sanity()` reproducing recorded traces with 100.0% bit-exact fidelity.
+7. **Test Suite (`dianoia/tests/test_anadrome.py`)**:
+   - 15/15 tests passing across canonical serialization, contracts, probe caching, WalkController integration with shadow branches, and replay engine invariants. Total Dianoia suite: 76 tests passing.
+
+---
+
 ## 3. Immediate Prioritized Tasks Left to Do
 
-### Task 5: Anadrome Decision-Tree Logging Harness
-- **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` and synthesis roadmap Section 2.4.
-- Extend Dianoia walk logger to capture continuation trees, eligible actions, and RFC 8785 canonical observation hashes to `~/.dianoia/replay_trees.jsonl`.
-- Restrict intermediate answer probes to path depth $\ge 2$ with in-process SQLite cache.
-- Bound shadow expansions to exactly 1 branch per walk with depth $\le 2$.
-- Verify bit-exact replay over baseline controller (100% agreement sanity check) before evaluating candidate policy zoo.
+### Task 6: Schedion & Symbolon Offline Adapters (Roadmap Milestone 1.3, Tracks C & D)
+- **Reference Spec**: `docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md` Section 2.1, 2.2, and Milestone 1.3.
+- **Schedion Adapter**:
+  - Implement isolated adapter wrapping NCM generation path.
+  - Implement deterministic sentence-boundary claim mapper for Krisis: each sentence in the decoded summary is treated as an unverified candidate claim anchored directly to the 512-token source span.
+- **Symbolon Adapter**:
+  - Implement isolated adapter wrapping VQ-VAE tokenizer.
+  - Implement multi-window code extraction with passage-relative window indexes: `(checkpoint_id, tokenizer_id, level, window_idx, pos, code_int)`.
+- **Diagnostic E1**:
+  - Evaluate reconstruction exact-preservation rates across probe texts.
+
+### Task 7: Anadrome Policy Zoo & Offline Replay (Roadmap Milestone 2.2, Track B)
+- **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` Section 5 and Roadmap Milestone 2.2.
+- Implement candidate walk policy zoo in Dianoia:
+  - Policy 1: Greedy similarity EXPAND (highest embedding similarity first).
+  - Policy 2: High-entropy stochastic selection (Kleroterion scaled logits).
+  - Policy 3: Early-exit answer threshold (trigger ANSWER if candidate support $> \tau$).
+  - Policy 4: Sheaf contradiction backtrack (force BACKTRACK immediately on detected conflict).
+- Execute replay harness over logged decision trees with mutual support coverage filtering ($\ge 80\%$) and Dokime bootstrap CIs.
 
 ---
 

@@ -33,6 +33,17 @@ try:
 except ImportError:
     LTHCMEngine = Any  # type: ignore
 
+import hashlib
+
+from dianoia.anadrome import (
+    AnadromeLogger,
+    AnswerProbeCache,
+    DecisionObservation,
+    EligibleAction,
+    EnvironmentIdentity,
+    RecordedTransition,
+    ReplayTreeRecord,
+)
 from dianoia.embedding import TextEmbedder
 from dianoia.log import append_walk_log, build_walk_record
 from dianoia.prompts import (
@@ -207,6 +218,12 @@ class WalkController:
         use_stochastic_resonance: bool = True,
         client: Optional[Any] = None,
         api_key: Optional[str] = None,
+        enable_anadrome_logging: bool = False,
+        replay_tree_log_path: Optional[str] = None,
+        probe_cache_path: Optional[str] = None,
+        corpus_snapshot_hash: str = "default_corpus",
+        index_build_id: str = "lthcm_v1",
+        max_shadow_expansions: int = 1,
     ):
         self.engine = engine
         self.embedder = embedder
@@ -216,6 +233,15 @@ class WalkController:
         self.top_p = top_p
         self.log_path = log_path
         self.use_stochastic_resonance = use_stochastic_resonance
+
+        # Anadrome Decision-Tree Replay Logging
+        self.enable_anadrome_logging = enable_anadrome_logging or (replay_tree_log_path is not None)
+        self.replay_tree_log_path = replay_tree_log_path
+        self.corpus_snapshot_hash = corpus_snapshot_hash
+        self.index_build_id = index_build_id
+        self.max_shadow_expansions = max_shadow_expansions
+        self.anadrome_logger = AnadromeLogger(replay_tree_log_path) if self.enable_anadrome_logging else None
+        self.probe_cache = AnswerProbeCache(probe_cache_path) if self.enable_anadrome_logging else None
 
         # Model management
         self.primary_model = model_name
@@ -558,6 +584,160 @@ class WalkController:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
+    # Anadrome Decision-Tree Replay Helpers
+    # ------------------------------------------------------------------
+
+    def _get_environment_identity(self) -> EnvironmentIdentity:
+        """Construct the immutable environment identity for walk replay."""
+        return EnvironmentIdentity(
+            corpus_snapshot_hash=self.corpus_snapshot_hash,
+            index_build_id=self.index_build_id,
+            embedder_id=getattr(self.embedder, "model_name", "default_embedder"),
+            controller_model_id=self.active_model,
+            sampling_params={"temperature": self.temperature, "top_p": self.top_p},
+            prompt_template_version="step_v1:ans_v1",
+            answer_generator_config={"max_tokens": 1024, "model": self.active_model},
+            seeding_config={
+                "top_k": self.top_k,
+                "use_stochastic_resonance": self.use_stochastic_resonance,
+            },
+            budget_config={"max_steps": self.max_steps},
+        )
+
+    def _execute_shadow_branch(
+        self,
+        question: str,
+        branch_node: str,
+        parent_walk_id: str,
+        branch_step: int,
+        walk_stack: List[str],
+        visited_passages: List[Dict[str, Any]],
+        max_shadow_depth: int,
+        env_identity: EnvironmentIdentity,
+        as_of: Optional[float] = None,
+        access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+    ) -> None:
+        """
+        Execute an alternative expansion branch up to max_shadow_depth steps (Spec 4.5).
+        Logs a separate continuation tree linked to parent_walk_id with is_shadow=True.
+        """
+        shadow_tree_id = str(uuid.uuid4())
+        shadow_walk_id = f"shadow_{uuid.uuid4().hex[:12]}"
+
+        # Clone state at the branch point
+        shadow_stack = list(walk_stack)
+        shadow_visited = list(visited_passages)
+
+        # Branch onto target node
+        shadow_stack.append(branch_node)
+        meta = self.engine.wormhole.node_metadata.get(branch_node, {}) if getattr(self, "engine", None) and hasattr(self.engine, "wormhole") else {}
+        current_content = meta.get("content", "[content unavailable]")
+        if not any(p["node_id"] == branch_node for p in shadow_visited):
+            shadow_visited.append({"node_id": branch_node, "content": current_content})
+
+        current_node_id = branch_node
+        shadow_transitions: List[RecordedTransition] = []
+        terminal_status = "BUDGET_EXHAUSTED"
+
+        for s_idx in range(max_shadow_depth):
+            neighbours = self._get_neighbours(current_node_id, as_of=as_of, access_filter=access_filter)
+            valid_ids = [n["node_id"] for n in neighbours]
+
+            eligible_actions: List[EligibleAction] = [
+                EligibleAction(
+                    action_type="EXPAND",
+                    target_node_id=n["node_id"],
+                    score=n.get("score"),
+                    edge_type=n.get("edge_type", "wormhole"),
+                )
+                for n in neighbours
+            ]
+            if len(shadow_stack) > 1:
+                eligible_actions.append(EligibleAction(action_type="BACKTRACK"))
+            eligible_actions.append(EligibleAction(action_type="ANSWER"))
+
+            obs = DecisionObservation(
+                env_hash=env_identity.compute_env_hash(),
+                current_node_id=current_node_id,
+                current_content=current_content,
+                path_prefix=list(shadow_stack),
+                visited_nodes=[p["node_id"] for p in shadow_visited],
+                remaining_budget=max_shadow_depth - s_idx,
+                eligible_actions=eligible_actions,
+            )
+
+            step_prompt = STEP_PROMPT_TEMPLATE.format(
+                question=question,
+                current_node_id=current_node_id,
+                current_content=current_content,
+                neighbours_block=self._format_neighbours_block(neighbours),
+                steps_remaining=max_shadow_depth - s_idx,
+                visited_summary=self._format_visited_summary(shadow_visited),
+            )
+
+            try:
+                raw_output = self._call_llm(CONTROLLER_SYSTEM_PROMPT, step_prompt)
+                parsed = parse_controller_output(raw_output, valid_ids)
+            except Exception as e:
+                parsed = ParsedAction(action="BACKTRACK", parse_failed=True, raw_output=f"[error: {e}]")
+
+            taken_action_str = parsed.action + (f" {parsed.target}" if parsed.target else "")
+
+            shadow_transitions.append(
+                RecordedTransition(
+                    step_index=s_idx,
+                    observation_hash=obs.observation_hash,
+                    observation=obs,
+                    taken_action=taken_action_str,
+                    raw_model_output=parsed.raw_output,
+                    parsed_reason=parsed.reason,
+                    parse_failed=parsed.parse_failed,
+                    next_node_id=parsed.target if parsed.action == "EXPAND" else (shadow_stack[-2] if parsed.action == "BACKTRACK" and len(shadow_stack) > 1 else None),
+                    answer_probe=None,
+                )
+            )
+
+            if parsed.action == "ANSWER":
+                terminal_status = "ANSWER"
+                break
+            elif parsed.action == "EXPAND" and parsed.target and parsed.target in valid_ids:
+                current_node_id = parsed.target
+                shadow_stack.append(current_node_id)
+                meta = self.engine.wormhole.node_metadata.get(current_node_id, {}) if getattr(self, "engine", None) and hasattr(self.engine, "wormhole") else {}
+                current_content = meta.get("content", "[content unavailable]")
+                if not any(p["node_id"] == current_node_id for p in shadow_visited):
+                    shadow_visited.append({"node_id": current_node_id, "content": current_content})
+            elif parsed.action == "BACKTRACK" and len(shadow_stack) > 1:
+                shadow_stack.pop()
+                current_node_id = shadow_stack[-1]
+                meta = self.engine.wormhole.node_metadata.get(current_node_id, {}) if getattr(self, "engine", None) and hasattr(self.engine, "wormhole") else {}
+                current_content = meta.get("content", "[content unavailable]")
+
+        try:
+            shadow_answer = self._synthesize_answer(question, shadow_visited)
+        except Exception:
+            shadow_answer = "[shadow answer synthesis unavailable]"
+
+        if self.anadrome_logger:
+            tree_rec = ReplayTreeRecord(
+                schema_version="1.0.0",
+                tree_id=shadow_tree_id,
+                walk_id=shadow_walk_id,
+                question=question,
+                seeded_nodes=[shadow_stack[0]],
+                environment=env_identity,
+                is_shadow=True,
+                parent_walk_id=parent_walk_id,
+                branch_point_step=branch_step,
+                branch_point_node=branch_node,
+                transitions=shadow_transitions,
+                final_answer=shadow_answer,
+                steps_used=len(shadow_transitions),
+                terminal_status=terminal_status,
+            )
+            self.anadrome_logger.append_tree(tree_rec)
+
+    # ------------------------------------------------------------------
     # Main walk loop
     # ------------------------------------------------------------------
 
@@ -567,6 +747,9 @@ class WalkController:
         conflict_prefix: Optional[str] = None,
         as_of: Optional[float] = None,
         access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        walk_id: Optional[str] = None,
+        parent_walk_id: Optional[str] = None,
+        is_shadow: bool = False,
     ) -> Dict[str, Any]:
         """
         Execute a single deliberative walk.
@@ -577,6 +760,9 @@ class WalkController:
                 informed by a conflict report).
             as_of: Optional POSIX epoch timestamp cutoff; nodes created after are excluded.
             access_filter: Optional predicate (dict -> bool) returning False for restricted nodes.
+            walk_id: Optional unique identifier for this walk.
+            parent_walk_id: Optional parent identifier for shadow branches.
+            is_shadow: Whether this walk is a shadow branch.
 
         Returns:
             Dict with:
@@ -587,6 +773,11 @@ class WalkController:
                 - steps_used: int
         """
         self._validate_graph()
+
+        active_walk_id = walk_id or str(uuid.uuid4())
+        env_identity = self._get_environment_identity() if self.enable_anadrome_logging else None
+        anadrome_transitions: List[RecordedTransition] = []
+        shadow_expansions_done = 0
 
         # Encode the question
         query_vec = self.embedder.encode_single(question)
@@ -682,7 +873,7 @@ class WalkController:
             else:
                 consecutive_parse_failures = 0
 
-            # Record this step
+            # Record this step in live path records
             path_records.append({
                 "node": current_node_id,
                 "action": parsed.action,
@@ -690,6 +881,99 @@ class WalkController:
                 "reason": parsed.reason,
                 "parse_failed": parsed.parse_failed,
             })
+
+            # Record decision observation and transition for Anadrome replay tree
+            if self.enable_anadrome_logging and env_identity is not None:
+                eligible_actions: List[EligibleAction] = [
+                    EligibleAction(
+                        action_type="EXPAND",
+                        target_node_id=n["node_id"],
+                        score=n.get("score"),
+                        edge_type=n.get("edge_type", "wormhole"),
+                    )
+                    for n in neighbours
+                ]
+                if len(walk_stack) > 1:
+                    eligible_actions.append(EligibleAction(action_type="BACKTRACK"))
+                eligible_actions.append(EligibleAction(action_type="ANSWER"))
+
+                obs = DecisionObservation(
+                    env_hash=env_identity.compute_env_hash(),
+                    current_node_id=current_node_id,
+                    current_content=current_content,
+                    path_prefix=list(walk_stack),
+                    visited_nodes=[p["node_id"] for p in visited_passages],
+                    remaining_budget=self.max_steps - step,
+                    eligible_actions=eligible_actions,
+                )
+
+                # Intermediate answer probe (Spec 4.4 & Roadmap Gap 1: path depth >= 2, non-ANSWER action)
+                answer_probe = None
+                if (step + 1) >= 2 and parsed.action != "ANSWER":
+                    prompt_hash = hashlib.sha256(
+                        "\n".join(p["node_id"] + p["content"] for p in visited_passages).encode("utf-8")
+                    ).hexdigest()
+                    cached = self.probe_cache.get(obs.observation_hash, self.active_model, prompt_hash) if self.probe_cache else None
+                    if cached:
+                        answer_probe = cached
+                    else:
+                        try:
+                            draft_ans = self._synthesize_answer(question, visited_passages)
+                            ver = self._verify_answer(question, draft_ans, visited_passages)
+                            answer_probe = {
+                                "draft_answer": draft_ans,
+                                "verified": not ver["conflicts_found"],
+                                "conflict_detail": ver.get("conflict_detail"),
+                            }
+                            if self.probe_cache:
+                                self.probe_cache.put(
+                                    state_id_hash=obs.observation_hash,
+                                    model_id=self.active_model,
+                                    prompt_hash=prompt_hash,
+                                    draft_answer=draft_ans,
+                                    verified=not ver["conflicts_found"],
+                                    conflict_detail=ver.get("conflict_detail"),
+                                )
+                        except Exception as probe_err:
+                            logger.debug("Intermediate answer probe skipped: %s", probe_err)
+
+                taken_act = parsed.action + (f" {parsed.target}" if parsed.target else "")
+                anadrome_transitions.append(
+                    RecordedTransition(
+                        step_index=step,
+                        observation_hash=obs.observation_hash,
+                        observation=obs,
+                        taken_action=taken_act,
+                        raw_model_output=parsed.raw_output,
+                        parsed_reason=parsed.reason,
+                        parse_failed=parsed.parse_failed,
+                        next_node_id=parsed.target if parsed.action == "EXPAND" else (walk_stack[-2] if parsed.action == "BACKTRACK" and len(walk_stack) > 1 else None),
+                        answer_probe=answer_probe,
+                    )
+                )
+
+                # Shadow expansion: exactly 1 per walk, depth <= 2 (Spec 4.5 & Roadmap Gap 1)
+                if (
+                    not is_shadow
+                    and shadow_expansions_done < self.max_shadow_expansions
+                    and parsed.action == "EXPAND"
+                    and len(valid_ids) > 1
+                ):
+                    alt_targets = [vid for vid in valid_ids if vid != parsed.target]
+                    if alt_targets:
+                        shadow_expansions_done += 1
+                        self._execute_shadow_branch(
+                            question=question,
+                            branch_node=alt_targets[0],
+                            parent_walk_id=active_walk_id,
+                            branch_step=step,
+                            walk_stack=list(walk_stack),
+                            visited_passages=list(visited_passages),
+                            max_shadow_depth=2,
+                            env_identity=env_identity,
+                            as_of=as_of,
+                            access_filter=access_filter,
+                        )
 
             # Execute the action
             if parsed.action == "ANSWER":
@@ -737,8 +1021,52 @@ class WalkController:
             })
             steps_used = self.max_steps
 
+            if self.enable_anadrome_logging and env_identity is not None and not (anadrome_transitions and anadrome_transitions[-1].taken_action == "ANSWER"):
+                obs = DecisionObservation(
+                    env_hash=env_identity.compute_env_hash(),
+                    current_node_id=current_node_id,
+                    current_content=current_content,
+                    path_prefix=list(walk_stack),
+                    visited_nodes=[p["node_id"] for p in visited_passages],
+                    remaining_budget=0,
+                    eligible_actions=[EligibleAction(action_type="ANSWER")],
+                )
+                anadrome_transitions.append(
+                    RecordedTransition(
+                        step_index=steps_used - 1,
+                        observation_hash=obs.observation_hash,
+                        observation=obs,
+                        taken_action="ANSWER",
+                        raw_model_output="[budget exhausted, forced ANSWER]",
+                        parsed_reason="Step budget exhausted.",
+                        parse_failed=False,
+                        next_node_id=None,
+                        answer_probe=None,
+                    )
+                )
+
         # Synthesize the final answer
         answer = self._synthesize_answer(question, visited_passages)
+
+        # Log completed replay tree record if Anadrome is enabled
+        if self.enable_anadrome_logging and self.anadrome_logger and env_identity is not None:
+            tree_record = ReplayTreeRecord(
+                schema_version="1.0.0",
+                tree_id=str(uuid.uuid4()),
+                walk_id=active_walk_id,
+                question=question,
+                seeded_nodes=seeded_node_ids,
+                environment=env_identity,
+                is_shadow=is_shadow,
+                parent_walk_id=parent_walk_id,
+                branch_point_step=None,
+                branch_point_node=None,
+                transitions=anadrome_transitions,
+                final_answer=answer,
+                steps_used=steps_used,
+                terminal_status="ANSWER" if (path_records and path_records[-1]["action"] == "ANSWER") else "BUDGET_EXHAUSTED",
+            )
+            self.anadrome_logger.append_tree(tree_record)
 
         return {
             "answer": answer,
@@ -746,6 +1074,7 @@ class WalkController:
             "visited_passages": visited_passages,
             "seeded_nodes": seeded_node_ids,
             "steps_used": steps_used,
+            "walk_id": active_walk_id,
         }
 
     # ------------------------------------------------------------------
@@ -783,7 +1112,9 @@ class WalkController:
         walk_id = str(uuid.uuid4())
 
         # --- Step 1: Initial walk ---
-        walk_result = self.walk(question, as_of=as_of, access_filter=access_filter)
+        walk_result = self.walk(
+            question, as_of=as_of, access_filter=access_filter, walk_id=walk_id
+        )
 
         # --- Step 2: Answer-time verification ---
         verification = self._verify_answer(
@@ -826,11 +1157,13 @@ class WalkController:
                 conflict_report=verification["conflict_detail"] or "Unspecified conflict."
             )
             try:
+                rewalk_id = f"{walk_id}_rewalk"
                 rewalk_result = self.walk(
                     question,
                     conflict_prefix=conflict_prefix,
                     as_of=as_of,
                     access_filter=access_filter,
+                    walk_id=rewalk_id,
                 )
 
                 # Re-verify the new answer
