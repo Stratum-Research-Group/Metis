@@ -124,18 +124,34 @@ To verify all services and environments are operational after system reboot:
    - **Experiment E1 Diagnostic Report (`docs/review/symbolon-reconstruction-fidelity-e1-report.md`)**: Executed on RTX 5060 Ti over representative entity, topological, numerical, and biochemical probes. Calibrated monotonic reconstruction fidelity from L0 (4 codes, 1.2% word overlap) to L8 (48 codes, 82.8% word overlap, 87.5% key term preservation).
    - **Unit Tests (`tests/test_symbolon.py`)**: 8/8 tests passing.
 
+### Phase 6: Anadrome Policy Zoo & Offline Evaluation Harness (Completed)
+1. **Candidate Walk Policy Zoo (`dianoia/dianoia/anadrome/policies.py`)**:
+   - `AnadromePolicy` abstract base contract and callable protocol (`select_action(obs: Dict[str, Any]) -> str`).
+   - **Policy 1: Greedy Similarity EXPAND (`GreedySimilarityPolicy`)**: Selects highest embedding similarity / edge score among eligible unvisited expand targets. Configurable `min_score_threshold`, `avoid_loops`, and fallback action preference.
+   - **Policy 2: High-Entropy Stochastic Selection (`HighEntropyStochasticPolicy`)**: Kleroterion-style temperature-scaled softmax categorical sampling over candidate action scores with deterministic pseudo-random draws keyed on `(seed, observation_hash)`.
+   - **Policy 3: Early-Exit Answer Threshold (`EarlyExitAnswerPolicy`)**: Monitors evidence accumulation and triggers early `ANSWER` once $\ge \text{min\_passages}$ visited or top candidate score is below threshold $\tau$.
+   - **Policy 4: Sheaf Contradiction Backtrack (`SheafContradictionBacktrackPolicy`)**: Inspects observation for cellular sheaf Laplacian topological obstruction/conflict flags or markers and immediately forces `BACKTRACK` on conflicting branches (stack depth > 1).
+   - **Baseline Replay Policy (`BaselineReplayPolicy`)**: Replays recorded transitions bit-for-bit from reference continuation trees or mappings.
+2. **Offline Replay Evaluation & Comparison Harness (`dianoia/dianoia/anadrome/evaluator.py`)**:
+   - Multi-policy zoo evaluation over recorded decision continuation trees.
+   - **Coverage Gate ($\ge 80\%$)**: Strict gating per Spec Section 4.3. Any policy with coverage $< 80\%$ is rejected with `promotion_verdict="FAILED_COVERAGE_GATE"`.
+   - **Mutual Support Filtering**: Restricts pairwise policy comparisons strictly to questions/episodes where *both* candidate and baseline achieved fully supported walks under the Zero Imputation Invariant.
+   - **Dokime Paired Bootstrap Protocol**: 10,000 paired resamples, seed 42, computing 95% confidence intervals on delta correctness/accuracy, step deltas, and hard error regressions.
+   - **Spec Section 6 Promotion Criteria**: Emits `PASS`, `NO_EVIDENCE`, `REGRESSION`, or `FAILED_COVERAGE_GATE` with exact statistical justification.
+3. **Unit and Integration Test Suite (`dianoia/tests/test_policy_zoo.py`)**:
+   - 13 comprehensive tests covering policy decisions, determinism, early exit, sheaf contradiction backtracking, baseline replay, coverage gate rejection, 10k bootstrap evaluation, promotion verdicts, and strict view isolation.
+   - Dianoia test suite: **89 passed** (up from 76).
+   - Total Metis test suite: **365 passed across all suites** (89 dianoia, 37 root, 66 prosopon, 173 kybernetes).
+
 ---
 
 ## 3. Immediate Prioritized Tasks Left to Do
 
-### Task 7: Anadrome Policy Zoo & Offline Replay (Roadmap Milestone 2.2, Track B)
-- **Reference Spec**: `docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt` Section 5 and Roadmap Milestone 2.2.
-- Implement candidate walk policy zoo in Dianoia:
-  - Policy 1: Greedy similarity EXPAND (highest embedding similarity first).
-  - Policy 2: High-entropy stochastic selection (Kleroterion scaled logits).
-  - Policy 3: Early-exit answer threshold (trigger ANSWER if candidate support $> \tau$).
-  - Policy 4: Sheaf contradiction backtrack (force BACKTRACK immediately on detected conflict).
-- Execute replay harness over logged decision trees with mutual support coverage filtering ($\ge 80\%$) and Dokime bootstrap CIs.
+### Task 8: Schedion & Symbolon Controlled Studies (Roadmap Milestone 2.3, Tracks C & D)
+- **Reference Spec**: Synthesis Roadmap Milestone 2.3.
+- **Schedion Stage 3**: Controlled comparison between Hestia summary candidates vs Schedion candidates over identical 512-token conditioned spans:
+  - Record Krisis selector pass/fail rates, claim extraction distributions, factual grounding, and wall-clock times.
+- **Symbolon E2**: Multiscale discrete code capture and fusion evaluation over benchmark diagnostic passages.
 
 ---
 
@@ -144,4 +160,6 @@ To verify all services and environments are operational after system reboot:
 - **Main Manual**: [`docs/MSS.md`](file:///home/akarta/Projects/Metis/docs/MSS.md)
 - **Pyle WebRTC + Passkey Spec**: [`docs/review/mss-pyle-webrtc-passkey-spec.md`](file:///home/akarta/Projects/Metis/docs/review/mss-pyle-webrtc-passkey-spec.md)
 - **Synthesis Roadmap (All 5 Subsystems)**: [`docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md`](file:///home/akarta/Projects/Metis/docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md)
+- **Anadrome Replay Spec**: [`docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
+

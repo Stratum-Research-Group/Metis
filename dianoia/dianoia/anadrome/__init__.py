@@ -8,7 +8,21 @@ from dianoia.anadrome.contracts import (
     RecordedTransition,
     ReplayTreeRecord,
 )
+from dianoia.anadrome.evaluator import (
+    AnadromeEvaluator,
+    PairedComparisonResult,
+    PolicyEpisodeScore,
+    PolicyEvaluationSummary,
+)
 from dianoia.anadrome.logger import AnadromeLogger
+from dianoia.anadrome.policies import (
+    AnadromePolicy,
+    BaselineReplayPolicy,
+    EarlyExitAnswerPolicy,
+    GreedySimilarityPolicy,
+    HighEntropyStochasticPolicy,
+    SheafContradictionBacktrackPolicy,
+)
 from dianoia.anadrome.probe_cache import AnswerProbeCache
 from dianoia.anadrome.replay import AnadromeReplayEngine, EpisodeReplayResult
 
@@ -24,4 +38,15 @@ __all__ = [
     "AnadromeLogger",
     "AnadromeReplayEngine",
     "EpisodeReplayResult",
+    "AnadromePolicy",
+    "GreedySimilarityPolicy",
+    "HighEntropyStochasticPolicy",
+    "EarlyExitAnswerPolicy",
+    "SheafContradictionBacktrackPolicy",
+    "BaselineReplayPolicy",
+    "AnadromeEvaluator",
+    "PolicyEvaluationSummary",
+    "PairedComparisonResult",
+    "PolicyEpisodeScore",
 ]
+
