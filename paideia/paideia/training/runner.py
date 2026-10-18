@@ -130,6 +130,16 @@ class QLoRATrainingRunner:
         git_info = get_git_info()
         hardware_info = inspect_hardware()
 
+        dataset_bom_dict = None
+        try:
+            from dokime.bom import DatasetBOM
+            if getattr(self.splits, "train_path", None) and Path(self.splits.train_path).is_file():
+                dataset_bom_dict = DatasetBOM.generate_from_file(Path(self.splits.train_path)).to_dict()
+            elif getattr(self.config, "data_dir", None) and Path(self.config.data_dir).is_dir():
+                dataset_bom_dict = DatasetBOM.generate_from_dir(Path(self.config.data_dir)).to_dict()
+        except Exception:
+            pass
+
         manifest = RunManifest(
             run_id=self.run_id,
             task_name=f"qlora_{self.config.task}",
@@ -153,6 +163,7 @@ class QLoRATrainingRunner:
                 "dev": len(self.splits.dev),
                 "test": len(self.splits.test),
             },
+            dataset_bom=dataset_bom_dict,
             seed=self.config.seed,
             hyperparameters=self.config.model_dump(),
         )

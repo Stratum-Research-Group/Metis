@@ -141,6 +141,8 @@ class StomaIndexer:
         config: Optional[StomaConfig] = None,
         embedder: Optional[StomaEmbedder] = None,
         plugin_registry: Optional[PluginRegistry] = None,
+        redactor: Optional[Any] = None,
+        filter_boilerplate: bool = False,
     ):
         from stoma.config import verify_runtime_dependencies
         verify_runtime_dependencies()
@@ -148,10 +150,14 @@ class StomaIndexer:
         self.config = config or StomaConfig()
         self.embedder = embedder or StomaEmbedder(model_name=self.config.model_name)
         self.plugins = plugin_registry or PluginRegistry()
+        self.redactor = redactor
+        self.filter_boilerplate = filter_boilerplate
         self.chunker = Chunker(
             embedder=self.embedder,
             target_tokens=self.config.max_chunk_tokens,
             overlap_tokens=self.config.chunk_overlap_tokens,
+            redactor=self.redactor,
+            filter_boilerplate=self.filter_boilerplate,
         )
 
         self.manifest: ProvenanceManifest

@@ -42,12 +42,16 @@ class Chunker:
         embedder: StomaEmbedder,
         target_tokens: int = 200,
         overlap_tokens: int = 30,
+        redactor: Optional[Any] = None,
+        filter_boilerplate: bool = False,
     ):
         self.embedder = embedder
         # Effective max tokens accounts for special tokens overhead
         self.hard_max_tokens = getattr(self.embedder, "effective_max_tokens", self.embedder.max_seq_length - 2)
         self.target_tokens = min(target_tokens, self.hard_max_tokens - 10)
         self.overlap_tokens = min(overlap_tokens, self.target_tokens // 4)
+        self.redactor = redactor
+        self.filter_boilerplate = filter_boilerplate
 
     def chunk_raw_passages_stream(
         self,
@@ -79,6 +83,18 @@ class Chunker:
             text = raw.content.strip()
             if not text:
                 continue
+
+            if self.filter_boilerplate:
+                from stoma.redaction import ContentAssessment
+                is_spam, _ = ContentAssessment.is_boilerplate_or_spam(text)
+                if is_spam:
+                    continue
+
+            if self.redactor:
+                text, _ = self.redactor.redact_text(text)
+                text = text.strip()
+                if not text:
+                    continue
 
             num_tokens = self.embedder.count_tokens(text)
 

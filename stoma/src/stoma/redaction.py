@@ -59,6 +59,10 @@ class PrivacyRedactor:
 
         return redacted_text, total_count
 
+    def redact_text(self, text: str) -> Tuple[str, int]:
+        """Instance alias for redact."""
+        return self.redact(text)
+
 
 class ContentAssessment:
     """

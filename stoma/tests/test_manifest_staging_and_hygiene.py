@@ -227,3 +227,35 @@ def test_archive_safety_guard_decompression_caps(tmp_path):
     with pytest.raises(ArchiveBombError) as exc:
         ArchiveSafetyGuard.inspect_zip_archive(traversal_zip)
     assert "path traversal" in str(exc.value)
+
+
+def test_chunker_with_privacy_redactor_and_boilerplate_filtering():
+    """Verify that Chunker redacts sensitive tokens and discards repetitive boilerplate when enabled."""
+    from stoma.chunker import Chunker
+    from stoma.plugins.base import RawPassage
+    from stoma.embedder import StomaEmbedder
+    from stoma.redaction import PrivacyRedactor
+
+    embedder = StomaEmbedder(model_name="paraphrase-MiniLM-L3-v2")
+    chunker = Chunker(
+        embedder=embedder,
+        redactor=PrivacyRedactor(),
+        filter_boilerplate=True,
+    )
+
+    passages = [
+        RawPassage(content="My private API key is sk-12345678901234567890123456789012 for the production service."),
+        RawPassage(content="Click here to unsubscribe! Click here to unsubscribe! Click here to unsubscribe! Click here to unsubscribe! Click here to unsubscribe!"),
+        RawPassage(content="This is standard documentation content explaining the architecture."),
+    ]
+
+    chunks = list(chunker.chunk_raw_passages_stream(passages))
+    assert len(chunks) == 2
+    # First chunk has redacted key
+    assert "sk-1234567890" not in chunks[0].content
+    assert "[REDACTED_API_KEY]" in chunks[0].content
+    # Boilerplate passage was skipped
+    assert not any("unsubscribe" in c.content.lower() for c in chunks)
+    # Third passage preserved
+    assert "standard documentation" in chunks[1].content
+

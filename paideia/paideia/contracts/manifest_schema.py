@@ -36,6 +36,7 @@ class RunManifest(BaseModel):
     dataset_checksum: str = Field(..., description="SHA-256 of primary input dataset")
     split_checksums: Dict[str, str] = Field(default_factory=dict, description="SHA-256 digests for train/dev/test splits")
     split_counts: Dict[str, int] = Field(default_factory=dict, description="Number of items in each split")
+    dataset_bom: Optional[Dict[str, Any]] = Field(default=None, description="Optional cryptographic Dataset BOM metadata from Dokime")
     
     # Config & Hyperparameters
     seed: int = Field(default=42, description="Random seed")

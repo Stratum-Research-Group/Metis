@@ -22,10 +22,12 @@ class GuardedGateway:
         policy_manager: PolicyManager,
         audit_logger: AuditLogger,
         approval_manager: ApprovalManager | None = None,
+        health_validator: Callable[[str], bool] | None = None,
     ):
         self.policy_manager = policy_manager
         self.audit_logger = audit_logger
         self.approval_manager = approval_manager or ApprovalManager()
+        self.health_validator = health_validator
 
     def decide(
         self,
@@ -38,11 +40,37 @@ class GuardedGateway:
         turn_id: str | None = None,
     ) -> AuthorizationRecord:
         """Evaluate policy, record pending approval if ASK, and log decision fail-closed."""
+        norm_verb = Verb(verb) if isinstance(verb, str) else verb
+        norm_rc = ResourceClass(resource_class) if isinstance(resource_class, str) else resource_class
+
+        if self.health_validator and (norm_verb == Verb.EXECUTE or norm_rc in (ResourceClass.TOOL, ResourceClass.SYSTEM)):
+            if not self.health_validator(target):
+                auth_rec = AuthorizationRecord(
+                    decision_id=f"dec-unhealthy-{uuid.uuid4().hex[:8]}",
+                    timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                    subject=subject,
+                    verb=norm_verb,
+                    resource_class=norm_rc,
+                    canonical_resource=target,
+                    effect=Effect.DENY,
+                    matched_rule_id="tool_health_probe_failed",
+                    policy_version=self.policy_manager.policy.version,
+                    reason=f"Target '{target}' failed health probe verification (missing or broken)",
+                    trace_id=trace_id,
+                    approval_id=None,
+                    argument_digest=None,
+                )
+                try:
+                    self.audit_logger.log_event(auth_record=auth_rec, receipt=None, context=arguments)
+                except PhylaxAuditFailureError:
+                    pass
+                return auth_rec
+
         evaluator = self.policy_manager.evaluator
         auth_rec = evaluator.decide(
             subject=subject,
-            verb=verb,
-            resource_class=resource_class,
+            verb=norm_verb,
+            resource_class=norm_rc,
             target=target,
             arguments=arguments,
             trace_id=trace_id,
@@ -117,6 +145,26 @@ class GuardedGateway:
         norm_verb = Verb(verb) if isinstance(verb, str) else verb
         norm_rc = ResourceClass(resource_class) if isinstance(resource_class, str) else resource_class
         policy_ver = self.policy_manager.policy.version
+
+        if self.health_validator and (norm_verb == Verb.EXECUTE or norm_rc in (ResourceClass.TOOL, ResourceClass.SYSTEM)):
+            if not self.health_validator(target):
+                auth_rec = AuthorizationRecord(
+                    decision_id=f"dec-unhealthy-{uuid.uuid4().hex[:8]}",
+                    timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                    subject=subject,
+                    verb=norm_verb,
+                    resource_class=norm_rc,
+                    canonical_resource=target,
+                    effect=Effect.DENY,
+                    matched_rule_id="tool_health_probe_failed",
+                    policy_version=policy_ver,
+                    reason=f"Target '{target}' failed health probe verification (missing or broken)",
+                    trace_id=trace_id,
+                    approval_id=None,
+                    argument_digest=None,
+                )
+                self.audit_logger.log_event(auth_rec, None, args)
+                raise PermissionError(f"Phylax denied action '{norm_verb.value}' on '{target}' for subject '{subject}': Target failed health probe verification")
 
         if approval_id:
             # Pre-approved path: verify and consume approval token atomically

@@ -159,3 +159,36 @@ def test_pre_execution_audit_failure_blocks_action(gateway_setup, monkeypatch):
     # Action MUST NOT have executed
     assert action_mock.call_count == 0
 
+
+def test_tool_health_validator_blocks_broken_tool(gateway_setup):
+    """Verify that GuardedGateway with health_validator blocks execution of broken tools."""
+    gw, tmp_path = gateway_setup
+
+    # Health validator considers 'calc' as broken/unhealthy
+    def mock_validator(tool_name: str) -> bool:
+        return False if tool_name == "calc" else True
+
+    gw.health_validator = mock_validator
+
+    with pytest.raises(PermissionError) as exc:
+        gw.authorize_and_execute(
+            subject="kybernetes",
+            verb=Verb.EXECUTE,
+            resource_class=ResourceClass.TOOL,
+            target="calc",
+            action_fn=lambda: "ran",
+        )
+
+    assert "failed health probe verification" in str(exc.value)
+
+    # Calling decide directly also produces DENY
+    auth_rec = gw.decide(
+        subject="kybernetes",
+        verb=Verb.EXECUTE,
+        resource_class=ResourceClass.TOOL,
+        target="calc",
+    )
+    assert auth_rec.effect == Effect.DENY
+    assert "tool_health_probe_failed" in auth_rec.matched_rule_id
+
+
