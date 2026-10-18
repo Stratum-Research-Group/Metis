@@ -2,8 +2,8 @@
 
 **Last Updated:** 2026-10-18  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `b537f4be4ab52a88ce1b5006416d45af4cd23f2f` (`feat(anadrome): harden canonical JSON normalization against mock OOM and execute Milestone 3.2 frozen live walk test`)  
-**Working Tree Status:** Clean, all tests passing.
+**Current HEAD Commit:** `9cbc8bf410be934e5e6c92c30f3e7aba0b7cbcee` (`feat(anadrome): refine Q08 to temporal reasoning question and update stoma provenance`)  
+**Working Tree Status:** Clean, all tests passing (375/375).
 
 ---
 
@@ -12,13 +12,19 @@
 To verify all services and environments are operational after system reboot:
 
 ```bash
-# 1. Run Prosopon test suite (66 tests)
+# 1. Run Prosopon test suite (70 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests
 
 # 2. Run Kybernetes test suite (173 tests)
 ./kybernetes/.venv/bin/pytest kybernetes/tests
 
-# Total: 239 tests passing
+# 3. Run Dianoia test suite (93 tests)
+./.venv/bin/pytest dianoia/tests
+
+# 4. Run Root test suite (39 tests)
+./.venv/bin/pytest tests
+
+# Total: 375 tests passing across all 4 suites
 ```
 
 ---
