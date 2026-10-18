@@ -81,13 +81,17 @@ class TerminalCodingAgent:
         auto_approve: bool = False,
         model_name: Optional[str] = None,
         test_command: Optional[str] = None,
+        temperature: float = 0.15,
+        base_url: Optional[str] = None,
     ):
         self.workspace_root = (workspace_root or Path.cwd()).resolve()
-        self.hestia = hestia_adapter or HestiaAdapter()
+        self.base_url = base_url
+        self.hestia = hestia_adapter or HestiaAdapter(base_url=base_url)
         self.max_steps = max_steps
         self.auto_approve = auto_approve
         self.model_name = model_name or self.hestia.default_model
         self.test_command = test_command
+        self.temperature = temperature
 
         self.tool_registry = ToolRegistry(
             allowed_roots=[self.workspace_root],
@@ -243,7 +247,7 @@ class TerminalCodingAgent:
                 prompt=full_prompt,
                 system_prompt=system_prompt,
                 model=self.model_name,
-                temperature=0.15,
+                temperature=self.temperature,
             ):
                 delta = chunk.get("delta", "")
                 if delta:

@@ -98,6 +98,9 @@ Kybernetes includes sandboxed built-in tools:
 
 ## 5. CLI Commands & Service Control
 
+For complete operational reference and advanced usage recipes, see [docs/MSS.md](../docs/MSS.md).
+
+### 5.1 Orchestrator & Server Operations
 ```bash
 # Stack readiness check
 kybernetes doctor
@@ -112,6 +115,53 @@ kybernetes chat -q "What is Metis architecture?"
 kybernetes serve --host 127.0.0.1 --port 8081 --db-path kybernetes_budget.db
 ```
 
+### 5.2 Sovereign Coding Agent (`kybernetes code`)
+```bash
+# Autonomous coding session with automated test rollback
+kybernetes code \
+  --goal "Implement feature and add unit tests" \
+  --workspace . \
+  --test-cmd "pytest kybernetes/tests" \
+  --model "qwen2.5-coder-32b-instruct" \
+  --temperature 0.15
+
+# Auto-approved unattended run
+kybernetes code --goal "Refactor imports" --auto-approve --test-cmd "pytest"
+```
+
+### 5.3 Lochos Multi-Agent Squad (`kybernetes lochos`)
+```bash
+# View active seats and current task batons
+kybernetes lochos ps
+
+# Inspect durable SQLite queue
+kybernetes lochos queue
+
+# Dispatch a mission slice to a seat
+kybernetes lochos dispatch --mission "v0.6.0" --slice "001" --title "Task title" --seat coder
+
+# Transfer task baton from coder to reviewer
+kybernetes lochos transfer --task-id "<TASK_ID>" --from-seat coder --to-seat reviewer
+
+# Execute claimed task on a seat
+kybernetes lochos run --seat coder --auto-approve
+```
+
+### 5.4 Pinax Tool Catalogue (`kybernetes pinax`)
+```bash
+# Passive PATH scan to discover system tools (no binary execution)
+kybernetes pinax scan
+
+# Search tools by keyword and risk tier
+kybernetes pinax lookup "git" --tier T1
+
+# Sliced documentation retrieval (size-capped)
+kybernetes pinax docs git --max-bytes 4096
+
+# Evaluate invocation arguments against security policies
+kybernetes pinax evaluate git commit -m "feat: new feature"
+```
+
 ---
 
 ## 6. Running Tests
@@ -119,4 +169,5 @@ kybernetes serve --host 127.0.0.1 --port 8081 --db-path kybernetes_budget.db
 ```bash
 uv run pytest kybernetes/tests -v --cov=kybernetes
 ```
-All unit tests validate route planning, Kalman filter burn-rate tracking, EVM bounds, safe AST calculator, SSE streaming, and Phylax capability integration.
+All unit tests validate route planning, Kalman filter burn-rate tracking, EVM bounds, safe AST calculator, SSE streaming, TerminalCodingAgent, Lochos squads, Pinax catalogue, and Phylax capability integration.
+

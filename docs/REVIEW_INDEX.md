@@ -11,7 +11,8 @@ The original `.txt` prompts are paired duplicates: each `v2` file repeats its ea
 | Kybernetes | [kybernetes/README.md](../kybernetes/README.md) & [REVIEW_AND_GAPS.md](../kybernetes/REVIEW_AND_GAPS.md) |
 | Prosopon | [prosopon/README.md](../prosopon/README.md) & [REVIEW_AND_GAPS.md](../prosopon/REVIEW_AND_GAPS.md) |
 
-The existing core components have detailed local documentation: [Stoma](../stoma/README.md), [Dianoia](../dianoia/README.md), [Dokime](../dokime/README.md), [Hestia](../hestia/README.md), [LTHCM](../LTHCM/README.md), [Kleroterion](../kleroterion/README.md), and [Krisis](../krisis/README.md). The overarching integration contract is [the stack integration plan](stack-integration.md).
+The existing core components have detailed local documentation: [Stoma](../stoma/README.md), [Dianoia](../dianoia/README.md), [Dokime](../dokime/README.md), [Hestia](../hestia/README.md), [LTHCM](../LTHCM/README.md), [Kleroterion](../kleroterion/README.md), and [Krisis](../krisis/README.md). The overarching integration contract is [the stack integration plan](stack-integration.md). For the autonomous coding agent, Lochos multi-agent squads, and Pinax tool catalogue, see [Metis Sovereign Stack User Manual](MSS.md).
+
 
 ## Historical Reviews and Architecture Specifications (`docs/review/`)
 

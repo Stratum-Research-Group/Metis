@@ -173,6 +173,8 @@ def demo():
 @click.option("--model", "-m", default=None, help="Model name on Hestia server.")
 @click.option("--test-cmd", "-t", default=None, help="Automated verification command (rolls back on failure).")
 @click.option("--workspace", "-w", default=None, type=click.Path(exists=True, file_okay=False), help="Workspace root path.")
+@click.option("--base-url", "-u", default=None, help="Hestia OpenAI-compatible endpoint URL (default: http://127.0.0.1:8080/v1).")
+@click.option("--temperature", default=0.15, type=float, help="Sampling temperature for code generation (default: 0.15).")
 def code_cmd(
     goal: str,
     max_steps: int,
@@ -180,6 +182,8 @@ def code_cmd(
     model: Optional[str],
     test_cmd: Optional[str],
     workspace: Optional[str],
+    base_url: Optional[str],
+    temperature: float,
 ):
     """Launch the sovereign Metis coding agent (MSS) directly in the terminal."""
     from pathlib import Path
@@ -192,6 +196,8 @@ def code_cmd(
         auto_approve=auto_approve,
         model_name=model,
         test_command=test_cmd,
+        base_url=base_url,
+        temperature=temperature,
     )
     result = agent.run(goal)
     if not result.success:
