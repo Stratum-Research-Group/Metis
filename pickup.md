@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-10-18  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `fed42ca2385982e3701fcede1f23260ff84ea949` (`feat(pyle): implement Phase 1 SQLite Device Registry, WebAuthn RP, and management endpoints`)  
+**Current HEAD Commit:** `90ddb918f0376cb42e92c2df9e5fe982b6c7aeb8` (`feat(pyle): implement Phase 2 WebRTC DataChannel engine, signaling, and client controller`)  
 **Working Tree Status:** Clean, all tests passing.
 
 ---
@@ -12,18 +12,18 @@
 To verify all services and environments are operational after system reboot:
 
 ```bash
-# 1. Run Prosopon test suite (58 tests)
+# 1. Run Prosopon test suite (66 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests
 
 # 2. Run Kybernetes test suite (173 tests)
 ./kybernetes/.venv/bin/pytest kybernetes/tests
 
-# Total: 231 tests passing
+# Total: 239 tests passing
 ```
 
 ---
 
-## 2. Completed Sessions (Phase 0 & Phase 1)
+## 2. Completed Sessions (Phase 0, Phase 1 & Phase 2)
 
 ### Phase 0: Perimeter Hardening
 1. **Perimeter Hardening**:
@@ -42,7 +42,7 @@ To verify all services and environments are operational after system reboot:
 
 ### Phase 1: SQLite Device Registry & WebAuthn RP (Completed)
 1. **SQLite Access Store (`prosopon/storage/access_store.py`)**:
-   - Persistent store `prosopon/data/access.db` managing `devices`, `passkeys`, `device_sessions`, `pairing_links`, `routes`, and `access_audit`.
+   - Persistent store `prosopon/data/access.db` managing `devices`, `passkeys`, `device_sessions`, `pairing_links`, `routes`, `access_audit`, and `webrtc_sessions`.
    - SHA-256 cryptographic hash-chaining across all access audit rows with verification.
    - Default `host_owner` device provisioned automatically.
 2. **W3C WebAuthn Relying Party (`prosopon/auth/webauthn.py`)**:
@@ -58,18 +58,28 @@ To verify all services and environments are operational after system reboot:
 6. **Documentation Update**:
    - Updated `docs/MSS.md` Section 3.5 and Section 11.8.
 
+### Phase 2: WebRTC DataChannel Engine & Client Controller (Completed)
+1. **WebRTC Gateway (`prosopon/transport/webrtc.py`)**:
+   - Implemented `WebRTCGateway` using `aiortc>=1.9.0`.
+   - SCTP DataChannel multiplexing:
+     - `control`: JSON-RPC 2.0 (ping/heartbeat, `auth.status`, `phylax.sign_approval`).
+     - `stream`: SSE formatted real-time event broadcasting.
+     - `terminal`: Bidirectional ANSI terminal stream.
+   - Phylax biometric action challenge verification with risk-tier scope checks (`approvals:resolve` for T1, `approvals:resolve_high` for T2/T3).
+   - Instant peer connection teardown on device revocation (< 500ms security invariant).
+2. **Signaling Endpoints (`prosopon/server.py`)**:
+   - `POST /api/webrtc/offer`: SDP negotiation with token/host-owner authentication.
+   - `POST /api/webrtc/ice-candidate`: ICE candidate ingestion.
+   - `GET /api/webrtc/sessions`: Active WebRTC session listing.
+   - Wired teardown into device revocation and emergency lockdown endpoints.
+3. **Client Controller (`prosopon/web/static/js/webrtc_client.js`)**:
+   - `PyleWebRTCClient` managing RTCPeerConnection, signaling, JSON-RPC, SSE streams, and Phylax signing.
+4. **Test Suite (`prosopon/tests/test_pyle_webrtc.py`)**:
+   - 8 comprehensive tests covering negotiation, unauthorized rejection, ICE candidates, JSON-RPC ping/auth, Phylax approval scope enforcement, SSE/terminal dispatch, and instant revocation.
+
 ---
 
 ## 3. Immediate Prioritized Tasks Left to Do
-
-### Task 3: Pyle Phase 2 — WebRTC DataChannel Engine (`aiortc`)
-- Implement WebRTC signaling (`/api/webrtc/offer`, `/api/webrtc/ice-candidate`).
-- Establish the 4 multiplexed channels:
-  - `control`: RPC, ping/keepalive, session state.
-  - `stream`: Lochos squad & chat token streaming.
-  - `terminal`: ANSI terminal streaming for `kybernetes code` runs.
-  - `audio`: Full-duplex Opus audio for sovereign voice client (bypasses browser self-signed TLS restrictions on mobile).
-- Enforce WebAuthn biometric challenge-signing for Phylax T2/T3 approvals.
 
 ### Task 4: NCM Hardware Validation (Schedion & Symbolon)
 - **Reference Spec**: `docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md`
