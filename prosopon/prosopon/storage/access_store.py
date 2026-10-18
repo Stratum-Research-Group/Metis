@@ -136,6 +136,14 @@ class AccessStore:
                 prev_row_hash TEXT NOT NULL,
                 row_hash TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS webrtc_sessions (
+                session_id TEXT PRIMARY KEY,
+                device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                connected_at_utc TEXT NOT NULL,
+                peer_address TEXT NOT NULL,
+                last_heartbeat_utc TEXT NOT NULL
+            );
             """)
 
             # Ensure host-owner device exists
@@ -981,4 +989,78 @@ class AccessStore:
                     tls=row["tls"],
                 )
                 for row in rows
+            ]
+
+    # -------------------------------------------------------------------------
+    # WebRTC Sessions
+    # -------------------------------------------------------------------------
+
+    def register_webrtc_session(
+        self,
+        session_id: str,
+        device_id: str,
+        peer_address: str,
+    ) -> None:
+        now_str = datetime.now(timezone.utc).isoformat()
+        conn = self._get_connection()
+        with self._lock, conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO webrtc_sessions (
+                    session_id, device_id, connected_at_utc, peer_address, last_heartbeat_utc
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, device_id, now_str, peer_address, now_str),
+            )
+            self._log_audit_locked(
+                conn,
+                action="webrtc_connected",
+                actor_device_id=device_id,
+                target_device_id=device_id,
+                detail={"session_id": session_id, "peer_address": peer_address},
+            )
+
+    def update_webrtc_heartbeat(self, session_id: str) -> None:
+        now_str = datetime.now(timezone.utc).isoformat()
+        conn = self._get_connection()
+        with self._lock, conn:
+            conn.execute(
+                "UPDATE webrtc_sessions SET last_heartbeat_utc = ? WHERE session_id = ?",
+                (now_str, session_id),
+            )
+
+    def close_webrtc_session(self, session_id: str) -> None:
+        conn = self._get_connection()
+        with self._lock, conn:
+            row = conn.execute("SELECT device_id FROM webrtc_sessions WHERE session_id = ?", (session_id,)).fetchone()
+            dev_id = row["device_id"] if row else None
+            conn.execute("DELETE FROM webrtc_sessions WHERE session_id = ?", (session_id,))
+            if dev_id:
+                self._log_audit_locked(
+                    conn,
+                    action="webrtc_closed",
+                    actor_device_id=dev_id,
+                    target_device_id=dev_id,
+                    detail={"session_id": session_id},
+                )
+
+    def list_webrtc_sessions(self, device_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        with self._lock:
+            if device_id:
+                rows = conn.execute(
+                    "SELECT * FROM webrtc_sessions WHERE device_id = ? ORDER BY connected_at_utc DESC",
+                    (device_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM webrtc_sessions ORDER BY connected_at_utc DESC").fetchall()
+            return [
+                {
+                    "session_id": r["session_id"],
+                    "device_id": r["device_id"],
+                    "connected_at_utc": r["connected_at_utc"],
+                    "peer_address": r["peer_address"],
+                    "last_heartbeat_utc": r["last_heartbeat_utc"],
+                }
+                for r in rows
             ]

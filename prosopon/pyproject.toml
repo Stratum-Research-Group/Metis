@@ -23,6 +23,7 @@ dependencies = [
     "aiofiles>=23.2.0",
     "python-multipart>=0.0.9",
     "webauthn>=2.0.0",
+    "aiortc>=1.9.0",
 ]
 
 [project.optional-dependencies]

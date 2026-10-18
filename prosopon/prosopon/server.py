@@ -39,6 +39,7 @@ from prosopon.storage.session_store import SessionStore
 from prosopon.storage.access_store import AccessStore
 from prosopon.auth.webauthn import WebAuthnManager
 from prosopon.auth.scopes import get_scopes_for_preset, has_scope
+from prosopon.transport.webrtc import WebRTCGateway
 from prosopon.contracts.access import (
     DeviceRecord,
     PairDeviceRequest,
@@ -117,6 +118,12 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     app.state.session_store = session_store
     app.state.access_store = access_store
     app.state.webauthn_mgr = webauthn_mgr
+    webrtc_gateway = WebRTCGateway(
+        access_store=access_store,
+        webauthn_mgr=webauthn_mgr,
+        ice_servers=getattr(cfg, "webrtc_ice_servers", None),
+    )
+    app.state.webrtc_gateway = webrtc_gateway
     app.state.kybernetes = kybernetes
 
     # CORS & Origin protection
@@ -420,6 +427,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 status_code=400,
                 detail=f"Device '{device_id}' not found, already revoked, or protected.",
             )
+        # Immediately terminate active WebRTC PeerConnections (<500ms)
+        await webrtc_gateway.close_device_connections(device_id)
         return {"status": "ok", "revoked": True, "device_id": device_id}
 
     @app.post("/api/devices/lockdown")
@@ -431,6 +440,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         client_ip = request.client.host if request.client else None
         reason = req.reason if req else "panic"
         rev_devs, rev_sess = access_store.lockdown_all(reason=reason, ip=client_ip)
+        # Terminate all active WebRTC sessions
+        await webrtc_gateway.close_all()
         return LockdownResponse(
             revoked_devices_count=rev_devs,
             revoked_sessions_count=rev_sess,
@@ -653,6 +664,83 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             "preset": device.preset,
             "scopes": device.scopes,
         }
+
+    # 2.2 WebRTC Signaling Endpoints (DataChannel & Media Gateway)
+    class WebRTCOfferRequest(BaseModel):
+        sdp: str
+        type: str
+        device_id: Optional[str] = None
+        session_id: Optional[str] = None
+
+    class WebRTCCandidateRequest(BaseModel):
+        session_id: str
+        candidate: Dict[str, Any]
+
+    @app.post("/api/webrtc/offer")
+    async def webrtc_offer(
+        req: WebRTCOfferRequest,
+        request: Request,
+        authorization: Optional[str] = Header(None),
+    ) -> Dict[str, Any]:
+        _validate_host_header(request)
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer "):].strip()
+
+        target_dev_id = req.device_id
+        host_owner_hdr = request.headers.get("x-host-owner-token")
+        if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
+            target_dev_id = "host_owner"
+        elif token:
+            res = access_store.validate_session_token(token)
+            if res:
+                target_dev_id = res[0].device_id
+
+        if not target_dev_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Valid device session or host-owner credential required for WebRTC gateway.",
+            )
+
+        client_ip = request.client.host if request.client else "unknown"
+        try:
+            answer_sdp, answer_type, sess_id = await webrtc_gateway.handle_offer(
+                sdp=req.sdp,
+                type_=req.type,
+                device_id=target_dev_id,
+                peer_address=client_ip,
+                session_id=req.session_id,
+            )
+            return {
+                "sdp": answer_sdp,
+                "type": answer_type,
+                "session_id": sess_id,
+                "device_id": target_dev_id,
+            }
+        except PermissionError as pe:
+            raise HTTPException(status_code=403, detail=str(pe))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"WebRTC offer negotiation failed: {e}")
+
+    @app.post("/api/webrtc/ice-candidate")
+    async def webrtc_ice_candidate(
+        req: WebRTCCandidateRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        _validate_host_header(request)
+        try:
+            await webrtc_gateway.handle_ice_candidate(req.session_id, req.candidate)
+            return {"status": "ok"}
+        except ValueError as ve:
+            raise HTTPException(status_code=404, detail=str(ve))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to add ICE candidate: {e}")
+
+    @app.get("/api/webrtc/sessions")
+    async def list_webrtc_sessions(
+        _: bool = Depends(require_auth),
+    ) -> List[Dict[str, Any]]:
+        return access_store.list_webrtc_sessions()
 
     # 3. Session Endpoints
     @app.get("/api/sessions")
