@@ -47,6 +47,122 @@ def test_load_walk_dataset_and_attempt_linkage():
     assert audit.action_counts["ANSWER"] == 2
 
 
+def test_load_anadrome_replay_dataset_and_auto_detection(tmp_path: Path):
+    from paideia.data.walk_loader import load_anadrome_replay_dataset
+    import json
+    replay_file = tmp_path / "replay_trees.jsonl"
+
+    rec1 = {
+        "schema_version": "1.0.0",
+        "tree_id": "tree_001",
+        "walk_id": "walk_001",
+        "question": "What is the capital of France?",
+        "seeded_nodes": ["node_france"],
+        "environment": {"controller_model_id": "qwen2.5-7b"},
+        "is_shadow": False,
+        "parent_walk_id": None,
+        "branch_point_step": None,
+        "branch_point_node": None,
+        "transitions": [
+            {
+                "step_index": 0,
+                "observation_hash": "hash_0",
+                "observation": {
+                    "env_hash": "e1",
+                    "current_node_id": "node_france",
+                    "current_content": "France is a country in Europe.",
+                    "path_prefix": ["node_france"],
+                    "visited_nodes": ["node_france"],
+                    "remaining_budget": 5,
+                    "eligible_actions": [],
+                },
+                "taken_action": "EXPAND node_paris",
+                "raw_model_output": "EXPAND node_paris",
+                "parsed_reason": "Explore capital city node",
+                "parse_failed": False,
+                "next_node_id": "node_paris",
+            },
+            {
+                "step_index": 1,
+                "observation_hash": "hash_1",
+                "observation": {
+                    "env_hash": "e1",
+                    "current_node_id": "node_paris",
+                    "current_content": "Paris is the capital of France.",
+                    "path_prefix": ["node_france", "node_paris"],
+                    "visited_nodes": ["node_france", "node_paris"],
+                    "remaining_budget": 4,
+                    "eligible_actions": [],
+                },
+                "taken_action": "ANSWER Paris",
+                "raw_model_output": "ANSWER Paris",
+                "parsed_reason": "Direct factual answer reached",
+                "parse_failed": False,
+                "next_node_id": None,
+            },
+        ],
+        "final_answer": "Paris",
+        "steps_used": 2,
+        "terminal_status": "ANSWER",
+    }
+
+    rec2 = {
+        "schema_version": "1.0.0",
+        "tree_id": "tree_002",
+        "walk_id": "walk_002",
+        "question": "Unfinished question",
+        "seeded_nodes": ["node_x"],
+        "environment": {"controller_model_id": "qwen2.5-7b"},
+        "is_shadow": False,
+        "parent_walk_id": None,
+        "branch_point_step": None,
+        "branch_point_node": None,
+        "transitions": [
+            {
+                "step_index": 0,
+                "observation_hash": "hash_x",
+                "observation": {
+                    "env_hash": "e1",
+                    "current_node_id": "node_x",
+                    "current_content": "content",
+                    "path_prefix": ["node_x"],
+                    "visited_nodes": ["node_x"],
+                    "remaining_budget": 0,
+                    "eligible_actions": [],
+                },
+                "taken_action": "EXPAND node_y",
+                "raw_model_output": "EXPAND node_y",
+                "parsed_reason": "budget exhausted",
+                "parse_failed": False,
+                "next_node_id": "node_y",
+            }
+        ],
+        "final_answer": "",
+        "steps_used": 1,
+        "terminal_status": "BUDGET_EXHAUSTED",
+    }
+
+    with open(replay_file, "w", encoding="utf-8") as f:
+        f.write(json.dumps(rec1) + "\n")
+        f.write(json.dumps(rec2) + "\n")
+
+    samples, audit = load_anadrome_replay_dataset(replay_file)
+    assert len(samples) == 2
+    assert audit.valid_records == 2
+    assert audit.unverified_excluded == 1
+    assert samples[0].action == "EXPAND"
+    assert samples[0].target_node == "node_paris"
+    assert samples[0].current_node == "node_france"
+    assert samples[1].action == "ANSWER"
+    assert samples[1].current_node == "node_paris"
+    assert "anadrome_replay_qwen2.5-7b" in samples[0].provenance
+
+    # Auto-detection call via load_walk_dataset
+    samples2, audit2 = load_walk_dataset(replay_file)
+    assert len(samples2) == 2
+    assert samples2[0].sample_id == "walk_001:0"
+
+
 def test_split_grouped_dataset_leakage_protection():
     fixture_path = FIXTURES_DIR / "lthcm_sample.json"
     records, _ = load_router_dataset(fixture_path)

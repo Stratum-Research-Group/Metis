@@ -255,6 +255,33 @@ def setup_model(config: StomaConfig, model: str):
         sys.exit(1)
 
 
+@cli.group("graph")
+def graph_group():
+    """Knowledge graph inspection and offline edge construction."""
+    pass
+
+
+@graph_group.command("build")
+@click.option("--index", "index_path", type=click.Path(exists=True), help="Path to index file (defaults to config index_path).")
+@click.option("--threshold", "-t", default=0.75, type=float, help="Cosine similarity threshold tau for edge creation (default 0.75).")
+@click.option("--k-neighbors", "-k", default=5, type=int, help="Maximum number of nearest neighbors per passage (default 5).")
+@click.pass_obj
+def build_graph(config: StomaConfig, index_path: Optional[str], threshold: float, k_neighbors: int):
+    """Build semantic cosine similarity edges across chunk embeddings into the wormhole graph."""
+    from stoma.graph_builder import build_knn_knowledge_graph
+    target_path = Path(index_path) if index_path else config.index_path
+    click.echo(f"Building knowledge graph for: {target_path} (tau>={threshold}, k={k_neighbors})...")
+    res = build_knn_knowledge_graph(
+        index_path=target_path,
+        similarity_threshold=threshold,
+        max_k_neighbors=k_neighbors,
+    )
+    click.echo(f"Nodes in index: {res['nodes_count']}")
+    click.echo(f"Edges added:    {res['edges_added']}")
+    click.echo(f"Total edges:    {res['total_edges']}")
+    click.secho(f"\n{res['message']}", fg="green" if res['edges_added'] > 0 else "yellow")
+
+
 def main():
     cli()
 

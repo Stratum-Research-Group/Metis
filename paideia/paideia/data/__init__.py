@@ -1,7 +1,12 @@
 """Paideia data loading and splitting package."""
 
 from paideia.data.router_loader import load_router_dataset, RouterDatasetAudit
-from paideia.data.walk_loader import load_walk_dataset, PolicyStepSample, WalkDatasetAudit
+from paideia.data.walk_loader import (
+    load_walk_dataset,
+    load_anadrome_replay_dataset,
+    PolicyStepSample,
+    WalkDatasetAudit,
+)
 from paideia.data.splitter import (
     DatasetSplits,
     split_grouped_dataset,
@@ -15,6 +20,7 @@ __all__ = [
     "load_router_dataset",
     "RouterDatasetAudit",
     "load_walk_dataset",
+    "load_anadrome_replay_dataset",
     "PolicyStepSample",
     "WalkDatasetAudit",
     "DatasetSplits",

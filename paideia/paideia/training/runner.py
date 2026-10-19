@@ -173,14 +173,14 @@ class QLoRATrainingRunner:
         t0 = time.perf_counter()
 
         try:
-            # 1. Run Preflight
-            self.preflight_check()
-
             if not getattr(self.config, "allow_simulated", True):
                 raise TrainingUnavailableError(
                     "Real QLoRA training / optimizer updates are unimplemented in this release. "
                     "Only marker-only simulation runs are supported; set allow_simulated=True."
                 )
+
+            # 1. Run Preflight
+            self.preflight_check()
 
             # 2. Check if PyTorch / GPU training packages are installed
             try:

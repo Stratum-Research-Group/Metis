@@ -162,7 +162,11 @@ class KybernetesCodingAdapter(RuntimeAdapter):
         from kybernetes.engine.checkpoint import GitMilestoneCheckpointer
         from kybernetes.engine.state import AgentStateMachine
 
-        checkpointer = self.checkpointer or GitMilestoneCheckpointer(cwd)
+        checkpointer = (
+            GitMilestoneCheckpointer(cwd)
+            if (self.checkpointer is None or self.checkpointer.workspace_root != cwd)
+            else self.checkpointer
+        )
         sm = AgentStateMachine()
 
         harness = CodingAgentHarness(
@@ -177,6 +181,11 @@ class KybernetesCodingAdapter(RuntimeAdapter):
             action_generator=gen,
             verifier=verifier,
         )
+        if not res.success and checkpointer.is_git_repo():
+            cps = checkpointer.list_checkpoints()
+            if cps:
+                checkpointer.rollback(cps[0])
+
         return LaunchResult(
             ok=res.success,
             session_id=f"harness-{seat.id}-{task.task_id}",

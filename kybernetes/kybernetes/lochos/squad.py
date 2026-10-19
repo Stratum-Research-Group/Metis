@@ -118,6 +118,7 @@ class LochosSquadManager:
         self.queue = queue or LochosQueue(self.workspace_root / ".metis" / "lochos.sqlite")
         self.checkpointer = checkpointer or GitMilestoneCheckpointer(self.workspace_root)
         self.seats: Dict[str, SeatRuntime] = {}
+        self._subagent_managers: Dict[str, Any] = {}
         self._event_listeners: List[Callable[[Dict[str, Any]], Any]] = []
         self._init_seats()
 
@@ -301,6 +302,80 @@ class LochosSquadManager:
         """Returns all open attention requests across all seats in the squad."""
         return self.queue.reconcile_attention()
 
+    def get_subagent_manager(self, seat_id: str) -> Any:
+        """Returns or creates a SubagentManager scoped to the seat's working root."""
+        from kybernetes.engine.subagent import SubagentManager
+
+        seat = self.get_seat(seat_id)
+        if not seat:
+            raise ValueError(f"Seat '{seat_id}' not found")
+        target_root = seat.worktree_path or self.workspace_root
+        key = str(target_root)
+        if key not in self._subagent_managers:
+            self._subagent_managers[key] = SubagentManager(
+                workspace_root=target_root,
+                checkpointer=GitMilestoneCheckpointer(target_root),
+            )
+        return self._subagent_managers[key]
+
+    def spawn_subagent(
+        self,
+        seat_id: str,
+        subagent_id: str,
+        description: str,
+        action_fn: Callable[[Path], Dict[str, Any]],
+        isolated: bool = True,
+    ) -> Any:
+        """
+        Spawns an isolated background subagent task delegated from a specific seat.
+        Uses SubagentManager to run in a dedicated git worktree sandbox.
+        """
+        seat = self.get_seat(seat_id)
+        if not seat:
+            raise ValueError(f"Seat '{seat_id}' not found")
+        mgr = self.get_subagent_manager(seat_id)
+        task = mgr.fork_subagent(
+            subagent_id=subagent_id,
+            description=description,
+            action_fn=action_fn,
+            isolated=isolated,
+        )
+        self.emit_event("subagent_spawned", {
+            "seat_id": seat.full_address,
+            "subagent_id": subagent_id,
+            "description": description,
+            "isolated": isolated,
+        })
+        return task
+
+    def merge_subagent(self, seat_id: str, subagent_id: str) -> bool:
+        """Merges a completed subagent branch into the seat's branch and prunes worktree."""
+        seat = self.get_seat(seat_id)
+        if not seat:
+            raise ValueError(f"Seat '{seat_id}' not found")
+        mgr = self.get_subagent_manager(seat_id)
+        merged = mgr.merge_subagent(subagent_id)
+        self.emit_event("subagent_merged", {
+            "seat_id": seat.full_address,
+            "subagent_id": subagent_id,
+            "success": merged,
+        })
+        return merged
+
+    def discard_subagent(self, seat_id: str, subagent_id: str) -> bool:
+        """Discards an unsuccessful subagent branch and prunes worktree."""
+        seat = self.get_seat(seat_id)
+        if not seat:
+            raise ValueError(f"Seat '{seat_id}' not found")
+        mgr = self.get_subagent_manager(seat_id)
+        discarded = mgr.discard_subagent(subagent_id)
+        self.emit_event("subagent_discarded", {
+            "seat_id": seat.full_address,
+            "subagent_id": subagent_id,
+            "success": discarded,
+        })
+        return discarded
+
     def execute_seat_task(
         self,
         seat_id: str,
@@ -319,9 +394,16 @@ class LochosSquadManager:
         if not seat.current_task:
             raise ValueError(f"Seat '{seat_id}' has no claimed task to execute")
 
+        seat_root = seat.worktree_path or self.workspace_root
+        seat_checkpointer = (
+            GitMilestoneCheckpointer(seat_root)
+            if (seat.worktree_path and seat.worktree_path != self.workspace_root)
+            else self.checkpointer
+        )
+
         harness = CodingAgentHarness(
-            workspace_root=seat.worktree_path or self.workspace_root,
-            checkpointer=self.checkpointer,
+            workspace_root=seat_root,
+            checkpointer=seat_checkpointer,
             state_machine=seat.state_machine,
         )
 
@@ -343,6 +425,10 @@ class LochosSquadManager:
                 "total_steps": res.total_steps,
             })
         else:
+            if seat_checkpointer.is_git_repo():
+                checkpoints = seat_checkpointer.list_checkpoints()
+                if checkpoints:
+                    seat_checkpointer.rollback(checkpoints[0])
             self.queue.fail_task(
                 task_id=seat.current_task.task_id,
                 seat_id=seat.full_address,
