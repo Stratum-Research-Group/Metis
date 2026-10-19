@@ -402,38 +402,17 @@ class TerminalCodingAgent:
             if is_mutating and self.test_command and result.success:
                 click.echo(click.style(f"-> Running Verification: `{self.test_command}`...", fg="cyan"))
                 self.state_machine.transition(AgentSemanticState.VERIFYING, reason="Running verification test command")
-                import subprocess
-                sanitized_env = {
-                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-                    "HOME": str(self.workspace_root),
-                    "LANG": "C.UTF-8",
-                    "PYTHONPATH": str(self.workspace_root),
-                }
-                try:
-                    test_proc = subprocess.run(
-                        self.test_command,
-                        shell=True,
-                        cwd=self.workspace_root,
-                        capture_output=True,
-                        text=True,
-                        env=sanitized_env,
-                        timeout=60,
-                    )
-                except subprocess.TimeoutExpired:
-                    test_proc = subprocess.CompletedProcess(
-                        args=self.test_command,
-                        returncode=124,
-                        stdout="",
-                        stderr="Verification test command timed out after 60s.",
-                    )
+                from kybernetes.tools.sandboxed_bash import SafeSandboxedBash
+                runner = SafeSandboxedBash(allowed_roots=[self.workspace_root])
+                v_res = runner.execute(self.test_command, cwd=str(self.workspace_root), timeout_seconds=60)
 
-                if test_proc.returncode != 0:
-                    click.echo(click.style(f"[✗] Verification failed (exit code {test_proc.returncode})! Rolling back checkpoint...", fg="red", bold=True))
+                if v_res["exit_code"] != 0:
+                    click.echo(click.style(f"[✗] Verification failed (exit code {v_res['exit_code']})! Rolling back checkpoint...", fg="red", bold=True))
                     self.checkpointer.rollback(active_checkpoint)
                     backtracks += 1
                     current_prompt = (
                         f"Step {step} resulted in test failure with command `{self.test_command}`:\n"
-                        f"{test_proc.stderr or test_proc.stdout}\n"
+                        f"{v_res['stderr'] or v_res['stdout']}\n"
                         "Working tree has been rolled back. Please analyze the error and try a different approach."
                     )
                     continue

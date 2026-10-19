@@ -218,22 +218,16 @@ class TerminalSeatAdapter(RuntimeAdapter):
         action_generator: Optional[Callable[[int, List[Any]], Optional[Dict[str, Any]]]] = None,
         verifier: Optional[Callable[[], bool]] = None,
     ) -> LaunchResult:
-        import subprocess
+        from kybernetes.tools.sandboxed_bash import SafeSandboxedBash
         cmd = task.payload.get("command", "echo 'No command'") if task.payload else "echo 'No command'"
         try:
-            res = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            runner = SafeSandboxedBash(allowed_roots=[cwd])
+            res = runner.execute(cmd, cwd=str(cwd), timeout_seconds=30)
             return LaunchResult(
-                ok=res.returncode == 0,
+                ok=res["exit_code"] == 0,
                 session_id=f"term-{seat.id}-{task.task_id}",
-                evidence=res.stdout or res.stderr,
-                error=res.stderr if res.returncode != 0 else None,
+                evidence=res["stdout"] or res["stderr"],
+                error=res["stderr"] if res["exit_code"] != 0 else None,
             )
         except Exception as e:
             return LaunchResult(
