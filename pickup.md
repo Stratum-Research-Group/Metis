@@ -1,9 +1,9 @@
 # Metis Development Resume Guide (`pickup.md`)
 
-**Last Updated:** 2026-10-18  
+**Last Updated:** 2026-10-19  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `9cbc8bf410be934e5e6c92c30f3e7aba0b7cbcee` (`feat(anadrome): refine Q08 to temporal reasoning question and update stoma provenance`)  
-**Working Tree Status:** Clean, all tests passing (375/375).
+**Current HEAD Commit:** `7eb49d035f4a8393f97b75f8fb554048d37d6251` (`feat(lochos,paideia,stoma): wire subagent delegation with rollback, anadrome training ingestion, and offline graph builder`)  
+**Working Tree Status:** Clean, all tests passing (540/540).
 
 ---
 
@@ -15,16 +15,22 @@ To verify all services and environments are operational after system reboot:
 # 1. Run Prosopon test suite (70 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests
 
-# 2. Run Kybernetes test suite (173 tests)
+# 2. Run Kybernetes test suite (184 tests)
 ./kybernetes/.venv/bin/pytest kybernetes/tests
 
-# 3. Run Dianoia test suite (93 tests)
+# 3. Run Paideia test suite (41 tests)
+./paideia/.venv/bin/pytest paideia/tests
+
+# 4. Run Stoma test suite (113 tests)
+./stoma/.venv/bin/pytest stoma/tests
+
+# 5. Run Dianoia test suite (93 tests)
 ./.venv/bin/pytest dianoia/tests
 
-# 4. Run Root test suite (39 tests)
+# 6. Run Root test suite (39 tests)
 ./.venv/bin/pytest tests
 
-# Total: 375 tests passing across all 4 suites
+# Total: 540 tests passing across all 6 suites
 ```
 
 ---
@@ -215,12 +221,44 @@ To verify all services and environments are operational after system reboot:
 
 ---
 
+### Phase 10: Architectural Review Synthesis & Kernel Hardening (Completed)
+1. **Live Dianoia Deliberation in Kybernetes (`kybernetes/adapters/dianoia.py`)**:
+   - Eliminated stub deliberation; wired live execution into `WalkController`.
+   - Maps visited passages into structured `Citation` metadata.
+   - Preserves flat fallback upon zero-edge indices or deliberation errors.
+   - Decoupled circular imports by re-homing `APPROVED_CONTROLLER_POLICIES` into `dianoia/anadrome/policies.py`.
+2. **Sandboxed Execution Boundary (`kybernetes/execution/backend.py`)**:
+   - Implemented `BubblewrapBackend` (`bwrap --ro-bind / / --tmpfs /tmp --dir <cwd> --bind <cwd> <cwd> --unshare-pid --unshare-ipc --unshare-uts`) with process group cleanup and fallback to `LocalProcessBackend`.
+   - Routed `SafeSandboxedBash`, `TerminalSeatAdapter.launch_harness`, and `TerminalCodingAgent` verification hooks through backend execution.
+   - Isolated `$HOME` to `target_cwd`, eliminating Substrate review host-execution leaks.
+3. **MSS Context Retention & Content-Addressed Spillover (`kybernetes/engine/terminal_agent.py`)**:
+   - Fixed terminal agent context amnesia by capturing alternating user tool observations in `history`.
+   - Populated `turn_history` with `CodingTurnState` records.
+   - Retained goal and plan constraints permanently in `current_prompt`.
+   - Implemented SHA-256 content-addressed disk spillover to `.metis/artifacts/tool_out_<hash>.txt` for outputs $> 1,000$ bytes.
+4. **Lochos Recursive Subagent Delegation & Worktree Rollback (`kybernetes/lochos/squad.py`, `adapters.py`)**:
+   - Scoped `GitMilestoneCheckpointer` to the seat's isolated worktree directory (`seat.worktree_path`).
+   - Wired automatic milestone rollback upon task failure (`rollback(checkpoints[0])`).
+   - Added subagent lifecycle management: `get_subagent_manager`, `spawn_subagent`, `merge_subagent`, `discard_subagent`.
+5. **Paideia Data Pipeline Anadrome Replay Ingestion (`paideia/data/walk_loader.py`)**:
+   - Implemented `load_anadrome_replay_dataset` to parse Anadrome continuation trees and decision records (`ReplayTreeRecord`) into supervised policy steps (`PolicyStepSample`).
+   - Added automatic format detection in `load_walk_dataset` to transparently ingest both Dianoia walk logs and Anadrome replay tree logs.
+   - Reordered honest refusal gate in `QLoRATrainingRunner` to verify `allow_simulated` prior to hardware VRAM checks.
+6. **Stoma Offline Knowledge Graph Edge Builder (`stoma graph build`)**:
+   - Implemented `build_knn_knowledge_graph` in `stoma/graph_builder.py` to calculate cosine similarities across chunk embeddings ($\tau \ge 0.75$) and install wormhole graph edges.
+   - Exposed opt-in CLI group `stoma graph build` without disturbing Stoma v1 zero-edge default ingestion invariants.
+7. **Test Suite Status**:
+   - Total Metis test suite: **540 passed across all 6 suites** (184 kybernetes, 113 stoma, 93 dianoia, 70 prosopon, 41 paideia, 39 root).
+
+---
+
 ## 3. Implementation Status Summary
 
-All 10 prioritized synthesis roadmap tasks across all 5 tracks are now **fully completed and verified**:
+All prioritized synthesis roadmap tasks and review remediation circuits across all subsystems are now **fully completed and verified**:
 - **Track A (Pyle)**: Loopback closure, SQLite device registry, WebAuthn RP, WebRTC DataChannel engine, Operator remote approvals, panic lockdown, doctor diagnostics (Phases 0, 1, 2, 8).
 - **Track B (Anadrome)**: Canonical JSON observation hashing, decision tree logging harness, in-process probe cache, zero imputation replay engine, policy zoo, Dokime paired bootstrap evaluation, frozen live walk test (Phases 4, 6, 9).
 - **Tracks C & D (Schedion & Symbolon)**: 5060 Ti hardware validation, candidate generation & code identity adapters, E1 diagnostic, Stage 3 and E2 controlled empirical comparisons, negative research reports and archival verdicts (Phases 3, 5, 7).
+- **Track E (Architectural Review Remediation & Kernel Hardening)**: Live Dianoia walk deliberation, Bubblewrap sandboxed containment, MSS terminal context retention and artifact spillover, Lochos worktree checkpointer rollback & subagent delegation, Paideia Anadrome ingestion, Stoma offline knowledge graph edge builder (Phase 10).
 
 ---
 
