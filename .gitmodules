@@ -1,0 +1,3 @@
+[submodule "vscode"]
+	path = vscode
+	url = https://gitlab.com/akarta-315h/metis-vscode.git
