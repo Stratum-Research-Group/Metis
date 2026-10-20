@@ -89,13 +89,31 @@ prosopon serve --lan --tls --port 8000 --kybernetes-url http://127.0.0.1:8081
 - Prints a 5-minute 6-digit device pairing PIN to the terminal.
 - Open `https://<host-ip>:8000` on your phone browser, enter the PIN, and enjoy authenticated chat and voice push-to-talk!
 
-### Device Pairing & Revocation
-Generate a fresh pairing PIN on demand:
+### Secure Desktop Launch (`prosopon open`)
+Open Prosopon in the default browser using a secure single-use bootstrap ticket (or print URL with `--no-browser`):
+```bash
+prosopon open
+```
+
+### Device Pairing & Remote Access (`prosopon device` / `prosopon pair`)
+Generate a fresh 6-digit PIN pairing code on demand:
 ```bash
 prosopon pair
 ```
 
-Revoke all paired tokens immediately:
+Manage registered devices, WebAuthn passkeys, and remote device revocations:
+```bash
+# List all registered devices and passkeys
+prosopon device list
+
+# Revoke a specific device and terminate its active sessions
+prosopon device revoke <device-id>
+
+# Immediate panic lockdown: revoke all remote devices
+prosopon device lockdown
+```
+
+Revoke all paired tokens across the system immediately:
 ```bash
 prosopon revoke
 ```

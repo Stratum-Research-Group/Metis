@@ -1,0 +1,11 @@
+DIANOIA round-2 fixes - 5 items from re-review of HEAD e5fe753. Round 1 landed well (3 fixed, graph walk now real). These finish the job. No refactors beyond these, do not touch LTHCM.
+
+1. --index NLI CONFIG: cli.py:187-189 only sets nli_model_name/threshold when the loaded index filter's name is None, so a previously saved index silently keeps a stale NLI config. When loading --index, ALWAYS apply the spec defaults (nli_model_name="cross-encoder/nli-deberta-v3-xsmall", contradiction_threshold=2.5), overriding the saved filter config, and report what was applied. Verified defaults must be defaults, not best-effort.
+
+2. OPERATIONAL FALLBACK: README.md:70-77 starts one llama.cpp server with only Qwen, and walk.py:236-249 only swaps the model string - fallback cannot work under the documented setup. Fix both sides: README documents serving the fallback GGUF too (or states fallback requires it explicitly), and at startup dianoia should verify the fallback model is actually available on the server and WARN if not (not fail - just honest logging). Widen OOM handling so OOM raised during a walk step (not only inside _call_llm) also triggers fallback where the walk state allows; state the actual scope in README.
+
+3. EXACT OUTPUT VALIDATION: walk.py:80-82 searches anywhere for ACTION/REASON, so "NOTACTION: ANSWER" passes and extra prose lines are tolerated. Require exactly two lines: one matching ^ACTION: (EXPAND \S+|BACKTRACK|ANSWER)$ and one matching ^REASON: .+$, nothing else. Anything else is a parse failure (log raw, BACKTRACK, decrement).
+
+4. CONFLICT PROVENANCE: walk.py:627-640 pairs the re-walk's verification report with the FIRST walk's conflict_detail, and walk.py:602-619 marks rewalked=true before the re-walk completes. Each verification record must carry ITS OWN conflict_detail; set rewalked only after the re-walk actually runs, and if the re-walk fails, the log must say so.
+
+5. LOG LINKAGE: the conflict path now writes two JSONL records with no documented relationship. Add a shared walk_id (uuid) field to both records of a conflict pair, and document the two-record pattern in README and log.py docstring so future consumers can join them.

@@ -1,0 +1,26 @@
+[Unit]
+Description=Metis Hestia Model Server (Sovereign Local AI)
+After=network.target
+Documentation=https://gitlab.com/akarta-315h/metis
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/Metis
+ExecStart=%h/Projects/Metis/hestia/.venv/bin/hestia serve --host 127.0.0.1 --port 8080 --config hestia/hestia.yaml --models hestia/models.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Process security hardening
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+RuntimeDirectory=metis
+ReadWritePaths=%h/Projects/Metis -%h/.cache/huggingface -%h/.cache/llama.cpp %t/metis
+PrivateTmp=true
+
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-%h/Projects/Metis/deploy/metis.env
+
+[Install]
+WantedBy=default.target

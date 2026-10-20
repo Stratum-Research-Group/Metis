@@ -1,0 +1,49 @@
+STOMA - ingestion pipeline. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Stoma feeds the memory of a local AI stack. LTHCM (topological memory, https://gitlab.com/akarta-315h/LTHCM) is the memory substrate; Stoma is the mouth - it takes the owner's documents and media, parses them into passages, and indexes them into LTHCM with full provenance. This is a separate repo, not a change to any existing stack component.
+
+HARD CONSTRAINTS
+- Everything local at runtime: no cloud parsers, no hosted OCR, no external APIs. Fetching the declared git dependencies at setup is separate from sending user data to a service; no user documents, transcripts, passages or embeddings leave the machine.
+- Add the existing stack projects as actual git submodules, pinned to these verified commits (not just mentioned in the README):
+  * LTHCM: https://gitlab.com/akarta-315h/LTHCM @ 336f4af9f624aca5b4978a5e3ce222ce9638da35
+  * dianoia: https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c
+  * hestia: https://gitlab.com/akarta-315h/hestia @ edd1bcf411180dd3c9b1171057d03f400b3bfb96
+  * dokime: https://gitlab.com/akarta-315h/dokime @ 43c025348098aa9511f56acfb26ed19a62983177
+- These are read-only dependencies. Never modify files inside a submodule, copy their contents into Stoma's own source tree, or push/upload their contents to Stoma or elsewhere. Commit only .gitmodules and gitlink pointers in Stoma. Do not auto-update the pins. Dianoia, Hestia and Dokime are pinned for stack integration/reference, not mandatory runtime imports or servers for the first build.
+- Output must match the pinned LTHCM's actual ingestion/retrieval interface. Use LTHCM as a pinned local library dependency, not a loose floating package or a duplicate code copy. Keep packaging and submodule pins consistent: if installing from the submodule, document the local install; if using a git dependency, pin the SAME SHA and still add the submodule. Do not silently mix versions.
+- Important compatibility point: LTHCMEngine.index_document currently takes doc_id, content, facet_vectors, domain and timestamp; its built-in metadata is domain/timestamp, not arbitrary source-path/content-hash fields. The superposition store has an upsert for an existing doc_id, but the unified engine does not advertise a cross-index delete API. Do not pretend LTHCM already has one. Build a Stoma-owned provenance manifest and adapter around the actual interface; ensure every result shown through Stoma can resolve its passage ID to path, content hash and ingestion timestamp. If true deletion/replacement across all LTHCM indexes is not safely supported, use a documented supported rebuild/swap of Stoma's owned index, or stop and report the limitation rather than leave deleted/old passages retrievable. Never patch LTHCM to make the demo pass.
+- Incremental: an unchanged file is skipped, a changed file replaces its old passages without duplicates, and a deleted file has no retrievable passages after reconciliation. Use stable source identity plus deterministic passage IDs, not content hash alone; define how renames and path normalization behave. A changed file's new state and manifest commit atomically or recoverably. Failed extraction/indexing must not erase the last valid version.
+- Handle large folders without loading all source files/passages into memory at once. Bound work per file/batch. Avoid symlink loops, directory traversal outside configured roots and indexing the Stoma repo's own state/submodules by accident.
+- Keep originals and extracted text local. Do not check in user content, model weights, local index data or generated sample outputs. Clearly mark Stoma-owned state/cache directories in .gitignore.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "stoma", Python package, pyproject.toml with the LTHCM dependency pinned to the exact SHA above. Add all four submodules and verify their recorded gitlinks equal the listed commits. Keep a narrow LTHCM adapter so a future pin change has one place to update. Provide config for permitted ingestion roots and local index/manifest location. No default scan of the entire home directory.
+
+2. SOURCE PLUGIN INTERFACE
+- A source plugin discovers supported files, extracts text and emits raw passages plus location information. Define the interface and ship:
+  a. plain text / markdown
+  b. PDF (local parser; explicitly distinguish text PDFs from image-only PDFs and report the latter as unsupported unless pre-extracted OCR exists)
+  c. code repositories (per-file, language-aware split at function/class boundaries where cheap; do not follow .git, virtualenvs, vendor/generated trees by default)
+  d. OCR hook: consume pre-extracted text from an external scanlation/OCR tool output folder (do NOT build OCR itself)
+  e. audio transcripts: consume whisper.cpp transcript files (do NOT transcribe)
+- Record enough source location to trace a result back to its file and page/section/line or timestamp when available. Handle decoding and parser errors per file without aborting the entire folder; show failed/skipped files clearly.
+
+3. CHUNKER
+- Structure-aware chunking (respect headings, dialogue turns, code blocks) with small overlap, sized for a configured local embedding encoder. Do not claim LTHCM chooses an embedding model for Stoma: inspect its d_model and facet count and provide a compatible local encoder/facet-vector strategy. Validate tensor shape, embedding dimension and reproducibility; document the chosen model and its local availability. Do not quietly download a model while ingesting user data. Empty and duplicate chunks must not become passages.
+
+4. INDEXER
+- Write passages to LTHCM through the narrow adapter with deterministic doc_id, content, compatible facet vectors and timestamp. Keep provenance in Stoma's durable manifest keyed to passage IDs and return it alongside every Stoma query result. Make replacement/deletion correct across the indices actually queried. If rebuilding is necessary, build a new complete index in bounded batches, verify it, then atomically swap it; explain the cost rather than call it an in-place upsert. Persist and reopen the index and provenance across process restarts, or mark the feature blocked if no supported persistence path exists without changing LTHCM. Avoid claiming durability from an in-memory demo.
+
+5. WATCHER
+- Watch configured folders; reconcile changed files using hashes (not mtime alone) and remove passages of deleted files. Debounce duplicate events; cope with partial writes, rename/move, restart and event loss via a periodic/manual full reconciliation. Never follow a symlink outside allowed roots. Include a manual one-shot ingest command for environments without reliable file-watch events.
+
+OUT OF SCOPE
+- Email/cloud account sync, OCR model training, audio transcription itself, dedup across different sources, changing the four stack submodules or standing up Hestia/Dianoia/Dokime services just to make Stoma's first build work.
+
+TESTS AND DEMO
+- Unit and integration tests for each source, chunk boundary, provenance resolution, unchanged/replaced/deleted file, rename policy, index/manifest restart, partial failure, symlink exclusion and large-folder bounded behavior. Include a regression asserting old passages are not returned after edit/delete by the same Stoma query path used in the demo.
+- Point Stoma at a small local folder mixing PDFs, markdown and a code repo. Ingest, query through Stoma's LTHCM-backed adapter and show that returned passages carry source path + timestamp (and hash in the manifest). Modify one file and show the watcher replacing passages without duplication; delete one and show its passages gone. Restart and repeat the query. Show the exact commands, test counts, dependency/submodule SHAs, local encoder used, and any unsupported PDF or indexing limitations in a short report.md. Do not include private document text, credentials, model files or generated user data in the report/repo.
+- If the pinned LTHCM API cannot meet an acceptance criterion without editing a submodule, stop and state the blocked criterion and the smallest Stoma-side alternative. Do not report a mocked adapter test as a working end-to-end ingest.

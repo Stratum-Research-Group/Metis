@@ -1,0 +1,55 @@
+DIANOIA - prompt revision 4, targets Dianoia v1. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Dianoia is a new project that sits on top of LTHCM (https://gitlab.com/akarta-315h/LTHCM), an existing topological memory layer for LLM retrieval. LTHCM is the memory substrate; Dianoia is the cognition layer that reasons over it. Tagline for the README: "LTHCM remembers, Dianoia thinks."
+
+HARD CONSTRAINTS
+- Dianoia depends on LTHCM as a git submodule pinned to commit 8a71605379ee32059e714feb3648cf74f4b42dc6 (update the pin deliberately, never automatically). Never copy, fork, or modify LTHCM code inside this repo.
+- Everything runs locally: no paid APIs, no closed models.
+- Deliberation model for v1: Qwen2.5-7B-Instruct GGUF (Q4_K_M). Fallback: Llama-3.1-8B-Instruct GGUF. Fallback trigger: 3 consecutive unparseable controller actions, or OOM on the target GPU.
+- Hardware ceiling: 16GB VRAM (targets: RTX 5060 Ti 16GB, Tesla V100 SXM2 16GB via PCIe adapter).
+- License: MIT (same as LTHCM - its LICENSE file says MIT License). Include the MIT license in this repo and name it in the README.
+- Documentation standard: describe mechanisms only, no absolute claims, publish negative results when benchmarks exist.
+
+SERVING
+- The deliberation model runs as a persistent llama.cpp server process exposing the OpenAI-compatible endpoint. Never spawn a process per walk.
+- Sampling for controller decisions: temperature 0.2, top_p 0.9 (structured actions need near-determinism).
+- Context: start at 8192 tokens; treat larger contexts as a tuning knob, not a v1 requirement.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "dianoia", Python package, pyproject.toml, LTHCM as a git submodule with the pinned commit recorded in the README.
+
+2. DELIBERATIVE WALK (core of v1)
+- A WalkController that directs traversal over an LTHCMEngine instance.
+- Seeding: call the engine's pre-verification retrieval directly. At the pinned commit that is engine.stochastic_resonance.resonate_retrieval(query_vec, memory_store, top_k=K) (lthcm/core/stochastic_resonance.py:226; the default path used by retrieve_and_verify at lthcm/engine/pipeline.py:204-209). If the stochastic-resonance path is disabled in the engine config, use the fallback engine.superposition.retrieve(q_vec, top_k=K) (pipeline.py:211). Verify both still exist at the pinned commit before building on them; if they have moved, find what retrieve_and_verify calls now and use that.
+- K is a constructor param (default 5).
+- At each step the controller is shown the current passage plus its graph neighbours (from LTHCM's edge structure) and must choose exactly one action:
+  EXPAND <neighbour_id> | BACKTRACK | ANSWER
+- BACKTRACK pops the most recent EXPAND, returning to the previous node. Previously visited nodes may be re-expanded.
+- Parse failure policy: if the model output is malformed, names a non-existent neighbour, or lists multiple actions - log the raw output, treat the step as BACKTRACK, and decrement the step budget.
+- Step budget is a constructor param max_steps (default 8). On exhaustion, force ANSWER from what has been seen.
+- ANSWER synthesizes the final answer from the passages visited, with the walk path attached.
+- Ship a draft system/step prompt template (controller role, available actions, output format: one line "ACTION: ..." plus "REASON: ...") marked clearly as the starting point to iterate on. Prompt iteration is expected; the template just must not block the first build.
+
+3. ANSWER-TIME VERIFICATION
+- After ANSWER, re-run LTHCM's sheaf/NLI contradiction check between the drafted answer and the retrieved evidence (answer-vs-evidence).
+- If conflicts are found: prepend the conflict report to the deliberation prompt and run at most ONE re-walk, then answer again regardless of outcome.
+- Return the final answer with a verification report stating what was checked and the outcome. Report actual NLI use, never intent.
+
+4. WALK LOGGING (training data for later)
+- Every walk appends one JSONL record to ~/.dianoia/walks.jsonl (default path, overridable via CLI flag; create the directory if absent). Rotation is deferred. Note in a code comment: append is not concurrent-safe; fine for single-shot v1.
+- Schema:
+  {"schema_version": 1, "question": str, "seeded_nodes": [str], "path": [{"node": str, "action": "EXPAND|BACKTRACK|ANSWER", "raw_output": str, "reason": str, "parse_failed": bool}], "verification": {"conflicts_found": bool, "rewalked": bool, "report": str, "conflict_detail": str | null}, "final_answer": str, "max_steps": int, "steps_used": int, "model": str, "fallback_used": bool}
+- Do NOT build any learner yet. These logs are the future training signal for a learned walk policy.
+
+5. OUT OF SCOPE
+- The learned question-type router belongs inside LTHCM, not Dianoia.
+- No write-back / edge-weight learning in v1. Read-only over the memory graph.
+- Log rotation, prompt optimization, multi-question interactive sessions, concurrent walks.
+
+6. DEMO CLI
+- Single-shot: one question per invocation.
+- Accepts EITHER --docs <dir> (builds a fresh LTHCM index) OR --index <path> (pre-built index). Fail gracefully with a clear message on an empty directory, unsupported files, or a corrupt/mismatched index.
+- Prints the walk step by step, the verification report, and the final answer. Exit code 0 on success, 1 on error.

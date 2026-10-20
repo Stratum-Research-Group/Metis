@@ -8,7 +8,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![Tests Passing](https://img.shields.io/badge/tests-93%20passed-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-119%20passed-brightgreen.svg)](tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -38,7 +38,7 @@
 | **WordNet ($N=250$)** | Hierarchical taxonomy reconstruction | Euclidean Space (MAP **0.1418**) | **Poincaré Ball (MAP 0.1393)** | **Neutral ($p = 0.8160$)** | No hierarchy advantage shown on small 250-node subtree; hyperbolic geometry requires high branching depth and scale. |
 | **RULER NIAH** | Synthetic long-context needle-in-a-haystack | Flat Dense (Recall@1 **1.000**) | **LTHCM Topological (Recall@1 1.000)** | *Dropped from Claims* | Test is saturated (100% across all depths for all arms) and cannot discriminate memory capacity. |
 
-Detailed methodology, paired randomization tests, and ablation records are documented in [BENCHMARK_REAL_RESULTS.md](BENCHMARK_REAL_RESULTS.md).
+Detailed methodology, paired randomization tests, and ablation records are documented in [BENCHMARK_REAL_RESULTS.md](../docs/review/BENCHMARK_REAL_RESULTS.md).
 
 ### The Unified Public Retriever Interface
 In response to the independent architectural review, LTHCM provides a single, deterministic `Retriever` interface called identically by application code and benchmark suites:

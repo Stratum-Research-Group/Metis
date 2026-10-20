@@ -96,6 +96,7 @@ def create_app(
         phylax_adapter=phylax_adapter,
         krisis_adapter=krisis_adapter,
         session_manager=session_manager,
+        thinking_budget_steps=cfg.thinking_budget_steps,
     )
 
     probe_registry = ProbeRegistry(
@@ -144,7 +145,16 @@ def create_app(
         )
         app.include_router(admin_router)
 
-    async def require_service_auth(authorization: Optional[str] = Header(None)) -> bool:
+    async def require_service_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
+        client_host = request.client.host if request.client else ""
+        # Local loopback trust: MSS Void on local machine does not need token authorization friction
+        if client_host in ("127.0.0.1", "::1", "localhost"):
+            return True
+
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[len("Bearer ") :].strip()
+
         if not effective_service_token:
             if os.environ.get("METIS_INSECURE_DEV") == "1":
                 return True
@@ -152,9 +162,6 @@ def create_app(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Unauthorized: Kybernetes service token required unless METIS_INSECURE_DEV=1 is set.",
             )
-        token = None
-        if authorization and authorization.startswith("Bearer "):
-            token = authorization[len("Bearer ") :].strip()
         if not token or not secrets.compare_digest(token, effective_service_token):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

@@ -49,12 +49,6 @@ class App {
     this.voiceTranscriptText = document.getElementById("voice-transcript-text");
     this.btnConfirmVoice = document.getElementById("btn-confirm-voice");
     this.btnCancelVoice = document.getElementById("btn-cancel-voice");
-    
-    this.pairingModal = document.getElementById("pairing-modal");
-    this.pairingPinInput = document.getElementById("pairing-pin-input");
-    this.btnSubmitPairing = document.getElementById("btn-submit-pairing");
-    this.btnClosePairing = document.getElementById("btn-close-pairing");
-    this.btnPairingInfo = document.getElementById("btn-pairing-info");
     this.themeSelect = document.getElementById("theme-select");
   }
 
@@ -107,11 +101,6 @@ class App {
     };
     this.btnCancelVoice.onclick = () => this.transcriptModal.classList.remove("active");
 
-    // Pairing Modal
-    this.btnPairingInfo.onclick = () => this.pairingModal.classList.add("active");
-    this.btnClosePairing.onclick = () => this.pairingModal.classList.remove("active");
-    this.btnSubmitPairing.onclick = () => this.handlePairingSubmit();
-
     // Devices Modal
     const devicesModal = document.getElementById("devices-modal");
     const btnCloseDevices = document.getElementById("btn-close-devices");
@@ -120,7 +109,7 @@ class App {
     }
 
     window.addEventListener("prosopon:unauthorized", () => {
-      this.pairingModal.classList.add("active");
+      console.warn("[Prosopon] Received unauthorized event for active session");
     });
   }
 
@@ -407,6 +396,18 @@ class App {
   }
 
   async startVoiceCapture() {
+    const isVoiceEnabled = localStorage.getItem("prosopon.voice_enabled") === "true";
+    if (!isVoiceEnabled) {
+      const enable = confirm("Voice interaction (Whisper STT & Piper TTS) is turned off by default to conserve resources.\n\nWould you like to switch it ON now?");
+      if (enable) {
+        localStorage.setItem("prosopon.voice_enabled", "true");
+        try {
+          await API.request("/api/voice/toggle", { method: "POST", body: { enabled: true } });
+        } catch (_) {}
+      } else {
+        return;
+      }
+    }
     this.btnPtt.classList.add("recording");
     try {
       await window.Voice.startRecording();
@@ -432,24 +433,6 @@ class App {
     }
   }
 
-  async handlePairingSubmit() {
-    const pin = this.pairingPinInput.value.trim();
-    if (pin.length !== 6) {
-      alert("Please enter a 6-digit PIN");
-      return;
-    }
-    try {
-      const res = await API.pairDevice(pin);
-      if (res.token) {
-        API.setAuthToken(res.token);
-        this.pairingModal.classList.remove("active");
-        alert("Device paired successfully!");
-        this.bootstrap();
-      }
-    } catch (err) {
-      alert("Pairing failed: " + err.message);
-    }
-  }
 
   scrollToBottom() {
     this.messageContainer.scrollTop = this.messageContainer.scrollHeight;

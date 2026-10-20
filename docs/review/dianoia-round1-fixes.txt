@@ -1,0 +1,15 @@
+DIANOIA round-1 fixes - 7 items from a spec-conformance review of HEAD 357f614. Fix in order. No refactors beyond these, no dependency upgrades, do not touch LTHCM.
+
+1. BROKEN --docs GRAPH (critical): cli.py:97-110 calls build_edges(corpus_docs=..., corpus_embeddings=...) but the pinned LTHCM signature is build_edges(docs, ..., doc_embeddings=...) (LTHCM/lthcm/graph/build_edges.py:81-89), and it returns edge TUPLES not dicts. The exception is swallowed at cli.py:112-113, so --docs builds ZERO edges. Fix the call to the real signature, adapt the return type, and remove the silent swallow - if edge building fails, exit with a clear error.
+
+2. SILENT FAKE NEIGHBOURS (critical): walk.py:275-291 fabricates embedding-similarity neighbours when a node has no graph edges. The spec requires neighbours from LTHCM's edge structure. Remove the fabrication: a node with no edges has an empty neighbour list, and if the whole graph has zero edges, fail loudly instead of walking a pretend graph.
+
+3. NLI HONESTY: wire the NLI model explicitly per the LTHCM benchmark convention: nli_model_name="cross-encoder/nli-deberta-v3-xsmall", contradiction_threshold=2.5. Then fix verify.py:97-100 to report ACTUAL use (sheaf_filter.nli_model is not None), never the flag. Update the README to state exactly which mode the default CLI runs.
+
+4. ANSWER SYNTHESIS PROMPT: walk.py:317-331 synthesizes the final answer under CONTROLLER_SYSTEM_PROMPT, which demands exactly ACTION/REASON lines and forbids anything else. Use a separate plain synthesis system prompt for the final answer; the controller prompt is for walk decisions only.
+
+5. FALLBACK DEFAULTS: spec says fallback = Llama-3.1-8B-Instruct triggered by 3 consecutive parse failures OR OOM. cli.py:235-239 defaults --fallback-model to None and OOM is only a generic walk failure. Make the fallback model default to the spec value (overridable by flag), and treat OOM as a fallback trigger. README states actual behavior.
+
+6. STRICT ACTION PARSING: walk.py:113-120 accepts "ACTION: EXPAND valid_id ANSWER" as one valid EXPAND via prefix regex. Any output with multiple actions or extra trailing tokens is malformed: log raw, treat as BACKTRACK, decrement budget (per spec).
+
+7. RE-WALK LOGGING: walk.py:559-600 discards the initial walk path when a conflict-triggered re-walk happens, logging only the final path. Log BOTH paths (the initial walk AND the re-walk) so the training signal is complete - either two records or one record containing both paths, with conflict_detail preserved.

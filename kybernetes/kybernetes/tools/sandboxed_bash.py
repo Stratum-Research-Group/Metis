@@ -116,6 +116,7 @@ class SafeSandboxedBash:
         command: str,
         cwd: Optional[str] = None,
         timeout_seconds: Optional[int] = None,
+        allow_network: bool = False,
     ) -> Dict[str, Any]:
         if not command or not command.strip():
             raise ValueError("Command cannot be empty")
@@ -143,6 +144,7 @@ class SafeSandboxedBash:
             cwd=target_cwd,
             env=clean_env,
             timeout_seconds=timeout,
+            allow_network=allow_network,
         )
 
         return {

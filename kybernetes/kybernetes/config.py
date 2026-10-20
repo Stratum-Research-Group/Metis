@@ -32,6 +32,7 @@ class KybernetesConfig(BaseModel):
             "http://localhost:8000",
             "http://127.0.0.1:8081",
             "http://localhost:8081",
+            "vscode-file://vscode-app",
         ],
         description="Explicit allowed CORS origins",
     )
@@ -50,6 +51,11 @@ class KybernetesConfig(BaseModel):
     admin_enabled: bool = Field(
         default=True,
         description="Whether to mount /v1/admin/* control plane endpoints",
+    )
+    thinking_budget_steps: int = Field(
+        default=10,
+        ge=1,
+        description="Maximum deliberative planning and reasoning steps per turn before forced synthesis",
     )
     config_path: Optional[str] = Field(
         default=None,
@@ -122,6 +128,9 @@ def load_config(config_path: Optional[str] = None) -> KybernetesConfig:
 
     if "KYBERNETES_ADMIN_TOKEN_FILE" in os.environ:
         raw_data["admin_token_file"] = os.environ["KYBERNETES_ADMIN_TOKEN_FILE"]
+
+    if "KYBERNETES_THINKING_BUDGET_STEPS" in os.environ:
+        raw_data["thinking_budget_steps"] = int(os.environ["KYBERNETES_THINKING_BUDGET_STEPS"])
 
     if resolved_path:
         raw_data["config_path"] = str(Path(resolved_path).resolve())

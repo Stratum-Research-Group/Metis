@@ -1,0 +1,13 @@
+DOKIME v8 - ROUND 4 FIX
+Review commit: 62eeccdcdafab65b8d8e646c94b4f4e731e2d1f3
+Reference: dokime-prompt-v8-57888bbf.txt
+
+Apply the single finding below. Nick will push the change for another review. Preserve the v8 compare contract.
+
+1. MEDIUM - Preserve and classify small per-query differences before display rounding.
+   Location: src/dokime/stats.py:218-232 (per_query_diff_analysis).
+   The function currently computes d = round(candidate - baseline, 4), then uses d to decide improved, regressed, or unchanged. For ten queries each changing from 0.0 to 0.00001, paired bootstrap reports IMPROVEMENT with delta and CI at +0.00001, while the query breakdown reports 0 improved, 10 unchanged and records every per-query diff as 0.0. Tiny negative changes have the symmetric issue.
+
+   Compute the difference without four-decimal rounding and classify against the unrounded value. Serialize per-query diffs with enough precision to keep any nonzero effect nonzero, using the existing small-value numeric treatment where suitable. Keep the sign and magnitude in diffs_by_query and the improved/regressed entries, and keep exactly zero effects in unchanged. Add regression tests for +1e-5, -1e-5, effects smaller than the eight-decimal cap (such as +/-1e-9), and true zero. Test both direct helper output and a report path so the per-query breakdown agrees with the paired verdict. Retain finite-score guards, 10,000 paired resamples and seed 42.
+
+Do not touch pinned submodules or copy their files. Keep the Hestia HTTP-only integration and port 8080 default, ordinary two-run same-model scoping, explicit single-run cross-model mode, full-query prompt-hash gate including failures, failure/null-score exclusion, query-set/dataset/results checksums, duplicate-ID rejection, ARC extraction, and collision-safe report paths. Run the full Python 3.12 pytest suite and state the new HEAD SHA and test count when done. If a change demands a wider contract decision, stop and ask Nick instead of guessing.

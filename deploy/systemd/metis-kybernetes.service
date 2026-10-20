@@ -1,0 +1,25 @@
+[Unit]
+Description=Metis Kybernetes Orchestrator & Deliberation Engine
+After=network.target metis-hestia.service
+Requires=metis-hestia.service
+Documentation=https://gitlab.com/akarta-315h/metis
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/Metis
+ExecStart=%h/Projects/Metis/kybernetes/.venv/bin/kybernetes serve --host 127.0.0.1 --port 8081 --db-path kybernetes.db --memory-root .stoma
+Restart=on-failure
+RestartSec=5s
+
+# Process security hardening
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+Environment=PYTHONUNBUFFERED=1
+Environment=HESTIA_BASE_URL=http://127.0.0.1:8080/v1
+Environment=KYBERNETES_DB_PATH=kybernetes.db
+EnvironmentFile=-%h/Projects/Metis/deploy/metis.env
+
+[Install]
+WantedBy=default.target

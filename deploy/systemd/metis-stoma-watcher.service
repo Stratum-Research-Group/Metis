@@ -1,0 +1,24 @@
+[Unit]
+Description=Metis Stoma Ambient Directory Ingestion Watcher
+After=network.target
+Documentation=https://gitlab.com/akarta-315h/metis
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/Metis
+ExecStart=%h/Projects/Metis/stoma/.venv/bin/stoma watch %h/Documents
+Restart=on-failure
+RestartSec=10s
+
+# Process security hardening
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+Environment=PYTHONUNBUFFERED=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HUB_OFFLINE=1
+EnvironmentFile=-%h/Projects/Metis/deploy/metis.env
+
+[Install]
+WantedBy=default.target

@@ -132,6 +132,20 @@ class LlamaCppBackend(Backend):
             args.append("--embedding")
         elif model.model_type == ModelType.CHAT:
             args.append("--skip-chat-parsing")
+            # For deep contexts (>= 16k), use 8-bit quantized KV cache to halve VRAM usage
+            if model.context_size >= 16384:
+                args.extend(["-ctk", "q8_0", "-ctv", "q8_0"])
+            # For contexts > 16k (e.g. 32k), allocate 1 dedicated slot so the session gets the full window within GPU VRAM
+            if model.context_size > 16384:
+                args.extend(["-np", "1"])
+
+        # Speculative decoding options
+        if model.draft_model_path:
+            args.extend(["--draft-model", str(model.draft_model_path)])
+        if model.draft_max is not None:
+            args.extend(["--draft-max", str(model.draft_max)])
+        if model.spec_type:
+            args.extend(["--spec-type", str(model.spec_type)])
 
         return args
 
@@ -142,6 +156,12 @@ class LlamaCppBackend(Backend):
                 model.name,
                 f"Model weights not found at '{model.gguf_path}'. "
                 "Please configure a valid GGUF path in models.yaml.",
+            )
+        if model.draft_model_path and not Path(model.draft_model_path).is_file():
+            raise BackendStartError(
+                model.name,
+                f"Speculative draft model weights not found at '{model.draft_model_path}'. "
+                "Please configure a valid draft GGUF path in models.yaml.",
             )
         if not self._binary.is_file():
             raise BackendStartError(

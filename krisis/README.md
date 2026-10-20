@@ -165,4 +165,4 @@ All 16 test cases reproduce exact determinism:
 ```bash
 uv run pytest krisis/tests -v --cov=krisis
 ```
-All 23 test suites validate JSON Schema validation, gate elimination, deduplication logic, routing matrix, half-even scoring arithmetic, and CLI commands.
+All 29 test suites validate JSON Schema validation, gate elimination, deduplication logic, routing matrix, half-even scoring arithmetic, and CLI commands.

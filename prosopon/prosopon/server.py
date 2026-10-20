@@ -208,20 +208,12 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                 detail="Forbidden: Host header mismatch or untrusted domain.",
             )
 
-        # Cross-site / Origin validation (Finding R3, Gate G29)
-        sec_fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
-        if sec_fetch_site == "cross-site":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Forbidden: Cross-site requests are not permitted.",
-            )
-
         origin = request.headers.get("origin")
+        origin_allowed = False
         if origin:
             try:
                 parsed_origin = urlparse(origin)
                 origin_hostname = (parsed_origin.hostname or "").strip().lower()
-                origin_allowed = False
                 if origin_hostname in allowed_hosts:
                     origin_allowed = True
                 elif origin in cfg.allowed_origins or "*" in cfg.allowed_origins:
@@ -238,6 +230,14 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Forbidden: Malformed Origin header.",
                 )
+
+        # Cross-site / Origin validation (Finding R3, Gate G29)
+        sec_fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
+        if sec_fetch_site == "cross-site" and not origin_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Cross-site requests are not permitted.",
+            )
 
     # Auth dependencies
     async def require_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
@@ -979,9 +979,32 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         res = await kybernetes.resolve_approval(approval_id, req.decision)
         return res
 
-    # 6. Local Voice: Transcribe (STT)
+    # 6. Local Voice: Transcribe (STT) & Synthesize (TTS)
+    @app.get("/api/voice/status")
+    async def get_voice_status(_: bool = Depends(require_auth)):
+        return {
+            "enabled": bool(getattr(cfg, "voice_enabled", False)),
+            "whisper_model": cfg.whisper_model,
+            "piper_model": cfg.piper_model,
+            "mock_mode": cfg.voice_mock_mode,
+        }
+
+    @app.post("/api/voice/toggle")
+    async def toggle_voice_engine(body: Dict[str, Any], _: bool = Depends(require_auth)):
+        enabled = bool(body.get("enabled", False))
+        cfg.voice_enabled = enabled
+        return {
+            "enabled": cfg.voice_enabled,
+            "message": "Voice pipeline (Whisper & Piper) is now active." if enabled else "Voice pipeline (Whisper & Piper) is now turned off.",
+        }
+
     @app.post("/api/voice/transcribe")
     async def transcribe_audio(file: UploadFile = File(...), _: bool = Depends(require_auth)):
+        if not getattr(cfg, "voice_enabled", False):
+            raise HTTPException(
+                status_code=403,
+                detail="Voice engine (Whisper STT / Piper TTS) is currently turned off by default. Switch it on in Settings to use voice features."
+            )
         MAX_UPLOAD_BYTES = 15 * 1024 * 1024
         chunks = []
         total_size = 0
@@ -1019,6 +1042,11 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
     # 7. Local Voice: Synthesize (TTS)
     @app.post("/api/voice/synthesize")
     async def synthesize_speech(req: SynthesisRequest, _: bool = Depends(require_auth)):
+        if not getattr(cfg, "voice_enabled", False):
+            raise HTTPException(
+                status_code=403,
+                detail="Voice engine (Whisper STT / Piper TTS) is currently turned off by default. Switch it on in Settings to use voice features."
+            )
         if len(req.text.strip()) == 0:
             raise HTTPException(status_code=400, detail="Text cannot be empty")
         if len(req.text) > 5000:
@@ -1543,8 +1571,16 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         is_authed = False
         if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
             is_authed = True
-        elif token and (pairing_mgr.validate_token(token) or pairing_mgr.validate_host_owner_token(token)):
-            is_authed = True
+        elif token:
+            # Check host owner token
+            if pairing_mgr.validate_host_owner_token(token):
+                is_authed = True
+            # Check access store device session token
+            elif access_store.validate_session_token(token):
+                is_authed = True
+            # Check pairing manager tokens or tickets
+            elif pairing_mgr.validate_token(token) or pairing_mgr.validate_ticket(token):
+                is_authed = True
 
         if not is_authed:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Unauthorized: Valid authentication token required")

@@ -323,10 +323,10 @@ async def test_hestia_security_auth_host_and_content_type(mock_registry: ModelRe
             )
             assert resp.status_code == 415
 
-        # 3. Missing auth token when not in insecure dev mode returns 401
+        # 3. Remote client without auth token returns 401, with token returns 200
         with patch.dict(os.environ, {"HESTIA_SERVICE_TOKEN": "secret-123", "METIS_INSECURE_DEV": "0"}):
             async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=app),
+                transport=httpx.ASGITransport(app=app, client=("192.168.1.100", 12345)),
                 base_url="http://127.0.0.1",
                 headers={"Host": "127.0.0.1:8080"},
             ) as client:
@@ -340,5 +340,14 @@ async def test_hestia_security_auth_host_and_content_type(mock_registry: ModelRe
 
                 # With correct token
                 resp = await client.get("/models", headers={"Authorization": "Bearer secret-123"})
+                assert resp.status_code == 200
+
+            # 4. Local loopback client (MSS Void) trusts local connection without token
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app, client=("127.0.0.1", 12345)),
+                base_url="http://127.0.0.1",
+                headers={"Host": "127.0.0.1:8080"},
+            ) as client:
+                resp = await client.get("/models")
                 assert resp.status_code == 200
 

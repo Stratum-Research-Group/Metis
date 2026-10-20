@@ -1,0 +1,38 @@
+KYBERNETES - orchestrator. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Kybernetes is the assistant layer that ties a local AI stack together. It receives a request and decides the path: answer directly with a small model, remember with LTHCM, deliberate with Dianoia, or use a tool. It is built last because it needs the others to exist. Name: kybernetes, Greek for steersman - the one who steers.
+
+HARD CONSTRAINTS
+- Everything local: models come from the Hestia serving layer, memory from LTHCM (library dependency), deliberation from Dianoia (library dependency). No paid APIs.
+- Every routing decision and outcome is logged as training data for a future learned policy.
+- Add the existing stack projects to the workspace as git submodules, pinned to their current commits: LTHCM (https://gitlab.com/akarta-315h/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6) and dianoia (https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c). They are read-only dependencies: never modify their contents, never copy their files into this repo's own tree, and never push or upload their contents anywhere.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "kybernetes", Python package, pyproject.toml with lthcm and dianoia dependencies.
+
+2. ROUTING POLICY (rule-based v1)
+- Classify each request: DIRECT (small model answers), MEMORY (consult LTHCM first), DELIBERATE (multi-hop - hand to Dianoia), TOOL (needs a tool call).
+- Rules only in v1. The learned policy comes later, trained by Paideia on the logs this project writes.
+
+3. TOOL INTERFACE
+- Plugin spec: name, JSON schema, callable.
+- Two starter tools: calculator, local file search.
+
+4. CONVERSATION LOOP
+- Session state, calls memory/deliberation/tools per the router, streams the final response.
+- Show its work flag: optionally print which path was taken and why.
+
+5. LOGGING
+- JSONL per turn: request, route chosen, components invoked, outcome, latency.
+
+6. CLI CHAT
+- Simple interactive CLI front-end for the loop.
+
+OUT OF SCOPE
+- Web UI, multi-user, voice, proactive behavior.
+
+DEMO
+- CLI chat handling three turns: a direct factual question answered directly, a multi-hop question routed through LTHCM + Dianoia with the walk shown, and a calculation routed to the calculator tool.

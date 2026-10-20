@@ -2,8 +2,35 @@
 
 import json
 import os
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
+
+
+def _resolve_metis_env(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Resolve a configuration value from os.environ or deploy/metis.env."""
+    if val := os.environ.get(key):
+        return val.strip()
+
+    candidates = [
+        Path.cwd() / "deploy" / "metis.env",
+        Path(__file__).resolve().parents[3] / "deploy" / "metis.env",
+        Path.home() / ".config" / "metis" / "metis.env",
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            try:
+                for line in cand.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        if k.strip() == key:
+                            val = v.strip().strip("'\"")
+                            if val:
+                                return val
+            except Exception:
+                continue
+    return default
 
 
 class HestiaAdapter:
@@ -23,7 +50,7 @@ class HestiaAdapter:
         self.base_url = resolved_url.rstrip("/")
         self.default_model = os.environ.get("HESTIA_DEFAULT_MODEL", default_model)
         self.timeout = timeout_seconds
-        self.service_token = service_token if service_token is not None else os.environ.get("HESTIA_SERVICE_TOKEN")
+        self.service_token = service_token if service_token is not None else _resolve_metis_env("HESTIA_SERVICE_TOKEN")
 
     def _get_headers(self) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}

@@ -132,6 +132,34 @@ To guarantee sovereign isolation against unauthorized local processes and establ
   2. **WebRTC DataChannels (`aiortc`)**: In-band DTLS 1.3 encryption and SCTP multiplexing (`control`, `stream`, `terminal`, `audio`) avoiding browser CA trust warnings and cellular NAT hurdles.
   3. **Biometric Phylax Approvals**: Remote biometric challenge-signing (FaceID/TouchID/Android Biometrics) for high-risk T2/T3 agent tool invocations.
 
+### 3.6 Local Zero-Friction vs. Remote MSS Void Peer Topology
+
+Metis differentiates strictly between the local loopback trust boundary and external network boundaries:
+
+1. **Local Machine Zero-Friction (Default)**:
+   - When running on the host machine (`127.0.0.1`), MSS terminal commands (`kybernetes code`), workbench browser launches (`prosopon open`), and background daemons (Stoma watcher) require **zero manual token exports, zero PIN prompts, and zero interactive pairing friction**.
+   - Local tools automatically resolve authorization from the POSIX `0600` filesystem authority ([`deploy/metis.env`](file:///home/akarta/Projects/Metis/deploy/metis.env) or `data/.host_owner_token`).
+   - The UI contains no mobile pairing modals or padlock prompts on localhost.
+
+2. **Remote MSS Void / Remote Peer Connection**:
+   - When a remote copy of MSS (e.g. running in an isolated VM, laptop, or remote container) connects to this Metis instance, it authenticates at the network perimeter:
+     ```bash
+     # Remote MSS Void environment configuration:
+     export KYBERNETES_BASE_URL="http://<metis-host-ip>:8081"
+     export KYBERNETES_SERVICE_TOKEN="<service-token-from-deploy/metis.env>"
+     export HESTIA_BASE_URL="http://<metis-host-ip>:8080/v1"
+     export HESTIA_SERVICE_TOKEN="<service-token-from-deploy/metis.env>"
+     ```
+   - All network calls over HTTP require `Authorization: Bearer <token>` or WebRTC DTLS 1.3 encryption.
+
+3. **Sandboxed Agent Execution (`BubblewrapBackend`)**:
+   - All tool commands executed by coding agents run within Bubblewrap kernel namespaces:
+     - Read-only host filesystem mount (`--ro-bind / /`)
+     - Writable binds strictly confined to the project workspace (`--bind <cwd> <cwd>`)
+     - Private ephemeral tmpfs (`--tmpfs /tmp`)
+     - Confined environment: `HOME` points to workspace, `TMPDIR` points to `/tmp`
+     - Isolated PID, IPC, UTS, and Network namespaces (`--unshare-net`) by default, blocking rogue outbound sockets and exfiltration unless explicitly permitted.
+
 ---
 
 ## 4. The Tool Surface

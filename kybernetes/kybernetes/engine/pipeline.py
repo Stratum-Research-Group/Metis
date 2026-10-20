@@ -58,6 +58,7 @@ class ExecutionPipeline:
         phylax_adapter: PhylaxAdapter,
         krisis_adapter: KrisisAdapter,
         session_manager: SessionManager,
+        thinking_budget_steps: int = 10,
     ):
         self.router = router
         self.budget_engine = budget_engine
@@ -68,6 +69,7 @@ class ExecutionPipeline:
         self.phylax = phylax_adapter
         self.krisis = krisis_adapter
         self.sessions = session_manager
+        self.thinking_budget_steps = thinking_budget_steps
         self.max_traces: int = 1000
         self._traces: Dict[str, TraceRecord] = {}
 
@@ -313,7 +315,8 @@ class ExecutionPipeline:
 
             elif stage_plan.stage == StageName.DELIBERATE:
                 components_used.append("Dianoia")
-                d_result = self.dianoia.deliberate(request.query, citations)
+                delib_steps = stage_plan.params.get("max_steps", self.thinking_budget_steps)
+                d_result = self.dianoia.deliberate(request.query, citations, max_steps=delib_steps)
                 zero_edge_fallback = d_result.zero_edge_fallback_used
                 deliberation_summary = d_result.deliberation_summary
 
@@ -328,6 +331,7 @@ class ExecutionPipeline:
                             "zero_edge_fallback": zero_edge_fallback,
                             "walk_steps": d_result.walk_steps,
                             "edges_traversed": d_result.edges_traversed,
+                            "max_deliberation_steps": delib_steps,
                         },
                     )
                 )

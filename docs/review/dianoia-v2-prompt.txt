@@ -1,0 +1,40 @@
+DIANOIA - new project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Dianoia is a new project that sits on top of LTHCM (https://gitlab.com/akarta-315h/LTHCM), an existing topological memory layer for LLM retrieval. LTHCM is the memory substrate; Dianoia is the cognition layer that reasons over it. Tagline for the README: "LTHCM remembers, Dianoia thinks."
+
+HARD CONSTRAINTS
+- Dianoia depends on LTHCM as a git submodule pinned to a specific commit (LTHCM is a sibling project under active development; update the pin deliberately, never automatically). Never copy, fork, or modify LTHCM code inside this repo.
+- Everything runs locally: no paid APIs, no closed models.
+- The deliberation model is fixed for v1: Qwen2.5-7B-Instruct GGUF (Q4_K_M) served by llama.cpp. Fallback if it misbehaves: Llama-3.1-8B-Instruct GGUF. Must fit a 16GB GPU (targets: RTX 5060 Ti 16GB, Tesla V100 SXM2 16GB via PCIe adapter).
+- License: copy LTHCM's LICENSE file verbatim into this repo and name it explicitly in the README (check the file, do not assume).
+- Documentation standard: describe mechanisms only, no absolute claims, publish negative results when benchmarks exist.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "dianoia", Python package, pyproject.toml, LTHCM as a git submodule with the pinned commit recorded in the README.
+
+2. DELIBERATIVE WALK (core of v1)
+- A WalkController that uses the deliberation model to direct traversal over an LTHCMEngine instance.
+- Seed the walk from the engine's standard retrieval results for the question - the same seeded candidate set used by the retrieve_and_verify path, minus the verification stage.
+- At each step the controller is shown the current passage plus its graph neighbours (from LTHCM's edge structure) and must choose exactly one action: EXPAND <neighbour>, BACKTRACK, or ANSWER.
+- Step budget is a constructor parameter max_steps (default 8). On budget exhaustion, force ANSWER from what has been seen.
+- ANSWER synthesizes the final answer from the passages visited, with the walk path attached.
+
+3. ANSWER-TIME VERIFICATION
+- After ANSWER, re-run LTHCM's sheaf/NLI contradiction check between the drafted answer and the retrieved evidence (answer-vs-evidence, not passage-vs-passage).
+- If conflicts are found: run at most ONE re-walk informed by the conflict report, then answer again regardless of outcome.
+- Return the final answer with a verification report stating what was checked and the outcome. Report actual NLI use, never intent.
+
+4. WALK LOGGING (training data for later)
+- Every walk appends one JSONL record. Schema:
+  {"question": str, "seeded_nodes": [str], "path": [{"node": str, "action": "EXPAND|BACKTRACK|ANSWER", "reason": str}], "verification": {"conflicts_found": bool, "rewalked": bool, "report": str}, "final_answer": str, "max_steps": int, "steps_used": int}
+- Do NOT build any learner yet. These logs are the future training signal for a learned walk policy.
+
+5. OUT OF SCOPE
+- The learned question-type router belongs inside LTHCM, not Dianoia. Do not implement routing changes here.
+- No write-back / edge-weight learning in v1. Read-only over the memory graph.
+
+6. DEMO CLI
+- Accepts EITHER a directory of documents (--docs <dir>, builds a fresh LTHCM index) OR a path to a pre-built LTHCM index (--index <path>). Then: given a question, run the walk, print the path step by step, the verification report, and the final answer.

@@ -94,8 +94,9 @@ async def test_service_token_auth():
     """Item 3 & Item 9: Authenticate the control boundary on Kybernetes internal routes."""
     secured_app = create_app(db_path=":memory:", service_token="secret-service-token-123")
     secured_app.state.sessions.register_active_turn("turn-1")
-    transport = ASGITransport(app=secured_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    # Remote client without token rejected, with token allowed
+    transport_remote = ASGITransport(app=secured_app, client=("192.168.1.100", 12345))
+    async with AsyncClient(transport=transport_remote, base_url="http://test") as client:
         # Health is public
         h_resp = await client.get("/v1/health")
         assert h_resp.status_code == 200
@@ -112,6 +113,14 @@ async def test_service_token_auth():
         )
         assert auth_resp.status_code == 200
         assert auth_resp.json()["cancelled"] is True
+
+    # Local loopback client (MSS Void) trusts local connection without token
+    secured_app.state.sessions.register_active_turn("turn-2")
+    transport_local = ASGITransport(app=secured_app, client=("127.0.0.1", 12345))
+    async with AsyncClient(transport=transport_local, base_url="http://test") as client:
+        local_resp = await client.post("/v1/chat/turns/turn-2/cancel")
+        assert local_resp.status_code == 200
+        assert local_resp.json()["cancelled"] is True
 
 
 @pytest.mark.asyncio

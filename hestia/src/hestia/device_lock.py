@@ -14,6 +14,10 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 def get_default_lock_dir() -> Path:
+    if custom := os.environ.get("METIS_LOCK_DIR"):
+        d = Path(custom)
+        d.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return d
     uid = os.getuid()
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
     if runtime_dir and Path(runtime_dir).is_dir():
@@ -92,7 +96,8 @@ def acquire_device_lease(
 
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (BlockingIOError, OSError):
+    except (BlockingIOError, OSError) as e:
+        logger.warning("Failed flock on per-device lock %s: %s", lock_path, e)
         os.close(fd)
         return None
 
@@ -102,7 +107,8 @@ def acquire_device_lease(
         try:
             default_fd = os.open(str(default_lock_path), open_flags, 0o600)
             fcntl.flock(default_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (BlockingIOError, OSError):
+        except (BlockingIOError, OSError) as e:
+            logger.warning("Failed flock on default lock %s: %s", default_lock_path, e)
             # Roll back per-device lock if shared lock fails
             try:
                 fcntl.flock(fd, fcntl.LOCK_UN)

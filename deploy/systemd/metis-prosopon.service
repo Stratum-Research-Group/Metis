@@ -1,0 +1,23 @@
+[Unit]
+Description=Metis Prosopon Web & Voice Interface (Pyle Sovereign Studio)
+After=network.target metis-kybernetes.service
+Requires=metis-kybernetes.service
+Documentation=https://gitlab.com/akarta-315h/metis
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/Metis
+ExecStart=%h/Projects/Metis/prosopon/.venv/bin/prosopon serve --host 127.0.0.1 --port 8000 --kybernetes-url http://127.0.0.1:8081/v1 --no-mock
+Restart=on-failure
+RestartSec=5s
+
+# Process security hardening
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-%h/Projects/Metis/deploy/metis.env
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,42 @@
+KYBERNETES BUDGET LOOP - bolt-on to the Greek local AI stack. Apply this spec while building kybernetes. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Kybernetes orchestrates phases of AI work but must know the likely token, time and optional money cost before dispatch, reconcile actual usage as work completes, and warn before the task runs out of budget. Build the SAME core engine as the standalone oikonomos prompt, behind a clean library interface. Dokime's eval history is a source of comparable prior outcomes; hestia supplies local-model request usage; phylax can enforce the budget guardrail. Do not turn a forecast into a quality claim.
+
+HARD CONSTRAINTS
+- Preserve local-first operation. SQLite stores predictions, usage events, outcomes and calibration. No telemetry or new hosted service. Priced API usage is optional; local models must be supported with wall-clock/compute measurements.
+- Keep separate token, time and money units. Input/output/cached tokens are distinct; absent usage, price or progress is unknown, never zero. Store the price schedule and currency used. Budget and deadline are supplied by the caller; never silently invent authorization to spend or stop a user's work.
+- Cold start must be labelled. Only show a calibrated overrun probability when the relevant cohort has enough reconciled history; no false 90% coverage claim from a small sample.
+- Add *.txt to .gitignore. Add the existing stack projects to the workspace as git submodules, pinned to their current commits: LTHCM (https://gitlab.com/akarta-315h/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6) and dianoia (https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c). They are read-only dependencies: never modify their contents, never copy their files into this repo's own tree, and never push or upload their contents anywhere.
+- Do not edit LTHCM or dianoia. Treat kybernetes, dokime, hestia and phylax interfaces as proposed integration contracts until the actual repos expose them; do not invent existing endpoint names or schemas.
+
+BUILD, IN THIS ORDER
+
+1. CONTRACT AND PERSISTENCE
+- Put a versioned budget-engine library behind kybernetes interfaces: TaskPlan, PhasePlan, UsageEvent, ProgressEvent, Estimate, CheckpointDecision and Reconciliation. Stable task/phase/request/event IDs; idempotent ingestion and explicit provenance for every measurement. SQLite with migrations, transactions and retention settings. Ensure concurrent phases cannot double-count or overwrite each other's events.
+- Define optional adapters for dokime history, hestia usage and priced API usage. Missing adapters degrade to explicit incomplete accounting, not an estimated actual. Do not import files or fork code from the pinned submodules.
+
+2. BEFORE DISPATCH
+- Kybernetes divides a task into named phases with measurable completion criteria and optional budget/deadline. Pull comparable, permitted eval outcomes from dokime into priors; fall back to labelled local cold-start assumptions when no comparable data exists. Bayesian update per-phase expected input/output tokens and wall-clock, with partial pooling for sparse cohorts.
+- Produce per-phase and whole-task expected spend and target 90% intervals. Adaptive conformal inference adjusts interval width based on previous out-of-sample misses. Record forecast version, cohort/sample count and assumptions before dispatch so later reconciliation cannot rewrite the original prediction.
+- Present expected spend, range and remaining budget to the orchestrator. Kybernetes must be able to warn or ask for a smaller phase before dispatch when the planned phase does not fit. No automatic paid-call commitment from a forecast.
+
+3. LIVE LOOP
+- Hestia adapter ingests actual per-request token usage from its API responses or structured logs, keyed by request ID; use final streaming usage only when present. For local runs record measured wall-clock/compute too. API adapter records provider usage fields and tariff snapshot. Track measured phase progress and rework separately from usage. Deduplicate retries by request ID while counting genuine repeat executions.
+- At each phase boundary and configurable in-phase checkpoints, estimate remaining work using the learned phase model; Kalman-filter observed burn rate with explicit units and startup behavior. Compute CPI = earned budget value / actual spend and EAC = budget / CPI only where earned work and actual spend exist, separately by unit. Build a predictive distribution for final spend to calculate probability of exceeding each supplied token, time or money limit; do not equate EAC alone with a probability.
+- Kybernetes compares EAC and overrun probability with configured limits. Default warn and require the orchestrator to surface the warning. Optional hard-stop policy prevents NEW phase/request dispatch at a checkpoint, not cancellation of in-flight work. Phylax may enforce that decision as a policy guard; it receives only the bounded decision and reason, not private task content. Record every warn/stop decision for audit. Avoid repeated identical warnings at every event.
+
+4. RECONCILE AND AMENDMENTS
+- After a phase/task ends, emit a report of forecast versus actual by phase, outcome/rework, empirical coverage, mean interval width and CPI where defined. Record the outcome before updating Bayesian priors and conformal state. Include cancelled/incomplete phases without presenting them as complete observations.
+- Amendments the other projects must surface: dokime exports versioned eval outcomes with task type, model, phase, measured work and usage where available; hestia emits per-request IDs and token usage, including streaming-final usage where its backend exposes it, with explicit unknown otherwise; phylax accepts an allow/warn/block decision and policy settings at dispatch boundaries. Define adapters and tests first. If a project does not expose an item, report the gap instead of silently changing that project or fabricating data.
+- Expose kybernetes configuration for budgets, coverage target, warning probability threshold and warn-only/hard-stop mode, plus an inspectable report/CLI. Keep engine logic usable without the rest of the stack so it can be tested against fixtures.
+
+OUT OF SCOPE
+- Building the other projects in this pass, editing read-only submodules, automatic paid-service provisioning, model training, autonomous budget increases, and guarantees about answer quality.
+
+TESTING
+- Unit tests for cold start, Bayesian updates, out-of-sample conformal calibration, Kalman startup, unit-safe EVM, missing usage, retries, concurrent phases and idempotent events. Contract tests with fake dokime/hestia/phylax adapters; integration test dispatch -> checkpoint warning/stop -> reconciliation -> next-run prior update. No paid API or GPU required for the suite.
+
+DEMO
+- Run a simulated kybernetes task with planning, generation, test and rework phases. Show pre-dispatch intervals, per-request usage arriving from a fake hestia adapter, a checkpoint warning and optional phylax block, then reconcile actuals.
+- Replay five labelled synthetic tasks with an initially narrow interval and known actuals; show the forecast before each outcome and calibration updates afterwards. Show calibration adapting on the fixture, not a claim of guaranteed 90% coverage from five tasks.

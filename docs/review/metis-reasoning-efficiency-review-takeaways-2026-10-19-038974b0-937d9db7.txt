@@ -1,0 +1,83 @@
+METIS TAKEAWAYS - seven-source reasoning/inference-efficiency review, 2026-10-19
+Project boundary: Metis only. ASOS items are in a separate file. Ideas and references only;
+nothing here is commissioned implementation, and nothing was executed, downloaded or benchmarked.
+
+VERIFIED SOURCES
+- Coconut paper (v4): https://arxiv.org/abs/2412.06769 ; code: https://github.com/facebookresearch/coconut
+- Hybrid Reasoning Agents paper (v1, full PDF read): https://arxiv.org/abs/2610.18861
+- HybridAgent repo @1b41ceb (2026-10-18): https://github.com/togethercomputer/HybridAgent
+  - adapter: https://github.com/togethercomputer/HybridAgent/blob/1b41cebbd2388d083ee1820af421b7f9e24affb5/hybrid_agent/hybridlink.py
+  - latent readout: https://github.com/togethercomputer/HybridAgent/blob/1b41cebbd2388d083ee1820af421b7f9e24affb5/hybrid_agent/readout.py
+  - engine: https://github.com/togethercomputer/HybridAgent/blob/1b41cebbd2388d083ee1820af421b7f9e24affb5/hybrid_agent/engine.py
+  - RL objective: https://github.com/togethercomputer/HybridAgent/blob/1b41cebbd2388d083ee1820af421b7f9e24affb5/hybrid_rl/grpo.py
+  - SFT 8-GPU config: https://github.com/togethercomputer/HybridAgent/blob/1b41cebbd2388d083ee1820af421b7f9e24affb5/hybrid_sft/configs/accelerate_zero2_offload.yaml
+- HybridAgent weights (bf16, verified sizes today): https://huggingface.co/togethercomputer/HybridAgent-8B-Agentic (16.4GB + 70MB adapter), https://huggingface.co/togethercomputer/HybridAgent-14B-Agentic (29.5GB + 100MB adapter)
+- NCM paper (v1): https://arxiv.org/abs/2610.14162
+- NCM repo @c702742 (2026-10-14): https://github.com/HazyResearch/ncm (eval entry: evaluate.py; per-task configs under config/eval/)
+- NCM artifacts: https://huggingface.co/hazyresearch/ncm-checkpoints and https://huggingface.co/datasets/hazyresearch/ncm-datasets
+- Google speculative-decoding retrospective (2024-12-06): https://research.google/blog/looking-back-at-speculative-decoding/
+- llama.cpp speculative decoding docs (master, read today): https://github.com/ggml-org/llama.cpp/blob/master/docs/speculative.md
+- OpenAI reasoning guide (live product docs): https://developers.openai.com/api/docs/guides/reasoning?api-mode=responses
+
+DIANOIA
+- Analogy only: HybridAgent's latent mode is a trained adapter feeding hidden states back inside
+  one model; dianoia's walk is explicit graph actions over retrieved memory. Different mechanisms.
+- Diagnostic-projection trick worth knowing: readout.py renders a latent span as pseudo-text by
+  cosine nearest-neighbour over the input-embedding table (~73 lines, self-contained). This is a
+  rough diagnostic projection - nearest tokens are a probe, not a faithful explanation of what
+  the latent state encodes. Treat it as an inspection hint, not an audit of reasoning.
+- Coconut's ProsQA analysis shows, on their synthetic tasks, that language CoT fails by premature
+  commitment and that a latent state can hold several candidate next steps at once. That is not
+  evidence dianoia's explicit backtracking works; the walk design needs its own evaluation.
+- The hybrid SFT trajectory format (text + latent spans + tool observations in one record) is a
+  worked reference adjacent to dianoia's walk-log format.
+
+PAIDEIA
+- hybrid_rl/grpo.py read (59 lines): group-normalized advantages plus a dual-clipped PPO-style
+  surrogate, computed over sampled TEXT positions only; latent steps carry no token-level loss.
+  Useful as reference math and for its constants (group_size 8, clip 0.2, lr 1e-6).
+- The harness around it is not portable to the current rig as shipped: pinned torch 2.11.0 /
+  transformers 5.13.0, multi-GPU lockstep rollouts (hybrid_rl/dist.py, rollout.py), SFT config
+  assumes 8 GPUs on one node with ZeRO-2 CPU offload for 14B, RL launcher defaults to 4 nodes x
+  8 GPUs. Any paideia use would be a reimplementation of the objective, not a reuse of the trainer.
+
+HESTIA
+- Only immediately actionable item, with current support verified: llama.cpp's llama-server
+  documents --spec-type draft, draft-eagle3, draft-dflash, draft-dspark and several n-gram
+  self-draft modes (source URL above).
+- Conditions, not guarantees: speed depends on draft acceptance rate and on serving being
+  memory-bandwidth-bound; it can be neutral or worse at high batch. Google's identical-distribution
+  property comes from their verification rule (exact for their speculative sampling; identical
+  outputs under greedy) - it is not a blanket property of every drafting scheme.
+- Practical constraints from the same docs: draft and target must share a tokenizer; EAGLE-3
+  drafts are trained per target model and converted against that target. Target-specific EAGLE-3
+  checkpoints for common open models are published on Hugging Face. Measure acceptance and answer
+  quality in dokime before adopting anything.
+- HybridAgent itself does NOT fit hestia's llama.cpp path: released weights are bf16 HF
+  safetensors (8B = 16.4GB, 14B = 29.5GB) and generation relies on its custom transformers engine
+  that feeds hidden states back as embeddings. No GGUF exists, and whether a quantized backbone
+  works with that custom loop on a 16GB card is unestablished.
+
+KLEROTERION / KYBERNETES
+- The OpenAI guide is product documentation for their API: per-request effort levels (supported
+  values and defaults are model-dependent), separately billed reasoning tokens, opt-in reasoning
+  summaries, encrypted reasoning items for stateless/ZDR use, reasoning carry-over restricted to
+  a model family, and between-turn effort changes that preserve their prompt cache. A local
+  per-task thinking-budget knob is a reasonable pattern to design, but none of those API
+  semantics (caching, carry-over, billing shape) transfer automatically - they would need their
+  own design in kybernetes.
+
+NCM (research watch item)
+- Repo re-verified: evaluation harness only (evaluate.py fans out one generation shard per GPU,
+  then merges and scores); generator and VQ-VAE tokenizer implementations are present; there is
+  no training code.
+- Full runtime artifacts per task, not just the generator: XSum needs generator.pt (354MB) +
+  tokenizer.pt (300MB) + config + test-data pickles from ncm-datasets; LM1B-large needs
+  generator.pt (2.9GB) + the shared tokenizer.pt (598MB). The datasets repo also carries large
+  training bins (up to ~18GB) that eval does not need.
+- Runtime reality: plain CUDA PyTorch, batch-oriented eval; the paper's 10-31x speed claims are
+  author numbers from an H100 at batch 16. Single-stream latency and VRAM footprint on consumer
+  hardware are unmeasured - no conclusion about fit for the current rig from checkpoint size alone.
+
+LTHCM
+- Nothing in this batch bears on LTHCM.

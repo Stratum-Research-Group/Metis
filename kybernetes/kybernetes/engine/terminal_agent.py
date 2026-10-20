@@ -191,6 +191,23 @@ class TerminalCodingAgent:
         return asyncio.run(self._run_async(goal))
 
     async def _run_async(self, goal: str) -> CodingSessionResult:
+        # Check active models on Hestia to ensure we use an installed model
+        if hasattr(self.hestia, "check_health") and asyncio.iscoroutinefunction(self.hestia.check_health):
+            try:
+                health = await self.hestia.check_health()
+                if isinstance(health, dict) and health.get("available") and health.get("models"):
+                    models = health["models"]
+                    if self.model_name not in models:
+                        preferred = [m for m in ("qwen2.5-14b-instruct", "gemma-4-26b-a4b-abliterated") if m in models]
+                        if preferred:
+                            self.model_name = preferred[0]
+                        elif models:
+                            self.model_name = models[0]
+                    elif self.model_name == "llama-3.1-8b-instruct" and "qwen2.5-14b-instruct" in models:
+                        self.model_name = "qwen2.5-14b-instruct"
+            except Exception:
+                pass
+
         click.echo("=" * 72)
         click.echo(click.style(" Metis Sovereign Coding Agent (MSS) — Terminal Harness", bold=True, fg="cyan"))
         click.echo(f" Workspace: {self.workspace_root}")

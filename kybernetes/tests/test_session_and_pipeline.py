@@ -160,3 +160,18 @@ async def test_pipeline_midstream_hestia_error_fallback(pipeline_setup, monkeypa
     assert "The calculation result is" not in full_text
 
 
+def test_thinking_budget_configuration(monkeypatch):
+    """Verify thinking_budget_steps in KybernetesConfig and load_config env override."""
+    from kybernetes.config import KybernetesConfig, load_config
+
+    default_cfg = KybernetesConfig()
+    assert default_cfg.thinking_budget_steps == 10
+
+    custom_cfg = KybernetesConfig(thinking_budget_steps=25)
+    assert custom_cfg.thinking_budget_steps == 25
+
+    monkeypatch.setenv("KYBERNETES_THINKING_BUDGET_STEPS", "15")
+    loaded = load_config()
+    assert loaded.thinking_budget_steps == 15
+
+

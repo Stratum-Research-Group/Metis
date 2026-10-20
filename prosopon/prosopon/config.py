@@ -38,7 +38,7 @@ class ProsoponConfig(BaseModel):
     )
     session_expiry_hours: int = Field(default=72, ge=1, description="Paired session expiry time")
     allowed_origins: List[str] = Field(
-        default_factory=lambda: ["http://localhost:8000", "https://localhost:8000", "http://127.0.0.1:8000", "https://127.0.0.1:8000"],
+        default_factory=lambda: ["http://localhost:8000", "https://localhost:8000", "http://127.0.0.1:8000", "https://127.0.0.1:8000", "vscode-file://vscode-app"],
         description="Allowed CORS / CSRF origins",
     )
     allowed_hosts: List[str] = Field(
@@ -47,6 +47,10 @@ class ProsoponConfig(BaseModel):
     )
 
     # Local voice paths
+    voice_enabled: bool = Field(
+        default=False,
+        description="Enable local voice processing (Whisper STT and Piper TTS). Disabled by default.",
+    )
     whisper_binary: str = Field(default="whisper.cpp", description="Path to whisper.cpp binary or alias")
     whisper_model: str = Field(default="base.en", description="Whisper model name or GGML file path")
     piper_binary: str = Field(default="piper", description="Path to piper TTS binary or alias")

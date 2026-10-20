@@ -800,5 +800,25 @@ class TestLlamaCppBinaryDiscoveryAndDeviceResolution:
         assert "--embedding" in embed_args
         assert "--skip-chat-parsing" not in embed_args
 
+        # Speculative decoding flags
+        spec_model = ModelEntry(
+            name="spec-chat-test",
+            model_type=ModelType.CHAT,
+            gguf_path=Path("/dummy/model.gguf"),
+            quantization="Q4_K_M",
+            context_size=4096,
+            vram_estimate_mb=5000,
+            draft_model_path=Path("/dummy/draft.gguf"),
+            draft_max=16,
+            spec_type="lookup",
+        )
+        spec_args = backend.build_launch_args(spec_model, 9050)
+        assert "--draft-model" in spec_args
+        assert "/dummy/draft.gguf" in spec_args
+        assert "--draft-max" in spec_args
+        assert "16" in spec_args
+        assert "--spec-type" in spec_args
+        assert "lookup" in spec_args
+
 
 

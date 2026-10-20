@@ -353,3 +353,55 @@ async def test_pinax_endpoints(app_instance, auth_headers):
         res = eval_resp.json()
         assert res["tier"] == "T3"
         assert res["requires_approval"] is True
+
+
+@pytest.mark.asyncio
+async def test_voice_disabled_by_default_and_toggle(app_instance, auth_headers):
+    """Verify Whisper & Piper voice pipeline is off by default and can be toggled on/off."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Status is initially disabled
+        status_resp = await client.get("/api/voice/status", headers=auth_headers)
+        assert status_resp.status_code == 200
+        assert status_resp.json()["enabled"] is False
+
+        # 2. Transcribe and Synthesize return 403 when voice is disabled
+        synth_resp = await client.post(
+            "/api/voice/synthesize",
+            json={"text": "Test speech synthesis"},
+            headers=auth_headers,
+        )
+        assert synth_resp.status_code == 403
+        assert "turned off by default" in synth_resp.json()["detail"]
+
+        files = {"file": ("test.wav", b"RIFF....WAVEfmt ....data....", "audio/wav")}
+        trans_resp = await client.post(
+            "/api/voice/transcribe",
+            files=files,
+            headers=auth_headers,
+        )
+        assert trans_resp.status_code == 403
+        assert "turned off by default" in trans_resp.json()["detail"]
+
+        # 3. Toggle voice ON
+        toggle_on = await client.post(
+            "/api/voice/toggle",
+            json={"enabled": True},
+            headers=auth_headers,
+        )
+        assert toggle_on.status_code == 200
+        assert toggle_on.json()["enabled"] is True
+
+        # Verify status is now enabled
+        status_on = await client.get("/api/voice/status", headers=auth_headers)
+        assert status_on.status_code == 200
+        assert status_on.json()["enabled"] is True
+
+        # 4. Toggle voice OFF
+        toggle_off = await client.post(
+            "/api/voice/toggle",
+            json={"enabled": False},
+            headers=auth_headers,
+        )
+        assert toggle_off.status_code == 200
+        assert toggle_off.json()["enabled"] is False

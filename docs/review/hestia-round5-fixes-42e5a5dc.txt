@@ -1,0 +1,14 @@
+HESTIA ROUND 5 FIXES
+Reviewed at 43ad0fbeb70d0d11c3f3ffebf0e703194be2b8ea (https://gitlab.com/akarta-315h/hestia). Fresh clone; no tracked source edits or pushes. 38 passed, 1 hardware-gated skip; ruff clean. Physical GPU demo not run here. uv created only an untracked local uv.lock.
+
+ROUND-4 VERDICTS
+1. Live CLI check blocking its own server: FIXED at tests/test_integration.py:115-123. CliRunner.invoke now runs in asyncio.to_thread, keeping the Uvicorn event loop available; the failure assertion includes exit code, captured output and exception. A separate minimal live Uvicorn/CLI status smoke check returned exit 0 and the health response. Hardware-gated full demo remains unverified on this machine.
+2. Idle unload after an in-flight completion: FIXED at src/hestia/server/__init__.py:215-255. Idle age is checked again after draining, before pop/stop, while the per-model lock remains held. request_finished touches the activity clock at :141-145. Tests at tests/test_server.py:280-338 cover idle abort and explicit unload separately; both passed.
+
+NEW FINDING
+1. LOW - A readiness assertion can abandon the live Uvicorn task without cleanup.
+   tests/test_integration.py:78-89,143-145
+   The new `assert server.started` is before `try/finally`. If startup takes longer than five seconds, or startup exits without setting `started`, the test raises before setting `server.should_exit` and awaiting `server_task`. Reproduced with a delayed Uvicorn lifespan: assertion failed with the server task still pending and `server.should_exit == False`. Move readiness polling and assertion into the protected try, and always set the exit flag and await/cancel the server task in finally. If startup exited, surface its exception (or exit outcome) rather than only a generic timeout assertion. Keep the readiness bound.
+
+GUARDRAILS
+Keep deps/LTHCM and deps/dianoia as gitlinks only, pinned to 8a71605379ee32059e714feb3648cf74f4b42dc6 and da7ce83cb05f3b44764fc59ab5c325995c6fd07c. Do not change, copy or push dependency contents. Preserve the threaded live CLI check, post-drain idle recheck, stale-health identity guard, explicit unload locking, retry bounds, loopback binding, single-GPU scope and API/CLI behavior. Do not claim a physical GPU demo pass until it is run with the configured binary and GGUF files.

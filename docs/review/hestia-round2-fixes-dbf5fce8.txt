@@ -1,0 +1,28 @@
+HESTIA ROUND 2 FIXES
+Reviewed at eec03082a1461829d93cf6fd1fe8905d6c4135f2.
+
+1. HIGH - A failed restart never gets the remaining attempts.
+   src/hestia/server/__init__.py:302-315, 317-370
+   _handle_crash increments the counter once, but if backend.start raises, it sets state=FAILED. The health loop visits only loaded_models(), so it never retries again. Reproduced: first failed restart leaves FAILED with retry_count=1 and no health-scan candidate. Keep a retry sequence alive for up to three attempts with backoff (1, 2, 4 seconds), only then mark FAILED. Ensure each attempt stops an old/wedged process and owns/releases its port correctly. Add a test that backend.start fails twice then succeeds, and one that fails all three attempts.
+
+2. HIGH - Unload/load race leaves a new backend marked unloaded and unprotected.
+   src/hestia/server/__init__.py:105-124, 130-138, 192-214
+   Explicit/idle unload never acquires the per-model load lock. _unload_model pops the old process then awaits backend.stop; a concurrent ensure_loaded sees the model still LOADED but no process, loads a new process, then the old unload resets its state to UNLOADED and clears the new in-flight count. Reproduced with a gated fake backend: after the old stop finishes, _processes contains the new process on 8082, state is UNLOADED, inflight is empty. Serialize unload against load for the same model and recheck state/in-flight after acquiring the lock. Keep the API request's in-flight increment atomic with selecting the process. Add a concurrent unload/load regression test.
+
+3. MED - SSE upstream connection can leak on connect failure; mid-stream error event is malformed for quotes.
+   src/hestia/api/app.py:114-143, 255-267
+   _open_stream_request creates AsyncClient, then client.send can raise before it returns the client; the caller can only release in-flight tracking, not close that client. Close the client inside _open_stream_request on exception. Mid-stream errors interpolate str(exc) directly into JSON; quotes/backslashes can invalidate the SSE data. Serialize with json.dumps and test a message with quotation marks. Preserve the pre-response upstream status check.
+
+4. MED - Local-only listener is not enforced in configuration.
+   src/hestia/config.py:24-55; src/hestia/cli/__init__.py:167-174
+   Default hestia.yaml safely says 127.0.0.1, but any listen_host string, including 0.0.0.0, is accepted and fed to Uvicorn. If 'no remote access' is a hard constraint, reject non-loopback listen hosts rather than allowing an accidental LAN bind. Test 0.0.0.0 and :: rejection. Do not add remote access/auth as a workaround.
+
+5. MED - Hardware integration test does not exercise its stated demo and can fail despite available models.
+   tests/test_integration.py:31-42, 45-93, 96-230
+   Readiness checks any registered GGUF, but test assumes both named files exist. The live ASGI test does not enter FastAPI lifespan and therefore _manager remains unset; it also never tests idle auto-unload/reload or CLI status. Require both configured GGUFs and binary before live run; enter lifespan explicitly, test idle reload and actual status output. The mocked scenario is useful but mocks both inference paths and directly invokes the idle checker, so it cannot replace the live demo coverage.
+
+6. MED - VRAM total-query failure silently assumes 16GB.
+   src/hestia/server/__init__.py:218-245; src/hestia/vram.py:76-91
+   If pynvml total query fails while nvidia-smi free succeeds, code falls back to 16384 MB, so the aggregate guard no longer uses the card's actual total. Use nvidia-smi for total as well, or fail closed with a distinct GPU-query error; never assume card capacity from a failed live query.
+
+DO NOT TOUCH: pinned gitlinks deps/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6 and deps/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c; do not copy, modify, or push those trees. Keep loopback backend binding, model/flag routing, single-GPU scope, CLI load via /manage/load, status metrics, unknown-model 404, upstream SSE status-before-response, and the 21 currently passing tests. No repo changes were made in this review.

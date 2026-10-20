@@ -1,0 +1,38 @@
+HESTIA - model serving layer. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Hestia is the model serving utility for a local AI stack. Today every project (LTHCM, Dianoia) would load its own copy of a model. Hestia makes models a shared utility: one service hosts them, everything else calls an API.
+
+HARD CONSTRAINTS
+- Everything local: no paid APIs, no hosted models.
+- Backend is llama.cpp server (must work on both RTX 5060 Ti 16GB / Blackwell and Tesla V100 SXM2 16GB / Volta via PCIe adapter). Design the backend behind an interface so vLLM can be added later. Account for the V100's older compute capability when choosing model/backend builds.
+- VRAM-aware: budget each physical GPU separately. Co-load models when their aggregate estimated use fits on their target GPU; never load one that does not fit. At load time, compare each model's estimate (GGUF file size plus context/KV-cache overhead) with live free VRAM from nvidia-smi.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "hestia", Python package, pyproject.toml.
+- Model registry as a YAML file: per model - name, GGUF path, quantization, context size, default sampling params, gpu_target (physical 5060 Ti or V100), vram_estimate_mb (GGUF size plus context/KV overhead heuristic).
+- hestia.yaml service config: listen port, llama.cpp binary path, default idle timeout (10 min), log level.
+
+2. SERVER MANAGER
+- Launches and manages llama.cpp server processes for registered models, respecting each model's gpu_target and the per-GPU VRAM budget. Track aggregate reservations and live free VRAM so more than one model can run on a card when they fit.
+- Lazy load on first request for a registered-but-unloaded model, with a per-model load lock to prevent duplicate starts. If it will not fit, unload idle models on that GPU and retry placement; if it still will not fit, return a clear error.
+- Health checks, logs capture, automatic unload after the configured idle timeout. On a crash, restart with exponential backoff, at most 3 retries; then mark the model failed and show that state in /health.
+
+3. API
+- OpenAI-compatible /v1/chat/completions with SSE stream:true support from the first build, proxying to the running backend.
+- OpenAI-compatible /v1/embeddings for LTHCM and Dianoia.
+- /models lists the registry with loaded/unloaded/failed status; /health reports service and model health.
+
+4. CLI
+- hestia list / hestia load <name> / hestia unload <name> / hestia status showing VRAM use per model and per GPU.
+
+OUT OF SCOPE
+- vLLM backend, multi-GPU sharding, auth, remote access, fine-tuning, raw-text /v1/completions.
+
+TESTING
+- Unit tests for VRAM budgeting, GPU placement, and load locking; integration test the demo scenario.
+
+DEMO
+- Register one 8B GGUF instruct model, hestia load it, answer one curl chat request (including stream:true), hestia status shows it loaded, auto-unload fires after idle timeout; a new request loads it again.

@@ -1,0 +1,20 @@
+HESTIA ROUND 4 FIXES
+Reviewed at b1bed3e0f29fc5396b47dcf02c8933483e9970ea (https://gitlab.com/akarta-315h/hestia). Fresh clone, no source edits or pushes. 36 tests pass, 1 hardware-gated skip; ruff clean. Hardware demo not run on this machine.
+
+ROUND-3 VERDICTS
+1. Stale health check: FIXED. src/hestia/server/__init__.py:335-365 now passes the checked BackendProcess and verifies its identity under the per-model lock before restart. Regression at tests/test_server.py:422-447. A stale result cannot stop the replacement.
+2. Explicit unload during pending load: FIXED for the reported overlap. src/hestia/server/__init__.py:127-132,186-199 now acquires the same lock before checking the loaded state. A pending load completes first; then unload stops it. Unit and API regressions in tests/test_server.py:130-163 and tests/test_integration.py:363-435.
+3. Stale idle check while waiting for lock: FIXED for the reported overlap. src/hestia/server/__init__.py:201-213,304-322 rechecks idle age under the lock and only reports a model actually unloaded. Regression in tests/test_server.py:241-275.
+4. Live demo coverage: PARTIAL. tests/test_integration.py:31-49 now checks the configured binary rather than an unrelated PATH executable; :60-141 starts a real API server and points the CLI at it. However the CLI check deadlocks as below. Physical GPU path skipped here.
+
+NEW FINDINGS
+1. HIGH - The live hardware integration test times out when checking CLI status.
+   tests/test_integration.py:71-85,114-119; src/hestia/cli/__init__.py:109-115
+   uvicorn.Server.serve() runs as a task on this test's event loop, then CliRunner invokes the synchronous status command on that same loop. Its blocking httpx.get waits for /health, but the server cannot service the request until the synchronous CLI returns. Reproduced using a minimal live FastAPI/Uvicorn server with the same structure: CLI exits with httpx.ReadTimeout, while /health returns 200 once the loop resumes. Run CLI in a worker thread (asyncio.to_thread around CliRunner.invoke), or spawn a real CLI subprocess asynchronously. Set a bounded readiness check and preserve exception context when asserting the result. The hardware-gated test did not exercise this on the review machine.
+
+2. MED - Idle auto-unload can still stop a model freshly used while draining an older request.
+   src/hestia/server/__init__.py:201-226,228-241,304-320
+   The new idle-age check happens once after the lock is acquired, before the in-flight drain loop. A model that was idle long enough when the check began may have an in-flight request; while waiting for it to finish, request_finished calls _touch. After the drain, _unload_model stops the now-fresh model without rechecking age. Reproduced by setting old last_activity and one in-flight request, finishing it during the drain sleep: _unload_model(..., is_idle_check=True) returned True and backend.stop ran. Recheck idle age after draining, immediately before popping/stopping the backend. Add a deterministic regression that finishes an in-flight request while an idle-triggered unload waits and asserts no stop, no unload report. Keep explicit unload semantics separate.
+
+GUARDRAILS
+Keep deps/LTHCM and deps/dianoia as gitlinks only, pinned to 8a71605379ee32059e714feb3648cf74f4b42dc6 and da7ce83cb05f3b44764fc59ab5c325995c6fd07c; do not change, copy, or push dependency contents. Preserve the current stale-health identity check, explicit unload locking, idle check under lock, retry bounds, loopback binding, single-GPU scope, and API/CLI semantics. Do not claim the physical GPU demo passes until run with the configured binary and GGUF files.

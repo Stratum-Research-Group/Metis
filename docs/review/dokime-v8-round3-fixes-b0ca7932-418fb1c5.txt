@@ -1,0 +1,15 @@
+DOKIME v8 - ROUND 3 FIX
+Review commit: b4989e4544de9f9801194ae07e8a4af0d1b19555
+Reference: dokime-prompt-v8-57888bbf.txt
+
+Apply the single finding below. Nick will push the change for another review. Preserve the v8 compare contract.
+
+1. MEDIUM - Nonfinite scorer output must never enter measured statistics.
+   Location: src/dokime/runner.py:123-125; src/dokime/stats.py:15-29, 61-90, 137-186; src/dokime/compare.py:324-358, 528-599.
+   A task score of float('nan') or float('inf') currently counts as successful and enters the bootstrap. round_stat then silently turns nonfinite estimates into 0.0. Reproduction: single_run_bootstrap([float('inf'), 1.0]) reports mean 0.0 and CI [1.0, 0.0] with count 2; paired_bootstrap_test([0, 0], [float('inf'), 1]) reports IMPROVEMENT while displaying delta 0.0. NaN produces similarly false zero estimates.
+
+   In the runner, validate the score after float conversion and before appending to the valid-score list. If it is not finite, log that query with score=null and an explicit error, count it as a failure, and continue so every query still has a JSONL row. Keep a legitimate 0.0 score valid. In both compare modes, treat a nonfinite score found in an existing or corrupted results JSONL as invalid input, not as a valid paired score. Reject such a run with a clear CompareError naming the run, model, task, and query, or explicitly exclude the row as a failed result and count it as a failure; in either case never compute bootstrap statistics from it. At the stats API boundary, refuse nonfinite score arrays rather than converting nonfinite estimates and CI to zero. Keep results-file checksum verification intact before consuming JSONL; test historic files with a matching recalculated checksum so the nonfinite guard is actually exercised.
+
+   Add regression tests for NaN, +Infinity, and -Infinity scorer results and historic JSONL compare inputs, including a complete valid pair to catch partial filtering. Test that they cannot yield a success count, zero estimate, or significant verdict from the bad score. Keep failure/null-score exclusion, per-query diffs, 10,000 paired resamples and seed 42 unchanged.
+
+Do not touch pinned submodules or copy their files. Keep the Hestia HTTP-only integration and port 8080 default, ordinary two-run same-model scoping, explicit single-run cross-model mode, full-query prompt-hash gate including failures, query-set/dataset/results checksums, duplicate-ID rejection, ARC extraction, and collision-safe report paths. Run the full Python 3.12 pytest suite and state the new HEAD SHA and test count when done. If a change demands a wider contract decision, stop and ask Nick instead of guessing.

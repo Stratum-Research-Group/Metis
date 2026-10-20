@@ -1,0 +1,153 @@
+HESTIA ROUND 1 FIXES - code review of https://gitlab.com/akarta-315h/hestia
+Reviewed at HEAD f86c96d6477d592a33738c7658a1d42187c4aca1 ("feat: initial scaffold").
+
+Apply the numbered fixes below. Do not refactor, rename, or restructure anything
+not listed here. Each fix names the exact file and line(s).
+
+================================================================
+1. llama.cpp child process will deadlock: stdout pipe never drained
+   src/hestia/backend/llamacpp.py:55
+   start() launches llama-server with stdout=subprocess.PIPE, stderr=STDOUT,
+   but nothing ever reads the pipe. llama.cpp logs verbosely; once the ~64KB
+   OS pipe buffer fills, the child blocks on write and the server freezes
+   (during startup or mid-generation).
+   FIX: write logs to a file instead of a pipe, e.g.
+       log_path = Path("logs") / f"{model.name}.log"  (create logs/ first)
+       log_file = open(log_path, "ab")
+       proc = subprocess.Popen(args, stdout=log_file, stderr=subprocess.STDOUT,
+                               start_new_session=True)
+   Track the file handle on the BackendProcess and close it in stop().
+   This also delivers the spec's "logs capture" requirement, which the pipe
+   currently does not.
+
+2. API binds 0.0.0.0 - violates the "everything local / no remote access"
+   hard constraint
+   src/hestia/cli/__init__.py:172
+   uvicorn.run(app, host="0.0.0.0", ...) exposes the full OpenAI-compatible
+   API and /manage/unload on the LAN with no auth (auth is out of scope).
+   FIX: bind 127.0.0.1. Better: add listen_host: 127.0.0.1 to hestia.yaml,
+   plumb it through ServiceConfig (src/hestia/config.py) and use it in serve.
+
+3. In-flight counter double-decremented on failed non-streaming requests
+   src/hestia/api/app.py:110-122 (route) and 204-207 (_proxy_request)
+   _proxy_request has `finally: manager.request_finished(model_name)` AND the
+   chat route has `except Exception: manager.request_finished(model_name); raise`.
+   On a failed non-streaming request both fire -> one request decrements twice.
+   With 2 concurrent requests and 1 failure, the counter hits 0 while a request
+   is still running, so idle-unload / VRAM eviction can kill a busy backend.
+   FIX: remove the `finally` block from _proxy_request (lines 206-207) so the
+   route owns the counter for all paths, matching how the embeddings route
+   (147-153) already does it. The stream generator's own finally (226-227)
+   stays as-is.
+
+4. Race: in-flight increment happens after ensure_loaded, outside the lock
+   src/hestia/api/app.py:105-110, 143-147
+   Between `await manager.ensure_loaded(name)` returning and
+   `manager.request_started(name)`, has_inflight() is still False, so the idle
+   checker (server/__init__.py:269) or VRAM eviction (:234) can unload the
+   model; the request then proxies to a dead port.
+   FIX: in ServerManager.ensure_loaded (server/__init__.py:92-110), call
+   self._touch AND increment self._inflight inside the per-model lock / on the
+   LOADED fast path, and make the API call request_finished when done (i.e.
+   move request_started into the manager). Alternatively: after
+   request_started, re-check the process is still registered and re-run
+   ensure_loaded once if it vanished. First option is cleaner.
+
+5. Crash path leaks a wedged process at max retries
+   src/hestia/server/__init__.py:296-306
+   When retries >= 3, _handle_crash pops the process and releases its port but
+   never calls backend.stop(). If the process is hung (health endpoint timing
+   out) rather than dead, it keeps running: holds VRAM and stays bound to a
+   port that has been handed back to the pool -> next backend fails to bind.
+   FIX: inside the retries >= _MAX_RESTART_RETRIES branch, after popping,
+   `await self._backend.stop(process)` before `self._release_port(...)`.
+
+6. `hestia load` fails for embedding models and burns a real inference
+   src/hestia/cli/__init__.py:63-90
+   load() triggers lazy-load by POSTing an actual chat completion ("ping").
+   For embedding models /v1/chat/completions returns 400 (type check in
+   api/app.py:99-103), so `hestia load nomic-embed-text` cannot work. It also
+   spends tokens on a junk generation.
+   FIX: add POST /manage/load {model} to src/hestia/api/app.py mirroring
+   /manage/unload (call manager.load_model_explicit), and point the CLI load
+   command at it. Map ModelNotFoundError to 404 there too (see #9).
+
+7. VRAM budget fast-path is a tautology; aggregate reservation not enforced
+   src/hestia/server/__init__.py:212-216
+   `if needed <= free and (reserved + needed) <= free + reserved:` - the
+   second clause simplifies to `needed <= free`, so the reserved term cancels
+   out. Spec requires tracking aggregate reservations against the card; that
+   check currently does nothing.
+   FIX: compare the aggregate against TOTAL VRAM, not free:
+       total = get_total_vram_mb()
+       if needed <= free and (reserved + needed) <= total:
+           return True
+   (import get_total_vram_mb from hestia.vram). Keep the live-free check as the
+   primary gate.
+
+8. `hestia status` shows estimates only, never live VRAM
+   src/hestia/cli/__init__.py:115-149
+   Spec asks status to show "VRAM use per model and on the RTX 5060 Ti". The
+   CLI prints registry vram_estimate_mb sums; it never queries the GPU.
+   FIX: expose live GPU numbers in the /health payload (call
+   hestia.vram.get_free_vram_mb / get_total_vram_mb in the health route) and
+   print "VRAM free/total" in the status command alongside the per-model
+   estimates.
+
+9. Unknown model returns 503 instead of 404
+   src/hestia/api/app.py:106-116 and 144-150
+   ModelNotFoundError is grouped with the 503s.
+   FIX: catch ModelNotFoundError separately and raise HTTPException(404).
+
+10. SSE proxy hides backend errors
+    src/hestia/api/app.py:210-227
+    _proxy_stream starts streaming without checking the backend's status code;
+    a backend 4xx/5xx is forwarded as a 200 SSE stream of the error body. An
+    httpx timeout mid-stream also kills the connection with no error event.
+    FIX: after client.stream() returns, if resp.status_code != 200, read the
+    body and raise HTTPException before yielding anything (the route must do
+    the status check BEFORE returning StreamingResponse - restructure so the
+    stream is opened before the response is returned). Optionally yield an SSE
+    `data: {"error": ...}` event on mid-stream failure.
+
+11. No integration test for the demo scenario
+    tests/ contains unit tests only (test_vram.py, test_server.py - all 16
+    pass at this HEAD). Spec TESTING requires an end-to-end integration test
+    of the demo scenario.
+    FIX: add tests/test_integration.py, marked (e.g. @pytest.mark.integration)
+    and skipped unless a llama-server binary and GGUF paths are present,
+    covering: load chat model -> /v1/chat/completions (stream:true) ->
+    /v1/embeddings lazy-load -> hestia status shows both -> idle auto-unload
+    -> reload on next request.
+
+================================================================
+MINOR NOTES (fix at your discretion, not required)
+- src/hestia/server/__init__.py:189 - drain waits max 60s, then stops the
+  backend anyway, cutting off long generations. Consider waiting
+  indefinitely (spec says drain before stopping) or making the cap a
+  hestia.yaml option.
+- src/hestia/server/__init__.py:332 - _restart_counts is only reset on a
+  fresh explicit load (:174), so the 3-retry limit counts LIFETIME crashes,
+  not consecutive ones. Reset to 0 after a successful restart if you want
+  "3 consecutive failures" semantics.
+- src/hestia/vram.py - when no GPU / driver is present, get_free_vram_mb
+  returns 0, so every load fails with "insufficient VRAM". A distinct
+  "GPU query failed" error would be less misleading when the driver breaks.
+
+DO NOT TOUCH (verified working at this HEAD):
+- Submodule layout: deps/LTHCM @ 8a71605, deps/dianoia @ da7ce83, pinned and
+  clean - no copied contents from those trees anywhere in the repo.
+- Backend interface abstraction (src/hestia/backend/__init__.py) and flag
+  derivation in build_launch_args (--ctx-size, -ngl, --embedding, --port).
+- Per-model load locking and double-check in ensure_loaded
+  (server/__init__.py:92-110) - the duplicate-load test passes.
+- Port allocation/release and the NoFreePortError path.
+- Longest-idle eviction ordering and the no-evict-with-in-flight rule
+  (server/__init__.py:231-240) - the rule itself is right; only the race in
+  fix #4 needs closing.
+- Crash backoff sequencing (1s, 2s, 4s) and the FAILED state surfacing in
+  /health.
+- Model-type validation on /v1/chat/completions vs /v1/embeddings.
+- CLI list/unload commands, pyproject.toml, .gitignore (*.txt present),
+  registry/hestia.yaml schemas.
+- All 16 existing unit tests pass at f86c96d - keep them passing.

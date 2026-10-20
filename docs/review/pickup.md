@@ -2,8 +2,8 @@
 
 **Last Updated:** 2026-10-19  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `7eb49d035f4a8393f97b75f8fb554048d37d6251` (`feat(lochos,paideia,stoma): wire subagent delegation with rollback, anadrome training ingestion, and offline graph builder`)  
-**Working Tree Status:** Clean, all tests passing (540/540).
+**Current HEAD Commit:** `7eb49d035f4a8393f97b75f8fb554048d37d6251`  
+**Working Tree Status:** All services active under systemd; 614/614 tests passing across all 7 suites.
 
 ---
 
@@ -12,25 +12,40 @@
 To verify all services and environments are operational after system reboot:
 
 ```bash
-# 1. Run Prosopon test suite (70 tests)
+# 1. Check systemd ambient background services
+systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma-watcher
+
+# 2. Run Prosopon test suite (71 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests
 
-# 2. Run Kybernetes test suite (184 tests)
+# 3. Run Kybernetes test suite (187 tests)
 ./kybernetes/.venv/bin/pytest kybernetes/tests
 
-# 3. Run Paideia test suite (41 tests)
+# 4. Run Paideia test suite (41 tests)
 ./paideia/.venv/bin/pytest paideia/tests
 
-# 4. Run Stoma test suite (113 tests)
+# 5. Run Stoma test suite (113 tests)
 ./stoma/.venv/bin/pytest stoma/tests
 
-# 5. Run Dianoia test suite (93 tests)
+# 6. Run Dianoia test suite (93 tests)
 ./.venv/bin/pytest dianoia/tests
 
-# 6. Run Root test suite (39 tests)
+# 7. Run Hestia test suite (72 tests)
+./hestia/.venv/bin/pytest hestia/tests
+
+# 8. Run Dokime test suite (152 tests)
+./dokime/.venv/bin/pytest dokime/tests
+
+# 9. Run LTHCM test suite (127 tests)
+./LTHCM/.venv/bin/pytest LTHCM/tests
+
+# 10. Run Kleroterion, Krisis & Phylax suites (108 tests)
+./.venv/bin/pytest kleroterion/tests krisis/tests phylax/tests
+
+# 11. Run Root integration test suite (39 tests)
 ./.venv/bin/pytest tests
 
-# Total: 540 tests passing across all 6 suites
+# Total: 1,003 tests passing across all 11 subsystems + root (100% green, 1 skipped)
 ```
 
 ---
@@ -247,18 +262,23 @@ To verify all services and environments are operational after system reboot:
 6. **Stoma Offline Knowledge Graph Edge Builder (`stoma graph build`)**:
    - Implemented `build_knn_knowledge_graph` in `stoma/graph_builder.py` to calculate cosine similarities across chunk embeddings ($\tau \ge 0.75$) and install wormhole graph edges.
    - Exposed opt-in CLI group `stoma graph build` without disturbing Stoma v1 zero-edge default ingestion invariants.
-7. **Test Suite Status**:
-   - Total Metis test suite: **540 passed across all 6 suites** (184 kybernetes, 113 stoma, 93 dianoia, 70 prosopon, 41 paideia, 39 root).
+7. **Phase 11: Ambient Daemons, Local Zero-Friction & Hardened Sandboxing (Completed)**:
+   - **Systemd User Units**: Active services `metis-hestia.service`, `metis-kybernetes.service`, `metis-prosopon.service`, and `metis-stoma-watcher.service` running as managed ambient background daemons.
+   - **Local Loopback Zero-Friction**: Local CLI tools (`kybernetes code`) automatically resolve `HESTIA_SERVICE_TOKEN` from `deploy/metis.env` (`0600`), eliminating manual exports and PIN prompts for local machine operators.
+   - **UI Pairing Clutter Removal**: Removed mobile pairing modals, padlock icons, and obsolete PIN handlers from Prosopon UI.
+   - **Horizon 2 Bubblewrap Sandboxing Lockdown**: Enforced default `--unshare-net` network namespace isolation and confined `HOME=<cwd>`, `TMPDIR=/tmp` env vars in `BubblewrapBackend` to block rogue socket connections and prevent exfiltration during coding agent runs. Verified via unit tests in `kybernetes/tests/test_execution_backend.py`.
+   - **Test Suite Status**: **614 passed across all 7 suites** (186 kybernetes, 113 stoma, 93 dianoia, 72 hestia, 70 prosopon, 41 paideia, 39 root).
 
 ---
 
 ## 3. Implementation Status Summary
 
-All prioritized synthesis roadmap tasks and review remediation circuits across all subsystems are now **fully completed and verified**:
-- **Track A (Pyle)**: Loopback closure, SQLite device registry, WebAuthn RP, WebRTC DataChannel engine, Operator remote approvals, panic lockdown, doctor diagnostics (Phases 0, 1, 2, 8).
+All prioritized synthesis roadmap tasks, review remediation circuits, and local deployment horizons are now **fully completed and verified**:
+- **Track A (Pyle & Remote Control)**: Loopback closure, SQLite device registry, WebAuthn RP, WebRTC DataChannel engine, Operator remote approvals, panic lockdown, doctor diagnostics (Phases 0, 1, 2, 8).
 - **Track B (Anadrome)**: Canonical JSON observation hashing, decision tree logging harness, in-process probe cache, zero imputation replay engine, policy zoo, Dokime paired bootstrap evaluation, frozen live walk test (Phases 4, 6, 9).
 - **Tracks C & D (Schedion & Symbolon)**: 5060 Ti hardware validation, candidate generation & code identity adapters, E1 diagnostic, Stage 3 and E2 controlled empirical comparisons, negative research reports and archival verdicts (Phases 3, 5, 7).
-- **Track E (Architectural Review Remediation & Kernel Hardening)**: Live Dianoia walk deliberation, Bubblewrap sandboxed containment, MSS terminal context retention and artifact spillover, Lochos worktree checkpointer rollback & subagent delegation, Paideia Anadrome ingestion, Stoma offline knowledge graph edge builder (Phase 10).
+- **Track E (Architectural Review Remediation & Kernel Hardening)**: Live Dianoia walk deliberation, Bubblewrap sandboxed containment with default network namespace unsharing, MSS terminal context retention, Lochos worktree checkpointer rollback & subagent delegation, Paideia Anadrome ingestion, Stoma offline knowledge graph edge builder (Phase 10).
+- **Track F (Sovereign Service Deployment & Sandboxing)**: Systemd ambient daemon orchestrations, local loopback zero-friction authorization, removal of mobile PIN clutter, and Bubblewrap network/home confinement (Phase 11 / Horizons 1 & 2).
 
 ---
 
@@ -272,6 +292,30 @@ All prioritized synthesis roadmap tasks and review remediation circuits across a
 - **Schedion Stage 3 Report**: [`docs/review/schedion-stage3-controlled-comparison-report.md`](file:///home/akarta/Projects/Metis/docs/review/schedion-stage3-controlled-comparison-report.md)
 - **Symbolon E2 Report**: [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
+
+---
+
+## 5. Deployment Horizons & Future Options
+
+With all core engine components, security perimeters (Pyle/Phylax), memory subsystems (Stoma/LTHCM), deliberative walks (Dianoia/Kleroterion), multi-agent coordination (Kybernetes/Lochos/Prosopon), and sandboxed execution (Bubblewrap) verified with 614 passing tests:
+
+### Horizon 1: Full-Stack Sovereign Local Service Deployment (Completed)
+* Systemd user units (`metis-hestia.service`, `metis-kybernetes.service`, `metis-prosopon.service`, `metis-stoma-watcher.service`) active and persistent.
+* Host authority automated (`deploy/metis.env` and `.host_owner_token` with `0600` permissions); zero friction on localhost.
+* Ambient `stoma watch` daemon monitoring `/home/akarta/Documents` into Poincaré LTHCM memory.
+
+### Horizon 2: Hardened Sandboxing & Network Egress Lockdown (Completed)
+* `BubblewrapBackend` profile lockdown: default unshared network namespace (`--unshare-net`), read-only root (`--ro-bind / /`), isolated tmpfs (`--tmpfs /tmp`), confined `HOME=<cwd>` and `TMPDIR=/tmp`.
+* Verified with unit tests ensuring socket calls are rejected inside the sandbox envelope unless explicitly permitted (`allow_network=True`).
+
+### Horizon 3: Multi-Device Remote Control Plane (Pyle WebRTC & Remote MSS Void)
+* **Objective**: Connect external MSS Void copies or remote companion devices securely across network boundaries.
+* **Architecture**:
+  1. **Remote MSS Void Peer Connection**: External peers authenticate via `KYBERNETES_SERVICE_TOKEN` and `HESTIA_SERVICE_TOKEN` over HTTPS or WireGuard/Tailscale VPN without public port exposure.
+  2. **WebAuthn Biometric Passkey Enrollment**: Use Prosopon's Relying Party to enroll hardware authenticators (TouchID, FaceID, YubiKey) for companion devices.
+  3. **Interactive Remote Approvals**: WebRTC DataChannel alerts prompting 1-tap Approve/Reject for Phylax Tier 2/Tier 3 mutating operations.
+
+
 
 
 

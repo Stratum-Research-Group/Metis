@@ -1,0 +1,15 @@
+DOKIME v8 - ROUND 1 FIXES
+Review commit: c7d5982cda17ff1bb40c83fb0660e4b2e8f2dad6
+Reference: dokime-prompt-v8-57888bbf.txt
+
+Apply only the two fixes below. Nick will push the changes for another review. Do not rewrite the harness or change the v8 compare contract.
+
+1. MEDIUM - Refuse unverifiable prompt hashes across the full cross-model query set.
+   Location: src/dokime/compare.py:293-334.
+   run_cross_model_comparison currently compares hashes on every query only when both are non-null; it checks for missing hashes again only on successful pairs. Thus a failure row with a null hash in model A and a scored row with a hash in model B is excluded from statistics and the comparison succeeds. The v8 safeguard applies before pairing and includes logged failure rows. For every shared query_id, require a nonempty hash for each model and exact equality. Refuse the comparison with a clear CompareError naming the query and models if either hash is null/empty or they differ. Preserve the separate failure counts and exclusion of failure/null-score rows from statistics only after the full-set integrity check. Add regression tests: one model has a null-hash failed row and the other has a scored, hashed row; both have at least one otherwise valid complete pair. Assert non-zero CLI exit/error rather than a report. Also cover mismatched non-null hashes on a failed row, and null hashes on both failed rows. Keep query-set, dataset-checksum, seed, and results-file checksum gates intact.
+
+2. LOW - Do not print an all-zero interval for a nonzero significant effect.
+   Location: src/dokime/stats.py:158-168; src/dokime/cli.py:334-337, 352-355.
+   paired_bootstrap_test rounds delta and CI bounds to four decimals but derives ci_excludes_zero and verdict from unrounded values. For ten baseline scores of 0.0 and ten candidate scores of 0.00001, it reports delta=0.0000, CI=[0.0000, 0.0000], verdict=IMPROVEMENT. Keep full-precision values through the significance decision and avoid contradictory report/CLI presentation. Either expose enough decimal places for the nonzero effect/bounds, or explicitly mark the printed interval/effect as below display precision. Ensure serialized report and CLI agree, and that genuinely zero or zero-crossing intervals remain distinguishable. Add a small-effect fixture asserting no all-zero displayed interval with an improvement/regression flag; keep the paired 10,000 resamples and seed 42 unchanged.
+
+Do not touch pinned submodules or copy their files. Keep the Hestia HTTP-only integration, port 8080 default, ordinary two-run same-model scoping, explicit single-run cross-model mode, error-row exclusion, dataset and results checksum checks, duplicate-ID rejection, ARC extraction, and collision-safe report paths. Run the full Python 3.12 pytest suite and state the new HEAD SHA and test count when done. If a change demands a wider contract decision, stop and ask Nick instead of guessing.

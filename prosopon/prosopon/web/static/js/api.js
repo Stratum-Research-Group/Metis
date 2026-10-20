@@ -311,7 +311,14 @@ const API = {
     return this.request(`/api/devices?all=${includeRevoked ? "true" : "false"}`);
   },
 
-  async pairDevice(label = "Companion Device", preset = "companion", validitySeconds = 300) {
+  async pairDeviceByPin(pin) {
+    return this.request("/api/auth/pair", {
+      method: "POST",
+      body: JSON.stringify({ pin, device_name: navigator.userAgent }),
+    });
+  },
+
+  async createPairingLink(label = "Companion Device", preset = "companion", validitySeconds = 300) {
     return this.request("/api/devices/pair", {
       method: "POST",
       body: JSON.stringify({ label, preset, validity_seconds: validitySeconds }),

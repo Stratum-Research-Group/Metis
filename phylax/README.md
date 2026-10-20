@@ -173,4 +173,4 @@ adapter.resolve("appr-12345", approved=True, reason="Owner approved")
 ```bash
 uv run pytest phylax/tests -v --cov=phylax
 ```
-All tests validate contract schemas, static linter warnings, symlink containment, deny-precedence, file-level atomic swap protections (see [THREAT_MODEL.md §4.2](file:///home/akarta/Projects/Metis/phylax/THREAT_MODEL.md) for residual parent-directory race considerations), argument digests, single-use token consumption, fail-closed audit writing, and CLI execution.
+All tests validate contract schemas, static linter warnings, symlink containment, deny-precedence, file-level atomic swap protections (see [THREAT_MODEL.md §4.2](THREAT_MODEL.md#42) for residual parent-directory race considerations), argument digests, single-use token consumption, fail-closed audit writing, and CLI execution.

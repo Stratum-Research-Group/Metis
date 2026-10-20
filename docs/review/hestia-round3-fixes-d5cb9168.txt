@@ -1,0 +1,22 @@
+HESTIA ROUND 3 FIXES
+Reviewed at 4ecf2bc8c424b25dd60df62efbb97802c9dd1a77. Static review with focused async reproductions. 32 tests pass, 1 hardware-gated skip; ruff clean. No repository edits or pushes.
+
+1. HIGH - Stale health result can restart a newer, healthy process.
+   src/hestia/server/__init__.py:317-325, 327-350, 356-383
+   The health loop snapshots a process and awaits health_check outside the per-model lock. While that await is pending, explicit unload and a new load can replace the process. On a false result for the old process, _handle_crash locks and stops whichever process is currently in _processes, including the new one. Reproduced: health check held on pid 1; unload and reload installed pid 2; releasing false result stopped pid 2 and started an unnecessary replacement. Pass the checked process identity into _handle_crash and, under the lock, recheck that it is still current and state remains LOADED before stopping/retrying. Test the health-check/unload/reload interleaving and assert the new process is untouched.
+
+2. MED - Explicit unload can return success without unloading a concurrent load.
+   src/hestia/server/__init__.py:127-135, 189-224; src/hestia/api/app.py:207-221
+   unload_model_explicit checks state before acquiring the per-model lock. While backend.start is pending, state is LOADING; unload returns without waiting, and /manage/unload reports "unloaded". Reproduced: delayed start, explicit unload, then start completion -> model LOADED, stop never called. Move the state decision inside the shared lock, letting unload wait for a load already in progress and then act on the current state. Test explicit load/unload overlap and its API response.
+
+3. MED - Idle eviction can unload a model that became active while waiting for the lock.
+   src/hestia/server/__init__.py:287-303, 189-224
+   check_idle_models reads last_activity outside the lock, then awaits _unload_model. A new request can touch the model before unload gets the lock; it is still stopped after the request completes because _unload_model rechecks in-flight but not idle age. Reproduced by holding the model lock, starting idle check with old activity, touching it, releasing lock: stopped once and returned the model in unloaded list. Recheck last_activity and idle timeout inside the lock for idle-triggered unload; keep explicit unload semantics distinct. Test the stale-idle decision interleaving.
+
+4. MED - Live demo coverage still has limits.
+   tests/test_integration.py:30-47, 50-130, 132-271
+   The readiness gate accepts a PATH llama-server even if the configured binary (/usr/local/bin/llama-server in hestia.yaml) is absent. The live CLI status assertion mocks httpx.get with an ASGI response; it verifies formatting, not the CLI talking to a live server. The mocked demo mocks both inference paths and forces idle by modifying _last_activity. These tests are useful, but the live hardware demo remains unverified in this review (skip on this machine). Gate against the configured executable, run CLI against a real local server in the hardware integration path where practical, and distinguish simulated coverage from the physical GPU demo.
+
+ROUND-2 STATUS: retry sequence fixed (3 attempts, 1/2/4-second backoff, cleanup tests); original unload/load stop race fixed by per-model lock (the two interleavings above remain); SSE connect cleanup and JSON error encoding fixed; loopback host validation fixed; total-VRAM nvidia-smi fallback and fail-closed load fixed; integration coverage partial as described. Keep the repaired behaviors.
+
+DO NOT TOUCH: pinned gitlinks deps/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6 and deps/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c; do not copy, modify, or push those trees. Keep loopback backend binding, single-GPU scope, model/flag routing, CLI load via /manage/load, status metrics, unknown-model 404, upstream SSE status-before-response, and passing tests. Ask before deviating.

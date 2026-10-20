@@ -1,0 +1,13 @@
+DOKIME v8 - ROUND 2 FIX
+Review commit: 8b27beafd997002f3aeda51d63c91d28be6bceab
+Reference: dokime-prompt-v8-57888bbf.txt
+
+Apply the single finding below. Nick will push the change for another review. Keep the v8 compare contract intact.
+
+1. LOW - Display significant effects smaller than the current eight-decimal cap.
+   Location: src/dokime/cli.py:18-68 (format_stat_value and format_interval).
+   Current dynamic formatting handles 0.00001, but values smaller than roughly 5e-9 fall through the eight-decimal loop and format at four decimals. Reproduction: paired_bootstrap_test([0.0] * 10, [1e-9] * 10) returns nonzero delta/CI and IMPROVEMENT, while the CLI helpers display +0.0000 and [+0.0000, +0.0000]. The corresponding negative effect displays -0.0000. For values below the configured decimal cap, use scientific notation or enough dynamic precision to expose the sign and nonzero magnitude. A significant nonzero interval must never read as zero in the CLI. Keep serialized statistics consistent with the display and distinguish a true zero or zero-crossing interval.
+
+   Add regression tests at +1e-9 and -1e-9 for the CLI value and interval rendering, ideally through a report-driven compare flow. Assert that the signs and nonzero values are visible beside the IMPROVEMENT or REGRESSION verdict; retain a true-zero case. Keep the 10,000 paired bootstrap resamples and seed 42 unchanged.
+
+Do not touch pinned submodules or copy their files. Keep the Hestia HTTP-only integration and port 8080 default, ordinary two-run same-model scoping, explicit single-run cross-model mode, all-query prompt-hash checks including failure rows, error-row exclusion, dataset/results checksums, duplicate-ID rejection, ARC extraction, and collision-safe report paths. Run the full Python 3.12 pytest suite and state the new HEAD SHA and test count when done. If a change demands a wider contract decision, stop and ask Nick instead of guessing.

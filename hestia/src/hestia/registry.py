@@ -60,6 +60,9 @@ class ModelEntry:
     gpu_target: str = "rtx-5060-ti"
     sampling: SamplingParams = field(default_factory=SamplingParams)
     artifact_digest: str | None = None
+    draft_model_path: Path | None = None
+    draft_max: int | None = None
+    spec_type: str | None = None
 
     # Runtime state — not persisted
     state: ModelState = field(default=ModelState.UNLOADED, repr=False)
@@ -78,6 +81,9 @@ class ModelEntry:
             gpu_target=raw.get("gpu_target", "rtx-5060-ti"),
             sampling=SamplingParams.from_dict(raw.get("sampling", {})),
             artifact_digest=raw.get("artifact_digest"),
+            draft_model_path=Path(raw["draft_model_path"]) if raw.get("draft_model_path") else None,
+            draft_max=int(raw["draft_max"]) if raw.get("draft_max") is not None else None,
+            spec_type=raw.get("spec_type"),
         )
 
 

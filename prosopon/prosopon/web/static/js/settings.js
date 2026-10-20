@@ -203,6 +203,13 @@ const MetisSettings = {
     ],
     voice: [
       {
+        key: "prosopon.voice_enabled",
+        label: "Enable Voice Engine (Whisper STT & Piper TTS)",
+        description: "Enables local microphone transcription and speech synthesis. Off by default to conserve system memory and compute.",
+        type: "boolean",
+        default: false,
+      },
+      {
         key: "prosopon.whisper_model",
         label: "Whisper STT Model Checkpoint",
         description: "Local speech-to-text model weight file utilized for voice transcription.",
@@ -653,7 +660,7 @@ const MetisSettings = {
         const preset = presetSelect ? presetSelect.value : "companion";
 
         try {
-          const res = await window.API.pairDevice(label, preset, 300);
+          const res = await window.API.createPairingLink(label, preset, 300);
           if (resBox && urlInput) {
             urlInput.value = res.pairing_url;
             resBox.style.display = "block";

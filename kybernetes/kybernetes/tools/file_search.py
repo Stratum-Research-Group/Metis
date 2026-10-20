@@ -1,5 +1,6 @@
 """Safe local file search tool integrated with canonical path boundaries and Phylax."""
 
+import fnmatch
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -139,6 +140,24 @@ class SafeFileSearch:
                         except ValueError:
                             continue
                     file_rel_str = str(fpath.relative_to(matching_root)) if matching_root else str(fpath)
+
+                    clean_pat = pat_lower.strip("^$")
+                    is_name_match = (
+                        (clean_pat and clean_pat in fname.lower())
+                        or (clean_pat and clean_pat in file_rel_str.lower())
+                        or fnmatch.fnmatch(fname.lower(), clean_pat)
+                        or fnmatch.fnmatch(file_rel_str.lower(), clean_pat)
+                    )
+                    if is_name_match:
+                        matches.append(
+                            {
+                                "file": file_rel_str,
+                                "line_number": 1,
+                                "snippet": f"[Path match: {file_rel_str}]",
+                            }
+                        )
+                        if len(matches) >= max_results:
+                            return {"matches": matches, "total_matches": len(matches), "truncated": True}
 
                     with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                         for l_idx, line in enumerate(f, 1):

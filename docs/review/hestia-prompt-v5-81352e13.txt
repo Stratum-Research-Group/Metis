@@ -1,0 +1,44 @@
+HESTIA - model serving layer. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Hestia is the model serving utility for a local AI stack. Today every project (LTHCM, Dianoia) would load its own copy of a model. Hestia makes models a shared utility: one service hosts them, everything else calls an API.
+
+HARD CONSTRAINTS
+- Everything local: no paid APIs, no hosted models.
+- Backend is llama.cpp server on the RTX 5060 Ti 16GB / Blackwell. Design the backend behind an interface so vLLM can be added later. The Tesla V100 SXM2 16GB / Volta via PCIe adapter is planned hardware, not yet online; do not build second-GPU support in this first build.
+- VRAM-aware: budget the one online GPU. Co-load models when their aggregate estimated use fits on the RTX 5060 Ti; never load one that does not fit. At load time, compare each model's estimate (GGUF file size plus context/KV-cache overhead) with live free VRAM from nvidia-smi.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "hestia", Python package, pyproject.toml. Add *.txt to .gitignore.
+- Add the existing stack projects to the workspace as git submodules, pinned to their current commits: LTHCM (https://gitlab.com/akarta-315h/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6) and dianoia (https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c). They are read-only dependencies: never modify their contents, never copy their files into this repo's own tree, and never push or upload their contents anywhere.
+- Model registry as a YAML file: per model - name, type (chat | embedding), GGUF path, quantization, context size, default sampling params, gpu_target (defaults to the RTX 5060 Ti; retained for future V100 config), vram_estimate_mb (GGUF size plus context/KV overhead heuristic).
+- hestia.yaml service config: listen port, llama.cpp binary path, backend port range (e.g. 8081-8099), default idle timeout (10 min), log level.
+
+2. SERVER MANAGER
+- Launches and manages one llama.cpp server process per loaded model on the next free backend port. Derive launch flags from registry fields: --ctx-size from context size, -ngl for GPU offload, --embedding for embedding models, --port from the allocated port; use the one online GPU.
+- Track aggregate reservations on the RTX 5060 Ti and check live free VRAM so multiple models can share the card when they fit.
+- Lazy load on first API request for a registered-but-unloaded model, with a per-model load lock to prevent duplicate starts. If it will not fit, unload the longest-idle eligible model on the RTX 5060 Ti and retry, repeating as needed; if it still will not fit, return a clear error. Do not evict a model serving in-flight requests.
+- Health checks, logs capture, automatic unload after the configured idle timeout. Drain in-flight requests before stopping a process on unload.
+- On a backend crash, restart with exponential backoff, at most 3 retries; then mark the model failed and show that state in /health.
+
+3. API
+- Clients select a model by name using the standard OpenAI "model" request field; route to the matching registry entry and backend.
+- OpenAI-compatible /v1/chat/completions with SSE stream:true support from the first build.
+- OpenAI-compatible /v1/embeddings for embedding-type models used by LTHCM and Dianoia.
+- /models lists the registry with loaded/unloaded/failed status; /health reports service and per-model health.
+
+4. CLI
+- hestia list / hestia load <name> / hestia unload <name> / hestia status showing VRAM use per model and on the RTX 5060 Ti.
+
+OUT OF SCOPE
+- vLLM backend, second GPU / multi-GPU (V100) support, auth, remote access, fine-tuning, raw-text /v1/completions.
+
+TESTING
+- Unit tests for single-GPU VRAM budgeting and load locking; integration test the demo scenario end-to-end.
+
+DEMO
+- Register one 8B GGUF instruct model and one small embedding model on the RTX 5060 Ti. Load the chat model, answer one curl chat request (including stream:true), and show it loaded in hestia status.
+- Send a curl /v1/embeddings request to lazy-load the embedding model; show both loaded and their VRAM use on the RTX 5060 Ti in hestia status.
+- Auto-unload after the idle timeout; a new request lazy-loads the model again.

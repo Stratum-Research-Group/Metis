@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import FastAPI, HTTPException, Request, Response, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
@@ -80,7 +81,19 @@ class ContentTypeValidationMiddleware(BaseHTTPMiddleware):
 
 
 def require_hestia_auth(request: Request) -> None:
-    """Require valid Hestia service token unless insecure-dev mode is explicitly enabled."""
+    """Require valid Hestia service token unless local loopback / MSS Void or insecure-dev mode."""
+    client_host = request.client.host if request.client else ""
+    # Local loopback trust: MSS Void on local machine does not need token authorization friction
+    if client_host in ("127.0.0.1", "::1", "localhost"):
+        return
+
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer ") :].strip()
+    elif "x-service-token" in request.headers:
+        token = request.headers["x-service-token"].strip()
+
     expected_token = os.environ.get("HESTIA_SERVICE_TOKEN")
     if not expected_token:
         if os.environ.get("METIS_INSECURE_DEV") == "1":
@@ -90,12 +103,6 @@ def require_hestia_auth(request: Request) -> None:
             status_code=401,
             detail="Unauthorized: Valid Hestia service token required (HESTIA_SERVICE_TOKEN unset or invalid).",
         )
-    auth_header = request.headers.get("authorization", "")
-    token = ""
-    if auth_header.startswith("Bearer "):
-        token = auth_header[len("Bearer ") :].strip()
-    elif "x-service-token" in request.headers:
-        token = request.headers["x-service-token"].strip()
 
     if not token or not secrets.compare_digest(token, expected_token):
         raise HTTPException(
@@ -161,6 +168,19 @@ def create_app(
     app.state.config_path = config_path
     app.state.models_path = models_path
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8081",
+            "http://localhost:8081",
+            "vscode-file://vscode-app",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_middleware(HostHeaderValidationMiddleware)
     app.add_middleware(ContentTypeValidationMiddleware)
 
@@ -311,11 +331,17 @@ def _build_router():
                     err_bytes = await resp.aread()
                     await resp.aclose()
                     await client.aclose()
-                    manager.request_finished(model_name)
-                    raise HTTPException(
-                        status_code=resp.status_code,
-                        detail=err_bytes.decode(errors="replace"),
-                    )
+                    await _safe_request_finished(manager, model_name)
+                    await _safe_release_admission(manager, model_name)
+                    try:
+                        err_json = json.loads(err_bytes.decode(errors="replace"))
+                        return JSONResponse(content=err_json, status_code=resp.status_code)
+                    except Exception:
+                        return Response(
+                            content=err_bytes,
+                            status_code=resp.status_code,
+                            media_type="application/json",
+                        )
 
                 async def _stream_generator() -> AsyncGenerator[str, None]:
                     try:
@@ -493,11 +519,14 @@ async def _proxy_request(
     base_url: str,
     body: dict,
     path: str = "/v1/chat/completions",
-) -> JSONResponse:
+) -> Response:
     """Proxy a non-streaming request to the backend."""
     async with httpx.AsyncClient(timeout=300.0) as client:
         resp = await client.post(f"{base_url}{path}", json=body)
-        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+        try:
+            return JSONResponse(content=resp.json(), status_code=resp.status_code)
+        except Exception:
+            return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
 
 
 async def _open_stream_request(

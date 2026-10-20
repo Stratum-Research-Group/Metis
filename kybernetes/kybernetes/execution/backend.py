@@ -60,6 +60,7 @@ class ExecutionBackend(ABC):
         env: Dict[str, str],
         timeout_seconds: int = 30,
         max_output_bytes: int = 100 * 1024,
+        allow_network: bool = False,
     ) -> ExecutionResult:
         """Execute command within the boundary."""
         pass
@@ -82,6 +83,7 @@ class LocalProcessBackend(ExecutionBackend):
         env: Dict[str, str],
         timeout_seconds: int = 30,
         max_output_bytes: int = 100 * 1024,
+        allow_network: bool = False,
     ) -> ExecutionResult:
         start_time = time.monotonic()
         proc = subprocess.Popen(
@@ -151,11 +153,12 @@ class BubblewrapBackend(ExecutionBackend):
     """
     Bubblewrap (bwrap) unprivileged sandbox backend.
     Mounts root read-only, restricts writes strictly to workspace cwd,
-    isolates /tmp onto private tmpfs, and unshares PID, IPC, and UTS namespaces.
+    isolates /tmp onto private tmpfs, unshares PID, IPC, UTS, and Network namespaces.
     """
 
-    def __init__(self, bwrap_path: Optional[str] = None):
+    def __init__(self, bwrap_path: Optional[str] = None, allow_network: bool = False):
         self.bwrap_path = bwrap_path or shutil.which("bwrap") or "/usr/bin/bwrap"
+        self.allow_network = allow_network
 
     @property
     def name(self) -> str:
@@ -182,8 +185,13 @@ class BubblewrapBackend(ExecutionBackend):
         env: Dict[str, str],
         timeout_seconds: int = 30,
         max_output_bytes: int = 100 * 1024,
+        allow_network: Optional[bool] = None,
     ) -> ExecutionResult:
         start_time = time.monotonic()
+
+        net_allowed = self.allow_network if allow_network is None else allow_network
+        if os.environ.get("METIS_ALLOW_NETWORK") == "1":
+            net_allowed = True
 
         # Build bubblewrap container command line
         bwrap_cmd: List[str] = [
@@ -197,10 +205,18 @@ class BubblewrapBackend(ExecutionBackend):
             "--unshare-pid",
             "--unshare-ipc",
             "--unshare-uts",
+        ]
+
+        if not net_allowed:
+            bwrap_cmd.append("--unshare-net")
+
+        bwrap_cmd.extend([
+            "--setenv", "HOME", str(cwd),
+            "--setenv", "TMPDIR", "/tmp",
             "--die-with-parent",
             "--chdir", str(cwd),
             "bash", "-c", command,
-        ]
+        ])
 
         proc = subprocess.Popen(
             bwrap_cmd,

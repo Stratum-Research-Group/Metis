@@ -1,0 +1,50 @@
+DOKIME - evaluation harness. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Dokime is the measurement layer for a local AI stack. It generalizes LTHCM's benchmark discipline: every model, prompt, or pipeline change gets real numbers with confidence intervals, never vibes.
+
+HARD CONSTRAINTS
+- Models are queried through the Hestia serving layer API (OpenAI-compatible), never loaded directly. Read hestia's server module and models.yaml in the submodule for the exact route schema (chat completions, streaming, model list endpoint) - do not re-specify the API here; name where to look.
+- Every run: fixed seeds, run_id, manifest with per-artifact checksums, hardware line, model identifier. Reproducible from a clean clone.
+- Statistics follow the LTHCM convention: point estimates plus paired bootstrap 10k CIs (seed 42), per-query diffs preserved.
+- Add the existing stack projects to the workspace as git submodules, pinned to their current commits: LTHCM (https://gitlab.com/akarta-315h/LTHCM @ 8a71605379ee32059e714feb3648cf74f4b42dc6), dianoia (https://gitlab.com/akarta-315h/dianoia @ da7ce83cb05f3b44764fc59ab5c325995c6fd07c), and hestia (https://gitlab.com/akarta-315h/hestia @ edd1bcf411180dd3c9b1171057d03f400b3bfb96). They are read-only dependencies: never modify their contents, never copy their files into this repo's own tree, and never push or upload their contents anywhere.
+- Dokime integrates with hestia through its OpenAI-compatible HTTP API only. The hestia submodule exists so the builder can read the real API surface and model registry, never to import hestia code.
+- Dianoia is a read-only reference for deliberation and prompt patterns. Dokime's prompt-variant regression compares exist to measure changes to patterns like dianoia's; that is its role in this repo, nothing more.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "dokime", Python 3.12+, src layout, pyproject.toml.
+- Dependencies: httpx for the API, numpy allowed for the bootstrap statistics, stdlib otherwise. Nothing else without asking.
+
+2. TASK PLUGIN INTERFACE
+- A task = dataset loader + scorer. A task implements a protocol: load() -> list[Query] and score(query, response) -> float. Tasks are discovered via entry points.
+- Ship one reference task: ~25 synthetic ARC-style multiple-choice items (synthetic stand-in, no licensing baggage) in a single local JSON file.
+
+3. RUNNER
+- Single CLI entry with subcommands: dokime run, dokime compare, dokime tasks.
+- Run config is a TOML file naming models, tasks, prompt variant, seed, temperature, and max tokens; CLI flags override config values.
+- Executes a model against tasks via the serving API. The seed is sent in the API request itself; temperature defaults to 0. Both are overridable in the run config.
+- Per-query results logged to JSONL with fields: run_id, task_id, query_id, model_id, prompt_hash, predicted, expected, correct, latency_ms, timestamp.
+- Errors: retry 3 times with exponential backoff. After that, log the query as a null result with the error recorded. Never silently skip a query.
+- All artifacts live under runs/{run_id}/: results JSONL, manifest, compare reports.
+
+4. STATS
+- Point estimates, paired bootstrap CIs, per-query diff analysis between two models or two prompts.
+
+5. MANIFEST + REGRESSION COMPARE
+- Manifest writer: a JSON file with run_id, checksums over the results JSONL and the dataset file, the repo's git sha, hardware, and model ids.
+- Hardware captured via the platform module, plus nvidia-smi output when present.
+- Compare command: diff two runs and flag changes whose CI excludes zero.
+
+6. TESTS
+- pytest.
+- Stats module: unit tests with known-answer fixtures.
+- Runner: integration tests against a mock OpenAI-compatible server.
+
+OUT OF SCOPE
+- Hosted eval APIs, human evaluation, leaderboard features.
+
+DEMO
+- Query hestia's model-list endpoint and use whatever model is currently served - do not assume an 8B.
+- Run the reference task on that model, produce run_id + manifest + CIs, then run a second prompt variant and show the regression compare output.

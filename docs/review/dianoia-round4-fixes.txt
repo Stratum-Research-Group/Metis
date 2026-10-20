@@ -1,0 +1,7 @@
+DIANOIA round-4 fixes - final 3 nits from re-review of HEAD 25f429d. Everything else is clean. No refactors beyond these, do not touch LTHCM.
+
+1. BROKEN PROXY EXAMPLE IN README: README.md:95-105 cannot work as written - the supposed config.yaml contents are all shell comments inside the bash fence, and no command writes config.yaml before "litellm --config config.yaml --port 8000". A reader running it verbatim gets a missing config file. Rewrite the example so it actually creates the config (e.g. a cat > config.yaml heredoc with the real YAML) and then starts litellm.
+
+2. VERIFY BOTH MODELS, NOT JUST FALLBACK: walk.py:276-285 checks only that the fallback model is listed. Also verify the PRIMARY model is listed (README already claims both are verified), with the same loud WARN on failure.
+
+3. MISSING models.list ON INJECTED CLIENT: walk.py:248-257 returns silently when an injected client has no models.list method. That silent path must produce the same WARN (availability unverified) instead of passing quietly - one log line is enough.

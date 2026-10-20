@@ -115,10 +115,13 @@ stoma watch /path/to/folder
 stoma reconcile
 ```
 
-### System Status & Interchange
+### System Status, Graph & Interchange
 ```bash
 # View storage, model info, and passage counts
 stoma status
+
+# Build offline semantic similarity graph edges for Dianoia deliberative walk
+stoma graph build --threshold 0.75 --top-k 5
 
 # Verify direct interchange against Dianoia
 stoma interchange

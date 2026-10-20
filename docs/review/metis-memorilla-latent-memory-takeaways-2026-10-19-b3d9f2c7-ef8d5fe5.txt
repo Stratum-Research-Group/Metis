@@ -1,0 +1,116 @@
+METIS / LTHCM RESEARCH TAKEAWAYS - Memorilla (snap-stanford)
+Compiled 2026-10-19 (rev b). Ideas only - not an implementation spec, not build
+authority. Repo reviewed at HEAD ee3f05a (2026-10-15), Apache-2.0. Paper
+arXiv:2610.21375 v1 (COLM workshop paper; author results, not independently
+reproduced). Unit tests exist in the repo (tests/, CPU-only pytest) but were
+NOT run by the reviewer; code was read, not executed.
+
+WHAT IT IS (verified against code, not just README)
+- A latent RETRIEVAL/readout system, not latent reasoning. Unlike Coconut or
+  HybridAgent (which change how a model thinks), Memorilla changes what reaches
+  a frozen model: a frozen Qwen3-Embedding-4B encodes each document chunk once
+  into a persistent store; per query, a trainable 194M-param module (16 learned
+  slots, query-conditioning cross-attention, 2 refinement cross-attention+FFN
+  blocks) reads the ENTIRE store and projects K=16 soft tokens into the frozen
+  Qwen3-8B decoder's input embedding space, injected at <|memory|> placeholder
+  positions. Decoder and encoder are never trained
+  (train.py L117 freezes the decoder; training updates only the memory module).
+- Pinned code refs (HEAD ee3f05a):
+  MemoryModule class + forward pass:
+    https://github.com/snap-stanford/memorilla/blob/ee3f05a1389835a39799f1c25545d237dbfe0805/memorilla/memory.py#L102
+    https://github.com/snap-stanford/memorilla/blob/ee3f05a1389835a39799f1c25545d237dbfe0805/memorilla/memory.py#L197
+  Embedding injection at placeholder positions:
+    https://github.com/snap-stanford/memorilla/blob/ee3f05a1389835a39799f1c25545d237dbfe0805/memorilla/llm.py#L12
+  vLLM inference with enable_prompt_embeds:
+    https://github.com/snap-stanford/memorilla/blob/ee3f05a1389835a39799f1c25545d237dbfe0805/memorilla/vllm.py#L71
+  Frozen decoder / only-memory-module training:
+    https://github.com/snap-stanford/memorilla/blob/ee3f05a1389835a39799f1c25545d237dbfe0805/train.py#L117
+  GRPO trains only the memory module (RL variant):
+    https://github.com/snap-stanford/memorilla/blob/ee3f05a1389835a39799f1c25545d237dbfe0805/rl/README.md#L36
+- Paper: https://arxiv.org/abs/2610.21375
+  Weights (5 x 370MB memory-module checkpoints only):
+  https://huggingface.co/memorilla/Memorilla-Qwen3-8B
+
+WHERE IT WINS / LOSES (author evidence, their own breakdowns)
+- Wins in their benchmarks: conceptual questions (NarrativeQA "why" +4.91,
+  "how" +7.02 ROUGE-L vs RAG-50), multi-entity relational claims (FactKG margin
+  over RAG grows +4.23pp at 1 entity to +7.59pp at 4+; RAG-50 drops 78.73 ->
+  51.75 as composed facts grow 1->4 while Memorilla holds 80-89), and
+  personalization where clues share no wording with the query (PMv2 44.6% vs
+  30.9% best baseline; full context with 1,974x more tokens stays near
+  closed-book).
+- Loses: exact entity recall (RAG-50 wins "who"/"which" questions),
+  fine-grained facts, tiny collections (PubMedQA, 324 tokens total: 59.0 vs
+  69.0 for LLMLingua-2), verbatim-sensitive scoring (MemoRAG leads NarrativeQA
+  ROUGE with 50x more tokens).
+- Their "union" result (Fig. 5) is an ORACLE upper bound, not a combined
+  system: a question counts as answered by the union if at least one of
+  Memorilla or RAG-50 answered it correctly. It shows the two methods fail on
+  different questions (complementary errors); no fusion, gating or routing
+  mechanism is implemented or measured. Any real gain from combining them is
+  untested.
+- "Full context is not an upper bound": in their setup, full context trails
+  Memorilla on 20 of 21 metrics - evidence that indiscriminate stuffing can
+  hurt, measured with their decoder/serving stack.
+
+HYPOTHESES FOR LTHCM / METIS (suggested by this setup, not established)
+1. Query-conditioned vs query-agnostic compression. Memorilla's motivating
+   critique is that query-blind soft tokens (ICAE/AutoCompressors-style) must
+   serve every question; their query-conditioned readout is one fix that worked
+   in this setup. Hypothesis worth testing in LTHCM: conditioning any read-time
+   compression on the query. This paper alone does not prove the principle
+   transfers.
+2. Complementary strengths suggest hybrid designs. Because latent memory kept
+   cross-document structure and text retrieval kept exact entities HERE, a
+   hybrid could help IF LTHCM's retrieval and any future latent readout show
+   the same complementary error pattern - measurable in dokime before any
+   design commitment. The paper's union number is oracle evidence only (above).
+3. Provenance is not carried by soft tokens. 16 latent tokens contain no
+   citation path. IF krisis (or any Metis layer) keeps a citation/provenance
+   contract, a latent readout would need a parallel text/provenance channel;
+   Memorilla itself has no citation mechanism.
+4. Train-the-small-module, freeze-the-base pattern. Their GRPO variant trains
+   ONLY the 194M memory module from reward around a frozen agent (avg@3 0.186
+   -> 0.242; an untrained module scores BELOW no memory, so the gain is
+   learned). This is the same broad shape as the paideia walk-policy proposal -
+   one working example of the pattern, not evidence it ports to paideia's
+   different objective and stack. Reference: rl/README.md + SkyRL-Memorilla.
+5. Retrieval encoders are not compression encoders. They attribute their
+   fine-grained-detail loss to using a stock embedding model. If LTHCM ever
+   compresses, expect a similar failure mode from off-the-shelf encoders;
+   a compression-trained encoder is their named future fix, untested.
+6. Serving cost stays flat only in the measured regime. On one H100, 1 -> 512
+   docs left end-to-end latency ~0.74s while full context went 0.75s -> 19.9s
+   (their Table 14, which reports the memory-module forward separately from
+   decoder end-to-end: ~2ms vs ~740ms). The readout still attends over every
+   stored embedding, so read cost grows with store size asymptotically - it was
+   simply negligible against decoding in the 1-512 range they measured. Write
+   path (encoding) is linear in documents, paid once.
+
+FEASIBILITY ON CURRENT RIG (5060Ti 16GB + V100 16GB) - supplied path NOT
+ESTABLISHED on these cards
+- The documented inference path co-locates a bf16 Qwen3-8B decoder (~16.4GB)
+  and Qwen3-Embedding-4B (~8GB) on one GPU via vLLM with prompt-embeds
+  (vllm.py sets 0.6/0.25 GPU-memory shares; README's example states "You need
+  one 80 GB GPU"). On a 16GB card that exact configuration does not fit.
+  Nothing here proves alternatives impossible - quantized decoders, CPU offload
+  or splitting encoder/decoder across the two cards are untested by the authors
+  and unverified by the reviewer; prompt-embeds support under those variants is
+  an open question, and there is no llama.cpp path (injection is at the
+  embedding level, not tokens).
+- Encoder placement: benchmark embeddings are precomputed offline, but
+  answering a NEW question needs the encoder live for the query embedding (and
+  any new documents) - it is not purely a write-path component.
+- Training recipes assume 4x H100 80GB (~19h, ~310GiB data). Treat Memorilla as
+  design reference and a possible dokime comparison target, not a component to
+  run now.
+
+CAVEATS ON THE EVIDENCE
+- Author-reported results on their own serving stack; nothing reproduced.
+- PMv2/PV4 short answers scored by cosine nearest-neighbor among candidate
+  answer embeddings (their Section 3.3) - softer than exact match.
+- Only Qwen encoder -> Qwen decoder tested; cross-family transfer untested.
+  COLM workshop paper, v1 (Oct 15 2026).
+- Review coverage: file-level read of memorilla/, train.py, evaluate.py, rl/
+  at HEAD ee3f05a; not an exhaustive audit; no models downloaded, nothing
+  executed, no benchmarks reproduced. No code errors found in what was read.

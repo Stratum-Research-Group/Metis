@@ -1,0 +1,33 @@
+DOKIME - evaluation harness. New project scaffold and first build. Follow these instructions exactly. Ask before deviating.
+
+CONTEXT
+Dokime is the measurement layer for a local AI stack. It generalizes LTHCM's benchmark discipline: every model, prompt, or pipeline change gets real numbers with confidence intervals, never vibes.
+
+HARD CONSTRAINTS
+- Models are queried through the Hestia serving layer API (OpenAI-compatible), never loaded directly.
+- Every run: fixed seeds, run_id, manifest with per-artifact checksums, hardware line, model identifier. Reproducible from a clean clone.
+- Statistics follow the LTHCM convention: point estimates plus paired bootstrap 10k CIs (seed 42), per-query diffs preserved.
+
+BUILD, IN THIS ORDER
+
+1. REPO SCAFFOLD
+- New repo "dokime", Python package, pyproject.toml.
+
+2. TASK PLUGIN INTERFACE
+- A task = dataset loader + scorer. Define the interface and ship one reference task (small ARC-style multiple-choice subset stored locally).
+
+3. RUNNER
+- Executes a model against tasks via the serving API, fixed seeds, per-query results logged to JSONL.
+
+4. STATS
+- Point estimates, paired bootstrap CIs, per-query diff analysis between two models or two prompts.
+
+5. MANIFEST + REGRESSION COMPARE
+- Manifest writer (run_id, checksums, hardware, model ids).
+- Compare command: diff two runs and flag changes whose CI excludes zero.
+
+OUT OF SCOPE
+- Hosted eval APIs, human evaluation, leaderboard features.
+
+DEMO
+- Run the reference task on one served 8B model, produce run_id + manifest + CIs, then run a second prompt variant and show the regression compare output.
