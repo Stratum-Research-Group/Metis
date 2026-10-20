@@ -265,6 +265,7 @@ class WalkController:
         self.active_model = model_name
         self.fallback_used = False
         self.fallback_available: Optional[bool] = None
+        self.last_walk_tokens: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
         # OpenAI-compatible client for llama.cpp / Hestia server
         if client is not None:
@@ -548,6 +549,10 @@ class WalkController:
                 top_p=self.top_p,
                 max_tokens=max_tokens,
             )
+            if hasattr(response, "usage") and response.usage:
+                self.last_walk_tokens["prompt_tokens"] += getattr(response.usage, "prompt_tokens", 0) or 0
+                self.last_walk_tokens["completion_tokens"] += getattr(response.usage, "completion_tokens", 0) or 0
+                self.last_walk_tokens["total_tokens"] += getattr(response.usage, "total_tokens", 0) or 0
             return response.choices[0].message.content or ""
         except Exception as e:
             err_msg = str(e).lower()
@@ -787,6 +792,7 @@ class WalkController:
         parent_walk_id: Optional[str] = None,
         is_shadow: bool = False,
         controller_policy: Optional[Any] = None,
+        skip_synthesis: bool = False,
     ) -> Dict[str, Any]:
         """
         Execute a single deliberative walk.
@@ -801,6 +807,7 @@ class WalkController:
             parent_walk_id: Optional parent identifier for shadow branches.
             is_shadow: Whether this walk is a shadow branch.
             controller_policy: Optional AnadromePolicy instance or name override.
+            skip_synthesis: If True, skips answer synthesis and returns answer="".
 
         Returns:
             Dict with:
@@ -809,8 +816,10 @@ class WalkController:
                 - visited_passages: list of passage dicts
                 - seeded_nodes: list of seed node IDs
                 - steps_used: int
+                - tokens: dict of token counts
         """
         self._validate_graph()
+        self.last_walk_tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
         active_walk_id = walk_id or str(uuid.uuid4())
         env_identity = self._get_environment_identity() if self.enable_anadrome_logging else None
@@ -1139,8 +1148,8 @@ class WalkController:
                     )
                 )
 
-        # Synthesize the final answer
-        answer = self._synthesize_answer(question, visited_passages)
+        # Synthesize the final answer (unless skipped for frozen walk logging)
+        answer = "" if skip_synthesis else self._synthesize_answer(question, visited_passages)
 
         # Log completed replay tree record if Anadrome is enabled
         if self.enable_anadrome_logging and self.anadrome_logger and env_identity is not None:
@@ -1169,6 +1178,7 @@ class WalkController:
             "seeded_nodes": seeded_node_ids,
             "steps_used": steps_used,
             "walk_id": active_walk_id,
+            "tokens": dict(self.last_walk_tokens),
         }
 
     # ------------------------------------------------------------------

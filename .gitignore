@@ -57,6 +57,7 @@ logs/
 .stoma/
 data/
 !dokime/src/dokime/tasks/data/
+!experiments/dianoia_compression/data/
 
 
 

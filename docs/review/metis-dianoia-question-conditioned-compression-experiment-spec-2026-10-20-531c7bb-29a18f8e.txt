@@ -1,0 +1,480 @@
+METIS EXPERIMENT SPEC - PLAN ONLY
+Question-conditioned compression between dianoia's retrieved passages and its
+answer step (a scoped, training-free test of the JitMem read-time curation idea)
+
+Date: 2026-10-20 (rev 3, audit, sampling, cost-gate and boundary-case
+statistics corrected)
+Status: proposal. Nothing in this document is preregistered, run, or approved
+for execution. It is a plan to review before any code is written. All data
+preparation, ID mapping, manifest generation and scoring in this plan are
+scripted steps; nothing here hands Nick an open-ended manual collection task.
+Scope anchor: Metis monorepo @ 531c7bb68f1155e57f431074302d0871264339a6
+(in-tree layout; all file:line references below were read from that commit).
+Inspiration: arXiv 2609.27334v1, "Just-in-Time Memory: Learning to Curate
+Task-Adaptive Memory for LLM Agents" (Zhou, Li, Liu, Yavuz, Joty, Salesforce
+AI Research, 23 Sep 2026). No code repository was found in the reviewed paper
+or the checked listings (HuggingFace, PapersWithCode); that says nothing
+about releases elsewhere or later.
+
+======================================================================
+0. WHAT THIS IS AND IS NOT
+======================================================================
+
+One question: does compressing the passages dianoia has already retrieved,
+conditioned on the question, before answer synthesis help, hurt, or cost more
+than it saves?
+
+It is NOT:
+- a change to stoma ingestion (stoma already stores raw chunk text with
+  provenance; nothing to fix there),
+- a retrieval experiment (retrieval and the walk are held fixed),
+- a training experiment (the curator here is prompted, not trained; GRPO or
+  any learned curator is explicitly future work),
+- related to the SwiLA streaming-state test or the Sylloge embedding
+  aggregation plan. Different mechanism, different slot, separate documents.
+- a claim that JitMem's benchmark numbers transfer to document QA. They were
+  author-reported on interactive agent environments (ALFWorld, WebShop,
+  tau2-bench). They motivate the mechanism only and appear nowhere in the
+  decision rule.
+
+======================================================================
+1. SOURCE GROUNDING (VERIFIED @531c7bb)
+======================================================================
+
+1.1 The slot under test. dianoia/dianoia/walk.py:569-581,
+_synthesize_answer(): the full raw text of every visited passage is
+concatenated as "[node_id]: content" blocks into ANSWER_PROMPT_TEMPLATE
+(dianoia/dianoia/prompts.py), and the synthesis model answers from that.
+There is no compression stage between retrieval and answer synthesis.
+
+1.2 Selection is already query-conditioned. The walk controller picks which
+passages to visit given the question (CONTROLLER_SYSTEM_PROMPT /
+STEP_PROMPT_TEMPLATE in prompts.py). This experiment isolates only the
+compression stage; it does not touch which passages are gathered.
+
+1.3 Stoma retains raw chunks and provenance. stoma/src/stoma/indexer.py:1020-
+1046 indexes raw chunk content with a PassageProvenance record (passage_id,
+source, file hash, chunk hash, location, token/char counts). The paper's
+"write-time distillation loses information" critique does not apply to the
+current ingestion path; nothing changes there.
+
+1.4 Answer verification exists downstream. dianoia/dianoia/verify.py runs an
+answer-vs-evidence sheaf/NLI contradiction check after synthesis. All arms
+feed the same verification step; it stays a constant, not a variable.
+
+1.5 Serving. Controller and synthesis calls go through the OpenAI-compatible
+llama.cpp endpoint (hestia's role), default http://localhost:8080/v1
+(dianoia/dianoia/cli.py). The curator in arms A1/A2 is another model served
+the same way. Serial serving (swap models on one GPU) is acceptable; actual
+memory and latency are measured and reported per arm, not assumed. No new
+serving infrastructure is assumed, and no claim is made that any particular
+model pair fits the current hardware - that is a dev-phase measurement, not
+a premise (see section 10).
+
+======================================================================
+2. PRIMARY METRIC, DECISION RULE, AND DESIGN DISCIPLINE
+======================================================================
+
+Primary metric: paired exact match (EM) of the final answer against the gold
+answer, per question, A1 versus A0, on the test set. Token-level F1 is a
+secondary final-answer metric. Final-answer metrics and briefing metrics
+(section 7) are separate families and are never pooled.
+
+Effect and equivalence margins (proposed, lockable before the test run):
+- Practical significance threshold m = 0.02 absolute EM. An effect smaller
+  than this is not worth an extra model call per answer, whatever its
+  statistical significance.
+- Equivalence: the two-sided 95% paired CI of Delta = EM(A1) - EM(A0) is
+  contained in [-m, +m].
+
+No non-overlapping per-arm CIs: all inference uses the paired CI of the
+per-question difference, because passage sets are identical across arms.
+
+Decision rule (ordered, exhaustive, mutually exclusive; first match wins;
+gates 1-2 take precedence over all statistics):
+
+  Gate 1 - INTEGRITY: any test-set exposure before tuning is frozen, any
+  dev/test overlap discovered, or any protocol break -> class INVALID.
+  Measured diagnostics from a burned run may still be reported, clearly
+  labelled INVALID, but they enter no decision class and support no
+  conclusion.
+
+  Gate 2 - SAFETY/COST: any of the following on the test set ->
+  class REJECT-COST-SAFETY, regardless of accuracy:
+    (a) fallback rate above its locked cap;
+    (b) boundary-violation count above its locked cap;
+    (c) mean paired post-retrieval token ratio sum(A1)/sum(A0) above the
+        locked multiple (section 8);
+    (d) audit-measured faithful preservation of retrieved gold facts below
+        the locked floor (section 7, blind semantic audit on a
+        prespecified random sample; the decision is conditional on that
+        sample and its sampling error - an audit pass is evidence within
+        that error, not proof of safety);
+    (e) peak RAM/VRAM or wall-time above the caps locked after dev
+        calibration (section 10).
+
+  Class 3 - REJECT-HARM: paired CI upper bound < -m.
+  Class 4 - ADOPT: paired CI lower bound > +m (and gates passed). Candidate
+    change to dianoia, submitted as a normal review, not auto-merged.
+  Class 5 - SMALL-EFFECT-NO-ADOPT: the CI excludes 0 but is contained in
+    (-m, 0) or (0, +m): a statistically detectable effect below the
+    practical threshold. Reported as measured; current code kept.
+  Class 6 - EQUIVALENT: CI contained in [-m, +m] (and not already class 5,
+    i.e. the CI includes 0). Compression adds nothing practical; keep
+    walk.py as is.
+  Class 7 - INCONCLUSIVE: anything else (CI straddles a margin boundary).
+    Report the prospective sample size needed to reach CI half-width <= m
+    at the observed paired variance, computed from the dev/test variance
+    estimate. No post-hoc or "achieved power" claims: prospective
+    sensitivity only.
+
+Every class except INVALID is a complete result. "Raw concat is fine"
+(classes 5, 6) and "compression hurts or costs too much" (classes 2, 3) are
+answers, not failures.
+
+======================================================================
+3. ARMS
+======================================================================
+
+All arms share: the same pre-built LTHCM index (frozen snapshot, hash
+recorded), the same walk configuration (max_steps, top_k, seeding, same
+controller model and sampling), and therefore the same visited passage set
+per question, frozen to disk (node IDs, content, order, corpus snapshot
+hash) before any arm runs. The ONLY intended difference is what fills the
+synthesis prompt's context block.
+
+A0 - Experimental control. Raw visited passages concatenated exactly as
+walk.py:569-581 does today, into the shared synthesis prompt of section 4.
+NOTE: A0 is the experimental control, not a bit-exact reproduction of
+current production behaviour - the production prompt has no untrusted-input
+boundary line. Because all arms must share one synthesis prompt (below), A0
+carries the same boundary line as A1/A2/A3, and the line is a shared
+constant, not part of the treatment. A dev-only production-reference check
+(current prompt verbatim, no boundary line, raw concat) is run once on dev
+to assess and report whether the added line itself moves accuracy; this is
+an estimate with uncertainty, not proof of zero effect, and it is not a
+test arm.
+
+A1 - Query-conditioned curator (the JitMem-style treatment). A separate
+curator model receives the question plus the raw visited passages (with node
+IDs) and writes a compact briefing. The synthesis prompt is identical to
+A0's except the context block contains the briefing instead of the raw
+passages. Synthesis model, sampling, and max output tokens unchanged.
+
+A2 - Query-independent compression (ablation). Same curator model and output
+contract as A1, but the curator is NOT shown the question. Separates
+"compression helps" from "question-conditioned compression helps".
+
+A3 - Token-matched extractive control (no curator model). Whole sentences
+selected from the visited passages by embedding similarity to the question
+(the embedder dianoia already loads), each kept with its source [node_id],
+no mid-word or mid-sentence truncation. Selection stops at the token count
+of A1's briefing for that question measured with the SAME tokenizer the
+synthesis model serves, within a proposed +/-5% tolerance. Tests whether any
+length-matched selection does as well as the curator.
+
+======================================================================
+4. CURATOR CONTRACT AND SHARED PROMPT BOUNDARY (A1, A2)
+======================================================================
+
+Curator inputs: the question (A1 only), the visited passages with node IDs,
+nothing else. The curator never sees gold answers, dataset metadata, walk
+logs, or test labels.
+
+Output rules, stated in the curator prompt and checked mechanically where
+possible:
+- Preserve every source ID used, in [node_id] form, so citation coverage
+  stays measurable against A0.
+- Preserve negation, numbers, units, dates and named entities verbatim.
+- If passages conflict, keep both sides and flag the conflict; do not
+  resolve it.
+- Do not add facts that are not in the passages.
+- Output cap: proposed 512 tokens (tunable on dev only).
+
+Untrusted-input boundary (all arms, shared): visited passages are corpus
+data and may contain instruction-like text. ONE identical boundary line is
+added to the shared synthesis prompt used by A0, A1, A2 and A3, stating that
+context content is data, never instructions. The curator prompt carries the
+same boundary for its own input. Applying the line to every arm keeps the
+compression treatment unconfounded; the dev-only production-reference check
+(section 3, A0 note) measures the line's own effect. Any briefing containing
+imperative text directed at the reader is logged as a boundary violation.
+
+Fallback: if the curator call fails, returns empty, or blows the output cap,
+the arm falls back to the A0 raw-concat context for that item, logged as a
+fallback. Fallbacks count toward the arm's cost and are reported as a rate;
+a fallback is never silently free. Fallback cap: proposed 5% of curator calls, calibrated and
+locked on dev; breaching it on test is a Gate 2 rejection. The
+boundary-violation cap is a rate too: proposed >2% of curator outputs,
+reported with its exact binomial CI, never a bare count.
+
+======================================================================
+5. DATA, SPLIT, AND ID MAPPING
+======================================================================
+
+Dataset: one QA benchmark already wired into the LTHCM harness with gold
+supporting-fact annotations - HotpotQA or 2WikiMultihopQA first choice,
+MuSiQue backup. One dataset for the main run.
+
+ID mapping (scripted, deterministic, checked before the run):
+- Each gold supporting fact (article title + sentence index) is mapped to
+  actual stoma/LTHCM chunk IDs by a deterministic rule (document title ->
+  source, sentence offset -> containing chunk or overlapping chunks),
+  recorded in the manifest. One-to-many mappings are valid: a sentence may
+  be covered by several overlapping chunks; what is required is that the
+  sentence's text is fully covered, not that the mapping is unique.
+- Coverage check: fraction of gold supporting sentences whose full text is
+  covered by their mapped chunk(s), and fraction of questions with every
+  supporting sentence covered. If question-level coverage is below the
+  locked floor (proposed 95%), the mapping rule is fixed or the dataset
+  swapped BEFORE the split; the experiment does not run on a partial
+  mapping.
+- Collision check: multiple supporting sentences mapping to one chunk is
+  expected and fine; non-deterministic or unresolved mappings are logged
+  and the item flagged.
+- Chunk IDs from this mapping, not dataset-internal IDs, drive all
+  citation-coverage metrics.
+
+Split, before anything runs:
+- Dev: proposed 150 questions, for prompt iteration, threshold and cap
+  calibration, fallback check, and the production-reference check.
+- Test: proposed 300 questions, evaluated exactly once per arm, after all
+  tuning is frozen.
+- No question, near-duplicate, or shared supporting document across the
+  split; checked by normalized question string and by mapped chunk/source
+  IDs; collisions dropped from test.
+- Models and prompts are locked after dev. Only test-set exposure or
+  overlap burns the test set (see Gate 1); a pre-test model swap forced by
+  hardware failure does NOT burn an unseen test set - dev is re-calibrated
+  for the new model and the manifest records the swap.
+
+Retrieval ceiling (reported, not hidden): the fraction of test questions
+where every gold supporting sentence's text is covered by the UNION of the
+visited chunks. Under the one-to-many mapping, a sentence counts as covered
+when at least one valid covering chunk (or combination of chunks) is
+visited; alternative overlapping chunks for the same sentence are never all
+required. This bounds every evidence metric. Retention and citation metrics
+are computed on the retrievable subset; the primary EM is reported on the
+full test set with the retrievable subset as a secondary cut. Unretrieved
+gold facts are a retrieval result, not a compression result, and are
+reported separately.
+
+======================================================================
+6. FIXED FACTORS
+======================================================================
+
+- Same index snapshot for all arms (corpus_snapshot_hash recorded; the field
+  already exists in the anadrome EnvironmentIdentity block).
+- Same controller model, temperature 0.2 / top_p 0.9 (dianoia defaults),
+  max_steps, top_k, seeding.
+- Same synthesis model, sampling, and shared synthesis prompt (boundary
+  line included) across all arms.
+- Same curator model for A1 and A2, served by hestia like everything else;
+  serial serving is acceptable. Model choice is locked after dev and
+  recorded; no co-residency requirement and no fit assumption (section 10).
+- Answer verification (verify.py) runs identically for all arms; logged,
+  not a scoring metric.
+
+======================================================================
+7. METRICS
+======================================================================
+
+Final-answer metrics (primary family):
+- M1 EM (primary; paired A1 vs A0 drives the section 2 rule) and token F1
+  (secondary), computed with the dataset's standard scoring script. No
+  LLM-as-judge in the primary family.
+- M2 Citation coverage (proxy, labelled as such): fraction of answer-cited
+  chunk IDs inside the mapped gold supporting set, and gold-fact recall,
+  where a gold fact counts as recalled when at least one of its valid
+  covering chunks is cited (duplicate chunk alternatives never required).
+  Chunk IDs alone do not establish entailment, and gold annotations are not
+  exhaustive - a citation outside the annotated set is not automatically
+  wrong. M2 is therefore a screening proxy; the semantic audit below
+  validates a sample and reports how far the proxy agrees with audit
+  judgments.
+
+Briefing metrics (separate family, A1/A2, never pooled with final answers):
+- M3 Source coverage: fraction of retrievable gold supporting facts
+  covered by the briefing, a fact counting as covered when any of its
+  valid covering chunk(s) is represented; missing duplicate chunk
+  alternatives are not penalized. This is an ID-level screen, NOT a
+  detail-retention measure, and no adoption floor is set on it.
+- M4 Cost: input + output tokens across ALL calls per item (curator
+  included), per-stage wall-clock latency (walk, curate, synthesize,
+  verify), and peak RAM/VRAM observed per arm. Token totals use the serving
+  model's actual tokenizer. Walk-phase and post-retrieval (curate +
+  synthesize) tokens are broken out separately so the shared frozen walk
+  cost does not dilute the incremental treatment cost; A0's zero curator
+  cost is shown as-is.
+- M5 Fallback rate (fallbacks / curator calls) and boundary-violation
+  rate (violations / curator outputs), each reported with an exact
+  binomial confidence interval, not a bare count.
+
+Semantic audit (the actual evidence-loss detector, all arms):
+- Two distinct audit targets, never conflated:
+  (i) CONTEXT preservation (A1, A2 and A3 contexts against the frozen raw
+      A0 context): every gold fact present in the frozen retrieved input
+      is annotated faithful / distorted / contradicted / dropped /
+      unknown-uncertain, each category reported separately. Only
+      'faithful' counts as preserved; distortion, contradiction, dropping
+      and uncertainty all count against. The denominator is ONLY facts
+      present in the frozen retrieved input - unretrievable facts belong
+      to the retrieval ceiling report.
+  (ii) FINAL-ANSWER sufficiency (all arms): each answer's claims are
+      checked for entailment against its own arm's context, and
+      unsupported claims are counted. An answer is NOT penalized for
+      omitting supporting wording: sufficiency judges what the answer
+      claims, not whether it restates every supporting sentence.
+- Sampling: a fixed random sample of proposed 100 paired test items, item
+  IDs drawn once, independently of any arm's outcomes, recorded in the
+  manifest before auditing; plus 30 dev items for rubric calibration. No
+  stratification by outcome.
+- The audit, not M3, supplies the fact-preservation floor used in Gate 2
+  (floor value proposed >=95% faithful on context preservation, locked
+  after dev calibration). It also catches evidence laundering: a right
+  answer whose context dropped the supporting fact shows up as
+  answer-correct + fact-dropped.
+- The audit rubric, drawn sample IDs, and per-item annotations go into the
+  manifest. It is a bounded scoring task on a fixed prespecified sample,
+  not open-ended manual work.
+
+======================================================================
+8. STATISTICAL PROTOCOL
+======================================================================
+
+- Per-item results stored first; all aggregates computed from that JSONL.
+- 95% paired CI for Delta EM by question-level bootstrap over the paired
+  per-item differences, proposed 10,000 resamples, for ordinary cases.
+- Boundary/degenerate case (prespecified): EM is paired-binary, so when
+  discordant pairs (A1 right / A0 wrong = p01; A0 right / A1 wrong = p10)
+  are zero or near-zero, a plain bootstrap CI collapses toward [0,0] and
+  can fake equivalence. In that case, and as a check in all cases, compute
+  conservative simultaneous exact binomial intervals for p01 and p10
+  (Bonferroni-corrected, 97.5% each for joint >=95% coverage) and form the
+  decision interval [lo(p01) - hi(p10), hi(p01) - lo(p10)]. The section 2
+  decision rule always consumes the reported decision interval; a
+  degenerate bootstrap interval is never used for a decision.
+- Effects reported as absolute points with the CI, never bare relative
+  gains.
+- Cost gate: the locked quantity is the mean paired ratio of
+  POST-RETRIEVAL tokens, (sum over test items of A1 curate+synthesize
+  tokens) / (sum over test items of A0 synthesize tokens), proposed cap
+  1.3, locked after dev calibration. The mean ratio avoids max-versus-mean
+  ambiguity; the per-item ratio tail is reported separately. Walk-phase
+  tokens are frozen and shared across arms: counted in the manifest and in
+  reported grand totals, excluded from the gate ratio so the shared cost
+  does not dilute the treatment's incremental cost.
+- Prospective sensitivity only: for any inconclusive outcome, report the n
+  needed for CI half-width <= m at the observed paired variance. No
+  post-hoc power claims.
+- One test evaluation per arm. Any retune after seeing test numbers burns
+  the test set (Gate 1) and the report says so.
+
+======================================================================
+9. REPRODUCIBILITY MANIFEST
+======================================================================
+
+One directory per run: Metis commit hash (531c7bb at authoring; record
+actual at run time); LTHCM index snapshot hash; every prompt verbatim
+(controller, shared synthesis with boundary line, curator A1/A2, production
+reference) with version tags; GGUF filename + hash, tokenizer ID,
+quantization, context size, and sampling for every model; frozen visited-
+passage sets per question; the gold-fact -> chunk ID mapping table with
+coverage and collision stats; per-item JSONL (question ID, arm, briefing
+text, answer, gold answer, mapped gold chunk IDs, cited IDs, per-stage
+tokens and latency, peak memory, fallback flag, boundary flag, verification
+output); audit rubric, sample list, annotations; seeds; scoring script +
+hash; hardware description recorded as observed fact (current rig: RTX 5060
+Ti 16GB + V100 16GB, not pooled) with no performance generalization.
+
+
+======================================================================
+10. RESOURCE CAPS AND STOP CONDITIONS
+======================================================================
+
+Caps that MUST be fixed numerically before the test run, from dev
+calibration measurements (no assumed fit; current hardware capacity is
+unverified for this workload):
+- Peak RAM and VRAM per stage, measured on dev, with caps locked from those
+  measurements. If the locked model pairing cannot be served within measured
+  capacity (serially or otherwise), the run does not start; the pairing is
+  changed on dev and re-calibrated.
+- Total wall-time budget for the full run, set from measured per-item
+  dev latencies.
+- Per-question pipeline wall-clock budget, set from dev; overruns logged
+  and counted, never retried to look faster.
+- Dataset sizes per section 5; no mid-run scaling.
+- Curator output cap 512 tokens; synthesis max_tokens stays 1024.
+
+Stop conditions (halt before test, or void a test run in progress):
+- Dev fallback rate above the locked cap, or boundary violations above the
+  locked cap on dev.
+- Test-set exposure or dev/test overlap discovered at any point (Gate 1).
+- Mapping coverage below the locked floor (section 5).
+- OOM or serving instability forcing a model swap: allowed pre-test with
+  dev re-calibration and a manifest entry; the split survives only if the
+  test set was never exposed.
+
+No dollar spend, no external API calls, and no paid model calls are assumed
+or approved. Everything runs on local models through hestia.
+
+======================================================================
+11. THREATS AND LIMITS
+======================================================================
+
+- Setting transfer: JitMem's gains are author-reported on interactive agent
+  benchmarks; document QA over LTHCM is a different setting. This experiment
+  exists because transfer is unknown.
+- The walk is already query-conditioned selection, so the marginal value of
+  query-conditioned compression may be small (a legitimate Class 5/6
+  outcome).
+- M2/M3 are ID-level proxies, labelled as such throughout; entailment and
+  preservation claims come only from the blind semantic audit on its fixed
+  sample, which carries its own sampling error (reported).
+- Gold supporting-fact annotations are not exhaustive; citations outside
+  the annotated set are not automatically wrong and are audit-checked on
+  the sample before counting against an arm.
+- A1's briefing is generated text fed to the synthesis model; curator
+  hallucination becomes context. The no-new-facts rule, the audit's
+  unsupported-addition count, and M5 exist to catch it; subtle distortion
+  can still slip through.
+- Single dataset in the main run; a second dataset is follow-up.
+
+======================================================================
+12. PROPOSED TUNABLES (ALL VALUES PROPOSALS, LOCKED BEFORE TEST)
+======================================================================
+
+- Practical margin m: 0.02 absolute EM.
+- Curator output cap: 512 tokens. A3 token-match tolerance: +/-5%.
+- Dev/test sizes: 150 / 300. Bootstrap resamples: 10,000.
+- Cost gate: mean paired post-retrieval token ratio sum(A1)/sum(A0)
+  <= 1.3; per-item tail reported separately.
+- Fact-preservation floor (Gate 2, audit-measured): >=95% of retrieved gold
+  facts faithful; distorted, contradicted, dropped and unknown-uncertain
+  each reported separately.
+- Fallback stop: >5% of curator calls. Boundary-violation stop: >2% of
+  curator outputs; both rates reported with exact binomial CIs.
+- Mapping coverage floor: 95% of questions with every supporting sentence
+  fully covered (one-to-many chunk mappings allowed).
+- Audit sample: 30 dev calibration items + 100 test items drawn as fixed
+  random IDs independent of outcomes; fixed rubric, blind to arm.
+- Peak RAM/VRAM caps, wall-time budgets: set from dev calibration, values
+  recorded in the manifest.
+- Curator and synthesis models: locked after dev; serial serving allowed.
+
+======================================================================
+13. EXPLICITLY OUT OF SCOPE
+======================================================================
+
+- Training a curator (GRPO or otherwise). If A1 wins training-free, a
+  learned curator becomes a separate paideia proposal; the paper's immediate
+  same-task reward signal is a candidate training signal, but that is a new
+  document.
+- Any change to stoma, LTHCM, or retrieval.
+- Any MSS/Pinax episodic-memory integration (BM25-family similarity is not
+  a design).
+- ASOS applications (design-level analogy only; nothing testable there).
+- SwiLA and Sylloge workstreams (separate plans, separate mechanisms).
+
+======================================================================
+END OF SPEC

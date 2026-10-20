@@ -1,0 +1,4307 @@
+{
+  "summary": {
+    "split": "dev",
+    "sample_size": 30,
+    "seed": 42,
+    "sample_ids": [
+      "5a7332935542991f9a20c67d",
+      "5a7571135542992d0ec05f98",
+      "5a77152355429966f1a36c2e",
+      "5a77cb335542997042120b3a",
+      "5a7a0e1e5542990783324e1a",
+      "5a7b12a355429927d897bf2a",
+      "5a7c960655429935c91b5244",
+      "5a80071f5542992bc0c4a684",
+      "5a80840f554299485f59863b",
+      "5a80b3a9554299485f5986cc",
+      "5a8574945542997b5ce3fffb",
+      "5a85fb085542994775f606de",
+      "5a86ebac55429960ec39b6d6",
+      "5a87c13f5542996e4f30890c",
+      "5a87d8215542994775f60800",
+      "5a8b57f25542995d1e6f1371",
+      "5a8c4c625542995e66a475a1",
+      "5a8c5569554299240d9c2126",
+      "5ab51dae5542991779162d82",
+      "5ac120c55542992a796dedfc",
+      "5ac23ff0554299636651994d",
+      "5ac2d1d755429921a00ab053",
+      "5adbf0a255429947ff17385a",
+      "5ae0006755429925eb1afbd3",
+      "5ae0361155429925eb1afc2c",
+      "5ae0d4c9554299603e418468",
+      "5ae53b545542990ba0bbb23c",
+      "5ae5736e5542990ba0bbb2b3",
+      "5ae73c065542991e8301cc18",
+      "5ae7e1fc55429952e35ea9cc"
+    ],
+    "context_preservation": {
+      "A1": {
+        "counts": {
+          "faithful": 21,
+          "distorted": 7,
+          "contradicted": 0,
+          "dropped": 8,
+          "uncertain": 0,
+          "total": 36
+        },
+        "faithful_rate": 0.5833,
+        "gate_2_pass": false
+      },
+      "A2": {
+        "counts": {
+          "faithful": 30,
+          "distorted": 6,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0,
+          "total": 36
+        },
+        "faithful_rate": 0.8333,
+        "gate_2_pass": false
+      },
+      "A3": {
+        "counts": {
+          "faithful": 26,
+          "distorted": 2,
+          "contradicted": 0,
+          "dropped": 7,
+          "uncertain": 0,
+          "total": 35
+        },
+        "faithful_rate": 0.7429,
+        "gate_2_pass": false
+      }
+    },
+    "unsupported_claims_count": {
+      "A0": 9,
+      "A1": 3,
+      "A2": 10,
+      "A3": 13
+    }
+  },
+  "items": [
+    {
+      "id": "5a8b57f25542995d1e6f1371",
+      "question": "Were Scott Derrickson and Ed Wood of the same nationality?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Ed Wood]: Edward Davis Wood Jr. (October 10, 1924 \u2013 December 10, 1978) was an American filmmaker, actor, writer, producer, and director.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that Ed Wood was an American filmmaker without distortion or contradiction."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Ed Wood]: Edward Davis Wood Jr. (October 10, 1924 \u2013 December 10, 1978) was an American filmmaker, actor, writer, producer, and director.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Ed Wood's identity, lifespan, profession, and roles without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Ed Wood]: Edward Davis Wood Jr. (October 10, 1924 \u2013 December 10, 1978) was an American filmmaker, actor, writer, producer, and director.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Ed Wood's full name, dates of birth and death, and his roles in the film industry without distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Scott Derrickson is not mentioned in the provided passages.",
+            "supported": true,
+            "reason": "The context does not mention Scott Derrickson."
+          },
+          {
+            "claim": "Ed Wood is explicitly stated to be American.",
+            "supported": true,
+            "reason": "The passage states 'Edward Davis Wood Jr. (October 10, 1924 \u2013 December 10, 1978) was an American filmmaker...'"
+          },
+          {
+            "claim": "There's no information about Scott Derrickson's nationality.",
+            "supported": true,
+            "reason": "The context does not provide any details regarding Scott Derrickson."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Ed Wood was an American filmmaker.",
+            "supported": true,
+            "reason": "The context explicitly states that Ed Wood was an American filmmaker."
+          },
+          {
+            "claim": "There is no explicit mention of Scott Derrickson's nationality in the given passages.",
+            "supported": true,
+            "reason": "The context clearly indicates that Scott Derrickson's nationality is not mentioned."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Ed Wood is explicitly described as an American filmmaker.",
+            "supported": true,
+            "reason": "The context clearly states that Ed Wood was an American filmmaker."
+          },
+          {
+            "claim": "There is no mention of Scott Derrickson's nationality in the given passages.",
+            "supported": true,
+            "reason": "The provided context does not contain any information about Scott Derrickson's nationality."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Ed Wood is explicitly stated to be an American filmmaker.",
+            "supported": true,
+            "reason": "The context clearly states that Ed Wood was an American filmmaker."
+          },
+          {
+            "claim": "There is no mention of Scott Derrickson's nationality in the given evidence.",
+            "supported": true,
+            "reason": "The provided context does not contain any information about Scott Derrickson\u2019s nationality."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5adbf0a255429947ff17385a",
+      "question": "Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Laleli Mosque]: The Laleli Mosque (Turkish: 'Laleli Camii, or Tulip Mosque') is an 18th-century Ottoman imperial mosque located in Laleli, Fatih, Istanbul, Turkey.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the location of the Laleli Mosque without distortion."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Esma Sultan Mansion]: The Esma Sultan Mansion (Turkish: 'Esma Sultan Yal\u0131s\u0131'), a historical yal\u0131 (English: waterside mansion) located at Bosphorus in Ortak\u00f6y neighborhood of Istanbul, Turkey and named after its original owner Esma Sultan, is used today as a cultural center after being redeveloped.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the location of the Esma Sultan Mansion without distortion."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Laleli Mosque]: The Laleli Mosque (Turkish: 'Laleli Camii, or Tulip Mosque') is an 18th-century Ottoman imperial mosque located in Laleli, Fatih, Istanbul, Turkey.",
+            "status": "faithful",
+            "reason": "The compressed context accurately summarizes the key details about the Laleli Mosque's location and its alternative name without distortion."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Esma Sultan Mansion]: The Esma Sultan Mansion (Turkish: 'Esma Sultan Yal\u0131s\u0131'), a historical yal\u0131 (English: waterside mansion) located at Bosphorus in Ortak\u00f6y neighborhood of Istanbul, Turkey and named after its original owner Esma Sultan, is used today as a cultural center after being redeveloped.",
+            "status": "faithful",
+            "reason": "The compressed context accurately summarizes the key details about the Esma Sultan Mansion's location, name origin, current use, and redevelopment without distortion."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Laleli Mosque]: The Laleli Mosque (Turkish: \"Laleli Camii, or Tulip Mosque\") is an 18th-century Ottoman imperial mosque located in Laleli, Fatih, Istanbul, Turkey.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion and key entities of the fact without distortion."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Esma Sultan Mansion]: The Esma Sultan Mansion (Turkish: \"Esma Sultan Yal\u0131s\u0131\"), a historical yal\u0131 (English: waterside mansion) located at Bosphorus in Ortak\u00f6y neighborhood of Istanbul, Turkey and named after its original owner Esma Sultan, is used today as a cultural center after being redeveloped.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion and key entities of the fact without distortion."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The Esma Sultan Mansion is located in the Ortak\u00f6y neighborhood of Istanbul.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "The Laleli Mosque is situated in Laleli, Fatih, Istanbul.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "Since Ortak\u00f6y and Laleli are different neighborhoods within Istanbul, it can be concluded that the Laleli Mosque and the Esma Sultan Mansion are not located in the same neighborhood.",
+            "supported": true,
+            "reason": "Inference based on explicitly stated locations."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The Esma Sultan Mansion is located in the Ortak\u00f6y neighborhood of Istanbul",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          },
+          {
+            "claim": "the Laleli Mosque is situated in Laleli, Fatih, Istanbul",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          },
+          {
+            "claim": "these two landmarks are not located in the same neighborhood",
+            "supported": true,
+            "reason": "The context clearly states different neighborhoods for each landmark."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The Esma Sultan Mansion is located in Ortak\u00f6y, Istanbul.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "The Laleli Mosque is situated in Laleli, Fatih, Istanbul.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "Since these two locations are different neighborhoods within Istanbul, it can be concluded that the Laleli Mosque and the Esma Sultan Mansion are not located in the same neighborhood.",
+            "supported": false,
+            "reason": "The context does not specify whether Ortak\u00f6y and Laleli (Fatih) are considered the same or different neighborhoods. The conclusion introduces a new fact not present in the given information."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The Esma Sultan Mansion is located in the Ortak\u00f6y neighborhood of Istanbul.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "The Laleli Mosque is situated in Laleli, Fatih, Istanbul.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae0d4c9554299603e418468",
+      "question": "Roger O. Egeberg was Assistant Secretary for Health and Scientific Affairs during the administration of a president that served during what years?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 0.5,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Roger O. Egeberg]: His other roles included Assistant Secretary for Health and Scientific Affairs in the Department of Health, Education, and Welfare (now the United States Department of Health and Human Services) during the Nixon administration and Dean of the University of Southern California's medical school.",
+            "status": "distorted",
+            "reason": "The compressed context omits Egeberg's role as Dean of the University of Southern California's medical school, which is part of the original fact."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Richard Nixon]: Richard Milhous Nixon (January 9, 1913 \u2013 April 22, 1994) was the 37th President of the United States from 1969 until 1974, when he resigned from office, the only U.S. president to do so.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Nixon's presidency and resignation without altering or omitting key details."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Roger O. Egeberg]: His other roles included Assistant Secretary for Health and Scientific Affairs in the Department of Health, Education, and Welfare (now the United States Department of Health and Human Services) during the Nixon administration and Dean of the University of Southern California's medical school.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Roger O. Egeberg's roles as Assistant Secretary for Health and Scientific Affairs under President Nixon and Dean of USC's medical school without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Roger O. Egeberg]: His other roles included Assistant Secretary for Health and Scientific Affairs in the Department of Health, Education, and Welfare (now the United States Department of Health and Human Services) during the Nixon administration and Dean of the University of Southern California's medical school.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Roger O. Egeberg's roles without distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Roger O. Egeberg served as Assistant Secretary for Health and Scientific Affairs during the Nixon administration.",
+            "supported": true,
+            "reason": "The context explicitly states that Roger O. Egeberg was Assistant Secretary for Health and Scientific Affairs in the Department of Health, Education, and Welfare during the Nixon administration."
+          },
+          {
+            "claim": "Richard Nixon was the 37th President of the United States from 1969 until 1974.",
+            "supported": true,
+            "reason": "The context provides this information directly about Richard Nixon's presidency."
+          },
+          {
+            "claim": "Roger O. Egeberg held his position during the years 1969 to 1974.",
+            "supported": false,
+            "reason": "While it is stated that Roger O. Egeberg served under Nixon, the exact dates of his tenure are not provided in the context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Roger O. Egeberg served as Assistant Secretary for Health and Scientific Affairs during Richard Nixon's presidency",
+            "supported": true,
+            "reason": "The context explicitly states that Roger O. Egeberg served in the position during the Nixon administration."
+          },
+          {
+            "claim": "Richard Nixon was president from 1969 until 1974",
+            "supported": true,
+            "reason": "The context directly provides these dates for Richard Nixon's presidency."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Roger O. Egeberg served as Assistant Secretary for Health and Scientific Affairs during President Richard Nixon's administration.",
+            "supported": true,
+            "reason": "The context explicitly states that Roger O. Egeberg was the Assistant Secretary for Health and Scientific Affairs under President Nixon."
+          },
+          {
+            "claim": "President Nixon was in office from 1969 to 1974 (he resigned in 1974).",
+            "supported": true,
+            "reason": "The context provides this information about Richard Nixon's political career, including his presidency from 1969 to 1974."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Roger O. Egeberg was Assistant Secretary for Health and Scientific Affairs during the Nixon administration.",
+            "supported": true,
+            "reason": "The context explicitly states that Roger O. Egeberg held this position during the Nixon administration."
+          },
+          {
+            "claim": "Richard Nixon served as President from 1969 to 1974.",
+            "supported": false,
+            "reason": "While it is a known historical fact, the context does not provide these specific years for Nixon's presidency."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ac23ff0554299636651994d",
+      "question": "When was Poison's album \"Shut Up, Make Love\" released?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Shut Up, Make Love]: \"Shut Up, Make Love\" is a song by American rock band Poison; released in 2000, it was the first single presented to radio stations from their 2000 \"Crack a Smile...and More!\"",
+            "status": "distorted",
+            "reason": "The compressed context does not mention that 'Shut Up, Make Love' is the first single from the album. It only states the release date of the album."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Shut Up, Make Love]: 'Shut Up, Make Love' is a song by American rock band Poison; released in 2000, it was the first single presented to radio stations from their 2000 'Crack a Smile...and More!'.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that 'Shut Up, Make Love' is by Poison and was released in 2000 as the first single from 'Crack a Smile...and More!', without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Shut Up, Make Love]: \"Shut Up, Make Love\" is a song by American rock band Poison; released in 2000, it was the first single presented to radio stations from their 2000 'Crack a Smile...and More!\"",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents all key elements of the original fact without distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Poison's album 'Crack a Smile...and More!' from which the song 'Shut Up, Make Love' was taken as the first single, was released on March 14, 2000.",
+            "supported": true,
+            "reason": "The context explicitly states that the album 'Crack a Smile...and More!' was released on March 14, 2000."
+          },
+          {
+            "claim": "The song itself was released in 2000 as well",
+            "supported": true,
+            "reason": "While an exact date is not provided, the context confirms that 'Shut Up, Make Love' was released in 2000 as the first single from the album."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Poison's album 'Crack a Smile...and More!' which includes the song 'Shut Up, Make Love' was released on March 14, 2000.",
+            "supported": true,
+            "reason": "The context explicitly states that Poison's album 'Crack a Smile...and More!', containing the song 'Shut Up, Make Love', was released on March 14, 2000."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 5,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The album 'Shut Up, Make Love' was not released as an individual album;",
+            "supported": true,
+            "reason": "The context states that 'Shut Up, Make Love' is a song from the album 'Crack a Smile...and More!', implying it wasn't released as its own album."
+          },
+          {
+            "claim": "it is a song from Poison's fifth studio album titled 'Crack a Smile...and More!';",
+            "supported": true,
+            "reason": "The context explicitly mentions that 'Shut Up, Make Love' is the first single from their fifth studio album 'Crack a Smile...and More!'"
+          },
+          {
+            "claim": "which was released on March 14, 2000;",
+            "supported": true,
+            "reason": "The context clearly states that 'Crack a Smile...and More!' was released on March 14, 2000."
+          },
+          {
+            "claim": "The song itself was the first single from that album",
+            "supported": true,
+            "reason": "The context explicitly mentions that 'Shut Up, Make Love' is the first single from their fifth studio album."
+          },
+          {
+            "claim": "and also appeared on another promo single 'Be the One' as a B-side.",
+            "supported": true,
+            "reason": "The context states that the song appears on the second promo single 'Be the One' as a B-side."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The album from which the song 'Shut Up, Make Love' is taken was released in 2000.",
+            "supported": false,
+            "reason": "The context only mentions that the song was released as a single in 2000 but does not specify when the album itself was released."
+          },
+          {
+            "claim": "The song 'Shut Up, Make Love' itself was released as the first single to radio stations from this album titled 'Crack a Smile...and More!'.",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae0361155429925eb1afc2c",
+      "question": "Which  French ace pilot and adventurer fly L'Oiseau Blanc",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[L'Oiseau Blanc]: The aircraft was flown by French World War I aviation heroes, Charles Nungesser and Fran\u00e7ois Coli.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that L'Oiseau Blanc was flown by Charles Nungesser and Fran\u00e7ois Coli without distortion or contradiction."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[L'Oiseau Blanc]: The aircraft was flown by French World War I aviation heroes, Charles Nungesser and Fran\u00e7ois Coli.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the pilots of L'Oiseau Blanc were Charles Nungesser and Fran\u00e7ois Coli without distortion."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[L'Oiseau Blanc]: The aircraft was flown by French World War I aviation heroes, Charles Nungesser and Fran\u00e7ois Coli.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion about the pilots of L'Oiseau Blanc without any distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The French ace pilot and adventurer who flew L'Oiseau Blanc was Charles Nungesser",
+            "supported": true,
+            "reason": "The context explicitly mentions that Charles Nungesser was one of the pilots flying L'Oiseau Blanc."
+          },
+          {
+            "claim": "Fran\u00e7ois Coli was the co-pilot with Charles Nungesser on L'Oiseau Blanc.",
+            "supported": true,
+            "reason": "The context clearly states that Fran\u00e7ois Coli flew alongside Charles Nungesser in L'Oiseau Blanc."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The French ace pilot and adventurer who flew L'Oiseau Blanc was Charles Nungesser along with Fran\u00e7ois Coli.",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          },
+          {
+            "claim": "The aircraft disappeared during an attempt to make the first non-stop transatlantic flight between Paris and New York City in 1927.",
+            "supported": true,
+            "reason": "This detail is also explicitly mentioned in the provided context."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 5,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The French ace pilot and adventurer who flew L'Oiseau Blanc was Charles Nungesser",
+            "supported": true,
+            "reason": "Charles Nungesser is listed as one of the pilots for L'Oiseau Blanc."
+          },
+          {
+            "claim": "He flew with his co-pilot Fran\u00e7ois Coli.",
+            "supported": true,
+            "reason": "Fran\u00e7ois Coli is also listed as a pilot alongside Charles Nungesser."
+          },
+          {
+            "claim": "They attempted to make the first non-stop transatlantic flight between Paris and New York City",
+            "supported": true,
+            "reason": "The purpose of flying L'Oiseau Blanc was explicitly stated as attempting the first non-stop transatlantic flight from Paris to New York."
+          },
+          {
+            "claim": "in a Levasseur PL.8 biplane on 8 May 1927",
+            "supported": true,
+            "reason": "The aircraft type and departure date are clearly stated in the context."
+          },
+          {
+            "claim": "but disappeared during their flight over Ireland.",
+            "supported": true,
+            "reason": "Their last sighting was reported to be over Ireland, and they were noted as having disappeared during the flight attempt."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The French ace pilots who flew L'Oiseau Blanc were Charles Nungesser and Fran\u00e7ois Coli.",
+            "supported": true,
+            "reason": "The context explicitly states that the aircraft was flown by Charles Nungesser and Fran\u00e7ois Coli, identifying them as French World War I aviation heroes."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ab51dae5542991779162d82",
+      "question": "Are both Elko Regional Airport and Gerald R. Ford International Airport located in Michigan?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Gerald R. Ford International Airport]: Gerald R. Ford International Airport (IATA: GRR, ICAO: KGRR, FAA LID: GRR) is a commercial airport in Cascade Township approximately 13 mi southeast of Grand Rapids, Michigan.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the location and distance from Grand Rapids for Gerald R. Ford International Airport without including unnecessary details like IATA, ICAO, or FAA codes."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Gerald R. Ford International Airport]: Gerald R. Ford International Airport (IATA: GRR, ICAO: KGRR, FAA LID: GRR) is a commercial airport in Cascade Township approximately 13 mi southeast of Grand Rapids, Michigan.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the location and nature of Gerald R. Ford International Airport without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Gerald R. Ford International Airport]: Gerald R. Ford International Airport (IATA: GRR, ICAO: KGRR, FAA LID: GRR) is a commercial airport in Cascade Township approximately 13 mi southeast of Grand Rapids, Michigan.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion and key entities without distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Gerald R. Ford International Airport is indeed located in Michigan, specifically in Cascade Township near Grand Rapids.",
+            "supported": true,
+            "reason": "The context explicitly states that Gerald R. Ford International Airport is located in Cascade Township, approximately 13 miles southeast of Grand Rapids, Michigan."
+          },
+          {
+            "claim": "there is no information given about Elko Regional Airport's location within the provided passages",
+            "supported": true,
+            "reason": "The context does not provide any information regarding the location of Elko Regional Airport."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Gerald R. Ford International Airport is located in Michigan.",
+            "supported": true,
+            "reason": "The context explicitly states that Gerald R. Ford International Airport is located in Cascade Township, approximately 13 miles southeast of Grand Rapids, Michigan."
+          },
+          {
+            "claim": "No information about Elko Regional Airport's location was given.",
+            "supported": true,
+            "reason": "The context clearly mentions there is no information provided about Elko Regional Airport's location."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Gerald R. Ford International Airport is located in Michigan.",
+            "supported": true,
+            "reason": "The context explicitly states that Gerald R. Ford International Airport is located in Cascade Township, approximately 13 miles southeast of Grand Rapids, Michigan."
+          },
+          {
+            "claim": "There is no information given about the location of Elko Regional Airport in the provided passages.",
+            "supported": true,
+            "reason": "The context does not provide any details regarding the location of Elko Regional Airport."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Both Elko Regional Airport and Gerald R. Ford International Airport are not located in Michigan according to the provided evidence.",
+            "supported": false,
+            "reason": "The context does not provide any information about Elko Regional Airport's location."
+          },
+          {
+            "claim": "Gerald R. Ford International Airport is confirmed to be in Michigan.",
+            "supported": true,
+            "reason": "The context explicitly states that Gerald R. Ford International Airport is located approximately 13 miles southeast of Grand Rapids, Michigan."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a7571135542992d0ec05f98",
+      "question": "Ralph Hefferline was a psychology professor at a university that is located in what city?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Ralph Hefferline]: Ralph Franklin Hefferline (15 February 1910 in Muncie, Indiana \u2013 16 March 1974) was a psychology professor at Columbia University.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that Ralph Hefferline was a psychology professor at Columbia University without altering the primary claim or key entities."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Ralph Hefferline]: Ralph Franklin Hefferline (15 February 1910 in Muncie, Indiana \u2013 16 March 1974) was a psychology professor at Columbia University.",
+            "status": "faithful",
+            "reason": "The compressed context accurately preserves the birth date, death date, and profession of Ralph Hefferline without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Ralph Hefferline]: Ralph Franklin Hefferline (15 February 1910 in Muncie, Indiana \u2013 16 March 1974) was a psychology professor at Columbia University.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion and key entities of the original fact without distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Ralph Hefferline was a psychology professor at Columbia University.",
+            "supported": true,
+            "reason": "The context explicitly states that Ralph Hefferline was a psychology professor at Columbia University."
+          },
+          {
+            "claim": "Columbia University is located in New York City.",
+            "supported": false,
+            "reason": "While the claim about Columbia University's location is generally known, it is not stated or implied by the given context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Ralph Hefferline was a psychology professor at Columbia University.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "Columbia University is located in New York City.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "The city where the university he taught at is located is New York City.",
+            "supported": true,
+            "reason": "Inferred from the previous two claims without introducing new facts."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Ralph Hefferline was a psychology professor at Columbia University.",
+            "supported": true,
+            "reason": "The context explicitly states that Ralph Hefferline was a Psychology professor at Columbia University."
+          },
+          {
+            "claim": "Columbia University is located in New York City.",
+            "supported": false,
+            "reason": "While it can be generally known, the specific location of Columbia University (New York City) is not mentioned in the given context."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Ralph Hefferline was a psychology professor at Columbia University.",
+            "supported": true,
+            "reason": "The context explicitly states that Ralph Franklin Hefferline was a psychology professor at Columbia University."
+          },
+          {
+            "claim": "The city where Columbia University is located is not explicitly stated in the given evidence.",
+            "supported": true,
+            "reason": "The context does not provide information about the location of Columbia University, only its name and that Hefferline was a professor there."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a7a0e1e5542990783324e1a",
+      "question": "Which dog's ancestors include Gordon and Irish Setters: the Manchester Terrier or the Scotch Collie?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 0.5,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Scotch Collie]: The Scotch Collie is a landrace breed of dog which originated from the highland regions of Scotland.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention the origin or description of the Scotch Collie as a landrace breed from highland regions of Scotland."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Scotch Collie]: Other ancestors include the Gordon and Irish Setters.",
+            "status": "faithful",
+            "reason": "The compressed context accurately states that the Scotch Collie's ancestors include Gordon and Irish Setters."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 2,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Scotch Collie]: The Scotch Collie is a landrace breed of dog which originated from the highland regions of Scotland.",
+            "status": "distorted",
+            "reason": "The compressed context mentions the origin as 'highland regions of Scotland' but adds additional ancestors and influences not present in the original fact."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Scotch Collie]: Other ancestors include the Gordon and Irish Setters.",
+            "status": "distorted",
+            "reason": "While it is mentioned that 'Gordon and Irish Setters' are part of the ancestry, other additional influences like Roman Cattle Dogs, Native Celtic Dogs, and Viking Herding Spitzes are included which were not present in the original fact."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Scotch Collie]: The Scotch Collie is a landrace breed of dog which originated from the highland regions of Scotland.",
+            "status": "faithful",
+            "reason": "The core assertion and key entities are accurately represented in the compressed context."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Scotch Collie]: Other ancestors include the Gordon and Irish Setters.",
+            "status": "faithful",
+            "reason": "The primary claim about the Scotch Collie's ancestry is accurately preserved."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The dog whose ancestors include Gordon and Irish Setters is the Scotch Collie.",
+            "supported": true,
+            "reason": "The context explicitly states that the Scotch Collie's ancestors include Gordon and Irish Setters."
+          },
+          {
+            "claim": "There is no mention of Gordon or Irish Setters being ancestors of the Manchester Terrier in the given evidence.",
+            "supported": true,
+            "reason": "The provided context does not mention any connection between the Manchester Terrier and Gordon/Irish Setters."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The dog whose ancestors include Gordon and Irish Setters is the Scotch Collie.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "There is no information suggesting that the Manchester Terrier has these same ancestors.",
+            "supported": true,
+            "reason": "Explicitly mentioned in the provided context."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The Scotch Collie's ancestors include Gordon and Irish Setters.",
+            "supported": true,
+            "reason": "Directly stated in the context for Scotch Collie."
+          },
+          {
+            "claim": "There is no mention of Gordon or Irish Setters being part of the ancestry for the Manchester Terrier (or its Toy variety) in the given passages.",
+            "supported": true,
+            "reason": "The context does not provide any information about Gordon and Irish Setters as ancestors of the Manchester Terrier."
+          },
+          {
+            "claim": "Therefore, the dog whose ancestors include Gordon and Irish Setters is the Scotch Collie.",
+            "supported": true,
+            "reason": "Based on the provided facts in the context, this conclusion logically follows."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The ancestors of the Scotch Collie include Gordon and Irish Setters.",
+            "supported": true,
+            "reason": "Directly stated in the context."
+          },
+          {
+            "claim": "There is no mention of these specific breeds being part of the Manchester Terrier's lineage.",
+            "supported": true,
+            "reason": "The context does not provide any information about the Manchester Terrier's ancestors, implying that it is not mentioned."
+          },
+          {
+            "claim": "Therefore, the dog whose ancestors include Gordon and Irish Setters is the Scotch Collie.",
+            "supported": true,
+            "reason": "Inferred from the first two claims; no other breed mentioned in context has these specific ancestors."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a87c13f5542996e4f30890c",
+      "question": "In what city did the \"Prince of tenors\" star in a film based on an opera by Giacomo Puccini?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Tosca (1956 film)]: It was made at Cinecitt\u00e0 in Rome.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the 1956 film 'Tosca' was made at Cinecitt\u00e0 in Rome without altering or omitting key details."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Tosca (1956 film)]: It was made at Cinecitt\u00e0 in Rome.",
+            "status": "faithful",
+            "reason": "The compressed context accurately states that the 1956 film 'Tosca' was produced at Cinecitt\u00e0 in Rome."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Tosca (1956 film)]: It was made at Cinecitt\u00e0 in Rome.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the 1956 film 'Tosca' was made at Cinecitt\u00e0 in Rome without any distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Franco Corelli was known as the 'Prince of tenors'.",
+            "supported": false,
+            "reason": "The context does not mention Franco Corelli being referred to as the 'Prince of tenors'."
+          },
+          {
+            "claim": "The film 'Tosca' (1956) was made in Rome.",
+            "supported": true,
+            "reason": "The context explicitly states that the film was made at Cinecitt\u00e0 in Rome."
+          },
+          {
+            "claim": "The film 'Tosca' is based on Puccini's opera 'Tosca'.",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The 'Prince of tenors' starred in the film 'Tosca' (1956), based on the opera by Giacomo Puccini, in Rome at Cinecitt\u00e0.",
+            "supported": false,
+            "reason": "The context does not mention the title 'Prince of tenors'."
+          },
+          {
+            "claim": "The city where this filming took place is Rome.",
+            "supported": true,
+            "reason": "The context explicitly states that the film was made at Cinecitt\u00e0 in Rome."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 5,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Franco Corelli is referred to as the 'Prince of tenors'.",
+            "supported": false,
+            "reason": "The context does not mention Franco Corelli being called the 'Prince of tenors'."
+          },
+          {
+            "claim": "Franco Corelli starred in the 1956 Italian musical film 'Tosca'.",
+            "supported": true,
+            "reason": "The context explicitly states that Franco Corelli starred in the 1956 film 'Tosca' based on Puccini's opera."
+          },
+          {
+            "claim": "The film 'Tosca' is based on an opera by Giacomo Puccini.",
+            "supported": true,
+            "reason": "The context clearly states that the film 'Tosca' is based on the opera 'Tosca' composed by Giacomo Puccini."
+          },
+          {
+            "claim": "The film was produced at Cinecitt\u00e0 in Rome.",
+            "supported": true,
+            "reason": "The context explicitly mentions that the film was produced at Cinecitt\u00e0 in Rome."
+          },
+          {
+            "claim": "Rome is the city where Franco Corelli starred in this film.",
+            "supported": true,
+            "reason": "Since the film was produced at Cinecitt\u00e0 in Rome, it can be inferred that the filming took place there."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 2,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The 'Prince of tenors' starred in a film based on Giacomo Puccini's opera 'Tosca'.",
+            "supported": false,
+            "reason": "The context does not mention the 'Prince of tenors' or any specific actor starring in the film."
+          },
+          {
+            "claim": "The film was made in Rome at Cinecitt\u00e0.",
+            "supported": true,
+            "reason": "The context explicitly states that the 1956 film based on Puccini's 'Tosca' was made at Cinecitt\u00e0 in Rome."
+          },
+          {
+            "claim": "Therefore, the city where this film was set or produced is Rome.",
+            "supported": false,
+            "reason": "The context only confirms that the film was made in Rome but does not specify if it was also set there."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a85fb085542994775f606de",
+      "question": "What is the name of the executive producer of the film that has a score composed by Jerry Goldsmith?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Alien (soundtrack)]: The iconic, avant-garde score to the film 'Alien' was composed by Jerry Goldsmith and is considered by some to be one of his best, most visceral scores.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any information about the soundtrack for 'Alien'. It incorrectly attributes a score to 'Mulan', which is unrelated to the original fact."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Alien (soundtrack)]: The iconic, avant-garde score to the film 'Alien' was composed by Jerry Goldsmith and is considered by some to be one of his best, most visceral scores.",
+            "status": "faithful",
+            "reason": "The compressed context accurately states that the score for 'Alien' was composed by Jerry Goldsmith without altering or omitting key details."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Alien (soundtrack)]: The iconic, avant-garde score to the film 'Alien' was composed by Jerry Goldsmith and is considered by some to be one of his best, most visceral scores.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention anything about the Alien soundtrack or Jerry Goldsmith's work on it."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Based on the provided passages, there are two films with scores composed by Jerry Goldsmith: 'Mulan' and 'Alien'.",
+            "supported": true,
+            "reason": "The context mentions that Jerry Goldsmith composed the score for both 'Mulan' and 'Alien'."
+          },
+          {
+            "claim": "The passage for 'Mulan (soundtrack)' provides details about the executive producer of its soundtrack album.",
+            "supported": false,
+            "reason": "The context does not provide any information regarding an executive producer for the 'Mulan' soundtrack."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The executive producer of the film 'Mulan,' which has a score composed by Jerry Goldsmith, is not explicitly named in the provided passage.",
+            "supported": true,
+            "reason": "The context does not mention any specific executive producer for 'Mulan.'"
+          },
+          {
+            "claim": "The passage only mentions that Jerry Goldsmith composed and conducted the soundtrack for 'Mulan,' released by Walt Disney Records, but does not provide information about the executive producer.",
+            "supported": true,
+            "reason": "This accurately reflects what is stated in the context."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Based on the provided passages, there is no specific mention of an executive producer for any film that has a score composed by Jerry Goldsmith.",
+            "supported": true,
+            "reason": "The context does not provide information about executive producers for films with scores by Jerry Goldsmith."
+          },
+          {
+            "claim": "The passages detail several films and TV shows with scores or soundtracks composed by Jerry Goldsmith but do not provide information about their respective executive producers.",
+            "supported": true,
+            "reason": "This accurately reflects the content of the provided context, which lists multiple works scored by Jerry Goldsmith without mentioning any executive producer."
+          },
+          {
+            "claim": "Therefore, the question cannot be answered directly from the given evidence as it lacks the necessary details regarding the executive producer of the specified film.",
+            "supported": true,
+            "reason": "The context indeed does not contain information about the executive producers for films with scores by Jerry Goldsmith."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passage does not specify the name of the executive producer of the film 'Legend' that has a score composed by Jerry Goldsmith.",
+            "supported": true,
+            "reason": "The context only mentions the musical score and does not provide any information about the executive producer."
+          },
+          {
+            "claim": "\"Legend: The Music of Jerry Goldsmith\" is a musical film score released in 1986 for the film of the same name, excluding its U.S. release details.",
+            "supported": true,
+            "reason": "This statement accurately reflects the information provided in the context."
+          },
+          {
+            "claim": "Therefore, there isn't enough information to determine the executive producer from this evidence alone.",
+            "supported": true,
+            "reason": "The context does not provide any information about the executive producer of the film."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a77152355429966f1a36c2e",
+      "question": "What was the Roud Folk Song Index of the nursery rhyme inspiring What Are Little Girls Made Of?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[What Are Little Boys Made Of?]: \"What Are Little Boys Made Of?\"",
+            "status": "faithful",
+            "reason": "The title is accurately represented in the compressed context."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[What Are Little Boys Made Of?]: It has a Roud Folk Song Index number of 821.",
+            "status": "faithful",
+            "reason": "The Roud Folk Song Index number is accurately preserved."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[What Are Little Boys Made Of?]: It has a Roud Folk Song Index number of 821.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion and key entities, including the title 'What Are Little Boys Made Of?' and its Roud Folk Song Index number 821."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[What Are Little Boys Made Of?]: \"What Are Little Boys Made Of?\"",
+            "status": "faithful",
+            "reason": "The title is accurately preserved in the compressed context."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not contain any information about the Roud Folk Song Index for the nursery rhyme inspiring 'What Are Little Girls Made Of?'",
+            "supported": true,
+            "reason": "The context does not mention a nursery rhyme titled 'What Are Little Girls Made Of?' or its corresponding index number."
+          },
+          {
+            "claim": "The passage [hp_5c82210e_What_Are_Little_Boys_Made_Of] provides the Roud Folk Song Index number of 821 for the nursery rhyme 'What Are Little Boys Made Of?'",
+            "supported": true,
+            "reason": "This information is explicitly stated in the context."
+          },
+          {
+            "claim": "There is no information given about a related nursery rhyme titled 'What Are Little Girls Made Of?' or its corresponding index number.",
+            "supported": true,
+            "reason": "The context does not provide any details regarding a nursery rhyme titled 'What Are Little Girls Made Of?'."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The nursery rhyme inspiring 'What Are Little Girls Made Of' is likely related to 'What Are Little Boys Made Of?'",
+            "supported": true,
+            "reason": "The context mentions that the two rhymes are similar in title and theme."
+          },
+          {
+            "claim": "According to the provided passage, the Roud Folk Song Index number for 'What Are Little Boys Made Of?' is 821.",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          },
+          {
+            "claim": "Since there is no specific mention of a different index for the girls' version, we can infer that it shares the same Roud Folk Song Index number, 821",
+            "supported": false,
+            "reason": "The context does not provide any information about the 'What Are Little Girls Made Of?' rhyme's Roud Folk Song Index number."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not contain any information about the nursery rhyme 'What Are Little Girls Made Of?' and its Roud Folk Song Index number.",
+            "supported": true,
+            "reason": "The context only mentions 'What Are Little Boys Made Of?' with a Roud Folk Song Index, but does not mention 'What Are Little Girls Made Of?'."
+          },
+          {
+            "claim": "The only nursery rhyme mentioned with an associated Roud Folk Song Index is 'What Are Little Boys Made Of?', which has a Roud Folk Song Index number of 821.",
+            "supported": true,
+            "reason": "This information is directly stated in the context."
+          },
+          {
+            "claim": "Since there is no direct reference to 'What Are Little Girls Made Of?' in the given passages, it's not possible to determine its Roud Folk Song Index from this information alone.",
+            "supported": true,
+            "reason": "The context does not provide any information about 'What Are Little Girls Made Of?', making it impossible to infer or state a Roud Folk Song Index for it."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not give the Roud Folk Song Index number for the nursery rhyme inspiring 'What Are Little Girls Made Of?'",
+            "supported": true,
+            "reason": "The context does not provide any information about a specific nursery rhyme that inspired 'What Are Little Girls Made Of?'."
+          },
+          {
+            "claim": "The passages only provide the Roud Folk Song Index numbers for 'What Are Little Boys Made Of?' (number 821) and 'Did You Ever See a Lassie?' (number 5040).",
+            "supported": true,
+            "reason": "This is explicitly stated in the context."
+          },
+          {
+            "claim": "There is no information given about the specific nursery rhyme that inspired 'What Are Little Girls Made Of?'.",
+            "supported": true,
+            "reason": "The context does not mention any nursery rhyme inspiring 'What Are Little Girls Made Of?'"
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a80840f554299485f59863b",
+      "question": "What WB supernatrual drama series was Jawbreaker star Rose Mcgowan best known for being in?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 2,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Jawbreaker (film)]: Jawbreaker is a 1999 American black comedy film written and directed by Darren Stein.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention 'Jawbreaker' or any of its details."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Jawbreaker (film)]: The film stars Rose McGowan, Rebecca Gayheart, and Julie Benz as girls in an exclusive clique in their high school.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention 'Jawbreaker' or the roles of Rose McGowan, Rebecca Gayheart, and Julie Benz."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 0.5,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Jawbreaker (film)]: Jawbreaker is a 1999 American black comedy film written and directed by Darren Stein.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the title, year of release, genre, director, and writer without distortion."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Jawbreaker (film)]: The film stars Rose McGowan, Rebecca Gayheart, and Julie Benz as girls in an exclusive clique in their high school.",
+            "status": "distorted",
+            "reason": "The compressed context includes Charlotte Ayanna's cameo role which was not mentioned in the original fact. While this does not contradict the main cast members listed, it adds information that was not present in the gold fact."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 0.5,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Jawbreaker (film)]: Jawbreaker is a 1999 American black comedy film written and directed by Darren Stein.",
+            "status": "dropped",
+            "reason": "The compressed context does not include any information about the year, genre, or creators of the film."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Jawbreaker (film)]: The film stars Rose McGowan, Rebecca Gayheart, and Julie Benz as girls in an exclusive clique in their high school.",
+            "status": "faithful",
+            "reason": "The core assertion about the main actors and their roles is accurately preserved without distortion."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Rose McGowan is best known for being in the WB supernatural drama series 'Charmed.'",
+            "supported": false,
+            "reason": "The context does not state that Rose McGowan is 'best known' for Charmed; it only mentions her role in the show."
+          },
+          {
+            "claim": "She joined the cast as Paige Matthews during the fourth season which began airing on October 4, 2001.",
+            "supported": true,
+            "reason": "The context explicitly states that Rose McGowan joined the cast of Charmed as Paige Matthews in the fourth season beginning October 4, 2001."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Rose McGowan is best known for being in the WB supernatural drama series 'Charmed'.",
+            "supported": true,
+            "reason": "The context explicitly states this."
+          },
+          {
+            "claim": "She played Paige Matthews starting from season 4 of the show.",
+            "supported": true,
+            "reason": "The context provides these details."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Rose McGowan is best known for being in the WB supernatural drama series 'Charmed'.",
+            "supported": true,
+            "reason": "The context clearly states that Rose McGowan played Paige Matthews in season 4 of Charmed, which aired on The WB."
+          },
+          {
+            "claim": "She played Paige Matthews starting from season 4 of the show.",
+            "supported": true,
+            "reason": "This information is explicitly provided in the context under 'Television Series: Charmed'."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passage does not contain any information about a WB supernatural drama series that Rose McGowan was best known for being in.",
+            "supported": true,
+            "reason": "The context only mentions her role in 'Jawbreaker' and provides no information about a WB supernatural drama series."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae7e1fc55429952e35ea9cc",
+      "question": "What color clothing do people of the Netherlands wear during Oranjegekte or to celebrate the national holiday Koningsdag?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Oranjegekte]: It manifests itself in the wearing of orange clothing such as T-shirts, caps and scarfs; lavish attention for sports and sports fans in the media; and the decoration of cars, rooms, houses, shops, and even entire streets in orange, the traditional color of the Dutch royal family, the House of Orange-Nassau.",
+            "status": "distorted",
+            "reason": "The compressed context omits details about lavish attention for sports and sports fans in the media and decoration of various places. It only mentions wearing orange clothing."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Oranjegekte]: It manifests itself in the wearing of orange clothing such as T-shirts, caps and scarfs; lavish attention for sports and sports fans in the media; and the decoration of cars, rooms, houses, shops, and even entire streets in orange, the traditional color of the Dutch royal family, the House of Orange-Nassau.",
+            "status": "faithful",
+            "reason": "The compressed context accurately captures the essence of Oranjegekte including wearing orange clothing, media attention for sports fans, extensive decoration with orange, and its connection to the House of Orange-Nassau."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Oranjegekte]: It manifests itself in the wearing of orange clothing such as T-shirts, caps and scarfs; lavish attention for sports and sports fans in the media; and the decoration of cars, rooms, houses, shops, and even entire streets in orange, the traditional color of the Dutch royal family, the House of Orange-Nassau.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion about Oranjegekte without distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "During Oranjegekte and to celebrate Koningsdag (King's Day) in the Netherlands, people wear orange clothing such as T-shirts, caps, and scarfs.",
+            "supported": true,
+            "reason": "The context explicitly states that during Oranjegekte and Koningsdag, people wear orange clothing including T-shirts, caps, and scarfs."
+          },
+          {
+            "claim": "This tradition stems from the traditional color of the Dutch royal family, the House of Orange-Nassau.",
+            "supported": true,
+            "reason": "The context mentions that orange is the traditional color of the Dutch royal family, the House of Orange-Nassau."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "During Oranjegekte and to celebrate Koningsdag, people in the Netherlands wear orange clothing such as T-shirts, caps, and scarfs.",
+            "supported": true,
+            "reason": "The context explicitly states that during these events, people wear orange clothing including specific items like T-shirts, caps, and scarfs."
+          },
+          {
+            "claim": "This tradition is associated with the color of the Dutch royal family, the House of Orange-Nassau.",
+            "supported": true,
+            "reason": "The context directly mentions that this tradition is linked to the color of the Dutch royal family."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "During Oranjegekte or to celebrate Koningsdag, people of the Netherlands wear orange clothing.",
+            "supported": true,
+            "reason": "The context explicitly states that during Oranjegekte and Koningsdag, people wear orange clothing."
+          },
+          {
+            "claim": "This tradition is rooted in the symbolism associated with the House of Orange-Nassau",
+            "supported": true,
+            "reason": "The context mentions that wearing orange symbolizes the House of Orange-Nassau."
+          },
+          {
+            "claim": "has become a widespread practice during major sporting events and national celebrations such as King's Day (Koningsdag).",
+            "supported": true,
+            "reason": "The context describes Oranjegekte as a phenomenon characterized by wearing orange clothing, especially during Koningsdag."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "During Oranjegekte or to celebrate Koningsdag, people in the Netherlands wear orange clothing such as T-shirts, caps, and scarfs.",
+            "supported": true,
+            "reason": "The context explicitly mentions that during Oranjegekte, people wear orange clothing including T-shirts, caps, and scarfs."
+          },
+          {
+            "claim": "This tradition is rooted in the historical significance of the color orange for the Dutch royal family, specifically the House of Orange-Nassau.",
+            "supported": true,
+            "reason": "The context states that orange is the traditional color of the Dutch royal family, the House of Orange-Nassau."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a77cb335542997042120b3a",
+      "question": "What American professional Hawaiian surfer born 18 October 1992 won the Rip Curl Pro Portugal?",
+      "retrievable_facts_count": 4,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 2,
+          "uncertain": 0
+        },
+        "total_facts": 4,
+        "faithful_rate": 0.5,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[MEO Rip Curl Pro Portugal]: MEO Rip Curl Pro Portugal formerly known as 'Moche Rip Curl Pro Portugal' or 'Rip Curl Pro Portugal' is a professional surfing competition of the ASP World Tour held every year in October at the Supertubos beach in Peniche, Portugal.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any details about the event's history or location."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[MEO Rip Curl Pro Portugal]: The defending champion is the 2016 WSL champion, John John Florence who won the event in 2016.",
+            "status": "faithful",
+            "reason": "The compressed context correctly identifies John John Florence as the winner of the Rip Curl Pro Portugal."
+          },
+          {
+            "fact_index": 3,
+            "fact_text": "[John John Florence]: John 'John' Alexander Florence (born 18 October 1992) is an American professional surfer.",
+            "status": "faithful",
+            "reason": "The compressed context accurately identifies John John Florence as an American professional surfer born on 18 October 1992."
+          },
+          {
+            "fact_index": 4,
+            "fact_text": "[John John Florence]: He is the first Hawaiian champion since 3 times world champion Andy Irons.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any information about John John Florence being a Hawaiian champion or his relation to Andy Irons."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 3,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 4,
+        "faithful_rate": 0.75,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[MEO Rip Curl Pro Portugal]: MEO Rip Curl Pro Portugal formerly known as 'Moche Rip Curl Pro Portugal' or 'Rip Curl Pro Portugal' is a professional surfing competition of the ASP World Tour held every year in October at the Supertubos beach in Peniche, Portugal.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the event name, former names, location, and annual schedule without distortion."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[MEO Rip Curl Pro Portugal]: The defending champion is the 2016 WSL champion, John John Florence who won the event in 2016.",
+            "status": "faithful",
+            "reason": "The compressed context correctly identifies John John Florence as the defending champion and mentions his victory in 2016."
+          },
+          {
+            "fact_index": 3,
+            "fact_text": "[John John Florence]: John 'John' Alexander Florence (born 18 October 1992) is an American professional surfer.",
+            "status": "faithful",
+            "reason": "The compressed context accurately provides John John Florence's full name and birth date."
+          },
+          {
+            "fact_index": 4,
+            "fact_text": "[John John Florence]: He is the first Hawaiian champion since 3 times world champion Andy Irons.",
+            "status": "distorted",
+            "reason": "The compressed context does not mention that John John Florence is the first Hawaiian champion since Andy Irons, and it provides details about Andy Irons instead."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 3,
+          "uncertain": 0
+        },
+        "total_facts": 4,
+        "faithful_rate": 0.25,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[MEO Rip Curl Pro Portugal]: MEO Rip Curl Pro Portugal formerly known as \"Moche Rip Curl Pro Portugal\" or \"Rip Curl Pro Portugal\" is a professional surfing competition of the ASP World Tour held every year in October at the Supertubos beach in Peniche, Portugal.",
+            "status": "faithful",
+            "reason": "The compressed context accurately preserves the name changes and location details without distortion."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[MEO Rip Curl Pro Portugal]: The defending champion is the 2016 WSL champion, John John Florence who won the event in 2016.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any information about the defending champion or John John Florence's victory."
+          },
+          {
+            "fact_index": 3,
+            "fact_text": "[John John Florence]: John \"John\" Alexander Florence (born 18 October 1992) is an American professional surfer.",
+            "status": "dropped",
+            "reason": "The compressed context does not include any information about John John Florence's birth date or nationality."
+          },
+          {
+            "fact_index": 4,
+            "fact_text": "[John John Florence]: He is the first Hawaiian champion since 3 times world champion Andy Irons.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any information about John John Florence being a Hawaiian champion or his relation to Andy Irons."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "John John Florence is the American professional Hawaiian surfer born on 18 October 1992",
+            "supported": true,
+            "reason": "The context [hp_06dcffa2_John_John_Florence] explicitly states that John John Florence was born on 18 October 1992 and is an American professional surfer."
+          },
+          {
+            "claim": "John John Florence won the Rip Curl Pro Portugal",
+            "supported": true,
+            "reason": "The context [hp_db1396bb_MEO_Rip_Curl_Pro_Portugal] mentions that John John Florence was the defending champion of the event in 2016, implying he had previously won it."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The American professional Hawaiian surfer born on 18 October 1992 who won the Rip Curl Pro Portugal is John John Florence.",
+            "supported": true,
+            "reason": "The context explicitly states that John John Florence, an American professional Hawaiian surfer born on 18 October 1992, won the Rip Curl Pro Portugal."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "John John Florence fits the description of an American professional Hawaiian surfer born on October 18, 1992.",
+            "supported": true,
+            "reason": "The context provides his birth date as October 18, 1992."
+          },
+          {
+            "claim": "John John Florence is known for his dominance at Pipeline and Supertubos beach in Peniche, Portugal being a similar venue.",
+            "supported": false,
+            "reason": "While the context mentions he is dominant at Pipeline, it does not explicitly state that Supertubos beach is a similar venue."
+          },
+          {
+            "claim": "John John Florence was the defending champion of the MEO Rip Curl Pro Portugal in 2016.",
+            "supported": true,
+            "reason": "The context states he won the World Surf League Men's Champion title in 2016, and it is noted that he is the defending champion."
+          },
+          {
+            "claim": "There is no specific mention of John John Florence winning the Rip Curl Pro Portugal event.",
+            "supported": true,
+            "reason": "The context does not provide any information about who won the event in question."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not contain specific information about an American professional Hawaiian surfer born on 18 October 1992 who won the Rip Curl Pro Portugal.",
+            "supported": true,
+            "reason": "The context does not provide any details about a specific surfer or their birth date and nationality."
+          },
+          {
+            "claim": "To accurately answer this question, additional details or relevant surfing competition results are needed that link to the specified birth date and nationality of the surfer in question.",
+            "supported": true,
+            "reason": "The context lacks necessary information about specific surfers and their achievements."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a86ebac55429960ec39b6d6",
+      "question": "Handi-Snacks are a snack food product line sold by what American multinational confectionery, food, and beverage company that is based in Illinois?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Handi-Snacks]: Handi-Snacks are a snack food product line sold by Mondelez International.",
+            "status": "faithful",
+            "reason": "The core assertion and key entities (Handi-Snacks, Mondelez International) are accurately preserved without distortion or contradiction."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Handi-Snacks]: Handi-Snacks are a snack food product line sold by Mondelez International.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that Handi-Snacks are snack food products sold by Mondelez International without any distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Handi-Snacks]: Handi-Snacks are a snack food product line sold by Mondelez International.",
+            "status": "faithful",
+            "reason": "The core assertion and key entities (Handi-Snacks, snack food product line, Mondelez International) are accurately preserved."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Handi-Snacks are a snack food product line sold by Mondelez International.",
+            "supported": true,
+            "reason": "The context explicitly states that Handi-Snacks are sold by Mondelez International."
+          },
+          {
+            "claim": "Mondelez International is an American multinational confectionery, food, and beverage company.",
+            "supported": false,
+            "reason": "While the context mentions Mondelez International, it does not specify that the company is a 'multinational confectionery, food, and beverage company' or its location as America."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Handi-Snacks are a snack food product line sold by Mondelez International",
+            "supported": true,
+            "reason": "The context explicitly states this."
+          },
+          {
+            "claim": "Mondelez International is an American multinational confectionery, food, and beverage company",
+            "supported": true,
+            "reason": "The context provides this information."
+          },
+          {
+            "claim": "Mondelez International is based in Illinois",
+            "supported": true,
+            "reason": "This fact is directly stated in the context."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Handi-Snacks are snack food products sold by Mondelez International, an American multinational confectionery, food, and beverage company.",
+            "supported": true,
+            "reason": "The context explicitly states that Handi-Snacks are sold by Mondelez International."
+          },
+          {
+            "claim": "There is no mention of Handi-Snacks being associated with Robert's American Gourmet Food or any other company in the given passages.",
+            "supported": true,
+            "reason": "The context only mentions Handi-Snacks in relation to Mondelez International and does not associate them with any other companies."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 2,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Handi-Snacks are a snack food product line sold by Mondelez International.",
+            "supported": true,
+            "reason": "The context explicitly states this."
+          },
+          {
+            "claim": "Mondelez International is an American multinational confectionery, food, and beverage company.",
+            "supported": false,
+            "reason": "While the context mentions Handi-Snacks are sold by Mondelez International, it does not provide details about the nature of the company."
+          },
+          {
+            "claim": "Mondelez International is based in Illinois.",
+            "supported": false,
+            "reason": "The context does not specify where Mondelez International's headquarters are located."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae5736e5542990ba0bbb2b3",
+      "question": "When was the American lawyer, lobbyist and political consultant who was a senior member of the presidential campaign of Donald Trump born?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Paul Manafort]: Paul John Manafort Jr. (born April 1, 1949) is an American lawyer, lobbyist and political consultant.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that Paul Manafort was born on April 1, 1949, and identifies him as an American lawyer, lobbyist, and political consultant without distortion or contradiction."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Paul Manafort]: Paul John Manafort Jr. (born April 1, 1949) is an American lawyer, lobbyist and political consultant.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the full name, date of birth, and occupations without distortion."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Paul Manafort]: Paul John Manafort Jr. (born April 1, 1949) is an American lawyer, lobbyist and political consultant.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion about Paul Manafort's identity, profession, and birth date without distortion."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Paul Manafort, the American lawyer, lobbyist, and political consultant who served as a senior member of Donald Trump's presidential campaign, was born on April 1, 1949.",
+            "supported": true,
+            "reason": "The context explicitly states that Paul Manafort is an American lawyer, lobbyist, and political consultant who joined Donald Trump's presidential campaign team in March 2016 and served as campaign manager from June to August 2016. It also clearly mentions his birth date as April 1, 1949."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Paul Manafort, the American lawyer, lobbyist, and political consultant who served as a senior member of Donald Trump's presidential campaign team, was born on April 1, 1949.",
+            "supported": true,
+            "reason": "The context explicitly states that Paul Manafort is an American lawyer, lobbyist, and political consultant who served as a senior member of Donald Trump's presidential campaign team and was born on April 1, 1949."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The American lawyer, lobbyist and political consultant who was a senior member of the presidential campaign of Donald Trump is Paul John Manafort Jr.",
+            "supported": true,
+            "reason": "The context provides this information about Paul John Manafort Jr."
+          },
+          {
+            "claim": "he was born on April 1, 1949",
+            "supported": true,
+            "reason": "The date of birth is explicitly stated in the context."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Paul Manafort, who was a senior member of the presidential campaign of Donald Trump and an American lawyer, lobbyist, and political consultant, was born on April 1, 1949.",
+            "supported": false,
+            "reason": "The context does not mention Paul Manafort's involvement in the presidential campaign of Donald Trump."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae53b545542990ba0bbb23c",
+      "question": "Where does the hotel and casino located in which Bill Cosby's third album was recorded?",
+      "retrievable_facts_count": 0,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Based on the provided passages, there is no specific mention of an album recorded at a hotel and casino associated with Bill Cosby's third album or any other details regarding such a location.",
+            "supported": true,
+            "reason": "The context does not provide information about recording locations for any albums."
+          },
+          {
+            "claim": "The passages discuss 'Inside the Mind of Bill Cosby' (1972) as his fourteenth comedy album but do not provide information about its recording location.",
+            "supported": true,
+            "reason": "The context mentions 'Inside the Mind of Bill Cosby', but does not specify a recording location."
+          },
+          {
+            "claim": "'Bill's Best Friend,' which is mentioned in another passage, does not contain relevant information about a hotel and casino either.",
+            "supported": true,
+            "reason": "The context discusses 'Bill's Best Friend' without mentioning any hotel or casino."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Based on the provided passages from the knowledge graph, there is no information available about where Bill Cosby's third album was recorded or any details regarding a hotel and casino location related to his recordings.",
+            "supported": true,
+            "reason": "The context explicitly states that none of the provided passages contain relevant information."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not specify where Bill Cosby's third album was recorded or any connection to a hotel and casino.",
+            "supported": true,
+            "reason": "The context does not provide information about the recording location of Bill Cosby's third album or its relation to a hotel and casino."
+          },
+          {
+            "claim": "Information available pertains mainly to details about 'Inside the Mind of Bill Cosby' (his 14th album) and 'Bill's Best Friend' (his 17th album), but does not mention his third album or any recording location associated with a hotel and casino.",
+            "supported": true,
+            "reason": "The context focuses on other albums by Bill Cosby without mentioning the third album or its recording location."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not contain any information about where Bill Cosby's third album was recorded or its connection to a hotel and casino.",
+            "supported": true,
+            "reason": "The context does not mention the recording location of Bill Cosby's albums or any association with hotels and casinos."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a80b3a9554299485f5986cc",
+      "question": "Tysons Galleria is located in what county?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[McLean, Virginia]: McLean ( ) is a census-designated place (CDP) in Fairfax County in Northern Virginia.",
+            "status": "distorted",
+            "reason": "The fact mentions McLean as a CDP specifically within Fairfax County, but the compressed context does not specify that McLean is a CDP and omits this detail."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[McLean, Virginia]: McLean ( ) is a census-designated place (CDP) in Fairfax County in Northern Virginia.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that McLean is a CDP in Fairfax County."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Tysons Galleria]: Tysons Galleria is a three-level super-regional mall owned by General Growth Properties located at 2001 International Drive, McLean, Virginia, in Tysons Corner.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the location and ownership of Tysons Galleria."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[McLean, Virginia]: McLean ( ) is a census-designated place (CDP) in Fairfax County in Northern Virginia.",
+            "status": "dropped",
+            "reason": "The specific detail about McLean being a CDP in Fairfax County is not mentioned."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Tysons Galleria is located in Fairfax County, Virginia.",
+            "supported": true,
+            "reason": "The context mentions that West McLean includes much of the Tysons Corner area where Tysons Galleria is situated and explicitly states that West McLean is in Fairfax County."
+          },
+          {
+            "claim": "The McLean station (which serves Tysons Corner) is explicitly stated to be in Fairfax County.",
+            "supported": true,
+            "reason": "The context directly states 'McLean station...is a Washington Metro station in Fairfax County, Virginia.'"
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Tysons Galleria is located in Fairfax County, Virginia.",
+            "supported": true,
+            "reason": "The context states that Tysons Galleria is in McLean and McLean is part of Fairfax County."
+          },
+          {
+            "claim": "McLean, where Tysons Galleria is situated on International Drive, is part of Fairfax County.",
+            "supported": true,
+            "reason": "Directly stated in the context that McLean is part of Fairfax County."
+          },
+          {
+            "claim": "West McLean (which includes much of the Tysons Corner area) is also in Fairfax County.",
+            "supported": true,
+            "reason": "Explicitly mentioned in the context."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Tysons Galleria is located in Fairfax County, Virginia.",
+            "supported": true,
+            "reason": "The context mentions that Tysons Galleria is in McLean, which is part of Fairfax County."
+          },
+          {
+            "claim": "West McLean, Virginia includes much of the Tysons Corner area and is located in Fairfax County.",
+            "supported": true,
+            "reason": "This information is directly stated in the context about West McLean, Virginia."
+          },
+          {
+            "claim": "McLean Station is located in Fairfax County within Tysons Corner.",
+            "supported": true,
+            "reason": "The context explicitly states that McLean Station is located in Fairfax County within Tysons Corner."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Tysons Galleria is located in McLean, Virginia.",
+            "supported": true,
+            "reason": "The context explicitly states that Tysons Galleria is located at 2001 International Drive, McLean, Virginia."
+          },
+          {
+            "claim": "McLean is part of Fairfax County (though not explicitly stated in the given passages).",
+            "supported": false,
+            "reason": "The context does not provide information about which county McLean is located in."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a8c4c625542995e66a475a1",
+      "question": "Which airplane was this Major test-flying after whom the base, that 514th Flight Test Squadron is stated at, is named?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[514th Flight Test Squadron]: It is assigned to the Ogden Air Logistics Center (OO-ALC), Air Force Materiel Command, stationed at Hill Air Force Base, Utah.",
+            "status": "distorted",
+            "reason": "The compressed context mentions that the 514th Flight Test Squadron is stationed at Hill Air Force Base but does not preserve all key details such as its assignment to Ogden Air Logistics Center and Air Force Materiel Command."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[514th Flight Test Squadron]: It is assigned to the Ogden Air Logistics Center (OO-ALC), Air Force Materiel Command, stationed at Hill Air Force Base, Utah.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the 514th Flight Test Squadron is assigned to the Ogden Air Logistics Center under the Air Force Materiel Command and is stationed at Hill Air Force Base in Utah."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[514th Flight Test Squadron]: It is assigned to the Ogden Air Logistics Center (OO-ALC), Air Force Materiel Command, stationed at Hill Air Force Base, Utah.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any details about the 514th Flight Test Squadron's assignment or location."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Based on the provided passages, there is no direct connection between Major Gervais Raoul Lufbery and the 514th Flight Test Squadron or Hill Air Force Base as stated in the question.",
+            "supported": true,
+            "reason": "The context does not provide any information linking Lufbery to the 514th Flight Test Squadron or Hill Air Force Base."
+          },
+          {
+            "claim": "The passage about the 514th Flight Test Squadron only mentions that it is stationed at Hill Air Force Base but does not provide any information linking this base to a test-flying major after whom it might be named.",
+            "supported": true,
+            "reason": "The context confirms that the squadron is based at Hill AFB without mentioning any connection to Lufbery or another test-flying major."
+          },
+          {
+            "claim": "Similarly, there is no mention of Lufbery's involvement with flight testing or Hill Air Force Base in his biographical passage.",
+            "supported": true,
+            "reason": "The context about Lufbery does not include any information related to flight testing or Hill AFB."
+          },
+          {
+            "claim": "Therefore, the question cannot be answered directly from the given passages due to insufficient and non-relevant information provided about Major Gervais Raoul Lufbery\u2019s connection to the 514th Flight Test Squadron or Hill Air Force Base.",
+            "supported": true,
+            "reason": "The context lacks any relevant details connecting Lufbery to the squadron or base."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not give enough information to determine which Major was test-flying an airplane after whom Hill Air Force Base is named.",
+            "supported": true,
+            "reason": "This statement accurately reflects the lack of relevant information in the context."
+          },
+          {
+            "claim": "The passages only mention that the 514th Flight Test Squadron is stationed at Hill Air Force Base",
+            "supported": true,
+            "reason": "This fact is directly stated in the context."
+          },
+          {
+            "claim": "and provide a brief biography of Gervais Raoul Lufbery, who is unrelated to the base or its test-flying activities based on the given information.",
+            "supported": true,
+            "reason": "The context provides this information and explicitly states that Lufbery is not related to Hill Air Force Base."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "There is no direct connection between Major Gervais Raoul Lufbery and any specific airplane he test-flew or a base named after him that houses the 514th Flight Test Squadron at Hill Air Force Base in Utah.",
+            "supported": true,
+            "reason": "The context does not mention any involvement of Lufbery with flight testing airplanes or having a base named after him related to such activities."
+          },
+          {
+            "claim": "The information about Lufbery pertains to his service as a fighter pilot during World War I, but does not mention any involvement with flight testing airplanes or having a base named after him related to test-flying activities.",
+            "supported": true,
+            "reason": "The context only provides details of Lufbery's service in the French and US Air Forces during WWI without mentioning anything about flight testing."
+          },
+          {
+            "claim": "The passage for the 514th Flight Test Squadron only states that it is stationed at Hill Air Force Base in Utah and provides no information about Major Lufbery's role in relation to this squadron or the base.",
+            "supported": true,
+            "reason": "The context confirms that the 514th FLTS is based at Hill AFB but does not mention any connection with Lufbery."
+          },
+          {
+            "claim": "There isn't enough evidence from these passages to determine which airplane Major Gervais Raoul Lufbery test-flew after whom a base housing 514th Flight Test Squadron is named.",
+            "supported": true,
+            "reason": "The context lacks any information linking Lufbery to flight testing or the naming of Hill AFB."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not contain sufficient information to determine which airplane Major test-flying the base named after is associated with regarding the 514th Flight Test Squadron.",
+            "supported": true,
+            "reason": "The context does not provide any information about a specific major or an airplane related to the 514th Flight Test Squadron."
+          },
+          {
+            "claim": "The passages only mention the existence of the squadron and provide details about another unit (the 486th Flight Test Squadron) located at Eglin Air Force Base, but they do not give any information about a specific Major or an airplane related to test-flying activities for the 514th Flight Test Squadron.",
+            "supported": true,
+            "reason": "The context only mentions the existence of the 514th and 486th Flight Test Squadrons without providing details on a major or airplanes associated with the 514th."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a8c5569554299240d9c2126",
+      "question": "Are Daryl Hall and Gerry Marsden both musicians?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Gerry Marsden]: Gerard Marsden MBE (born 24 September 1942) is an English musician and television personality, best known for being leader of the British Merseybeat band Gerry and the Pacemakers.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that Gerry Marsden is an English musician and leader of Gerry and the Pacemakers without distortion or contradiction."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Gerry Marsden]: Gerard Marsden MBE (born 24 September 1942) is an English musician and television personality, best known for being leader of the British Merseybeat band Gerry and the Pacemakers.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents all key details about Gerry Marsden including his full name, birth date, occupation, and role in the band without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Gerry Marsden]: Gerard Marsden MBE (born 24 September 1942) is an English musician and television personality, best known for being leader of the British Merseybeat band Gerry and the Pacemakers.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents all key details including his name, title, birth date, profession, and leadership role in the band."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Daryl Hall is not mentioned at all in the given evidence.",
+            "supported": true,
+            "reason": "The context does not contain any information about Daryl Hall."
+          },
+          {
+            "claim": "Gerry Marsden is explicitly described as an English musician who was the leader of the band 'Gerry and the Pacemakers'.",
+            "supported": true,
+            "reason": "This description matches the provided biographical details in the context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Gerry Marsden is confirmed to be a musician.",
+            "supported": true,
+            "reason": "The context explicitly states that Gerry Marsden is an English musician."
+          },
+          {
+            "claim": "There is no information available regarding whether Daryl Hall is a musician or not.",
+            "supported": true,
+            "reason": "The context clearly indicates there is no information provided about Daryl Hall's status as a musician."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Gerry Marsden is explicitly described as an English musician and television personality.",
+            "supported": true,
+            "reason": "The context directly states Gerry Marsden's occupation includes being a musician."
+          },
+          {
+            "claim": "Daryl Hall's occupation or musical career is not mentioned in the given passages.",
+            "supported": true,
+            "reason": "There is no information provided about Daryl Hall in the context."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Gerry Marsden is explicitly described as an English musician who was the leader of the British Merseybeat band Gerry and the Pacemakers.",
+            "supported": true,
+            "reason": "The context clearly states that Gerard 'Gerry' Marsden MBE is an English musician and leader of Gerry and the Pacemakers."
+          },
+          {
+            "claim": "There is no information given about Daryl Hall's occupation or musical career in the visited passages.",
+            "supported": true,
+            "reason": "The context does not mention anything related to Daryl Hall, thus there is no information provided about him."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ac120c55542992a796dedfc",
+      "question": "Maxeda has been owned since 2004 by which American multinational equity firm?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Maxeda]: Since 2004 Maxeda is owned by a consortium of investors led by American private equity firm Kohlberg Kravis Roberts.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion and key entities without distortion or contradiction."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Maxeda]: Since 2004 Maxeda is owned by a consortium of investors led by American private equity firm Kohlberg Kravis Roberts.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that since 2004, Maxeda has been owned by a consortium of investors led by KKR without any distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Maxeda]: Since 2004 Maxeda is owned by a consortium of investors led by American private equity firm Kohlberg Kravis Roberts.",
+            "status": "faithful",
+            "reason": "The compressed context accurately preserves the core assertion, key entities (Maxeda, consortium of investors, Kohlberg Kravis Roberts), and relational claim without any distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Since 2004, Maxeda has been owned by a consortium of investors led by the American private equity firm Kohlberg Kravis Roberts (KKR).",
+            "supported": true,
+            "reason": "The context explicitly states that since 2004, Maxeda is owned by a consortium of investors led by an American private equity firm named Kohlberg Kravis Roberts."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Since 2004, Maxeda has been owned by a consortium of investors led by the American private equity firm Kohlberg Kravis Roberts",
+            "supported": true,
+            "reason": "The context explicitly states that since 2004, Maxeda has been owned by a consortium of investors led by KKR."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Since 2004, Maxeda has been owned by a consortium of investors led by the American private equity firm Kohlberg Kravis Roberts.",
+            "supported": true,
+            "reason": "The context explicitly states that since 2004, Maxeda has been owned by a consortium of investors led by American private equity firm Kohlberg Kravis Roberts."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Since 2004, Maxeda has been owned by a consortium of investors led by the American private equity firm Kohlberg Kravis Roberts.",
+            "supported": true,
+            "reason": "The context explicitly states that since 2004, Maxeda is owned by a consortium of investors led by KKR (Kohlberg Kravis Roberts), an American private equity firm."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a7b12a355429927d897bf2a",
+      "question": "When was the palace founded at which Columba de Dunbar died in 1435?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Columba de Dunbar]: Columba de Dunbar ( 1386 \u2013 1435) was Bishop of Moray from 1422 until his death at Spynie Palace near Elgin sometime before 7 November 1435.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the key information that Columba de Dunbar died at Spynie Palace near Elgin sometime before 7 November 1435, without altering or omitting critical details."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Columba de Dunbar]: Columba de Dunbar ( 1386 \u2013 1435) was Bishop of Moray from 1422 until his death at Spynie Palace near Elgin sometime before 7 November 1435.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Columba de Dunbar's lifespan, position as Bishop of Moray starting in 1422, place and approximate date of death without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Columba de Dunbar]: Columba de Dunbar ( 1386 \u2013 1435) was Bishop of Moray from 1422 until his death at Spynie Palace near Elgin sometime before 7 November 1435.",
+            "status": "faithful",
+            "reason": "The compressed context accurately preserves all key details including the person's name, lifespan, position as bishop, years of service, place of death, and specific date reference."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The passage does not provide the founding date of Spynie Palace",
+            "supported": true,
+            "reason": "The context does not mention when Spynie Palace was founded."
+          },
+          {
+            "claim": "Bishop Columba de Dunbar died at Spynie Palace near Elgin sometime before November 7, 1435.",
+            "supported": true,
+            "reason": "This information is explicitly stated in the context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Columba de Dunbar died at Spynie Palace near Elgin sometime before 7 November 1435.",
+            "supported": true,
+            "reason": "The context explicitly states this information."
+          },
+          {
+            "claim": "There is no specific founding date provided for Spynie Palace in the given evidence.",
+            "supported": true,
+            "reason": "The context does not provide any information about when Spynie Palace was founded, which aligns with the claim."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Columba de Dunbar died at Spynie Palace near Elgin before 7 November 1435.",
+            "supported": true,
+            "reason": "The context explicitly states that Columba de Dunbar died at Spynie Palace near Elgin before 7 November 1435."
+          },
+          {
+            "claim": "There is no specific founding date provided for Spynie Palace within the given evidence.",
+            "supported": true,
+            "reason": "The context does not provide any information about when Spynie Palace was founded."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The passage does not provide the founding date of Spynie Palace",
+            "supported": true,
+            "reason": "The context only mentions Columba de Dunbar's death at Spynie Palace without any information about its founding date."
+          },
+          {
+            "claim": "Columba de Dunbar died there sometime before 7 November 1435.",
+            "supported": true,
+            "reason": "This is explicitly stated in the context."
+          },
+          {
+            "claim": "Therefore, based on the given evidence, it is not possible to determine when the palace was founded.",
+            "supported": true,
+            "reason": "The context does not provide any information about the founding date of Spynie Palace."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae0006755429925eb1afbd3",
+      "question": "Where is the Bubblegum Alley, that is similar to Gum Wall, located in California?",
+      "retrievable_facts_count": 0,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Bubblegum Alley is located in the 700 block of Higuera Street in downtown San Luis Obispo, California.",
+            "supported": true,
+            "reason": "The context explicitly states this location."
+          },
+          {
+            "claim": "It is an alley that is 15 feet high and 70 feet long",
+            "supported": true,
+            "reason": "The dimensions are directly stated in the context."
+          },
+          {
+            "claim": "known for its accumulation of used bubble gum on the walls left by passers-by.",
+            "supported": true,
+            "reason": "This description is provided in the context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Bubblegum Alley is located on Higuera Street in downtown San Luis Obispo, California.",
+            "supported": true,
+            "reason": "The context explicitly states that Bubblegum Alley is located in the 700 block of Higuera Street in downtown San Luis Obispo."
+          },
+          {
+            "claim": "It covers a stretch of 20 meters",
+            "supported": true,
+            "reason": "The context directly mentions that it covers a stretch of 20 meters."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Bubblegum Alley is located in downtown San Luis Obispo, California.",
+            "supported": true,
+            "reason": "The context explicitly states this."
+          },
+          {
+            "claim": "It measures 15 feet high and 70 feet long.",
+            "supported": true,
+            "reason": "This measurement is directly provided in the context."
+          },
+          {
+            "claim": "It covers a stretch of approximately 20 meters.",
+            "supported": true,
+            "reason": "The context mentions it covers 20 meters along Higuera Street."
+          },
+          {
+            "claim": "This alley is known as a tourist attraction due to its accumulation of used bubble gum on the walls.",
+            "supported": true,
+            "reason": "The context explicitly states this fact."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Bubblegum Alley is located in downtown San Luis Obispo, California.",
+            "supported": true,
+            "reason": "The context explicitly states this location."
+          },
+          {
+            "claim": "Bubblegum Alley is similar to the Gum Wall attraction.",
+            "supported": false,
+            "reason": "While the generated answer mentions similarity to the Gum Wall, the context does not provide any information about a comparison or similarity between Bubblegum Alley and the Gum Wall."
+          },
+          {
+            "claim": "The alley is 15 feet high and 70 feet long.",
+            "supported": true,
+            "reason": "This measurement is directly stated in the context."
+          },
+          {
+            "claim": "The alley is covered with chewed bubble gum left by visitors.",
+            "supported": true,
+            "reason": "The context mentions that it is an attraction known for its accumulation of used bubble gum on the walls."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a8574945542997b5ce3fffb",
+      "question": "Which film was Oscar nominated, LaLee's Kin: The Legacy of Cotton or Gimme Shelter, the 1970 Rolling Stones documentary?",
+      "retrievable_facts_count": 2,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[LaLee's Kin: The Legacy of Cotton]: LaLee's Kin: The Legacy of Cotton is a 2001 American documentary film directed by Deborah Dickson, Susan Fr\u00f6mke and Albert Maysles.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the key entities (LaLee's Kin: The Legacy of Cotton, directors) and the year (2001)."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[LaLee's Kin: The Legacy of Cotton]: LaLee's Kin: The Legacy of Cotton is a 2001 American documentary film directed by Deborah Dickson, Susan Fr\u00f6mke and Albert Maysles.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion that 'LaLee's Kin: The Legacy of Cotton' is a 2001 documentary film directed by Deborah Dickson, Susan Fr\u00f6mke, and Albert Maysles."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[LaLee's Kin: The Legacy of Cotton]: It was nominated for Best Documentary Feature at the 74th Academy Awards.",
+            "status": "faithful",
+            "reason": "The compressed context accurately states that 'LaLee's Kin: The Legacy of Cotton' was nominated for Best Documentary Feature at the Academy Awards."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 2,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[LaLee's Kin: The Legacy of Cotton]: LaLee's Kin: The Legacy of Cotton is a 2001 American documentary film directed by Deborah Dickson, Susan Fr\u00f6mke and Albert Maysles.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents the core assertion about the film being an American documentary from 2001 directed by the specified individuals."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[LaLee's Kin: The Legacy of Cotton]: It was nominated for Best Documentary Feature at the 74th Academy Awards.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the film was nominated for a Best Documentary Feature award."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "LaLee's Kin: The Legacy of Cotton is the film that was nominated for an Oscar.",
+            "supported": true,
+            "reason": "The context explicitly states LaLee's Kin was nominated for Best Documentary Feature at the 74th Academy Awards."
+          },
+          {
+            "claim": "There is no mention of Gimme Shelter being nominated for any Oscars in the provided passages.",
+            "supported": true,
+            "reason": "No information about 'Gimme Shelter' being nominated for an Oscar is present in the given context."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "LaLee's Kin: The Legacy of Cotton was nominated for Best Documentary Feature at the 74th Academy Awards in 2001.",
+            "supported": true,
+            "reason": "The context explicitly states this information."
+          },
+          {
+            "claim": "There is no information given about Oscar nominations for Gimme Shelter.",
+            "supported": true,
+            "reason": "The context clearly mentions that there is no evidence regarding Oscar nominations for Gimme Shelter."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The film that was nominated for an Oscar is LaLee's Kin: The Legacy of Cotton.",
+            "supported": true,
+            "reason": "The context explicitly states that 'LaLee's Kin: The Legacy of Cotton' was nominated for Best Documentary Feature at the 74th Academy Awards."
+          },
+          {
+            "claim": "There is no mention in the given passages about any Oscar nominations for Gimme Shelter, the 1970 Rolling Stones documentary.",
+            "supported": true,
+            "reason": "The context does not provide any information regarding an Oscar nomination for 'Gimme Shelter'."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "LaLee's Kin: The Legacy of Cotton was nominated for Best Documentary Feature at the 74th Academy Awards.",
+            "supported": true,
+            "reason": "The context explicitly states that LaLee's Kin: The Legacy of Cotton was nominated for Best Documentary Feature at the 74th Academy Awards."
+          },
+          {
+            "claim": "There is no mention of an Oscar nomination for Gimme Shelter in the given evidence.",
+            "supported": true,
+            "reason": "The context does not provide any information about Gimme Shelter being nominated for an Oscar, and only discusses LaLee's Kin: The Legacy of Cotton."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a7332935542991f9a20c67d",
+      "question": "Which board game was published most recently, Pirate's Cove or Catan?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Pirate's Cove]: Pirate's Cove (in German, Piratenbucht) is a board game designed by Paul Randles and Daniel Stahl, originally published in Germany in 2002 by Amigo Spiele, illustrated by Markus Wagner and Swen Papenbrock.",
+            "status": "dropped",
+            "reason": "The compressed context does not mention any of the specific details about Pirate's Cove's publication date, designers, publisher, or illustrators."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Pirate's Cove]: Pirate's Cove (in German, Piratenbucht) is a board game designed by Paul Randles and Daniel Stahl, originally published in Germany in 2002 by Amigo Spiele, illustrated by Markus Wagner and Swen Papenbrock.",
+            "status": "distorted",
+            "reason": "The compressed context omits the original illustrators (Markus Wagner and Swen Papenbrock) and incorrectly states new graphics were done by Julien Delval and Cyrille Daujean in 2003, which is not part of the gold fact."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Pirate's Cove]: Pirate's Cove (in German, Piratenbucht) is a board game designed by Paul Randles and Daniel Stahl, originally published in Germany in 2002 by Amigo Spiele, illustrated by Markus Wagner and Swen Papenbrock.",
+            "status": "faithful",
+            "reason": "The compressed context accurately preserves the core assertion about Pirate's Cove being a board game designed by Paul Randles and Daniel Stahl, originally published in Germany in 2002 by Amigo Spiele with illustrations from Markus Wagner and Swen Papenbrock."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Pirate's Cove was originally published in 2002.",
+            "supported": true,
+            "reason": "The context explicitly states that Pirate's Cove was originally published in Germany in 2002."
+          },
+          {
+            "claim": "There is no specific publication date mentioned for Catan (or The Settlers of Catan) within these passages.",
+            "supported": true,
+            "reason": "The provided context does not mention a release year for Catan or The Settlers of Catan."
+          },
+          {
+            "claim": "Since we don't have a precise release year for Catan, it's impossible to definitively state which game was released most recently between Pirate's Cove and Catan based solely on the given information.",
+            "supported": true,
+            "reason": "The context does not provide a publication date for Catan, making it impossible to determine which game was published more recently."
+          },
+          {
+            "claim": "Considering that Pirate's Cove had its first publication in 2002 and there is no later date provided for either title, we cannot determine a more recent release date for Catan from this data alone.",
+            "supported": true,
+            "reason": "The context lacks the necessary information to compare the publication dates of both games."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Pirate's Cove was published in 2002 (and later updated to 2003 with new graphics).",
+            "supported": true,
+            "reason": "The context explicitly states that Pirate's Cove was originally published in 2002 and implies an update in 2003."
+          },
+          {
+            "claim": "No specific publication date is given for Catan.",
+            "supported": true,
+            "reason": "The context clearly mentions there is no specific publication date provided for Catan."
+          },
+          {
+            "claim": "Therefore, according to the available evidence, Pirate's Cove was published most recently compared to Catan.",
+            "supported": false,
+            "reason": "While it is true that a publication year for Catan is not given, the claim about which game was published more recently cannot be conclusively supported without knowing Catan's publication date."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 2,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Pirate's Cove was originally published in 2002 and republished with new graphics in 2003.",
+            "supported": true,
+            "reason": "The context explicitly states the original publication year as 2002 and the republishing year as 2003."
+          },
+          {
+            "claim": "There is no specific publication date mentioned for Catan, but a related game 'The Kids of Catan' (which uses the theme from 'The Settlers of Catan') does not provide an exact release year.",
+            "supported": false,
+            "reason": "While it's true that there is no specific publication date provided for Catan in the context, mentioning 'The Kids of Catan' as a related game introduces information about another game which doesn't directly answer when Catan was published."
+          },
+          {
+            "claim": "Given that Pirate's Cove has a clear republishing date in 2003, and there is no later publication date for Catan provided, Pirate's Cove was published most recently according to the given evidence.",
+            "supported": false,
+            "reason": "The context does not provide any information about when 'Catan' (presumably referring to 'Settlers of Catan') was published. The claim makes an unsupported conclusion based on a lack of information."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 2,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Pirate's Cove was originally published in 2002.",
+            "supported": true,
+            "reason": "The context explicitly states that Pirate's Cove was originally published in Germany in 2002."
+          },
+          {
+            "claim": "Catan does not have an explicit publication date mentioned in the given passage; however, Klaus Teuber created the original Settlers of Catan (the basis for Catan) in 1995.",
+            "supported": false,
+            "reason": "The context only mentions that Catan is published by Kosmos and Mayfair Games but does not provide a publication date. The year 1995 is introduced as the creation year of Settlers of Catan, which is not mentioned in the given context."
+          },
+          {
+            "claim": "Therefore, Pirate's Cove was published more recently than Catan.",
+            "supported": false,
+            "reason": "The conclusion relies on an assumption about the publication date of Catan that is not supported by the provided context. The original Settlers of Catan creation year (1995) does not necessarily imply its publication year."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a80071f5542992bc0c4a684",
+      "question": "Alice David is the voice of Lara Croft in a video game developed by which company ?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Alice David]: She is the voice of the French dub of Lara Croft in the video game 'Tomb Raider'.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Alice David as the voice of Lara Croft in the French version of Tomb Raider without altering or omitting key details."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Alice David]: She is the voice of the French dub of Lara Croft in the video game 'Tomb Raider'.",
+            "status": "faithful",
+            "reason": "The compressed context accurately states that Alice David voices Lara Croft in the French dub of 'Tomb Raider', preserving the core assertion without distortion or contradiction."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Alice David]: She is the voice of the French dub of Lara Croft in the video game 'Tomb Raider'.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Alice David's role as the voice of the French dub of Lara Croft without any distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 4,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Alice David is the voice of Lara Croft in the video game 'Tomb Raider', but there's no specific mention of which company developed this particular version of the game in the given context.",
+            "supported": true,
+            "reason": "The context mentions Alice David as the French voice of Lara Croft in 'Tomb Raider' without specifying the developer."
+          },
+          {
+            "claim": "'Tomb Raider III' was developed by Core Design and published by Eidos Interactive, but there's no explicit mention that Alice David voiced this specific game.",
+            "supported": true,
+            "reason": "The context provides information about 'Tomb Raider III', its developer (Core Design) and publisher (Eidos Interactive), without mentioning Alice David's voice work for it."
+          },
+          {
+            "claim": "If her voice work pertains to a major installment in the series, the developer would likely be Core Design or another company associated with the franchise's primary developers and publishers.",
+            "supported": false,
+            "reason": "This is an inference not directly supported by the context."
+          },
+          {
+            "claim": "The passage about Square Enix companion books is unrelated to the question at hand and does not provide any relevant information regarding the development of the Tomb Raider series or Alice David's voice work.",
+            "supported": true,
+            "reason": "This statement accurately reflects that the provided context about Square Enix companion books is irrelevant to the question."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Alice David is the voice of Lara Croft in the French dub of 'Tomb Raider'.",
+            "supported": true,
+            "reason": "The context explicitly states this fact."
+          },
+          {
+            "claim": "'Tomb Raider' is a video game developed by Core Design.",
+            "supported": true,
+            "reason": "The context clearly mentions that the game was developed by Core Design."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 2,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "Alice David voices Lara Croft in the French dub of the video game 'Tomb Raider'.",
+            "supported": true,
+            "reason": "The context explicitly states that Alice David is the voice of Lara Croft in the French dub of the video game 'Tomb Raider'."
+          },
+          {
+            "claim": "Core Design developed the original 'Tomb Raider' and its immediate sequel(s).",
+            "supported": false,
+            "reason": "The context does not provide information about which specific installment of Tomb Raider Alice David voiced or who developed it beyond mentioning Core Design for 'Tomb Raider III'."
+          },
+          {
+            "claim": "Alice David is the voice of Lara Croft in a video game ('Tomb Raider') developed by Core Design.",
+            "supported": false,
+            "reason": "While the context mentions that Alice David voices Lara Croft, it does not specify which particular installment or confirm that Core Design was responsible for developing the specific 'Tomb Raider' she voiced."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Alice David voices Lara Croft in the French dub of 'Tomb Raider'.",
+            "supported": true,
+            "reason": "Directly stated in [hp_f680458b_Alice_David]"
+          },
+          {
+            "claim": "'Tomb Raider' is an action-adventure video game developed by Core Design.",
+            "supported": true,
+            "reason": "Combination of information from both contexts, specifically mentioning 'Tomb Raider III' and its developer."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ae73c065542991e8301cc18",
+      "question": "Which Eminem album included vocals from a singer who had an album titled \"Unapologetic\"?",
+      "retrievable_facts_count": 0,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The album 'Encore' by Eminem included vocals from artists including 50 Cent and Dr. Dre for its title track.",
+            "supported": true,
+            "reason": "The context explicitly mentions that the song 'Encore' features vocals from Eminem, 50 Cent, and Dr. Dre."
+          },
+          {
+            "claim": "There is no mention of an artist who contributed vocals to this album having an album titled 'Unapologetic'.",
+            "supported": true,
+            "reason": "The context does not provide any information about an artist contributing vocals to the album 'Encore' with an album titled 'Unapologetic'."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The Eminem album that includes vocals from featured artists Dr. Dre and 50 Cent is 'Encore,' released in 2004.",
+            "supported": true,
+            "reason": "This information is explicitly stated in the context."
+          },
+          {
+            "claim": "There is no explicit mention in the given passages that either Dr. Dre or 50 Cent had an album titled 'Unapologetic.'",
+            "supported": true,
+            "reason": "The context does not provide any information about albums by Dr. Dre or 50 Cent titled 'Unapologetic'."
+          },
+          {
+            "claim": "Additional data about albums by Dr. Dre and 50 Cent would be necessary to confirm if either of them released an album called 'Unapologetic.'",
+            "supported": true,
+            "reason": "This is a logical conclusion based on the lack of information in the context."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The Eminem album that included vocals from a singer who had an album titled 'Unapologetic' is 'Encore'.",
+            "supported": false,
+            "reason": "The context does not mention any singer with an album titled 'Unapologetic' contributing to 'Encore'."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The provided passages do not directly mention any singer who had an album titled 'Unapologetic'.",
+            "supported": true,
+            "reason": "The context does not contain any information about a singer with an album titled 'Unapologetic'."
+          },
+          {
+            "claim": "There is no evidence that Eminem's album 'Encore' included vocals from such a singer.",
+            "supported": true,
+            "reason": "The context only mentions collaborations with 50 Cent and Dr. Dre, not any other artist with an album titled 'Unapologetic'."
+          },
+          {
+            "claim": "Based on the given evidence, it's not possible to determine which Eminem album included vocals from a singer who had an album titled 'Unapologetic'.",
+            "supported": true,
+            "reason": "The context does not provide any information about such a singer or their contribution to Eminem's albums."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a87d8215542994775f60800",
+      "question": "This American crime film set in South Los Angeles was written and directed by the same director and writer of screenwriter of \"Street Kings\", \"End of Watch\", \"Sabotage\", \"Fury\" and what other film?",
+      "retrievable_facts_count": 0,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 0,
+        "faithful_rate": 1.0,
+        "facts": [],
+        "details": []
+      },
+      "A0_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The film 'South of 8' is an American crime film set in South Los Angeles.",
+            "supported": true,
+            "reason": "This information is explicitly stated in the context."
+          },
+          {
+            "claim": "'South of 8' was written by Tony Olmos and Rosewood Five Productions.",
+            "supported": true,
+            "reason": "The passage clearly states this fact."
+          },
+          {
+            "claim": "Tony Olmos also wrote or directed 'Street Kings', 'End of Watch', 'Sabotage', and 'Fury'.",
+            "supported": false,
+            "reason": "There is no information in the context linking Tony Olmos to these films."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Based on the provided evidence from the knowledge graph, there is no mention of another film written or directed by the same individual responsible for 'Street Kings', 'End of Watch', 'Sabotage', and 'Fury'.",
+            "supported": true,
+            "reason": "The context does not provide information about other films written or directed by these individuals."
+          },
+          {
+            "claim": "The passage about 'South of 8' does not provide information that links it to those films' writer/director.",
+            "supported": true,
+            "reason": "The provided context explicitly states this fact."
+          },
+          {
+            "claim": "Therefore, we cannot determine from this evidence what other film is being referred to in the question.",
+            "supported": true,
+            "reason": "Given the lack of information linking 'South of 8' or any other film to those mentioned ('Street Kings', etc.), this conclusion follows logically."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The question asks for another film written and directed by the same person who wrote and directed 'South of 8,' which is Tony Olmos.",
+            "supported": true,
+            "reason": "The context clearly states that 'South of 8' was written and directed by Tony Olmos."
+          },
+          {
+            "claim": "Based on the provided passages, there is no explicit mention of other films that Tony Olmos has written or directed apart from 'South of 8'.",
+            "supported": true,
+            "reason": "The context does not provide any information about additional films by Tony Olmos."
+          },
+          {
+            "claim": "The passage does not provide information about any other film by Tony Olmos.",
+            "supported": true,
+            "reason": "There is no mention of any other film directed or written by Tony Olmos in the given context."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The American crime film set in South Los Angeles that was written and directed by Tony Olmos is 'South of 8'.",
+            "supported": true,
+            "reason": "The context explicitly states that 'South of 8' is a crime film written by first-time director Tony Olmos."
+          },
+          {
+            "claim": "There isn't any additional specific film mentioned in relation to Tony Olmos other than 'South of 8'.",
+            "supported": true,
+            "reason": "The context does not mention any other films directed or written by Tony Olmos besides 'South of 8'."
+          },
+          {
+            "claim": "No additional film can be identified from the given context.",
+            "supported": true,
+            "reason": "There is no information in the provided passages about other films written or directed by Tony Olmos."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5a7c960655429935c91b5244",
+      "question": "The 1974 Texas Tech Raiders football team represented what public research university in Lubbock, Texas?",
+      "retrievable_facts_count": 1,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 0,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 0.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[1974 Texas Tech Red Raiders football team]: The 1974 Texas Tech Red Raiders football team represented Texas Tech University in the Southwest Conference during the 1974 NCAA Division I football season.",
+            "status": "distorted",
+            "reason": "The compressed context omits key details such as representing Texas Tech University in the Southwest Conference and the specific NCAA division, which are crucial parts of the original fact."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[1974 Texas Tech Red Raiders football team]: The 1974 Texas Tech Red Raiders football team represented Texas Tech University in the Southwest Conference during the 1974 NCAA Division I football season.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the 1974 Texas Tech Red Raiders football team played in the NCAA Division I and were part of the Southwest Conference."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 0,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 1,
+        "faithful_rate": 1.0,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[1974 Texas Tech Red Raiders football team]: The 1974 Texas Tech Red Raiders football team represented Texas Tech University in the Southwest Conference during the 1974 NCAA Division I football season.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents that the 1974 Texas Tech Red Raiders football team was part of the Southwest Conference and played in the NCAA Division I, without any distortion or contradiction."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The 1974 Texas Tech Raiders football team represented Texas Tech University",
+            "supported": true,
+            "reason": "The context explicitly states this."
+          },
+          {
+            "claim": "Texas Tech University is a public research university located in Lubbock, Texas",
+            "supported": false,
+            "reason": "The context does not provide information about the nature of Texas Tech University or its location beyond being in Lubbock, Texas."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "The 1974 Texas Tech Raiders football team represented Texas Tech University in Lubbock, Texas.",
+            "supported": true,
+            "reason": "The context directly states this information."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The 1974 Texas Tech Raiders football team represented Texas Tech University",
+            "supported": true,
+            "reason": "The context explicitly states this."
+          },
+          {
+            "claim": "Texas Tech University is a public research university located in Lubbock, Texas.",
+            "supported": false,
+            "reason": "The context does not provide information about the nature of Texas Tech University or its location beyond being in Lubbock."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 1,
+        "unsupported_claims": 1,
+        "is_fully_supported": false,
+        "details": [
+          {
+            "claim": "The 1974 Texas Tech Raiders football team represented Texas Tech University in Lubbock, Texas.",
+            "supported": false,
+            "reason": "The context does not explicitly mention that the university is located in Lubbock, Texas."
+          }
+        ]
+      }
+    },
+    {
+      "id": "5ac2d1d755429921a00ab053",
+      "question": "Who had the best singles ranking, Roberta Vinci or Jorge Lozano?",
+      "retrievable_facts_count": 3,
+      "A1_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 1,
+          "uncertain": 0
+        },
+        "total_facts": 3,
+        "faithful_rate": 0.3333,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Roberta Vinci]: Roberta Vinci (] ; born 18 February 1983) is an Italian tennis player.",
+            "status": "dropped",
+            "reason": "The birth date and nationality information are not present in the compressed context."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Roberta Vinci]: Up until 6 April 2015, she held the position of World No. 1 in doubles, while reaching a career-high of World No. 7 in singles in May 2016.",
+            "status": "distorted",
+            "reason": "The compressed context only mentions her highest singles ranking but omits her doubles achievement and specific dates."
+          },
+          {
+            "fact_index": 3,
+            "fact_text": "[Jorge Lozano]: His highest singles ranking was World No. 51, achieved the following month.",
+            "status": "faithful",
+            "reason": "The compressed context accurately represents Jorge Lozano's highest singles ranking without distortion."
+          }
+        ]
+      },
+      "A2_preservation": {
+        "counts": {
+          "faithful": 2,
+          "distorted": 1,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 3,
+        "faithful_rate": 0.6667,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Roberta Vinci]: Roberta Vinci (] ; born 18 February 1983) is an Italian tennis player.",
+            "status": "faithful",
+            "reason": "The compressed context accurately states her birth date and nationality."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Roberta Vinci]: Up until 6 April 2015, she held the position of World No. 1 in doubles, while reaching a career-high of World No. 7 in singles in May 2016.",
+            "status": "faithful",
+            "reason": "The compressed context accurately summarizes her ranking achievements without distortion."
+          },
+          {
+            "fact_index": 3,
+            "fact_text": "[Jorge Lozano]: His highest singles ranking was World No. 51, achieved the following month.",
+            "status": "distorted",
+            "reason": "While Jorge Lozano's highest singles ranking is mentioned as World No. 51 in September 1988, the compressed context does not specify the exact date or month when this achievement was reached."
+          }
+        ]
+      },
+      "A3_preservation": {
+        "counts": {
+          "faithful": 1,
+          "distorted": 2,
+          "contradicted": 0,
+          "dropped": 0,
+          "uncertain": 0
+        },
+        "total_facts": 3,
+        "faithful_rate": 0.3333,
+        "details": [
+          {
+            "fact_index": 1,
+            "fact_text": "[Roberta Vinci]: Roberta Vinci (] ; born 18 February 1983) is an Italian tennis player.",
+            "status": "faithful",
+            "reason": "The core assertion and key entities are accurately preserved."
+          },
+          {
+            "fact_index": 2,
+            "fact_text": "[Roberta Vinci]: Up until 6 April 2015, she held the position of World No. 1 in doubles, while reaching a career-high of World No. 7 in singles in May 2016.",
+            "status": "distorted",
+            "reason": "The date '6 April 2015' and specific achievement details are omitted or misattributed."
+          },
+          {
+            "fact_index": 3,
+            "fact_text": "[Jorge Lozano]: His highest singles ranking was World No. 51, achieved the following month.",
+            "status": "distorted",
+            "reason": "The exact ranking number and achievement details are omitted or misattributed."
+          }
+        ]
+      },
+      "A0_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Roberta Vinci's highest singles ranking was World No. 7.",
+            "supported": true,
+            "reason": "The context explicitly states that Roberta Vinci reached a career-high of World No. 7 in singles."
+          },
+          {
+            "claim": "Jorge Lozano's highest singles ranking was World No. 51.",
+            "supported": true,
+            "reason": "The context clearly mentions that Jorge Lozano achieved his highest singles ranking of World No. 51."
+          }
+        ]
+      },
+      "A1_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Roberta Vinci reached her career-high singles ranking of World No. 7.",
+            "supported": true,
+            "reason": "The context explicitly states that Roberta Vinci's highest singles ranking was World No. 7."
+          },
+          {
+            "claim": "Jorge Lozano achieved his highest singles ranking of World No. 51.",
+            "supported": true,
+            "reason": "The context explicitly states that Jorge Lozano's highest singles ranking was World No. 51."
+          },
+          {
+            "claim": "Since World No. 7 is better than World No. 51, Roberta Vinci had the best singles ranking between the two players.",
+            "supported": true,
+            "reason": "The context provides both rankings and it's a logical conclusion that World No. 7 is higher (better) than World No. 51."
+          }
+        ]
+      },
+      "A2_sufficiency": {
+        "total_claims": 2,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Roberta Vinci's highest singles ranking was World No. 7.",
+            "supported": true,
+            "reason": "The context explicitly states that Roberta Vinci reached a career-high of World No. 7 in singles."
+          },
+          {
+            "claim": "Jorge Lozano's highest singles ranking was World No. 51.",
+            "supported": true,
+            "reason": "The context clearly mentions that Jorge Lozano's highest singles ranking was World No. 51."
+          }
+        ]
+      },
+      "A3_sufficiency": {
+        "total_claims": 3,
+        "unsupported_claims": 0,
+        "is_fully_supported": true,
+        "details": [
+          {
+            "claim": "Roberta Vinci's highest singles ranking was World No. 7 in May 2016.",
+            "supported": true,
+            "reason": "The context explicitly states that Roberta Vinci reached a career-high of World No. 7 in singles in May 2016."
+          },
+          {
+            "claim": "Jorge Lozano's highest singles ranking is only stated as 'World No.' without a specific number following it.",
+            "supported": true,
+            "reason": "The context provides Jorge Lozano's highest singles ranking as 'World No.' but does not specify the exact rank."
+          },
+          {
+            "claim": "Therefore, Roberta Vinci had the best singles ranking among the two players mentioned.",
+            "supported": true,
+            "reason": "Based on the provided rankings, Roberta Vinci's World No. 7 is a higher ranking than Jorge Lozano's unspecified 'World No.'"
+          }
+        ]
+      }
+    }
+  ]
+}

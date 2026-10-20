@@ -1,0 +1,24 @@
+{
+  "split": "test",
+  "num_items": 300,
+  "corpus_snapshot_hash": "9d763355ef396fdb0af866bd39577c592fcd4fd3fd2940d6b2b2a1daec66723d",
+  "total_chunks": 2968,
+  "wormhole_edges": 14539,
+  "controller_model": "qwen2.5-14b-instruct",
+  "max_steps": 6,
+  "top_k": 5,
+  "temperature": 0.2,
+  "top_p": 0.9,
+  "total_wall_time_s": 2448.76,
+  "mean_item_latency_s": 8.1625,
+  "total_walk_tokens": {
+    "prompt_tokens": 1396337,
+    "completion_tokens": 84722,
+    "total_tokens": 1481059
+  },
+  "retrieval_ceiling_questions": 31,
+  "retrieval_ceiling_pct": 10.33,
+  "total_facts": 729,
+  "total_covered_facts": 362,
+  "fact_coverage_pct": 49.66
+}
