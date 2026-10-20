@@ -1,0 +1,65 @@
+METIS: WHAT TO BORROW FROM JAZ
+20 October 2026 | Research only, not an implementation spec
+
+VERDICT
+Useful for MSS's agent execution/history layer. Borrow the exact-history and instruction-handoff contract before adopting this alpha framework wholesale. Not a reason to replace LTHCM or rewrite Dianoia.
+
+GROUNDING
+Initially inspected Metis 531c7bb68f1155e57f431074302d0871264339a6. Final remote fetch found main updated to 7eb7cd27454c16728f222354ad94af430c41ddc2. A direct diff confirms all three cited Metis source files are unchanged between these snapshots, so the file/line mappings below still apply. The new commit adds SwiLA experiment/report material, outside this JAZ review. Components are in-tree directories at both inspected snapshots. JAZ 0803d4971be785e95b80054b02259664d70fa3da. No source changes or real-model tests.
+
+1. BEST FIT: MSS / KYBERNETES HISTORY-AWARE EXECUTION
+kybernetes/kybernetes/engine/coding_agent.py:105-134 already passes structured history to action_generator(step, history); :184-222 records tool results. So Metis already has history. JAZ's useful delta is model-accessible exact-history lookup and instruction references through continuation, rather than having an LLM reconstruct what happened.
+
+Proposed design, not built:
+- Host owns original instructions and an append-only durable event record.
+- Agent can search/read permitted records by stable IDs and ranges. Start read-only. Do not hand it the mutable canonical history.
+- Distinguish original instructions, generated code, tool results, observed errors and summaries. Preserve source identity and event IDs.
+- Children get only necessary references and approved capabilities. Delegation never widens authority. Instructions and approvals stay host-owned.
+- Apply one explicit tree-wide call/token/depth/elapsed-time/resource budget, not a fresh unlimited allowance per child.
+- Persist checkpoints outside interpreter RAM if restart recovery matters. A Python list surviving within one process is not persistent memory.
+
+Study paths in JAZ: src/jaz/_agent.py:548-567; _invoke_tool.py; scope.py; provenance.py; hooks/builtin/atif_trace.py and trajectory_directory.py. Scope values are shared object references, not isolated copies.
+
+2. KEEP HOST EXECUTION AND APPROVAL BOUNDARIES
+kybernetes/kybernetes/tools/code_mode.py:31-83 defines bounded inspection; :227-246 validates code and prepares child-process execution; :260-277 injects workspace helpers. That is a different purpose from unrestricted recursive Python.
+
+In bounded local JAZ probes, direct private-attribute access was blocked but a format string could read a synthetic canary from a supplied function's globals. A failed governance hook logged its exception and allowed the mock tool to run. A $0.01 allowance accepted one mocked $0.20 completion. Generated code could extend the default execution timeout. No actual secrets or paid calls were used.
+
+Do not replace Metis's host policy with those defaults. Keep capabilities/approval checks in an independent tool service. Never expose raw host credential-bearing clients, unrestricted SWE helpers or broad filesystem objects to generated code. Use OS isolation and explicit filesystem/network/resource rules. A child process alone is not a complete security boundary. This review did not security-certify Metis's Code Mode or approval flows.
+
+3. DOKIME: TEST ONE CHANGE
+Suggested experiment, not run or preregistered:
+Control: current code-mode loop and history handoff.
+Treatment: same model, tasks, evidence, limits and tool capabilities, with one specified controlled exact-history lookup interface and only the prompt changes needed to describe it.
+Tasks: delayed-instruction recall, debugging after earlier failures, context handoff, conflicting/stale records, malicious text in tool output, plus tasks not needing history.
+Metrics: task success, history-citation correctness, instruction retention, unauthorized actions, total calls/tokens, latency and resource use. Test kill/recover and duplicate-side-effect prevention separately.
+Freeze development choices before held-out evaluation. Non-adapting tasks can use paired comparisons; adapting sequences require repeated complete runs/order variation and dependence-aware analysis. Sample size/adoption margins/hardware fit require a bounded pilot and are not asserted here.
+
+This is separate from the JitMem compression experiment. That changes synthesis context after retrieval; this changes session/history access. Combining both would hide the cause of a result.
+
+4. DO NOT INSERT THIS INTO LTHCM FIRST
+Current dianoia/dianoia/walk.py:569-584 concatenates visited passages for synthesis. JAZ is not a new factual retriever, contradiction checker or evidence verifier. Keep retrieval and passage provenance unchanged in a first history experiment.
+
+The paper measures live-process episodic recall and online prompt/skill adaptation, not durable cross-session retention, deletion guarantees, private-source permissions or performance on Nick's corpus. It neither falsifies nor validates LTHCM. Treat it as agent-harness research beside the memory substrate.
+
+5. LATER: PAIDEIA ROLLOUT RECORDING
+JAZ's token-native SGLang backend and RolloutRecorder separate exact token IDs/logprobs/loss masks from driver-assigned rewards. Useful design material if Metis later needs policy training. Text-only llama.cpp output does not automatically supply faithful token-native rollouts. Edited/non-monotone contexts require per-turn/per-piece export rather than a fabricated flat sequence. No serving-backend switch or training job is recommended now.
+
+ORDER
+1) Read-only exact-history and provenance contract in MSS/kybernetes.
+2) Independent host policy/limits and a matched Dokime comparison.
+3) Only then native implementation versus pinned optional JAZ adapter.
+4) Training integration only for a measured use case.
+
+Framework Python >=3.12; JAZ console/t-strings >=3.14. No throughput, VRAM fit or pooled-memory claim. No implementation permission inferred from this review request.
+
+SOURCES READ LIVE
+https://gitlab.com/akarta-315h/metis
+https://arxiv.org/abs/2609.26891
+https://arxiv.org/html/2609.26891v1
+https://github.com/jaz-lang/jaz
+https://github.com/jaz-lang/jaz/blob/main/src/jaz/repl/python_repl.py
+https://github.com/jaz-lang/jaz/blob/main/src/jaz/hooks/dispatcher.py
+https://github.com/jaz-lang/jaz/blob/main/src/jaz/hooks/builtin/budget_pool.py
+https://github.com/jaz-lang/jaz-evals/blob/main/README.md
+Metis file/line references come from the initial fresh clone and were checked unchanged against final remote HEAD 7eb7cd27454c16728f222354ad94af430c41ddc2; no guessed GitLab file links.

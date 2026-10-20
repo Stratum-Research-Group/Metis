@@ -1,0 +1,70 @@
+METIS - what to take (and not take) from the OpenFst and ERA reviews
+2026-10-20
+
+Sources:
+- https://github.com/google-research/openfst @ c6f49f1 (2026-10-19)
+- https://github.com/google-research/era @ 012c2d3
+- https://arxiv.org/abs/2509.06503
+
+Review scope: source inspection only for OpenFst. For ERA, the reviewer
+additionally exercised futs.py with a 200-iteration local mock and
+reproduced the shipped example's two TypeError signatures - but the full
+model-driven pipeline and the paper's benchmarks were not run, and nothing
+was installed. Metis was last verified Oct 19 @ b987510; the mappings below
+are conceptual, not checked against live Metis source.
+
+== 1. FROM ERA: a bounded experiment-search loop for retrieval and ranking ==
+
+TAKE:
+- The FUTS core (implementation/futs.py, ~100 lines, Apache-2.0): flat tree
+  search where every candidate is expandable, PUCT selection, visit-count
+  backpropagation, no rollouts, final answer = argmax raw task score.
+- A portable detail: converting raw scores to ranks (rank/(n-1)) before
+  adding the exploration bonus reduces dependence on a task's numerical
+  score range. It does not settle how objectives should be weighted, and it
+  does not make the search settings transferable across tasks.
+- Proposed use: search LTHCM retrieval parameters or ranking functions
+  against held-out queries with known relevant results, driven by a
+  dokime-style scorable benchmark. This optimises the retrieval machinery -
+  it does not supply memory itself. Conceptual mapping only; whether a local
+  model is a good enough mutation engine is untested.
+- Note: for pure parameter search the LLM is optional - the tree search
+  works with any candidate generator, including a plain parameter sampler.
+
+DISCIPLINE REQUIRED:
+- A trustworthy score is the hard requirement. If the metric rewards
+  shortcuts, the search finds better shortcuts.
+- Keep a separate final evaluation set the search never optimises against.
+- Cost: each node = one generation + one execution + one scoring pass. The
+  paper's scale was ~500 nodes / ~7 hours on Google's infrastructure.
+
+DO NOT TAKE:
+- The ERA repo as a runnable system. Its sandbox is a deliberate stub
+  (sandbox.py:33-34 raises NotImplementedError), the shipped example has two
+  confirmed TypeErrors plus README/code API mismatches, and there is no
+  cross-run memory or production parallel search. Reuse futs.py; build your
+  own generate/execute/score around it.
+
+== 2. FROM OPENFST: bounded, peripheral use only ==
+
+POSSIBLE:
+- Deterministic, rule-based text rewriting/normalisation inside stoma as a
+  preprocessing step, if a large composable rule grammar is ever needed.
+  OpenFst ships the algebra (weights, composition, shortest paths), not
+  ready-made grammars - the rules themselves are your construction work.
+
+NOT FOR LTHCM:
+- No core or replacement role. Learned memory is untouched by a finite-state
+  tool; at most OpenFst is a lexical component beside semantic retrieval.
+
+NOT FOR HESTIA CONSTRAINED DECODING:
+- llama.cpp's GBNF already covers context-free output constraints and is the
+  simpler starting point. OpenFst would only add value for weighted
+  composition of regular constraints, and there is no existing
+  OpenFst-to-llama.cpp integration - that would be your own engineering.
+
+REMEMBER:
+- WFSTs encode regular relations only. They cannot express arbitrary
+  recursive JSON schemas.
+- A transducer is not automatically deterministic; determinization is an
+  explicit operation, worst-case exponential, and not always possible.

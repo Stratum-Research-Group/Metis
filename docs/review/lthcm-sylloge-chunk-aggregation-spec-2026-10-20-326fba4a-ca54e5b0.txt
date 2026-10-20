@@ -1,0 +1,59 @@
+SPEC: Learned chunk-to-document/session aggregation for LTHCM (proposed name: "Sylloge", unapproved)
+Projects: LTHCM within the Metis monorepo. No other projects touched.
+Inspired by: snap-stanford/PULSAR @ 7442e4e (source-reviewed 2026-10-20; review txt delivered separately)
+Date: 2026-10-20
+Status: PROPOSAL ONLY. No code written, no implementation authorised. Training on the corpus is proposed, not approved. Everything under PROPOSED is a design choice to confirm, not an approved fact.
+
+THE IDEA IN ONE PARAGRAPH
+In the inspected ingestion path, every chunk gets its own embedding and no aggregate vector sits above it. PULSAR's transferable pattern is a small transformer that takes many item embeddings as a sequence and produces one higher-level vector via a CLS token - cells to donor in their case, chunks to document (or turns to chat session) in ours. This changes how chunk embeddings are COMBINED, not how text is split. Chunking stays exactly as it is.
+
+CURRENT CODE (verified in the Metis monorepo at HEAD b9875101cabe9e7289cf3fe1560a4e642c2b82d6, 2026-10-18)
+- dianoia/dianoia/embedding.py: TextEmbedder wraps sentence-transformers (default all-MiniLM-L6-v2), one vector per input text.
+- stoma/src/stoma/embedder.py: StomaEmbedder binds that model with offline enforcement; line 249 hardcodes a "mean_pooling" pooling-spec hash. In the ingestion and embedding path inspected, the only embedding aggregation is the sentence-transformer's internal token-level mean pooling.
+- stoma/src/stoma/indexer.py (1,746 lines): embeds chunk texts in batches (encode() at lines 1021 and 1429) and indexes chunk-level vectors into an LTHCMEngine. No document-level or session-level aggregate vector exists in the indexing path.
+- LTHCM/lthcm/engine/pipeline.py: LTHCMEngine receives caller-computed embeddings; items are stored as multi-facet vectors in SuperpositionMemoryStore (num_facets=4 default). There is no chunk-to-document aggregation layer to replace - this proposal ADDS a tier; it does not modify an existing one.
+- Benchmark harness that would evaluate this: LTHCM/lthcm/benchmarks/real/ (scifact_eval.py, hotpot_real_eval.py, musique_eval.py, twowiki_eval.py, vitaminc_eval.py, ruler_eval.py, wordnet_eval.py) with paired significance tests in utils/significance.py. Note: this harness exists, but it has no document-level or aggregate-vector metrics today - the evaluation below requires extending it, not just running it.
+- lthcm/core/hdc_vsa.py exists in-tree, so HDC bundling is a plausible candidate baseline - but it is not a ready-made one: it would need an adapter from chunk embeddings to hypervectors and a compatible query-space/scoring path before any comparison is meaningful.
+
+THE HONEST TENSION (why this needs care in LTHCM specifically)
+LTHCM's own demo states the motivation: standard embeddings "average these concepts into an ambiguous middle vector" (lthcm/demo.py:30). A single document vector - however computed - risks recreating exactly that blur at the document level. A learned attention aggregator can in principle weight and separate chunks better than a flat mean, but nothing in the PULSAR release proves that for text, and a learned aggregator can also learn to blur. The design and evaluation below exist to contain that risk.
+
+PROPOSED DESIGN
+1. Position: an optional coarse retrieval tier ABOVE chunk storage, never a replacement for it. This is an accuracy-first experiment, not an acceleration claim.
+   - Chunk-level facet vectors remain the authoritative memory content; verification (sheaf/NLI, causal, wormhole) keeps operating at chunk level.
+   - Document/session vectors would be used for first-pass candidate narrowing, with the existing retrieve-and-verify on the surviving chunks - but a prefilter can permanently drop the document that held the answer, and running a full flat chunk search alongside adds cost rather than saving it. So: evaluate the aggregate-only path separately OFFLINE first. Only if it meets the bar below would any narrowed live path be worth considering, and any such path must be compared at the same retrieval budget (merged top-k), so a win is real and not merely the effect of doubling the budget.
+2. Module shape (following PULSAR's readable minimal pattern, model.py:262-348):
+   - Input: a document's chunk embeddings (384-dim, all-MiniLM-L6-v2 output) as a sequence with a prepended CLS token; the CLS output is the document vector.
+   - Proposed default: NO positional encoding - treat chunks as an unordered set, since the aggregate should represent content, not layout. Alternative worth comparing: add positional encoding so the aggregator can use document order. Document order is layout, not causal or time order - no correlation with the Lorentzian causal filter is claimed. Either way, per-chunk provenance metadata lives separately and is untouched; the aggregate must never be the only place order or source survives.
+   - Long documents: PULSAR caps its input at 1,024 items; a Metis document can exceed any fixed window. Proposed: bounded windows over the chunk sequence (e.g. windowed passes combined by a second-level aggregate, or a reservoir-sampled window), with the windowing rule recorded per aggregate and chunk provenance retained for every input. No silent truncation - an aggregate that dropped chunks must say so in its metadata.
+   - Invalidation: editing or deleting a document invalidates its stored aggregate. Aggregates should be versioned with the document's content hash and rebuilt on change, on the same trigger stoma already uses for re-ingestion.
+   - Size: 2-4 encoder layers at d_model=384 with a 4x FFN is roughly 3.5M-7M parameters (about 12*d^2 per layer, computed, excluding heads). PULSAR's 87.4M-parameter checkpoints are a size-class reference only; what training or fine-tuning costs on the RTX 5060 Ti 16GB must be measured, not inferred from a parameter count.
+   - Proposed name "Sylloge" (Greek: collection/gathering) for the module, e.g. LTHCM/lthcm/core/sylloge.py, with stoma calling it at index time to additionally store one vector per document (and later per chat session for Metis conversation memory). Name unapproved.
+3. Alignment risk, stated plainly: queries are embedded by all-MiniLM-L6-v2; document vectors come out of a new transformer. Matching dimension does not make them the same retrieval space. Before any reliance, measure whether cosine(query, doc_vector) actually ranks relevant documents first; if not, add a query-side alignment objective during training. This is an open risk, not a solved step.
+4. Training signal (proposed, not approved; trained on Nick's own ingested corpus via stoma output, no labelled data needed to start):
+   - Contrastive: a document vector should be near its own chunks and far from other documents' chunks - but naive all-chunks-positive training can itself learn to blur, so use hard negatives (near-duplicate and same-topic documents that should stay distinct) and track minority-topic behaviour explicitly.
+   - Optional masked reconstruction (PULSAR's decoder does this): mask some chunk embeddings, reconstruct from the rest plus CLS.
+   - Document-level train/eval split: held-out whole documents, never chunks of training documents, so the eval measures generalisation rather than memorised content.
+5. Baselines it must beat (matching the standing precedent that a learned component is adopted only once it beats the simple option):
+   - Mean-pooled chunk embeddings as the doc vector (one line of code - always the first comparison).
+   - HDC bundling, if the adapter and scoring path above get built (otherwise note it as untested, not failed).
+   - Flat chunk retrieval with no doc tier (current behaviour).
+6. Evaluation, as a noninferiority design rather than a vibes pass:
+   - Harness: LTHCM/lthcm/benchmarks/real/, extended with document-level and aggregate-path metrics (that extension is part of the work), on the held-out document split above.
+   - Predeclared margin: pick an acceptable recall loss BEFORE running (e.g. aggregate-path recall@20 no worse than flat retrieval minus a fixed margin), and report a confidence interval using the in-tree paired tests (benchmarks/real/utils/significance.py: paired randomization and bootstrap). "No statistically significant difference" is not evidence of equivalence - the margin and interval are the test.
+   - Recall floors on held-out minority topics, not just the aggregate number, so the aggregator can't pass by doing well only on dominant topics.
+   - Same-budget comparisons throughout: aggregate-path, dual-retrieval, and flat baselines each reported at matched effective top-k.
+   - Latency/VRAM delta measured on the 5060 Ti 16GB.
+   - Adoption criterion (proposed): the aggregate-only path stays inside the predeclared recall margin with its confidence interval, holds the minority-topic floors, AND beats the mean-pooling baseline at the same budget. If it doesn't beat mean pooling, drop it - learned aggregation has to earn its complexity.
+
+WHAT THIS IS NOT
+- Not a change to chunking, tokenisation, or text segmentation.
+- Not a replacement for chunk-level storage, facets, or any existing LTHCM module.
+- Not an acceleration claim: dual retrieval costs more, and any narrowed path is only a future option gated on the offline results.
+- Not validated by PULSAR's results: those are single-cell biology numbers (authors' own, pretraining not reproducible from the release). Transfer to text memory is a hypothesis.
+- Not a hardware commitment: sized to measure on the 5060 Ti 16GB; no claim about the V100 or the future quad-V100 rig.
+
+SOURCES
+- Metis monorepo: https://gitlab.com/akarta-315h/metis @ b9875101cabe9e7289cf3fe1560a4e642c2b82d6 (files cited above inspected at this ref, 2026-10-20)
+- PULSAR repo: https://github.com/snap-stanford/PULSAR @ 7442e4e (source inspection only, no runs)
+- PULSAR preprint: https://www.biorxiv.org/content/10.1101/2025.11.24.685470v1
