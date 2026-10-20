@@ -293,7 +293,9 @@ All prioritized synthesis roadmap tasks, review remediation circuits, and local 
 - **Symbolon E2 Report**: [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md)
 - **SwiLA Session State Experiment Plan v3**: [`docs/review/metis-swila-session-state-experiment-plan-v3-509d70c-d2ce8894.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-swila-session-state-experiment-plan-v3-509d70c-d2ce8894.txt)
 - **SwiLA Stage 1 Audit Report**: [`docs/review/metis-swila-stage1-report-audit-20261020-bbf93822.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-swila-stage1-report-audit-20261020-bbf93822.txt)
-- **SwiLA Stage 1 Empirical Report**: [`experiments/swila_session_state/results/SWILA_SESSION_STATE_STAGE1_REPORT.md`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/results/SWILA_SESSION_STATE_STAGE1_REPORT.md)
+- **SwiLA Stage 1 Empirical Report**: [`docs/review/swila-session-state-stage1-report.md`](file:///home/akarta/Projects/Metis/docs/review/swila-session-state-stage1-report.md)
+- **Dianoia Question-Conditioned Compression Spec**: [`docs/review/metis-dianoia-question-conditioned-compression-experiment-spec-2026-10-20-531c7bb-29a18f8e.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-dianoia-question-conditioned-compression-experiment-spec-2026-10-20-531c7bb-29a18f8e.txt)
+- **Dianoia Compression Stage 1 Report**: [`docs/review/dianoia-compression-stage1-report.md`](file:///home/akarta/Projects/Metis/docs/review/dianoia-compression-stage1-report.md)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
 
 ---
