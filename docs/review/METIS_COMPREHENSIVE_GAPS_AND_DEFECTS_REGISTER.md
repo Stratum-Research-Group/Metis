@@ -430,6 +430,10 @@
 * **Defect:** Review of latent continuous memory approaches (Memorilla / Soft-Tokens) identified a severe grounding vulnerability where continuous latent representations lack discrete source span provenance, which directly violates Krisis grounding policy (`krisis-policy-0.1.json`).
 * **Remediation:** Enforced architectural invariant: all retrieval into context and deliberate reasoning must retain discrete passage span provenance; continuous latent memory representations remain non-adopted for retrieval to preserve deterministic verification and zero-hallucination claim auditability.
 
+### 77. SwiLA Streaming Session State Stage 1 Empirical Evaluation & Audit Remediation
+* **Discovery:** Audit of the Stage 1 SwiLA session state evaluation (`metis-swila-stage1-report-audit-20261020-bbf93822.txt`) confirmed the validity of the Gate 1 stop rule (halting Tier B), but identified empirical implementation gaps: Check 8e controls were omitted from `validity_checks.py`, candidate target index was fixed at index 0 risking tie bias, per-seed score arrays and mechanism diagnostics were absent from the JSON output, and the initial report contained overclaimed conclusions regarding Poincaré/BM25.
+* **Remediation:** Implemented Check 8e (label permutation and independent random association controls) in [`validity_checks.py`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/validity_checks.py); randomized candidate target positions across $0 \dots 49$ in [`data_generator.py`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/data_generator.py) and [`runner.py`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/runner.py); instrumented mechanism diagnostics ($\exp(H) = 4.00$, $\text{NMI} = 0.0025$, zero collisions); dumped complete per-seed arrays into [`tier_a_results.json`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/results/tier_a_results.json); revised [`SWILA_SESSION_STATE_STAGE1_REPORT.md`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/results/SWILA_SESSION_STATE_STAGE1_REPORT.md) to adhere strictly to preregistered G4 protocol language; and archived the audit in [`docs/review/`](file:///home/akarta/Projects/Metis/docs/review/).
+
 ---
 
 ## Summary & Verification Matrix
@@ -444,6 +448,7 @@
 | **Evaluation, Memory & Benchmarks** | Items 47–59 | Negative study archives, Stoma OOM streaming, audit chains | **Empirically Proven** | Phylax audit chain (368 records) & Dokime 10k bootstrap |
 | **Deep Audits & Geometric Hardening** | Items 60–73 | Lie group gauge filters, HDC VSA seeds, autograd leaks, LTHCM venv | **Hardened & Tested** | 1,002 tests passed across 11 modules + 0 TS compile errors |
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
+| **Session Memory & Routing Audits** | Item 77 | SwiLA recurrence vs baselines, 6/6 G0 checks, Gate 1 stop | **Empirically Audited** | 6/6 G0 checks PASS; 10k paired bootstrap CIs; Tier B halted |
 
 ---
 
@@ -465,5 +470,6 @@
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.65s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
 | **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,003** | **1** | **~9.5 min** | **ALL GATES PASS** |
+
 
 

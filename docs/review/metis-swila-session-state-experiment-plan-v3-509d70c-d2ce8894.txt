@@ -1,0 +1,120 @@
+METIS EXPERIMENT PLAN v3: SwiLA-STYLE STREAMING SESSION STATE
+Plan only. Nothing was installed, run or changed. No dependencies, models or datasets were downloaded; I only read the two source repositories (shallow clones for reading). 20 Oct 2026. Replaces v1 and v2.
+Sources pinned: Metis 509d70cceb770b8b227ec99ec1ba0d2de7c8cd67 (gitlab.com/akarta-315h/metis, HEAD at 12:16 SAST; it moved from b9875101 earlier today). SwiLA repo 4b43bb5c9d3e76659e5f07740c15b046cddb581b (github.com/lindermanlab/switching-linear-attention). Paper arXiv 2609.39034.
+Working name: "session-state probe". No Greek name proposed.
+
+AUTHORISATION
+This document is a proposal. None of it is authorised to run, including Stage 1 and Stage 2. Nothing here implies permission to install packages, download model weights or datasets, or use a GPU. Whether torch (CPU), the embedder weights or the SwiLA package are already present in Nick's environment is unknown to me. Each stage needs Nick's explicit go-ahead.
+
+1. QUESTION
+Can a fixed-size online mixture-of-regressions state (the SwiLA recurrence) hold several competing topics from a streaming session better than comparable single-expert states of the same state size, and is the effect separable from simply partitioning keys arbitrarily?
+
+This tests a memory rule. It is not a language-model test and not a replacement for LTHCM chunk retrieval. Chunks stay the evidence; the state would at most propose which chunk ids to look at. Separate from the Sylloge/PULSAR aggregation proposal (that one pools chunk vectors into document vectors; this one is a recurrent state written turn by turn).
+Whether it is practically useful for Metis retrieval is NOT decided by this plan. See section 9 (G3).
+
+2. WHAT THE CODE GIVES US (read in source, not run)
+- swila/ops/core/torch_recurrent.py, swila_recurrence(): CPU reference, Python loop over time. Per step: pred = k.S; u = v - pred; r = softmax(pi_k - 0.5*u^2); S += beta*r*u*k. Readout: softmax(pi_q)-weighted sum over experts of q.S, with q multiplied by `scale` (default D_k^-0.5). State shape [B,H,D_v,K,D_k]. The 0.5 error coefficient is hard-coded.
+- It takes q,k,v,beta,pi_q,pi_k as inputs. In the full layer these come from learned projections. Here we supply them, so we test the recurrence with fixed, untrained parameters. A negative result does not refute the paper.
+- Zero initial state with flat pi_k (equal priors across experts): all experts predict identically, get identical responsibility and update, and never differentiate. Symmetry must be broken on purpose (see 6, arm S1) or a K=4 arm silently behaves as K=1.
+- Temporal mode (swila_recurrence_temporal): by static read, gate_kv and gate_q are transposed unconditionally, so they must be supplied even though the docstring calls them optional. Also it carries log-responsibility and query-mix state (r_prev, rho_prev) that advance every step. Therefore a query cannot simply be appended as a step: it must read from a copy (snapshot) of S, r_prev and rho_prev and discard it. To be verified by a test before use (G0).
+- The layer swila.layers.SwitchingLinearAttention is GPU-only; README names H100 as validation target; support on the RTX 5060 Ti and V100 is unverified. Not needed for Stages 1-2.
+- No pretrained weights were found in the paper or README (not proof none exist).
+- Paper evidence: 374M parameters / 15B tokens language modelling, synthetic recall tasks, trained on 4K sequences with the recall evaluation truncated to 2K. The reported results in what I read do not include a test of external session memory or of recall beyond 2K. That is a scope statement about the paper's reported evaluations, not a claim about the method's limits.
+
+3. HYPOTHESES (preregistered)
+H1 (mechanism): on streams that interleave topics with different key-to-value mappings, a K>=2 SwiLA state with error-driven responsibilities recalls minority-topic associations better than (a) equal-state single-expert baselines and (b) a fixed random-routing mixture of the same size (which isolates error-driven responsibilities from an arbitrary key partition).
+H2 (text): the effect carries over to streams built from real text embeddings.
+H3 (cost, descriptive): report the state-only footprint and the total resident footprint (section 7). No usefulness claim is made from footprint alone.
+Null: no gain over the matched baselines, or gain only on majority topics.
+
+4. WHAT IS WRITTEN, QUERIED AND SCORED
+Write event: key k = embedding of a cue text (entity or slot phrase); value v = projected embedding of the chunk the cue refers to. Cue text and chunk text are different strings.
+Query event: key q = embedding of a separately generated paraphrase of the cue. The state returns v_hat. Score: the correct chunk is the nearest (cosine) to v_hat among a candidate set of N=50 chunk value vectors.
+- Candidate set rules: the correct chunk was written before the query; every distractor was also written before the query (no future chunks, so novelty or recency of unseen chunks cannot cue the answer). Candidates must come from the stored chunk-vector table, so scoring needs that full table. This table is external to the state.
+- A query is not consumed as a write: it never updates S or any carried state. Paraphrase overlap between cue and query is not leakage by itself; it is the task.
+- Delay schedule feasibility: a query at delay D is only scheduled if write_time + D < stream end. Fact writes are placed in the first part of the stream so every listed delay is feasible; delays that cannot be scheduled for a stream length are dropped and reported as not run.
+Projection and normalisation (fixed before any run):
+- Embedding to D_k=64 for keys and D_v=64 for values via fixed seeded Gaussian random projections scaled by 1/sqrt(input dim) (separate seeds for key and value), or PCA fit on the dev split only. Orthogonal columns are only possible when output dim <= input dim, so the wide arm B2 (D_k' = K*D_k = 128 at K=2, 256 at K=4, 512 at K=8 with D_k=64; 512 exceeds the 384-dim embedder output) uses Gaussian projections (1/sqrt(input dim) scaling does not make pre-normalisation norms equal 1 across output dims, so no unit-norm test is applied; require every projected vector to be finite and nonzero, and record the norm distribution; vectors are L2-normalised afterwards), or explicit smaller D_k chosen so D_k' <= the embedder dimension. Dimensions are recorded per run. Tier A has no embedder and uses direct dimensions.
+- k and q are L2-normalised after projection. Values are divided by the dev-split per-dimension standard deviation. Readout scale parameter fixed at 1.0 because q is normalised.
+- beta: constant scalar broadcast to [B,T,H,D_v,K], grid {0.1, 0.3, 0.5, 1.0}.
+- pi_k: fixed seeded random matrix W_k (D_k x K) applied to k, times temperature tau in {0, 1, 3}; pi_q likewise with an independent W_q and its own tau. tau=0 means flat priors.
+- Gated variants: constant log_decay in {0, -0.001, -0.01} (per step, all key dims). Temporal variants: exploratory only (see section 9); gate_kv and gate_q are logits, grid not yet specified.
+- Symmetry breaking for S1: small seeded random initial_state (std 0.01) and, in a separate arm, tau>0 with flat initial state. Both reported.
+Leakage and lexical handling:
+- BM25 (query text vs chunk text) is computed for every query. Lexical success is a task slice, not automatically leakage. Report all results stratified by BM25-top-1-correct vs not, and by two cue sets: lexically overlapping paraphrases and lexically disjoint paraphrases. No arm is required to be near chance on the overlapping set.
+
+5. DATA
+Tier A, synthetic regime switching (no embedder):
+- M topics, each with its own random linear key-to-value map plus noise.
+- Stream length and mixes: set before running. Mixes: balanced, skewed (about 70/20/7/3), bursty (long majority runs between minority writes). Delays: 10, 100, 1000 where feasible.
+Tier B, text streams (offline embedder):
+- Made-up corpus (the 9-file corpus in generic test plan v2 if it has enough distinct topics, otherwise generated). No real or memorised facts.
+- Identities (entities), cue texts and paraphrases are disjoint across train/dev/test splits. Dev: tuning of beta, tau, decay, K, projection. Test: touched once.
+- Embedder: stoma/src/stoma/embedder.py StomaEmbedder (default all-MiniLM-L6-v2, offline). Record exact embedder identity, tokenizer and weights hash with every run; vectors from different embedders are not comparable.
+Seeds: stream seeds and model-init seeds are separate; count set before running (proposal: 20 stream seeds per condition).
+
+6. ARMS (equal state budget; every arm gets the same dev-split grid size)
+State floats per arm = H * D_v * K * D_k (SwiLA form). Budget fixed per comparison group.
+ S1  SwiLA recurrence (reference), H=1, K in {2,4,8}; plain and gated confirmatory; temporal and temporal+gated exploratory.
+ R1  Fixed random routing (control for error-driven responsibilities): same K experts and same S update, but responsibilities come only from softmax(pi_k) (no error term, coefficient 0 instead of 0.5). Not in the reference code, so it needs our own implementation, validated against the reference (G0 b).
+ B1  K independent narrow single-expert states: K heads with K=1, each with its own independent random key projection and its own readout, outputs averaged. Not identical copies; float count equals S1.
+ B2  One wide single-expert state: H=1, K=1 with key dimension D_k' = K*D_k, same float count. Differs from B1 in that it is one wide delta-rule memory, not K narrow ones. (If after implementation B1 and B2 turn out equal in effect for a given K, report them as one.)
+ B3  Mean/EMA pooled value vector per topic-agnostic session (one compressed vector).
+ B4  Recency window: the last N writes verbatim with nearest-key lookup, N set so total state bytes match S1.
+ B5  Exact key-value store with nearest-key lookup over all writes. Unbounded memory, a reference point, NOT a mathematical ceiling (nearest-key can fail on noisy keys).
+ O1  Oracle projection ceiling: score using the true stored value vector as v_hat. Measures what projection plus candidate set cost, independent of memory, and bounds the metric. Ties and collisions (identical or equal-cosine candidate vectors after projection) are handled deterministically: ties go to the lowest candidate index, collisions are counted and reported, and the candidate set is rebuilt without exact-collision distractors.
+ C0  Random guess; BM25 slice (as in 4).
+
+7. METRICS
+Primary: minority-topic recall@1 (macro over the two smallest topics) at delay 100 and 1000.
+Secondary: overall recall@1/@3; recall by delay (retention curve); majority-topic recall (must not collapse); interference (early fact recalled after N distractor writes).
+Footprint, always reported separately:
+ - state-only bytes (S1, B1-B4 state);
+ - total resident bytes = state + the candidate chunk-vector table needed to score + any other index. Scoring against candidates requires the full table, so total resident is never below that table. Compression claims about state-only bytes must not be read as compression of the retrieval system.
+Mechanism diagnostics (S1, R1): effective number of experts exp(H(mean usage)); dead-expert fraction (the paper reports >40% dead in one ablation without load balancing); NMI between argmax expert (responsibilities averaged over output dims) and true topic. Expert alignment shows where weight went, not that the answer is right.
+Cost: wall time per write and per query, peak RAM.
+
+8. VALIDITY CHECKS (G0; every one must pass before any result counts)
+ a. Causality: change all writes after time t; output at t is bit-identical. Also confirm queries leave the carried state unchanged (compare S, r_prev, rho_prev before/after a query), including in temporal mode.
+ b. K=1 reductions: plain K=1 matches an independently written numpy delta rule within 1e-5; gated K=1 matches a gated numpy delta rule (log_decay) within 1e-5; temporal K=1 matches plain K=1 (responsibility is 1 either way). R1 with error coefficient 0.5 restored matches the reference.
+ c. Symmetry check: with zero init and flat pi_k, experts' state slices and predictions stay identical (expected; compare S[...,k,:] and per-expert pred across k, not usage). With the chosen symmetry breaking, per-expert predictions must actually differ: mean pairwise relative difference between expert predictions on a probe batch must exceed a threshold set from the numeric tolerance (at least 100x the float32 tolerance used in the check), AND effective experts > 1.5. Usage entropy alone is insufficient: identical, uniformly used experts score K.
+ d. Determinism: same seed, identical outputs across two runs.
+ e. Control: permute the EVALUATION labels (which chunk each query is scored against) after the writes are frozen; recall must be near chance. Also an unwritten-fact control: queries whose chunk was never written, scored separately. Tier A uses random linear key-to-value maps, so an unwritten fact's value CAN be predicted by generalising the map from other writes; the unwritten-fact result is therefore a generalisation measure, not a chance expectation. Chance is expected only in a separate Tier A independent-random-association control, where each cue's value is drawn independently of its key (nothing to generalise). In Tier B a semantic embedder can also recover some of the answer through prior key-value text similarity, so there the unwritten-fact result is a floor for 'no write' recall. Report these and subtract nothing. (Shuffling value assignments before writing is valid associative learning and is not used as a control.)
+ f. Candidate and schedule rules in section 4 hold for every query (answer present exactly once, written before the query, delay feasible).
+
+9. DECISION RULES (thresholds are proposals to confirm before the first run, then fixed)
+Effect size delta0 = 0.05 absolute on the primary metric. Paired bootstrap 95% CI [lo, hi] of (arm minus comparator) across seeds; est = point estimate. Classes are mutually exclusive and applied in this order, first match wins:
+ 1. STRONG PASS: lo > 0.05.
+ 2. PASS: lo > 0 and est >= 0.05 (and not class 1).
+ 3. NO EFFECT: hi <= 0 (the arm is not better than the comparator).
+ 4. BELOW TARGET: 0 < hi < 0.05 (any gain is real at most but smaller than the target; the target size is excluded).
+ 5. INCONCLUSIVE: everything else (CI too wide to decide).
+Example: CI [0.01, 0.09] with est 0.05 is PASS; with est 0.03 it falls to INCONCLUSIVE. Only NO EFFECT and BELOW TARGET against the matched baselines count as negative results. INCONCLUSIVE is not a failure: decide whether to add seeds within the caps or stop.
+G1 Tier A: S1 vs B1, B2 and R1 on the primary metric; the result must be PASS or STRONG PASS against ALL three comparators, majority recall drop <= 0.02, and not confined to balanced mixes. NO EFFECT or BELOW TARGET against any of them (or a failed G0) stops the experiment and Tier B is not run. INCONCLUSIVE holds Tier B until resolved.
+G2 Tier B: same comparisons plus B3 and B4, on the test split, with the BM25 and cue-set slices reported.
+G3 Practical usefulness: NOT decided here. This experiment never measures source-chunk retrieval through LTHCMRetriever. Usefulness as a routing prior requires a separate follow-on measurement: does reordering or prefiltering the real retriever's candidates by v_hat raise recall of the source chunk, at what latency, with total resident footprint. No 80%-of-ceiling or 10%-bytes claim is made.
+G4: if S1 is NO EFFECT or BELOW TARGET against R1, no positive gain (NO EFFECT) or no gain of the target size (BELOW TARGET) of error-driven responsibilities over arbitrary random partitioning is supported; likewise against B4, no such gain over a simple window at equal bytes. NO EFFECT means the CI upper bound is <= 0 (no positive gain supported), not that the arms are equivalent. BELOW TARGET means any gain is smaller than 0.05, not that it is zero. Report as such.
+The temporal and temporal+gated arms are EXPLORATORY and not part of the preregistered confirmatory claims: the temporal gate inputs (gate_kv, gate_q) pass through logsigmoid in the code (so they are logits), but I have not read the temporal mixing code enough to propose a justified grid. They are run only after the plain and gated results are known, with grid values chosen and written down before that run, and reported as exploratory.
+Unexpected results (S1 worse than B3, expert collapse, flat delay curves) are reported with diagnostics, not tuned away.
+
+10. STAGES, CAPS AND STOP RULES (if approved)
+Stage 1 (CPU, needs approval): G0, then a pilot (one seed per configuration), then the Tier A sweep.
+Stage 2 (CPU, needs approval, only after G1 is resolved as PASS or STRONG PASS against all three comparators): Tier B with the offline embedder; one embedding pass per corpus cached by embedder identity.
+Stage 3 (separate approval): learned projections and beta/pi using the official layer on GPU; first check the layer imports and runs on the 5060 Ti and V100 (README validates H100 only; CUDA and Triton support unverified). One GPU at a time; the cards are not pooled. Not part of this plan.
+Not in scope: training a language model, FineWeb-Edu recipes, adding the layer to a GGUF model in hestia, any change to LTHCM, dianoia or kybernetes.
+Caps apply to the whole pilot and the whole sweep, not only per run: maximum CPU threads, maximum total wall time, maximum total RAM, set by Nick before launch (placeholders for discussion: 4 threads, pilot 1 hour total, sweep 8 hours total, 4 GB RAM total). Hitting any cap stops the stage and reports partial results. I give no runtime estimates; the reference runs a Python loop over time, and actual speed is unmeasured. Any single failing G0 check stops the stage.
+
+11. WHERE IT FITS IN METIS (read at 509d70c)
+- dokime tasks (dokime/src/dokime/tasks/protocol.py) are Query -> LLM response -> score. This experiment has no LLM in the loop, so it should be a standalone script that writes Query-style data files and a results JSON (seeds, commit hashes, embedder identity). Whether dokime's manifest/BOM can record it is unchecked.
+- LTHCMRetriever.search (LTHCM/lthcm/engine/retriever.py) stays unchanged; chunks remain the evidence and provenance stays chunk-level.
+- LTHCM/lthcm/engine/paged_memory.py has a RetentionProbe (forgetting score across domains). Its per-domain drop idea can inform the retention metrics here; it measures weight drift, so adapt the idea, not the code.
+- Session storage in kybernetes (kybernetes/kybernetes/contracts/turn.py, tests/test_session_*) was not traced; any integration claim is open.
+
+12. DELIVERABLES (if approved)
+Script and generator, results JSON per arm and seed, one table per gate with CIs, a verdict per gate (STRONG PASS / PASS / NO EFFECT / BELOW TARGET / INCONCLUSIVE) with diagnostics, reproduction commands with commit hashes.
+
+13. OPEN QUESTIONS FOR NICK
+1. Approve the decision rules (delta0 = 0.05, the five outcome classes) before any run?
+2. Caps for threads, time and memory (placeholders in section 10)?
+3. Generic-test-plan corpus or a new made-up one for Tier B?
+4. Stage 1 go-ahead, and whether torch CPU and the embedder weights are already on the box?

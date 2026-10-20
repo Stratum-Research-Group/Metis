@@ -291,6 +291,9 @@ All prioritized synthesis roadmap tasks, review remediation circuits, and local 
 - **Anadrome Milestone 3.2 Report**: [`docs/review/anadrome-frozen-live-walk-milestone3-report.md`](file:///home/akarta/Projects/Metis/docs/review/anadrome-frozen-live-walk-milestone3-report.md)
 - **Schedion Stage 3 Report**: [`docs/review/schedion-stage3-controlled-comparison-report.md`](file:///home/akarta/Projects/Metis/docs/review/schedion-stage3-controlled-comparison-report.md)
 - **Symbolon E2 Report**: [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md)
+- **SwiLA Session State Experiment Plan v3**: [`docs/review/metis-swila-session-state-experiment-plan-v3-509d70c-d2ce8894.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-swila-session-state-experiment-plan-v3-509d70c-d2ce8894.txt)
+- **SwiLA Stage 1 Audit Report**: [`docs/review/metis-swila-stage1-report-audit-20261020-bbf93822.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-swila-stage1-report-audit-20261020-bbf93822.txt)
+- **SwiLA Stage 1 Empirical Report**: [`experiments/swila_session_state/results/SWILA_SESSION_STATE_STAGE1_REPORT.md`](file:///home/akarta/Projects/Metis/experiments/swila_session_state/results/SWILA_SESSION_STATE_STAGE1_REPORT.md)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
 
 ---
