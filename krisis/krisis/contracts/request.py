@@ -35,3 +35,8 @@ class KrisisRequest(BaseModel):
     # Upstream generation tracking
     generation_attempts: int | None = None
     generation_failures: int | None = None
+
+    # KnowNo conformal uncertainty fields
+    conformal_q_hat: float | None = None
+    conformal_alpha: float | None = None
+    calibration_scores: list[float] | None = None

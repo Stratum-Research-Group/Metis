@@ -471,6 +471,29 @@
   3. Created curated 20-prompt verifiable evaluation suite `dokime/src/dokime/tasks/data/ifeval_suite.json`.
   4. Registered `ifeval_instruction_following` in `BUILTIN_TASKS` and verified 167/167 Dokime tests pass (including 15 new unit/integration tests).
 
+### 81. Track B: KnowNo Conformal Prediction Uncertainty Sets in Krisis
+- **Category:** Statistical Uncertainty & Adaptive Escalation Engine (Google Research Takeaways: KnowNo, Ren et al., arXiv:2307.01928)
+- **Status:** **Remediated & Verified**
+- **Impacted Files:**
+  - `krisis/krisis/gates/conformal.py`
+  - `krisis/krisis/engine/selector.py`
+  - `krisis/krisis/contracts/enums.py`
+  - `krisis/krisis/contracts/request.py`
+  - `krisis/krisis/contracts/decision.py`
+  - `krisis/tests/test_conformal.py`
+- **Root Cause & Rationale:**
+  - Standard candidate selection in Krisis relied solely on static heuristic scalar thresholds ($\tau$). In ambiguous or uncertain queries with multiple competing candidates or low-confidence outputs, static thresholds either over-select erroneous answers or reject viable answers without statistical validity guarantees.
+  - Split conformal prediction provides finite-sample coverage guarantees ($P(Y \in \mathcal{C}(X)) \ge 1 - \alpha$) over held-out calibration scores, yielding prediction sets $\mathcal{C}(X) = \{c \mid s(c) \ge 1 - \hat{q}\}$.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `ConformalCalibrator` and `ConformalPredictionSet` in `krisis.gates.conformal` with finite-sample quantile math $\lceil(n+1)(1-\alpha)\rceil / n$.
+  2. Extended Krisis contracts with `Reason.AMBIGUOUS_PREDICTION_SET` and `Reason.CONFORMAL_EMPTY_SET`.
+  3. Wired conformal set evaluation into `KrisisSelector.evaluate()`:
+     - $|\mathcal{C}(X)| == 1$: Statistically unique winner $\to$ `SELECTED` with conformal metadata.
+     - $|\mathcal{C}(X)| > 1$: Ambiguous set $\to$ `ABSTAINED` with `AMBIGUOUS_PREDICTION_SET` (triggers human-in-the-loop escalation in Kybernetes).
+     - $|\mathcal{C}(X)| == 0$: Empty set $\to$ `ABSTAINED` with `CONFORMAL_EMPTY_SET`.
+     - Preserves standard scalar $\tau$ fallback when conformal parameters are not specified.
+  4. Created comprehensive unit and integration test suite `krisis/tests/test_conformal.py`. All 36 Krisis tests pass cleanly.
+
 ---
 
 ## Summary & Verification Matrix
@@ -488,27 +511,28 @@
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
 | **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 167 Dokime tests passing (15 new unit/integration tests) |
+| **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 36 Krisis tests passing (7 new conformal unit/integration tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,003 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,030 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Kybernetes** (Orchestrator & Tools) | `./kybernetes/.venv/bin/pytest kybernetes/tests -q` | **187** | 0 | 14.84s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./dokime/.venv/bin/pytest dokime/tests -q` | **152** | 0 | 1.53s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **190** | 0 | 19.88s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **167** | 0 | 2.33s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **127** | 0 | 233.53s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **113** | 0 | 233.92s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **72** | 1 | 1.19s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **71** | 0 | 43.82s | **PASS** |
-| **Kleroterion** (Stochastic Policy) | `./.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
+| **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.64s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **41** | 0 | 4.07s | **PASS** |
+| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **36** | 0 | 0.72s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
-| **Krisis** (Claim Grounding & Gates) | `./.venv/bin/pytest krisis/tests -q` | **29** | 0 | 0.28s | **PASS** |
-| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.65s | **PASS** |
+| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,003** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,030** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 

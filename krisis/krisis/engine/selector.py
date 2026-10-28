@@ -11,6 +11,7 @@ from krisis.contracts.enums import DecisionStatus, Reason
 from krisis.contracts.policy import PolicyManifest
 from krisis.contracts.request import KrisisRequest
 from krisis.dedup.exact import ExactDeduplicator
+from krisis.gates.conformal import ConformalCalibrator
 from krisis.gates.evaluator import GateEvaluator
 from krisis.routing.router import ClassRouter
 from krisis.scoring.decimal_calc import compute_candidate_score, to_decimal
@@ -177,7 +178,66 @@ class KrisisSelector:
                     scores[cand.id] = score_str
                 survivors_after_scoring.append(cand)
 
-        # 7. Quality Threshold (tau) Evaluation
+        # 7. Conformal Uncertainty (KnowNo) or Quality Threshold (tau) Evaluation
+        is_conformal = (req.conformal_q_hat is not None) or (req.calibration_scores is not None)
+
+        if is_conformal and survivors_after_scoring:
+            alpha = float(req.conformal_alpha) if req.conformal_alpha is not None else 0.05
+            if req.calibration_scores:
+                calib = [float(s) for s in req.calibration_scores]
+                q_hat = ConformalCalibrator.compute_q_hat(calib, alpha=alpha)
+            else:
+                assert req.conformal_q_hat is not None
+                q_hat = float(req.conformal_q_hat)
+
+            cand_score_map = {c.id: scores[c.id] for c in survivors_after_scoring if c.id in scores}
+            conf_set = ConformalCalibrator.evaluate(cand_score_map, q_hat=q_hat, alpha=alpha)
+
+            if conf_set.is_singleton:
+                selected_cand = next(c for c in survivors_after_scoring if c.id == conf_set.selected_id)
+                decision = KrisisDecision(
+                    status=DecisionStatus.SELECTED.value,
+                    selected_id=selected_cand.id,
+                    profile=profile_id,
+                    scores=scores,
+                    rejected=rejected_list,
+                    label=None,
+                    trust_flags=trust_flags,
+                    conformal=conf_set.to_dict(),
+                )
+                if req.generation_failures and req.generation_failures > 0:
+                    decision.warning = "UPSTREAM_GENERATION_FAILED_PARTIAL"
+                    decision.upstream = {
+                        "attempts": req.generation_attempts or 1,
+                        "failures": req.generation_failures,
+                    }
+                return decision
+            elif conf_set.status == "ambiguous":
+                return KrisisDecision(
+                    status=DecisionStatus.ABSTAINED.value,
+                    reason=Reason.AMBIGUOUS_PREDICTION_SET.value,
+                    profile=profile_id,
+                    scores=scores,
+                    rejected=rejected_list,
+                    per_candidate_reasons=per_candidate_reasons,
+                    mapped_reasons=mapped_reasons,
+                    trust_flags=trust_flags,
+                    conformal=conf_set.to_dict(),
+                )
+            else:  # empty set
+                return KrisisDecision(
+                    status=DecisionStatus.ABSTAINED.value,
+                    reason=Reason.CONFORMAL_EMPTY_SET.value,
+                    profile=profile_id,
+                    scores=scores,
+                    rejected=rejected_list,
+                    per_candidate_reasons=per_candidate_reasons,
+                    mapped_reasons=mapped_reasons,
+                    trust_flags=trust_flags,
+                    conformal=conf_set.to_dict(),
+                )
+
+        # Standard Quality Threshold (tau) Evaluation
         survivors_after_tau: list[Candidate] = []
         tau_val = to_decimal(profile_config.tau) if profile_config.tau is not None else None
 

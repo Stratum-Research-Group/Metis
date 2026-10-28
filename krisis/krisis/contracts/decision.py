@@ -37,3 +37,4 @@ class KrisisDecision(BaseModel):
     upstream: dict[str, int] | None = None
     trust_flags: dict[str, str] = Field(default_factory=dict)
     normalized_question_class: str | None = None
+    conformal: dict[str, Any] | None = None
