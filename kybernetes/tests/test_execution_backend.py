@@ -118,3 +118,25 @@ def test_bubblewrap_confinement_env(tmp_path: Path):
     assert res.exit_code == 0
     assert f"HOME={str(tmp_path)}" in res.stdout
     assert "TMPDIR=/tmp" in res.stdout
+
+
+def test_get_default_execution_backend_explicit_bwrap_fail_closed(monkeypatch):
+    """Verify Finding 3: If bwrap is explicitly requested but unavailable, fail closed."""
+    from kybernetes.execution.backend import BubblewrapBackend, get_default_execution_backend
+
+    monkeypatch.setattr(BubblewrapBackend, "is_available", lambda self: False)
+
+    with pytest.raises(RuntimeError, match="Bubblewrap backend explicitly requested, but 'bwrap' is not available"):
+        get_default_execution_backend("bwrap")
+
+
+def test_get_default_execution_backend_fallback_warns(monkeypatch):
+    """Verify Finding 3: Auto-detect fallback emits warning when bwrap unavailable."""
+    import warnings
+    from kybernetes.execution.backend import BubblewrapBackend, LocalProcessBackend, get_default_execution_backend
+
+    monkeypatch.setattr(BubblewrapBackend, "is_available", lambda self: False)
+
+    with pytest.warns(UserWarning, match="Bubblewrap \\('bwrap'\\) is not available"):
+        backend = get_default_execution_backend()
+        assert isinstance(backend, LocalProcessBackend)

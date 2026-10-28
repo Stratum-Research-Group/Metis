@@ -21,7 +21,7 @@ def test_coding_agent_loop_success(tmp_path: Path):
     subprocess.run(["git", "add", "calc.py"], cwd=str(tmp_path), check=True)
     subprocess.run(["git", "commit", "-m", "Baseline"], cwd=str(tmp_path), check=True)
 
-    tools = ToolRegistry(allowed_roots=[tmp_path])
+    tools = ToolRegistry(allowed_roots=[tmp_path], enforce_approvals=False)
     harness = CodingAgentHarness(workspace_root=tmp_path, tool_registry=tools)
 
     # Simulated action sequence: edit file to fix bug
@@ -63,7 +63,7 @@ def test_coding_agent_loop_with_rollback(tmp_path: Path):
     subprocess.run(["git", "add", "calc.py"], cwd=str(tmp_path), check=True)
     subprocess.run(["git", "commit", "-m", "Baseline"], cwd=str(tmp_path), check=True)
 
-    tools = ToolRegistry(allowed_roots=[tmp_path])
+    tools = ToolRegistry(allowed_roots=[tmp_path], enforce_approvals=False)
     harness = CodingAgentHarness(workspace_root=tmp_path, tool_registry=tools)
 
     # Step 1 makes an edit that fails verification, triggering rollback.
@@ -193,4 +193,45 @@ def test_tool_registry_rejects_unapproved_and_fake_token_mutations(tmp_path: Pat
     assert res_fake.success is False
     assert "Invalid or unverified Phylax approval token" in res_fake.error
     assert not target_file.exists()
+
+
+def test_autonomous_mode_forbids_self_approval(tmp_path: Path):
+    """Verify Finding 2: Autonomous mode must fail closed and never self-approve mutating tools."""
+    from kybernetes.contracts.enums import AgentSemanticState
+
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Metis Test"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@metis.local"], cwd=str(tmp_path), check=True)
+
+    target_file = tmp_path / "calc.py"
+    target_file.write_text("def add(a, b): return a\n", encoding="utf-8")
+    subprocess.run(["git", "add", "calc.py"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "Baseline"], cwd=str(tmp_path), check=True)
+
+    tools = ToolRegistry(allowed_roots=[tmp_path], enforce_approvals=True)
+    harness = CodingAgentHarness(workspace_root=tmp_path, tool_registry=tools)
+
+    def action_generator(step, history):
+        if step == 1:
+            return {
+                "tool_name": "edit_file_block",
+                "arguments": {
+                    "path": str(target_file),
+                    "search_block": "return a",
+                    "replace_block": "return a + b",
+                },
+            }
+        return None
+
+    res = harness.run_autonomous_loop(
+        goal="Autonomous edit without approval token",
+        action_generator=action_generator,
+        verifier=lambda: True,
+    )
+
+    assert res.success is False
+    assert res.final_state == AgentSemanticState.AWAITING_APPROVAL
+    assert "autonomous self-approval is forbidden" in res.history[0].error
+    # File must not be modified
+    assert target_file.read_text(encoding="utf-8") == "def add(a, b): return a\n"
 

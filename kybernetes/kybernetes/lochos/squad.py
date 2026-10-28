@@ -381,12 +381,15 @@ class LochosSquadManager:
         seat_id: str,
         action_generator: Callable[[int, List[Any]], Optional[Dict[str, Any]]],
         verifier: Optional[Callable[[], bool]] = None,
+        tool_registry: Optional[Any] = None,
+        enforce_approvals: bool = False,
     ) -> Any:
         """
         Executes the current claimed task for a seat using CodingAgentHarness
         inside that seat's isolated worktree path.
         """
         from kybernetes.engine.coding_agent import CodingAgentHarness
+        from kybernetes.tools.registry import ToolRegistry
 
         seat = self.get_seat(seat_id)
         if not seat:
@@ -401,8 +404,14 @@ class LochosSquadManager:
             else self.checkpointer
         )
 
+        registry = tool_registry or ToolRegistry(
+            allowed_roots=[seat_root],
+            enforce_approvals=enforce_approvals,
+        )
+
         harness = CodingAgentHarness(
             workspace_root=seat_root,
+            tool_registry=registry,
             checkpointer=seat_checkpointer,
             state_machine=seat.state_machine,
         )

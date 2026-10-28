@@ -172,8 +172,27 @@ class CodingAgentHarness:
                         arguments=args,
                     )
                     if app_req:
-                        self.tool_registry.phylax_adapter.resolve_approval(app_req["approval_id"], "allow_once")
-                        approval_token = app_req["approval_id"]
+                        self.state_machine.transition(
+                            AgentSemanticState.AWAITING_APPROVAL,
+                            reason=f"Action '{tool_name}' requires human approval; autonomous self-approval denied",
+                            metadata={"step": step, "tool_name": tool_name, "approval_id": app_req.get("approval_id")},
+                        )
+                        result = ToolResult(
+                            tool_id=tool_name,
+                            success=False,
+                            error=f"Policy requires approval for '{tool_name}' ({app_req.get('approval_id')}): autonomous self-approval is forbidden",
+                        )
+                        turn_state = CodingTurnState(
+                            step=step,
+                            tool_name=tool_name,
+                            arguments=args,
+                            result=result,
+                            passed_validation=False,
+                            error=result.error,
+                            semantic_state=AgentSemanticState.AWAITING_APPROVAL,
+                        )
+                        history.append(turn_state)
+                        break
 
                 self.state_machine.transition(
                     AgentSemanticState.MUTATING,

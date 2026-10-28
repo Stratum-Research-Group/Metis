@@ -126,7 +126,7 @@ class BatchJobManager:
         self,
         task_id: Optional[str] = None,
         model_id: Optional[str] = None,
-        smoke_test: bool = True,
+        smoke_test: bool = False,
         actor: Optional[str] = None,
         client_ip: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -292,7 +292,7 @@ class BatchJobManager:
     async def run_paideia(
         self,
         task: str = "router",
-        allow_simulated: bool = True,
+        allow_simulated: bool = False,
         actor: Optional[str] = None,
         client_ip: Optional[str] = None,
     ) -> Dict[str, Any]:

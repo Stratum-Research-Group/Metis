@@ -441,6 +441,25 @@
   - **Marginal Task Performance:** Contained EM was $\Delta \text{EM} = +0.0300$, with 95% bootstrap CI $[0.0000, +0.0600]$ straddling the practical adoption margin $+m = +0.02$.
 * **Remediation:** Enforced formal protocol decision **Class 2 (REJECT-COST-SAFETY)**; rejected integrating learned curator compression into `dianoia/dianoia/walk.py`; confirmed raw concatenation as the production invariant; archived full empirical results in [`docs/review/dianoia-compression-stage1-report.md`](file:///home/akarta/Projects/Metis/docs/review/dianoia-compression-stage1-report.md).
 
+### Item 79: Round 5 Security Hardening & Build Hygiene (Findings 1–6)
+* **Date:** 2026-10-28
+* **Subsystems:** `deploy`, `kleroterion`, `kybernetes.engine`, `kybernetes.execution`, `kybernetes.admin`, `kybernetes.adapters`
+* **Severity:** P0 (Secrets Exposure) / P1 (Sandbox & Approval Bypasses) / P2 (Simulation Defaults) / P3 (Exception & Count Hygiene)
+* **Discovery:** Repo-wide Round 5 audit (`metis-repo-wide-round5-531c7bb-findings-v5-ea1789c2.txt`) identified:
+  1. `kleroterion/pyproject.toml` pointed `readme` to a moved file, failing package builds.
+  2. `kybernetes/engine/coding_agent.py` autonomously resolved its own single-use Phylax approval tokens for mutating tools.
+  3. `kybernetes/execution/backend.py` silently degraded to unisolated host execution when Bubblewrap was unavailable.
+  4. `deploy/metis.env` tracked live authentication tokens in git history.
+  5. `kybernetes/admin/batch_runner.py` defaulted `smoke_test` and `allow_simulated` to `True`.
+  6. `kybernetes/adapters/phylax.py` swallowed all exceptions in `resolve_approval`.
+* **Remediation:**
+  1. Updated `kleroterion/pyproject.toml` to reference `README.md`; verified editable build and all 43 tests pass.
+  2. Prohibited autonomous self-approval in `coding_agent.py`; mutating actions without explicit approval token pause in `AgentSemanticState.AWAITING_APPROVAL`. Added regression test.
+  3. Hardened `get_default_execution_backend()` to raise `RuntimeError` if Bubblewrap is explicitly requested but missing, and emit `UserWarning` on fallback. Added regression tests.
+  4. Untracked `deploy/metis.env` via `git rm --cached`, restricted permissions to `0600`, added to `.gitignore`, and committed `deploy/metis.env.example`.
+  5. Flipped `smoke_test` and `allow_simulated` defaults to `False` in `BatchRunner`.
+  6. Added error logging and return `False` on approval resolution failures in `PhylaxAdapter`.
+
 ---
 
 ## Summary & Verification Matrix
@@ -456,6 +475,7 @@
 | **Deep Audits & Geometric Hardening** | Items 60–73 | Lie group gauge filters, HDC VSA seeds, autograd leaks, LTHCM venv | **Hardened & Tested** | 1,002 tests passed across 11 modules + 0 TS compile errors |
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
+| **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
 
 ---
 

@@ -1,9 +1,12 @@
 """Phylax capability gateway adapter and authorization broker."""
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from kybernetes.contracts.enums import CheckpointAction
 
@@ -274,8 +277,9 @@ class PhylaxAdapter:
                     approved=approved,
                     reason=f"Resolved via PhylaxAdapter with {decision}",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"PhylaxAdapter failed to resolve approval request {approval_id}: {e}")
+                return False
 
         return True
 

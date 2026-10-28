@@ -19,6 +19,7 @@ import signal
 import subprocess
 import time
 from typing import Any, Dict, List, Optional
+import warnings
 
 
 @dataclass
@@ -295,10 +296,15 @@ def get_default_execution_backend(preferred_backend: Optional[str] = None) -> Ex
         bwrap = BubblewrapBackend()
         if bwrap.is_available():
             return bwrap
-        return LocalProcessBackend()
+        raise RuntimeError("Bubblewrap backend explicitly requested, but 'bwrap' is not available or functional.")
 
     # Automatic detection: prefer bubblewrap if available
     bwrap = BubblewrapBackend()
     if bwrap.is_available():
         return bwrap
+    warnings.warn(
+        "Bubblewrap ('bwrap') is not available on this system. Falling back to unisolated LocalProcessBackend.",
+        UserWarning,
+        stacklevel=2,
+    )
     return LocalProcessBackend()
