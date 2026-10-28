@@ -28,6 +28,7 @@ from hestia.api.schemas import (
 )
 from hestia.backend import BackendStartError
 from hestia.backend.llamacpp import LlamaCppBackend
+from hestia.cascade.engine import CascadeConfig, SpeculativeCascadeEngine
 from hestia.config import ServiceConfig
 from hestia.registry import ModelRegistry, ModelType
 from hestia.server import (
@@ -267,6 +268,9 @@ def _build_router():
         if not model_name:
             raise HTTPException(status_code=400, detail="'model' field is required")
 
+        if model_name.startswith("cascade:"):
+            return await cascade_completions(request)
+
         # Validate request schema
         try:
             validated_req = ChatCompletionRequest.model_validate(body)
@@ -368,6 +372,61 @@ def _build_router():
             # If an error occurred before returning the streaming response generator
             await _safe_release_admission(manager, model_name)
             raise
+
+    @router.post("/v1/cascade/completions", response_model=None)
+    async def cascade_completions(request: Request) -> JSONResponse:
+        """Speculative drafter-verifier cascade endpoint with early deferral rules."""
+        require_hestia_auth(request)
+        manager = _get_manager()
+        registry = _get_registry()
+
+        try:
+            body = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+
+        draft_name = body.get("draft_model")
+        verifier_name = body.get("verifier_model")
+        model_spec = body.get("model", "")
+        if (not draft_name or not verifier_name) and model_spec.startswith("cascade:"):
+            parts = model_spec.split(":")
+            if len(parts) >= 3:
+                draft_name = parts[1]
+                verifier_name = parts[2]
+
+        if not draft_name or not verifier_name:
+            raise HTTPException(
+                status_code=400,
+                detail="Both 'draft_model' and 'verifier_model' must be specified (or model='cascade:<draft>:<verifier>')",
+            )
+
+        draft_model = registry.get(draft_name)
+        if not draft_model:
+            raise HTTPException(status_code=404, detail=f"Draft model '{draft_name}' not found")
+        verifier_model = registry.get(verifier_name)
+        if not verifier_model:
+            raise HTTPException(status_code=404, detail=f"Verifier model '{verifier_name}' not found")
+
+        threshold = float(body.get("deferral_threshold", 0.80))
+        criterion = body.get("criterion", "mean_prob")
+        cost_ratio = float(body.get("cost_ratio", 0.25))
+        draft_max_tokens = body.get("draft_max_tokens")
+
+        config = CascadeConfig(
+            draft_model=draft_name,
+            verifier_model=verifier_name,
+            deferral_threshold=threshold,
+            criterion=criterion,
+            draft_max_tokens=draft_max_tokens,
+            cost_ratio=cost_ratio,
+        )
+        engine = SpeculativeCascadeEngine(config)
+
+        async def _forward_call(m_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+            return await _forward_cascade_call(manager, m_name, payload)
+
+        resp_content, decision = await engine.execute(body, _forward_call)
+        return JSONResponse(content=resp_content)
 
     @router.post("/v1/embeddings")
     async def embeddings(request: Request) -> JSONResponse:
@@ -546,6 +605,31 @@ async def _open_stream_request(
     except Exception:
         await client.aclose()
         raise
+
+
+async def _forward_cascade_call(
+    manager: ServerManager,
+    model_name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Forward an internal cascade inference request to the loaded backend instance."""
+    await manager.acquire_admission(model_name)
+    try:
+        proc = await manager.ensure_loaded(model_name, track_inflight=True)
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            resp = await client.post(f"{proc.base_url}/v1/chat/completions", json=payload)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            return resp.json()
+    except (ModelNotFoundError, ModelFailedError, InsufficientVramError, NoFreePortError, GpuQueryError, BackendStartError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    finally:
+        res1 = manager.request_finished(model_name)
+        if asyncio.iscoroutine(res1):
+            await res1
+        res2 = manager.release_admission(model_name)
+        if asyncio.iscoroutine(res2):
+            await res2
 
 
 def _get_manager() -> ServerManager:

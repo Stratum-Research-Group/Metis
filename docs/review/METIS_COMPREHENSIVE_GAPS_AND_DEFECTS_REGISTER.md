@@ -516,6 +516,27 @@
 
 ---
 
+### Item 83: Speculative Cascades Serving Engine & Early Deferral Endpoints in Hestia
+- **Priority:** P1 (Serving Latency & Compute Efficiency)
+- **Status:** **Implemented & Fully Verified**
+- **Impacted Files:**
+  - `hestia/src/hestia/cascade/engine.py`
+  - `hestia/src/hestia/cascade/__init__.py`
+  - `hestia/src/hestia/api/app.py`
+  - `hestia/tests/test_speculative_cascades.py`
+- **Root Cause & Rationale:**
+  - Hestia served single models per request without speculative cascading. Routine code completions and factual inquiries were routed unconditionally to high-capacity verifier models (e.g. 8B–70B), inflating latency and VRAM/compute consumption when lightweight drafters (e.g. 1B–3B) could have generated acceptable completions with high confidence.
+  - Speculative Cascades (ICLR 2025) queries a lightweight draft model first with logprobs enabled. If token-level confidence (mean probability, minimum probability, or margin proxy) meets or exceeds deferral threshold $\tau$, the draft completion exits early, yielding estimated speedups of $3\times$ to $5\times$. If confidence falls below $\tau$, the request defers to the verifier model with fail-safe telemetry.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `CascadeConfig`, `CascadeDecision`, and `SpeculativeCascadeEngine` in `hestia.cascade.engine`.
+  2. Supported linear token probability extraction from both OpenAI and llama.cpp native logprob payloads (`math.exp(logprob)`).
+  3. Implemented deferral criteria: `mean_prob`, `min_prob`, and `margin`.
+  4. Created dedicated `POST /v1/cascade/completions` endpoint and integrated transparent cascade dispatch in `POST /v1/chat/completions` via `model="cascade:<draft>:<verifier>"`.
+  5. Enforced admission control, concurrency safety, and telemetry annotation in `response["usage"]["cascade"]`.
+  6. Added 5 comprehensive unit and API integration tests in `hestia/tests/test_speculative_cascades.py`. All 77 Hestia tests pass cleanly (1 skipped for hardware).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -533,10 +554,11 @@
 | **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 176 Dokime tests passing (15 IFEval unit/integration tests) |
 | **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 36 Krisis tests passing (7 conformal unit/integration tests) |
 | **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 176 Dokime tests passing (9 SIS unit/integration tests) |
+| **Speculative Cascades Serving** | Item 83 | Hestia (Speculative Drafter-Verifier Cascades & Deferral) | **Integrated & Verified** | 77 Hestia tests passing (5 cascade unit/API tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,039 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,044 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -545,7 +567,7 @@
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **127** | 0 | 233.53s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **113** | 0 | 233.92s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
-| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **72** | 1 | 1.19s | **PASS** |
+| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.25s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **71** | 0 | 43.82s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.64s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **41** | 0 | 4.07s | **PASS** |
@@ -553,7 +575,7 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,039** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,044** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 
