@@ -494,6 +494,26 @@
      - Preserves standard scalar $\tau$ fallback when conformal parameters are not specified.
   4. Created comprehensive unit and integration test suite `krisis/tests/test_conformal.py`. All 36 Krisis tests pass cleanly.
 
+### 82. Track C: Sufficient Input Subsets (SIS) Explainer in Dokime
+- **Category:** Black-Box Attribution & Prompt Minimization Engine (Google Research Takeaways: SIS, Carter et al., arXiv:2107.09752)
+- **Status:** **Integrated & Verified**
+- **Impacted Files:**
+  - `dokime/src/dokime/explainers/sis.py`
+  - `dokime/src/dokime/explainers/__init__.py`
+  - `dokime/src/dokime/__init__.py`
+  - `dokime/src/dokime/cli.py`
+  - `dokime/tests/test_sis.py`
+- **Root Cause & Rationale:**
+  - Diagnosing why a model produced a particular response or identifying the minimum context driving a factual claim in Metis required gradient access or intermediate activation hooks, which are unavailable when querying black-box served GGUF models via Hestia.
+  - Sufficient Input Subsets computes the minimal subset along a greedy backward-selection path that satisfies a decision threshold $f(S) \ge \tau$, with $O(N)$ batched evaluations per step and deterministic tie-breaking.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `SufficientInputSubsets`, `SISResult`, and `SISCollectionResult` in `dokime.explainers.sis`.
+  2. Implemented greedy backward elimination: masks each candidate position and removes the item whose omission retains the highest score $\ge \tau$, breaking ties deterministically to lowest index.
+  3. Implemented disjoint rationale collection (`find_sis_collection`): iteratively masks previously discovered rationales to reveal redundant or alternative pathways.
+  4. Implemented `explain_text_sufficiency` helper supporting sentence, paragraph, and word level granularity.
+  5. Added `dokime explain` subcommand to CLI with `--target-keyword`, `--disjoint`, and `--tau` options.
+  6. Added 9 unit and integration tests in `dokime/tests/test_sis.py`. All 176 Dokime tests pass cleanly.
+
 ---
 
 ## Summary & Verification Matrix
@@ -510,17 +530,18 @@
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
-| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 167 Dokime tests passing (15 new unit/integration tests) |
-| **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 36 Krisis tests passing (7 new conformal unit/integration tests) |
+| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 176 Dokime tests passing (15 IFEval unit/integration tests) |
+| **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 36 Krisis tests passing (7 conformal unit/integration tests) |
+| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 176 Dokime tests passing (9 SIS unit/integration tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,030 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,039 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **190** | 0 | 19.88s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **167** | 0 | 2.33s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **176** | 0 | 2.59s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **127** | 0 | 233.53s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **113** | 0 | 233.92s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
@@ -532,7 +553,7 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,030** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,039** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 

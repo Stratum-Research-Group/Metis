@@ -8,6 +8,12 @@ from dokime.adversarial import (
     TaskDataKind,
 )
 from dokime.bom import DatasetBOM, generate_dataset_bom
+from dokime.explainers import (
+    SISCollectionResult,
+    SISResult,
+    SufficientInputSubsets,
+    explain_text_sufficiency,
+)
 from dokime.lineage import (
     ExperimentNode,
     build_experiment_tree,
@@ -33,5 +39,9 @@ __all__ = [
     "TaskDataKind",
     "ReconciliationRecord",
     "SelectiveRiskReport",
+    "SISResult",
+    "SISCollectionResult",
+    "SufficientInputSubsets",
+    "explain_text_sufficiency",
 ]
 

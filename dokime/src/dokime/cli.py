@@ -213,6 +213,53 @@ def create_parser() -> argparse.ArgumentParser:
         help="Base directory containing runs (default: 'runs').",
     )
 
+    # Subcommand: explain (Sufficient Input Subsets)
+    explain_parser = subparsers.add_parser(
+        "explain",
+        help="Find Sufficient Input Subsets (SIS) rationales for prompts (Carter et al., Google Research).",
+    )
+    explain_parser.add_argument(
+        "--text",
+        type=str,
+        default=None,
+        help="Input text or prompt to explain.",
+    )
+    explain_parser.add_argument(
+        "--file",
+        type=str,
+        default=None,
+        help="Path to file containing input text to explain.",
+    )
+    explain_parser.add_argument(
+        "--unit",
+        choices=["sentence", "paragraph", "word"],
+        default="sentence",
+        help="Granularity of explanation units (default: 'sentence').",
+    )
+    explain_parser.add_argument(
+        "--tau",
+        type=float,
+        default=0.8,
+        help="Sufficiency threshold tau (default: 0.8).",
+    )
+    explain_parser.add_argument(
+        "--target-keyword",
+        type=str,
+        default=None,
+        help="Target keyword to evaluate presence / frequency for sufficiency.",
+    )
+    explain_parser.add_argument(
+        "--disjoint",
+        action="store_true",
+        help="Find collection of disjoint sufficient input subsets.",
+    )
+    explain_parser.add_argument(
+        "--max-subsets",
+        type=int,
+        default=3,
+        help="Maximum number of disjoint subsets to uncover (default: 3).",
+    )
+
     return parser
 
 
@@ -448,6 +495,82 @@ def handle_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_explain(args: argparse.Namespace) -> int:
+    """Handle 'dokime explain' subcommand using Sufficient Input Subsets."""
+    from dokime.explainers.sis import (
+        SISCollectionResult,
+        SISResult,
+        explain_text_sufficiency,
+    )
+
+    # Read input text
+    text: str | None = args.text
+    if args.file:
+        path = Path(args.file)
+        if not path.is_file():
+            print(f"Error: file not found: {args.file}", file=sys.stderr)
+            return 1
+        text = path.read_text(encoding="utf-8")
+
+    if not text or not text.strip():
+        print("Error: must provide non-empty input via --text or --file.", file=sys.stderr)
+        return 1
+
+    # Define score function
+    if args.target_keyword:
+        target = args.target_keyword.lower()
+
+        def score_fn(cand_text: str) -> float:
+            low = cand_text.lower()
+            return 1.0 if target in low else 0.0
+
+    else:
+        # Default length/density ratio
+        initial_len = max(len(text), 1)
+
+        def score_fn(cand_text: str) -> float:
+            return min(len(cand_text) / initial_len, 1.0)
+
+    try:
+        res = explain_text_sufficiency(
+            text=text,
+            score_fn=score_fn,
+            tau=args.tau,
+            unit=args.unit,
+            find_disjoint=args.disjoint,
+            max_subsets=args.max_subsets,
+        )
+    except Exception as e:
+        print(f"Error computing Sufficient Input Subsets: {e}", file=sys.stderr)
+        return 1
+
+    print("== Dokime Sufficient Input Subsets (SIS) ==")
+    if isinstance(res, SISCollectionResult):
+        print(f"Threshold (tau):    {res.threshold}")
+        print(f"Total Input Items:  {res.total_items} ({args.unit}s)")
+        print(f"Disjoint Subsets:   {res.total_subsets}")
+        print(f"Residual Score:     {res.residual_score}")
+        print("-" * 55)
+        for i, sub in enumerate(res.subsets, 1):
+            print(f"Subset #{i}: {len(sub.subset_indices)}/{sub.total_items} items (Score: {sub.final_score:.4f}, Reduction: {sub.reduction_ratio:.1%})")
+            print(f"  Indices: {sub.subset_indices}")
+            print(f"  Text:    \"{sub.reconstructed_text}\"")
+    else:
+        print(f"Threshold (tau):    {res.threshold}")
+        print(f"Total Input Items:  {res.total_items} ({args.unit}s)")
+        print(f"Subset Size:        {len(res.subset_indices)} ({args.unit}s)")
+        print(f"Is Sufficient:      {res.is_sufficient}")
+        print(f"Initial Score:      {res.initial_score:.4f}")
+        print(f"Final Score:        {res.final_score:.4f}")
+        print(f"Reduction Ratio:    {res.reduction_ratio:.1%}")
+        print("-" * 55)
+        print("Sufficient Input Subset:")
+        print(f"  Indices: {res.subset_indices}")
+        print(f"  Text:    \"{res.reconstructed_text}\"")
+
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Main CLI entry point."""
     parser = create_parser()
@@ -459,6 +582,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return handle_run(args)
     elif args.subcommand == "compare":
         return handle_compare(args)
+    elif args.subcommand == "explain":
+        return handle_explain(args)
     return 0
 
 
