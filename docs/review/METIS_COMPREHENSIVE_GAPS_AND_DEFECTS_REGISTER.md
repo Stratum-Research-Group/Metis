@@ -460,6 +460,17 @@
   5. Flipped `smoke_test` and `allow_simulated` defaults to `False` in `BatchRunner`.
   6. Added error logging and return `False` on approval resolution failures in `PhylaxAdapter`.
 
+### Item 80: Dokime IFEval Programmatic Instruction-Following Evaluation Suite
+* **Date:** 2026-10-28
+* **Subsystems:** `dokime.tasks`
+* **Severity:** Feature / Capability Integration (Google Research Track)
+* **Discovery:** Assessment of `google-research/google-research` (`metis-google-research-takeaways-2026-10-28-db336cdc-d4cccfb9-0358fb51.txt`) identified IFEval (arXiv 2311.07911) as a high-value deterministic evaluation capability. Prior Dokime task suites lacked verifiable instruction-following checks, relying exclusively on multiple-choice and competition math formats.
+* **Remediation:**
+  1. Implemented `dokime.tasks.ifeval_checkers` providing 11 programmatic instruction checkers (JSON format/schema, word count, sentence count, paragraph count, keyword presence, forbidden words with inflection guards, keyword frequency, section headers, start/end constraints, numbered lists, postscripts).
+  2. Implemented `IFEvalTask` in `dokime.tasks.ifeval` supporting strict and loose prompt/rule accuracy without LLM judges.
+  3. Created curated 20-prompt verifiable evaluation suite `dokime/src/dokime/tasks/data/ifeval_suite.json`.
+  4. Registered `ifeval_instruction_following` in `BUILTIN_TASKS` and verified 167/167 Dokime tests pass (including 15 new unit/integration tests).
+
 ---
 
 ## Summary & Verification Matrix
@@ -476,6 +487,7 @@
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
+| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 167 Dokime tests passing (15 new unit/integration tests) |
 
 ---
 

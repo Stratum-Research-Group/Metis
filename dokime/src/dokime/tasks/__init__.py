@@ -4,6 +4,7 @@ from dokime.tasks.arc import ArcEasy25Task
 from dokime.tasks.base_mc import MultipleChoiceTask
 from dokime.tasks.epistemic import EpistemicAdversarialTask, EpistemicAdversarialV2Task
 from dokime.tasks.gpqa import GPQADiamondTask, GPQADiamondV2Task
+from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetitionMathV2Task
 from dokime.tasks.pinax_lookup import PinaxLookup50Task
 from dokime.tasks.protocol import Query, Task
@@ -18,6 +19,7 @@ __all__ = [
     "EpistemicAdversarialV2Task",
     "GPQADiamondTask",
     "GPQADiamondV2Task",
+    "IFEvalTask",
     "MultipleChoiceTask",
     "PinaxLookup50Task",
     "Query",

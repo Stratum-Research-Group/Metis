@@ -1,0 +1,168 @@
+[
+  {
+    "id": "ifeval-01",
+    "prompt": "Provide a brief explanation of what an operating system kernel does in JSON format. The JSON object must contain exactly the keys: 'component', 'role', and 'example'.",
+    "rules": [
+      {"rule_type": "json_format", "kwargs": {"required_keys": ["component", "role", "example"]}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-02",
+    "prompt": "Explain what a mutex is in exactly 2 sentences.",
+    "rules": [
+      {"rule_type": "sentence_count", "kwargs": {"exact_sentences": 2}}
+    ],
+    "category": "length"
+  },
+  {
+    "id": "ifeval-03",
+    "prompt": "Write a short paragraph about database indexing using at most 30 words.",
+    "rules": [
+      {"rule_type": "word_count", "kwargs": {"max_words": 30}}
+    ],
+    "category": "length"
+  },
+  {
+    "id": "ifeval-04",
+    "prompt": "Describe the difference between TCP and UDP. Your answer must contain at least 60 words.",
+    "rules": [
+      {"rule_type": "word_count", "kwargs": {"min_words": 60}}
+    ],
+    "category": "length"
+  },
+  {
+    "id": "ifeval-05",
+    "prompt": "Write an explanation of public-key cryptography. You must include the words 'asymmetric', 'encryption', and 'signature'.",
+    "rules": [
+      {"rule_type": "keyword_presence", "kwargs": {"keywords": ["asymmetric", "encryption", "signature"], "case_sensitive": false}}
+    ],
+    "category": "keywords"
+  },
+  {
+    "id": "ifeval-06",
+    "prompt": "Explain how garbage collection works in modern programming languages. Do not use the words 'memory', 'leak', or 'pointer'.",
+    "rules": [
+      {"rule_type": "forbidden_words", "kwargs": {"forbidden_words": ["memory", "leak", "pointer"], "case_sensitive": false}}
+    ],
+    "category": "keywords"
+  },
+  {
+    "id": "ifeval-07",
+    "prompt": "Write a short note on system reliability where the word 'fault' appears exactly 3 times.",
+    "rules": [
+      {"rule_type": "keyword_frequency", "kwargs": {"keyword": "fault", "exact_frequency": 3, "case_sensitive": false}}
+    ],
+    "category": "frequency"
+  },
+  {
+    "id": "ifeval-08",
+    "prompt": "Draft an incident report with exactly two markdown section headers: '## Incident Overview' and '## Corrective Actions'.",
+    "rules": [
+      {"rule_type": "section_headers", "kwargs": {"headers": ["## Incident Overview", "## Corrective Actions"]}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-09",
+    "prompt": "Acknowledge the deployment request. Your response must start with 'STATUS_CONFIRMED:' and end with 'VERIFICATION_COMPLETE.'",
+    "rules": [
+      {"rule_type": "start_end", "kwargs": {"starts_with": "STATUS_CONFIRMED:", "ends_with": "VERIFICATION_COMPLETE."}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-10",
+    "prompt": "List the top 4 layers of the OSI networking model as a numbered list from 1 to 4.",
+    "rules": [
+      {"rule_type": "numbered_list", "kwargs": {"min_items": 4}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-11",
+    "prompt": "Write a 3-paragraph summary of distributed consensus algorithms. Separate each paragraph with an empty line.",
+    "rules": [
+      {"rule_type": "paragraph_count", "kwargs": {"exact_paragraphs": 3}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-12",
+    "prompt": "Explain the concept of zero-trust architecture. End your response with a postscript starting with 'P.S.' recommending a reference standard.",
+    "rules": [
+      {"rule_type": "postscript", "kwargs": {}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-13",
+    "prompt": "Generate a JSON configuration for a web server with port 8080 and host '127.0.0.1'. Must be valid JSON containing keys 'host' and 'port', and do not mention 'apache' or 'nginx'.",
+    "rules": [
+      {"rule_type": "json_format", "kwargs": {"required_keys": ["host", "port"]}},
+      {"rule_type": "forbidden_words", "kwargs": {"forbidden_words": ["apache", "nginx"], "case_sensitive": false}}
+    ],
+    "category": "compound"
+  },
+  {
+    "id": "ifeval-14",
+    "prompt": "Write an advisory note on password hashing algorithms in exactly 3 sentences. You must mention 'Argon2' or 'bcrypt'.",
+    "rules": [
+      {"rule_type": "sentence_count", "kwargs": {"exact_sentences": 3}},
+      {"rule_type": "keyword_presence", "kwargs": {"keywords": ["bcrypt"], "case_sensitive": false}}
+    ],
+    "category": "compound"
+  },
+  {
+    "id": "ifeval-15",
+    "prompt": "Provide 5 hardening steps for SSH server configuration as a numbered list. Do not use the word 'password'.",
+    "rules": [
+      {"rule_type": "numbered_list", "kwargs": {"min_items": 5}},
+      {"rule_type": "forbidden_words", "kwargs": {"forbidden_words": ["password"], "case_sensitive": false}}
+    ],
+    "category": "compound"
+  },
+  {
+    "id": "ifeval-16",
+    "prompt": "Summarize what atomic transactions mean in databases. Start your message with 'TRANSACTION_SPEC:' and keep the entire text under 40 words.",
+    "rules": [
+      {"rule_type": "start_end", "kwargs": {"starts_with": "TRANSACTION_SPEC:"}},
+      {"rule_type": "word_count", "kwargs": {"max_words": 40}}
+    ],
+    "category": "compound"
+  },
+  {
+    "id": "ifeval-17",
+    "prompt": "Describe what a hypervisor does in exactly 2 paragraphs. The first paragraph must contain the word 'virtualization'.",
+    "rules": [
+      {"rule_type": "paragraph_count", "kwargs": {"exact_paragraphs": 2}},
+      {"rule_type": "keyword_presence", "kwargs": {"keywords": ["virtualization"], "case_sensitive": false}}
+    ],
+    "category": "compound"
+  },
+  {
+    "id": "ifeval-18",
+    "prompt": "Write a 4-item numbered checklist for reviewing code pull requests. Each item must be concise.",
+    "rules": [
+      {"rule_type": "numbered_list", "kwargs": {"exact_items": 4}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-19",
+    "prompt": "Explain what reproducible builds are without using the word 'compiler' or 'artifact'.",
+    "rules": [
+      {"rule_type": "forbidden_words", "kwargs": {"forbidden_words": ["compiler", "artifact"], "case_sensitive": false}}
+    ],
+    "category": "keywords"
+  },
+  {
+    "id": "ifeval-20",
+    "prompt": "Provide an assessment of software supply chain security. Format with sections '## Assessment' and '## Recommendations', and include a postscript starting with 'P.S.'",
+    "rules": [
+      {"rule_type": "section_headers", "kwargs": {"headers": ["## Assessment", "## Recommendations"]}},
+      {"rule_type": "postscript", "kwargs": {}}
+    ],
+    "category": "compound"
+  }
+]
