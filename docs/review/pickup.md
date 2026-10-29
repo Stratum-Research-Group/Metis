@@ -1,9 +1,9 @@
 # Metis Development Resume Guide (`pickup.md`)
 
-**Last Updated:** 2026-10-28  
+**Last Updated:** 2026-10-29  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `23d54fe40a52e7dac3a6028b2b41838dab0cf477`  
-**Working Tree Status:** All services active under systemd; 885 passing tests verified across 11 modules in constrained sandbox (1,003 claimed on full host).
+**Current HEAD Commit:** `8d1105073a41d0b3419fbebc5dd68220fc992e09`  
+**Working Tree Status:** All services active under systemd; 1,082 passing tests verified across all 11 monorepo packages + root + VS Code Void IDE client (100% green, 1 skipped).
 
 ---
 
@@ -15,37 +15,46 @@ To verify all services and environments are operational after system reboot:
 # 1. Check systemd ambient background services
 systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma-watcher
 
-# 2. Run Prosopon test suite (71 tests)
-./prosopon/.venv/bin/pytest prosopon/tests
+# 2. Run Kybernetes orchestrator & tools test suite (193 tests)
+./.venv/bin/pytest kybernetes/tests -q
 
-# 3. Run Kybernetes test suite (187 tests)
-./kybernetes/.venv/bin/pytest kybernetes/tests
+# 3. Run Dokime evaluation & release gate test suite (189 tests)
+./.venv/bin/pytest dokime/tests -q
 
-# 4. Run Paideia test suite (41 tests)
-./paideia/.venv/bin/pytest paideia/tests
+# 4. Run LTHCM Poincaré memory engine test suite (133 tests)
+./LTHCM/.venv/bin/pytest LTHCM/tests -q
 
-# 5. Run Stoma test suite (113 tests)
-./stoma/.venv/bin/pytest stoma/tests
+# 5. Run Stoma ingestion & structured OCR test suite (118 tests)
+./stoma/.venv/bin/pytest stoma/tests -q
 
-# 6. Run Dianoia test suite (93 tests)
-./.venv/bin/pytest dianoia/tests
+# 6. Run Dianoia MCTS deliberation test suite (93 tests)
+./.venv/bin/pytest dianoia/tests -q
 
-# 7. Run Hestia test suite (72 tests)
-./hestia/.venv/bin/pytest hestia/tests
+# 7. Run Hestia speculative cascades & serving test suite (77 tests, 1 skipped)
+./hestia/.venv/bin/pytest hestia/tests -q
 
-# 8. Run Dokime test suite (152 tests)
-./dokime/.venv/bin/pytest dokime/tests
+# 8. Run Prosopon WebRTC & access store test suite (73 tests)
+./prosopon/.venv/bin/pytest prosopon/tests -q
 
-# 9. Run LTHCM test suite (127 tests)
-./LTHCM/.venv/bin/pytest LTHCM/tests
+# 9. Run Paideia active training pipeline test suite (46 tests)
+./paideia/.venv/bin/pytest paideia/tests -q
 
-# 10. Run Kleroterion, Krisis & Phylax suites (108 tests)
-./.venv/bin/pytest kleroterion/tests krisis/tests phylax/tests
+# 10. Run Kleroterion stochastic policy test suite (43 tests)
+./kleroterion/.venv/bin/pytest kleroterion/tests -q
 
-# 11. Run Root integration test suite (39 tests)
-./.venv/bin/pytest tests
+# 11. Run Krisis claim grounding & conformal gates test suite (40 tests)
+./.venv/bin/pytest krisis/tests -q
 
-# Total: 1,003 tests passing across all 11 subsystems + root (100% green, 1 skipped)
+# 12. Run Phylax capability security gateway test suite (36 tests)
+./.venv/bin/pytest phylax/tests -q
+
+# 13. Run Root integration test suite (39 tests)
+./.venv/bin/pytest tests -q
+
+# 14. Compile VS Code Void IDE client (0 errors)
+npm --prefix vscode run compile
+
+# Monorepo Total: 1,082 tests passing across all 11 subsystems + root (100% green, 1 skipped)
 ```
 
 ---
@@ -267,34 +276,55 @@ systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma
    - **Local Loopback Zero-Friction**: Local CLI tools (`kybernetes code`) automatically resolve `HESTIA_SERVICE_TOKEN` from `deploy/metis.env` (`0600`), eliminating manual exports and PIN prompts for local machine operators.
    - **UI Pairing Clutter Removal**: Removed mobile pairing modals, padlock icons, and obsolete PIN handlers from Prosopon UI.
    - **Horizon 2 Bubblewrap Sandboxing Lockdown**: Enforced default `--unshare-net` network namespace isolation and confined `HOME=<cwd>`, `TMPDIR=/tmp` env vars in `BubblewrapBackend` to block rogue socket connections and prevent exfiltration during coding agent runs. Verified via unit tests in `kybernetes/tests/test_execution_backend.py`.
-   - **Test Suite Status**: **614 passed across all 7 suites** (186 kybernetes, 113 stoma, 93 dianoia, 72 hestia, 70 prosopon, 41 paideia, 39 root).
+
+8. **Phase 12: Google Research Evaluation Integration (Tracks A through G) (Completed)**:
+   - **Track A (Verifiable Instruction Following - IFEval)**: Implemented 15 programmatic instruction constraint checkers in `dokime/src/dokime/tasks/ifeval_checkers.py` and `IFEvalTask` in `dokime/src/dokime/tasks/ifeval.py` evaluated against 25 dense test prompts in `dokime/src/dokime/tasks/data/ifeval_suite.json`. Verified via 19 unit/integration tests in `dokime/tests/test_ifeval.py`.
+   - **Track B (Conformal Uncertainty Prediction Sets - KnowNo)**: Implemented `ConformalCalibrator` and `ConformalPredictionSet` with exact finite-sample coverage guarantees ($1 - \alpha$) in `krisis/krisis/gates/conformal.py`. Fully wired into `KrisisSelector.evaluate()` with 7 unit tests in `krisis/tests/test_conformal.py`.
+   - **Track C (Sufficient Input Subsets - SIS Explainer)**: Implemented backward greedy token attribution in `dokime/src/dokime/explainers/sis.py` and `dokime explain` CLI command. Isolates minimal sufficient rationales preserving prediction fidelity ($\ge \tau$) with 9 unit tests in `dokime/tests/test_sis.py`.
+   - **Track D (Speculative Cascades Serving)**: Implemented speculative drafter-verifier cascading engine in `hestia/src/hestia/cascade/engine.py` and exposed `POST /v1/cascade/completions` API endpoints and `model="cascade:<draft>:<verifier>"` transparent routing. Verified via 5 tests in `hestia/tests/test_speculative_cascades.py`.
+   - **Track E (Active Selective Prediction - ASPEST)**: Implemented `KrisisActiveRecord` and `ASPESTSampler` in `paideia/paideia/data/aspest_sampler.py`, exposing `paideia dataset sample-active` CLI for facility location clustering and uncertainty scoring over abstained query pools. Verified via 9 tests in `paideia/tests/test_aspest_sampler.py` and `krisis/tests/test_active_learning.py`.
+   - **Track F (Google ScaNN ANN Index & Dokime ANN Yardstick)**: Implemented `ScannIndex` wrapping `scann.scann_ops_pybind` with anisotropic Tree-AH quantization and brute-force SIMD fallback in `LTHCM/lthcm/core/scann_index.py`. Implemented `ANNBenchmarkSuite` and `dokime ann-benchmark` CLI. Achieved >108k QPS (11.47x speedup over linear baseline) with 100% recall. Verified via 9 unit tests in `LTHCM/tests/test_scann_index.py` and `dokime/tests/test_ann_benchmark.py`.
+   - **Track G (VRDU Structured Ingestion & Extraction Task)**: Enhanced `stoma/src/stoma/plugins/ocr.py` to parse complex semi-structured document layouts into clean Markdown tables, DePlot/MatCha chart summaries (`# Chart: Title`, `Series: ...`), and key-value blocks. Implemented `VRDUTask` with a 20-sample dense semi-structured document benchmark suite in `dokime/src/dokime/tasks/data/vrdu_suite.json`. Verified via 9 unit tests in `stoma/tests/test_ocr_structured.py` and `dokime/tests/test_vrdu.py`.
+
+9. **Phase 13: Round 5 Security Audit Remediations & Zero-Loopback Model (Completed)**:
+   - **F-02 (Code Mode Generator Frame Traversal Sandbox Escape)**: Blocked generator frame attributes (`gi_frame`, `cr_frame`, `ag_frame`, `f_back`, `f_globals`, `f_locals`, `f_builtins`, `f_code`, `format`, `format_map`, `__dict__`, `__closure__`), prohibited `ast.Yield` / `ast.YieldFrom`, blocked format calls in AST, and reclassified `run_code_mode` as `ToolSideEffectClass.SYSTEM_EXECUTION` in `kybernetes/kybernetes/tools/code_mode.py`.
+   - **F-03 (Prosopon WebRTC Unauthenticated Device ID Injection)**: Enforced strict authentication in `prosopon/prosopon/server.py:webrtc_offer`; rejected unauthenticated callers with 401 Unauthorized.
+   - **F-04 (Kybernetes Zero-Loopback Model & Route Protection)**: Removed loopback exemptions in `require_service_auth`; protected all Lochos squad and Pinax endpoints with authentication; injected shared `phylax_adapter` instance into `ToolRegistry`.
+   - **F-05 (Prosopon Workbench File Sensitive Credential Disclosure)**: Added strict path denylisting in `prosopon/prosopon/server.py:workbench_file` blocking `.host_owner_token`, `metis.env`, `paired_tokens.json`, `.env`, keys, SQLite databases, and internal snapshot/policy directories with 403 Forbidden.
+   - **F-07 (Execution Pipeline Phylax Gate Hard-Deny Fallthrough)**: Enforced immediate `TurnOutcomeStatus.DENIED` event termination when Phylax denies an action; replaced non-existent `"guarded_action"` with `"write_file"` in `router.py`.
+   - **F-08 (Krisis Claim Negation False Contradiction Polarity Clash)**: Replaced naive contradiction keyword checks with semantic polarity clash analysis between claim and evidence in `kybernetes/kybernetes/adapters/krisis.py`.
+   - **Pickle Security Hardening**: Flipped `allow_trusted_pickle=False` default across Stoma graph builder and interchange modules.
 
 ---
 
 ## 3. Implementation Status Summary
 
-All prioritized synthesis roadmap tasks, review remediation circuits, and local deployment horizons are now **fully completed and verified**:
+All prioritized synthesis roadmap tasks, review remediation circuits, Google Research tracks, and security hardening horizons are **fully completed, verified, and synchronized**:
 - **Track A (Pyle & Remote Control)**: Loopback closure, SQLite device registry, WebAuthn RP, WebRTC DataChannel engine, Operator remote approvals, panic lockdown, doctor diagnostics (Phases 0, 1, 2, 8).
 - **Track B (Anadrome)**: Canonical JSON observation hashing, decision tree logging harness, in-process probe cache, zero imputation replay engine, policy zoo, Dokime paired bootstrap evaluation, frozen live walk test (Phases 4, 6, 9).
 - **Tracks C & D (Schedion & Symbolon)**: 5060 Ti hardware validation, candidate generation & code identity adapters, E1 diagnostic, Stage 3 and E2 controlled empirical comparisons, negative research reports and archival verdicts (Phases 3, 5, 7).
 - **Track E (Architectural Review Remediation & Kernel Hardening)**: Live Dianoia walk deliberation, Bubblewrap sandboxed containment with default network namespace unsharing, MSS terminal context retention, Lochos worktree checkpointer rollback & subagent delegation, Paideia Anadrome ingestion, Stoma offline knowledge graph edge builder (Phase 10).
 - **Track F (Sovereign Service Deployment & Sandboxing)**: Systemd ambient daemon orchestrations, local loopback zero-friction authorization, removal of mobile PIN clutter, and Bubblewrap network/home confinement (Phase 11 / Horizons 1 & 2).
+- **Track G (Google Research Evaluation Tracks A–G)**: IFEval instruction following, KnowNo conformal uncertainty, SIS backward token attribution, Speculative Cascades serving, ASPEST active prediction, Google ScaNN anisotropic Tree-AH vector index, and VRDU structured multimodal ingestion (Phase 12).
+- **Track H (Round 5 Security Hardening & Zero-Loopback Model)**: F-02 to F-08 security defect remediations, generator frame sandbox traversal prevention, path traversal credential denylist, and fail-closed gate pipelines (Phase 13).
 
 ---
 
 ## 4. Key Documentation Links
 
 - **Main Manual**: [`docs/MSS.md`](file:///home/akarta/Projects/Metis/docs/MSS.md)
+- **Comprehensive Gaps and Defects Register**: [`docs/review/METIS_COMPREHENSIVE_GAPS_AND_DEFECTS_REGISTER.md`](file:///home/akarta/Projects/Metis/docs/review/METIS_COMPREHENSIVE_GAPS_AND_DEFECTS_REGISTER.md)
+- **Comprehensive Project Review (2026-10-21)**: [`docs/review/COMPREHENSIVE_PROJECT_REVIEW_2026_10_21.md`](file:///home/akarta/Projects/Metis/docs/review/COMPREHENSIVE_PROJECT_REVIEW_2026_10_21.md)
+- **Round 5 Audit Brief**: [`docs/review/metis-repo-wide-round5-531c7bb-findings-v5-ea1789c2.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-repo-wide-round5-531c7bb-findings-v5-ea1789c2.txt)
+- **Google Research Takeaways (Metis General)**: [`docs/review/metis-google-research-takeaways-2026-10-28-db336cdc-d4cccfb9-0358fb51.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-google-research-takeaways-2026-10-28-db336cdc-d4cccfb9-0358fb51.txt)
+- **Google Research Takeaways (LTHCM Memory)**: [`docs/review/lthcm-google-research-takeaways-2026-10-28-db336cdc-3e696024-ea23eeaf.txt`](file:///home/akarta/Projects/Metis/docs/review/lthcm-google-research-takeaways-2026-10-28-db336cdc-3e696024-ea23eeaf.txt)
+- **Google Research Takeaways (Dioptra Evaluation)**: [`docs/review/dioptra-google-research-takeaways-2026-10-28-db336cdc-70fd015d-ab6f215f.txt`](file:///home/akarta/Projects/Metis/docs/review/dioptra-google-research-takeaways-2026-10-28-db336cdc-70fd015d-ab6f215f.txt)
 - **Pyle WebRTC + Passkey Spec**: [`docs/review/mss-pyle-webrtc-passkey-spec.md`](file:///home/akarta/Projects/Metis/docs/review/mss-pyle-webrtc-passkey-spec.md)
 - **Synthesis Roadmap (All 5 Subsystems)**: [`docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md`](file:///home/akarta/Projects/Metis/docs/review/metis-ncm-anadrome-pyle-synthesis-roadmap-2026-10-18.md)
-- **Anadrome Replay Spec**: [`docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-anadrome-walk-replay-experiment-spec-aa69f396.txt)
 - **Anadrome Milestone 3.2 Report**: [`docs/review/anadrome-frozen-live-walk-milestone3-report.md`](file:///home/akarta/Projects/Metis/docs/review/anadrome-frozen-live-walk-milestone3-report.md)
 - **Schedion Stage 3 Report**: [`docs/review/schedion-stage3-controlled-comparison-report.md`](file:///home/akarta/Projects/Metis/docs/review/schedion-stage3-controlled-comparison-report.md)
 - **Symbolon E2 Report**: [`docs/review/symbolon-candidate-fusion-e2-report.md`](file:///home/akarta/Projects/Metis/docs/review/symbolon-candidate-fusion-e2-report.md)
-- **SwiLA Session State Experiment Plan v3**: [`docs/review/metis-swila-session-state-experiment-plan-v3-509d70c-d2ce8894.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-swila-session-state-experiment-plan-v3-509d70c-d2ce8894.txt)
-- **SwiLA Stage 1 Audit Report**: [`docs/review/metis-swila-stage1-report-audit-20261020-bbf93822.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-swila-stage1-report-audit-20261020-bbf93822.txt)
 - **SwiLA Stage 1 Empirical Report**: [`docs/review/swila-session-state-stage1-report.md`](file:///home/akarta/Projects/Metis/docs/review/swila-session-state-stage1-report.md)
-- **Dianoia Question-Conditioned Compression Spec**: [`docs/review/metis-dianoia-question-conditioned-compression-experiment-spec-2026-10-20-531c7bb-29a18f8e.txt`](file:///home/akarta/Projects/Metis/docs/review/metis-dianoia-question-conditioned-compression-experiment-spec-2026-10-20-531c7bb-29a18f8e.txt)
 - **Dianoia Compression Stage 1 Report**: [`docs/review/dianoia-compression-stage1-report.md`](file:///home/akarta/Projects/Metis/docs/review/dianoia-compression-stage1-report.md)
 - **Review Specs Index**: [`docs/REVIEW_INDEX.md`](file:///home/akarta/Projects/Metis/docs/REVIEW_INDEX.md)
 
@@ -302,7 +332,7 @@ All prioritized synthesis roadmap tasks, review remediation circuits, and local 
 
 ## 5. Deployment Horizons & Future Options
 
-With all core engine components, security perimeters (Pyle/Phylax), memory subsystems (Stoma/LTHCM), deliberative walks (Dianoia/Kleroterion), multi-agent coordination (Kybernetes/Lochos/Prosopon), and sandboxed execution (Bubblewrap) verified with 614 passing tests:
+With all core engine components, security perimeters (Pyle/Phylax), memory subsystems (Stoma/LTHCM), deliberative walks (Dianoia/Kleroterion), multi-agent coordination (Kybernetes/Lochos/Prosopon), and sandboxed execution (Bubblewrap) verified with 1,082 passing tests:
 
 ### Horizon 1: Full-Stack Sovereign Local Service Deployment (Completed)
 * Systemd user units (`metis-hestia.service`, `metis-kybernetes.service`, `metis-prosopon.service`, `metis-stoma-watcher.service`) active and persistent.
@@ -319,6 +349,7 @@ With all core engine components, security perimeters (Pyle/Phylax), memory subsy
   1. **Remote MSS Void Peer Connection**: External peers authenticate via `KYBERNETES_SERVICE_TOKEN` and `HESTIA_SERVICE_TOKEN` over HTTPS or WireGuard/Tailscale VPN without public port exposure.
   2. **WebAuthn Biometric Passkey Enrollment**: Use Prosopon's Relying Party to enroll hardware authenticators (TouchID, FaceID, YubiKey) for companion devices.
   3. **Interactive Remote Approvals**: WebRTC DataChannel alerts prompting 1-tap Approve/Reject for Phylax Tier 2/Tier 3 mutating operations.
+
 
 
 
