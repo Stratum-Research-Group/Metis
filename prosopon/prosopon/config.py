@@ -28,6 +28,10 @@ class ProsoponConfig(BaseModel):
     )
     
     # Security & Pairing
+    workspace_root: Optional[Path] = Field(
+        default=None,
+        description="Workspace root directory for workbench APIs",
+    )
     data_dir: Path = Field(
         default_factory=lambda: Path("./data"),
         description="Directory for sessions, pairing state, and temporary audio",

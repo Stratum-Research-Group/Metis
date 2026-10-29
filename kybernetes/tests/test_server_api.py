@@ -114,13 +114,20 @@ async def test_service_token_auth():
         assert auth_resp.status_code == 200
         assert auth_resp.json()["cancelled"] is True
 
-    # Local loopback client (MSS Void) trusts local connection without token
+    # F-04: Zero-loopback trust model - local loopback client without token must be rejected with 401
     secured_app.state.sessions.register_active_turn("turn-2")
     transport_local = ASGITransport(app=secured_app, client=("127.0.0.1", 12345))
     async with AsyncClient(transport=transport_local, base_url="http://test") as client:
-        local_resp = await client.post("/v1/chat/turns/turn-2/cancel")
-        assert local_resp.status_code == 200
-        assert local_resp.json()["cancelled"] is True
+        local_unauth = await client.post("/v1/chat/turns/turn-2/cancel")
+        assert local_unauth.status_code == 401
+        assert "Valid Kybernetes service token required" in local_unauth.json()["detail"]
+
+        local_auth = await client.post(
+            "/v1/chat/turns/turn-2/cancel",
+            headers={"Authorization": "Bearer secret-service-token-123"},
+        )
+        assert local_auth.status_code == 200
+        assert local_auth.json()["cancelled"] is True
 
 
 @pytest.mark.asyncio

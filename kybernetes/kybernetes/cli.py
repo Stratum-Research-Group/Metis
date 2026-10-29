@@ -125,14 +125,15 @@ def chat(query: str):
     """Run a single interactive turn through the full Kybernetes pipeline."""
     async def _run():
         db = BudgetDatabase(":memory:")
+        phylax_adapter = PhylaxAdapter()
         pipeline = ExecutionPipeline(
             router=PlanRouter(),
             budget_engine=BudgetEngine(db),
-            tool_registry=ToolRegistry(),
+            tool_registry=ToolRegistry(phylax_adapter=phylax_adapter),
             hestia_adapter=HestiaAdapter(),
             lthcm_adapter=LTHCMAdapter(),
             dianoia_adapter=DianoiaAdapter(),
-            phylax_adapter=PhylaxAdapter(),
+            phylax_adapter=phylax_adapter,
             krisis_adapter=KrisisAdapter(),
             session_manager=SessionManager(),
         )

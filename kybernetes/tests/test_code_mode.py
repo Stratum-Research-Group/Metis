@@ -104,7 +104,8 @@ while True:
 
 
 def test_code_mode_registered_in_tool_registry(tmp_path: Path):
-    registry = ToolRegistry(allowed_roots=[tmp_path])
+    # Tool execution with approvals disabled
+    registry = ToolRegistry(allowed_roots=[tmp_path], enforce_approvals=False)
     assert "run_code_mode" in registry.list_tools()
 
     req = ToolCallRequest(
@@ -117,6 +118,12 @@ def test_code_mode_registered_in_tool_registry(tmp_path: Path):
     assert result.success is True
     assert result.data["result"] == 45.0
 
+    # With enforce_approvals=True, SYSTEM_EXEC tool requires approval token (Finding F-02)
+    enforced_registry = ToolRegistry(allowed_roots=[tmp_path], enforce_approvals=True)
+    enforced_res = enforced_registry.execute(req)
+    assert enforced_res.success is False
+    assert "requires verified Phylax approval token" in enforced_res.error
+
 
 def test_code_mode_rejects_format_spec_traversal(tmp_path: Path):
     """Finding A6 regression: format-spec attribute traversal must be blocked by AST safety validation."""
@@ -126,13 +133,42 @@ def test_code_mode_rejects_format_spec_traversal(tmp_path: Path):
     script1 = 'result = "{0.__class__}".format(1)'
     res1 = cmode.execute(script1)
     assert res1["success"] is False
-    assert "Prohibited format-spec attribute traversal" in res1["error"]
+    assert ("Prohibited format-spec attribute traversal" in res1["error"]
+            or "string format/format_map methods is prohibited" in res1["error"]
+            or "Prohibited access to internal or dangerous attribute" in res1["error"])
 
     # 2. String format with mro / forbidden attributes
     script2 = 'result = "{0.__class__.__mro__}".format(1)'
     res2 = cmode.execute(script2)
     assert res2["success"] is False
-    assert "Prohibited format-spec attribute traversal" in res2["error"]
+    assert ("Prohibited format-spec attribute traversal" in res2["error"]
+            or "string format/format_map methods is prohibited" in res2["error"]
+            or "Prohibited access to internal or dangerous attribute" in res2["error"])
+
+
+def test_code_mode_rejects_generator_and_frame_traversal(tmp_path: Path):
+    """Finding F-02 regression: generator yield and frame traversal escapes must be blocked."""
+    cmode = SafeCodeMode(allowed_roots=[tmp_path])
+
+    # 1. Reject generator yield
+    script_yield = """
+def gen():
+    yield 1
+g = gen()
+result = 1
+"""
+    res_yield = cmode.execute(script_yield)
+    assert res_yield["success"] is False
+    assert "Generator and coroutine yield expressions are prohibited" in res_yield["error"]
+
+    # 2. Reject frame traversal attributes
+    script_frame = """
+g = [1, 2]
+res = g.gi_frame
+"""
+    res_frame = cmode.execute(script_frame)
+    assert res_frame["success"] is False
+    assert "Prohibited access to internal dunder attribute 'gi_frame'" in res_frame["error"]
 
 
 def test_code_mode_enforceable_timeout_on_c_extensions(tmp_path: Path):

@@ -365,8 +365,8 @@ class ExecutionPipeline:
                     target=target,
                     arguments=tool_args,
                 )
-                if not permitted and (needs_interactive or app_req):
-                    if app_req:
+                if not permitted:
+                    if app_req and needs_interactive:
                         e_state_block = TurnEvent(
                             turn_id=turn_id,
                             seq_num=seq_num,
@@ -493,6 +493,53 @@ class ExecutionPipeline:
                                 emitted_events=emitted_events,
                             )
                             return
+                    else:
+                        denied_msg = f"Action was denied by security policy: {capability} -> {target}"
+                        e_delta = TurnEvent(
+                            turn_id=turn_id,
+                            seq_num=seq_num,
+                            event_type=EventType.DELTA.value,
+                            payload={"text": denied_msg},
+                            status=TurnOutcomeStatus.DENIED.value,
+                        )
+                        _record_event(e_delta)
+                        yield e_delta
+                        seq_num += 1
+
+                        denied_lat = round((time.perf_counter() - start_time) * 1000, 2)
+                        e_comp = TurnEvent(
+                            turn_id=turn_id,
+                            seq_num=seq_num,
+                            event_type=EventType.COMPLETED.value,
+                            payload={
+                                "route_summary": {
+                                    "route": plan.route_label,
+                                    "action_status": "denied",
+                                    "components_used": list(set(components_used)),
+                                    "latency_ms": denied_lat,
+                                }
+                            },
+                            status=TurnOutcomeStatus.DENIED.value,
+                        )
+                        _record_event(e_comp)
+                        yield e_comp
+                        self._record_terminal_state(
+                            trace_id=trace_id,
+                            turn_id=turn_id,
+                            session_id=request.session_id,
+                            plan=plan,
+                            components_used=components_used,
+                            stage_outcomes=stage_outcomes,
+                            total_lat=denied_lat,
+                            final_status=TurnOutcomeStatus.DENIED,
+                            zero_edge_fallback=False,
+                            is_turn_simulated=is_turn_simulated,
+                            v_report=None,
+                            query=request.query,
+                            response_text=denied_msg,
+                            emitted_events=emitted_events,
+                        )
+                        return
 
                 if self.sessions.is_turn_cancelled(turn_id):
                     cancel_msg = "Turn was cancelled before tool execution."

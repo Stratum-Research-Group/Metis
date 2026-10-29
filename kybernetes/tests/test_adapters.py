@@ -196,6 +196,66 @@ def test_krisis_verification_statuses():
     assert rep4.status == TurnOutcomeStatus.INSUFFICIENT_EVIDENCE
 
 
+def test_krisis_polarity_clash_detection():
+    """F-08: Verify polarity clash detection differentiates contradiction from agreeing negations."""
+    krisis = KrisisAdapter()
+    
+    pos_cit = Citation(
+        citation_id="[1]",
+        passage_id="p_pos",
+        source_id="s1",
+        source_title="Metis Architecture",
+        text="Metis supports speculative execution on CPU and GPU pipelines.",
+        score=0.9,
+    )
+    neg_cit = Citation(
+        citation_id="[2]",
+        passage_id="p_neg",
+        source_id="s2",
+        source_title="Metis Architecture",
+        text="Metis does not support unauthenticated WebRTC network access.",
+        score=0.9,
+    )
+
+    # 1. Agreeing positive: no clash
+    rep_pos_agree = krisis.verify_response(
+        "query",
+        "Metis supports speculative execution on CPU pipelines [1].",
+        [pos_cit],
+    )
+    assert rep_pos_agree.status == TurnOutcomeStatus.CITED_UNVERIFIED
+    assert rep_pos_agree.conflict_detected is False
+
+    # 2. Agreeing negative: "not" in both claim and citation -> no clash
+    rep_neg_agree = krisis.verify_response(
+        "query",
+        "Metis does not support unauthenticated WebRTC network access [2].",
+        [neg_cit],
+    )
+    assert rep_neg_agree.status == TurnOutcomeStatus.CITED_UNVERIFIED
+    assert rep_neg_agree.conflict_detected is False
+
+    # 3. Polarity clash: claim negates affirmative citation
+    rep_clash_neg_claim = krisis.verify_response(
+        "query",
+        "Metis does not support speculative execution on CPU pipelines [1].",
+        [pos_cit],
+    )
+    assert rep_clash_neg_claim.status == TurnOutcomeStatus.CONFLICTED
+    assert rep_clash_neg_claim.conflict_detected is True
+    assert "Contradiction detected in cited claim against evidence" in rep_clash_neg_claim.explanation
+
+    # 4. Polarity clash: claim asserts negative citation
+    rep_clash_pos_claim = krisis.verify_response(
+        "query",
+        "Metis supports unauthenticated WebRTC network access [2].",
+        [neg_cit],
+    )
+    assert rep_clash_pos_claim.status == TurnOutcomeStatus.CONFLICTED
+    assert rep_clash_pos_claim.conflict_detected is True
+
+
+
 def test_dokime_cohort_priors():
     dokime = DokimeAdapter()
     assert dokime.load_cohort_priors("unknown") is None

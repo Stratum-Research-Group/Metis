@@ -405,3 +405,67 @@ async def test_voice_disabled_by_default_and_toggle(app_instance, auth_headers):
         )
         assert toggle_off.status_code == 200
         assert toggle_off.json()["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_webrtc_offer_unauthenticated_device_id_rejection(app_instance):
+    """F-03: Verify unauthenticated caller cannot bypass WebRTC auth by supplying device_id in body."""
+    transport = ASGITransport(app=app_instance)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/webrtc/offer",
+            json={
+                "sdp": "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n",
+                "type": "offer",
+                "device_id": "attacker_injected_device_id",
+            },
+        )
+        assert resp.status_code == 401
+        assert "Unauthorized" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_workbench_file_sensitive_path_denial(tmp_path):
+    """F-05: Verify sensitive workspace resources cannot be retrieved via workbench file API."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    cfg = ProsoponConfig(
+        data_dir=tmp_path / "data",
+        workspace_root=workspace,
+        mock_kybernetes=True,
+    )
+    app = create_app(cfg)
+    tok = app.state.pairing_mgr.get_or_create_host_owner_token()
+    headers = {"Authorization": f"Bearer {tok}"}
+    transport = ASGITransport(app=app)
+    
+    # Create dummy sensitive files in workspace
+    (workspace / ".host_owner_token").write_text("secret_token")
+    (workspace / "metis.env").write_text("SECRET_KEY=12345")
+    (workspace / "paired_tokens.json").write_text("{}")
+    (workspace / "storage.db").write_text("binary_sqlite_data")
+    admin_dir = workspace / ".admin_snapshots"
+    admin_dir.mkdir(exist_ok=True)
+    (admin_dir / "snapshot.json").write_text("{}")
+    
+    # Create legitimate file
+    (workspace / "sample.txt").write_text("legitimate content")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Sensitive files must return 403 Forbidden
+        for sens_path in [
+            ".host_owner_token",
+            "metis.env",
+            "paired_tokens.json",
+            "storage.db",
+            ".admin_snapshots/snapshot.json",
+        ]:
+            resp = await client.get(f"/api/workbench/file?path={sens_path}", headers=headers)
+            assert resp.status_code == 403, f"Expected 403 for {sens_path}, got {resp.status_code}"
+            assert "sensitive workspace resource" in resp.json()["detail"]
+
+        # Legitimate file must succeed with 200
+        ok_resp = await client.get("/api/workbench/file?path=sample.txt", headers=headers)
+        assert ok_resp.status_code == 200
+        assert ok_resp.json()["content"] == "legitimate content"
+

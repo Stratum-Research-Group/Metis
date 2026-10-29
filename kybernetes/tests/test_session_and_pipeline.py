@@ -175,3 +175,27 @@ def test_thinking_budget_configuration(monkeypatch):
     assert loaded.thinking_budget_steps == 15
 
 
+@pytest.mark.asyncio
+async def test_pipeline_hard_policy_denial_no_approval_req(pipeline_setup, monkeypatch):
+    """F-07: Verify that hard DENY in Phylax policy immediately terminates with DENIED without executing tool."""
+    pipeline, phylax, _ = pipeline_setup
+    
+    # Mock Phylax is_action_permitted to return (False, None) -> hard deny, no interactive approval possible
+    def mock_is_action_permitted(capability, target, arguments=None):
+        return (False, None)
+
+    monkeypatch.setattr(phylax, "is_action_permitted", mock_is_action_permitted)
+
+    req = TurnRequest(session_id="s_hard_deny", query="Write file to /etc/shadow")
+    events = [e async for e in pipeline.execute_turn_stream(req)]
+
+    types = [e.event_type for e in events]
+    assert EventType.ASK_APPROVAL.value not in types
+    assert EventType.COMPLETED.value in types
+    
+    completed_event = events[-1]
+    assert completed_event.status == TurnOutcomeStatus.DENIED.value
+    assert completed_event.payload["route_summary"]["action_status"] == "denied"
+
+
+

@@ -91,7 +91,7 @@ class PlanRouter:
         # 4. TOOL STAGE (if tool needed)
         if needs_tool:
             route_tags.append(RouteTag.TOOL)
-            tool_name = "calculator" if needs_math else ("file_search" if needs_file_search else "guarded_action")
+            tool_name = "calculator" if needs_math else ("file_search" if needs_file_search else "write_file")
             stages.append(
                 StagePlan(
                     stage=StageName.TOOL,

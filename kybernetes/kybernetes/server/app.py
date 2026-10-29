@@ -62,6 +62,9 @@ def create_app(
     krisis_adapter: Optional[KrisisAdapter] = None,
     hestia_adapter: Optional[HestiaAdapter] = None,
     lochos_squad: Optional[LochosSquadManager] = None,
+    tool_registry: Optional[ToolRegistry] = None,
+    router: Optional[PlanRouter] = None,
+    session_manager: Optional[SessionManager] = None,
     config: Optional[KybernetesConfig] = None,
 ) -> FastAPI:
     """Create and configure FastAPI application for Kybernetes."""
@@ -76,15 +79,15 @@ def create_app(
 
     db = BudgetDatabase(db_path=effective_db_path)
     budget_engine = BudgetEngine(db=db)
-    tool_registry = ToolRegistry()
+    phylax_adapter = phylax_adapter or PhylaxAdapter()
+    tool_registry = tool_registry or ToolRegistry(phylax_adapter=phylax_adapter)
     hestia_adapter = hestia_adapter or HestiaAdapter(base_url=cfg.hestia_base_url)
     lthcm_adapter = lthcm_adapter or LTHCMAdapter(memory_root=effective_memory_root)
     dianoia_adapter = dianoia_adapter or DianoiaAdapter()
-    phylax_adapter = phylax_adapter or PhylaxAdapter()
     krisis_adapter = krisis_adapter or KrisisAdapter()
-    session_manager = SessionManager()
+    session_manager = session_manager or SessionManager()
     lochos_squad = lochos_squad or LochosSquadManager()
-    router = PlanRouter()
+    router = router or PlanRouter()
 
     pipeline = ExecutionPipeline(
         router=router,
@@ -146,11 +149,6 @@ def create_app(
         app.include_router(admin_router)
 
     async def require_service_auth(request: Request, authorization: Optional[str] = Header(None)) -> bool:
-        client_host = request.client.host if request.client else ""
-        # Local loopback trust: MSS Void on local machine does not need token authorization friction
-        if client_host in ("127.0.0.1", "::1", "localhost"):
-            return True
-
         token = None
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer ") :].strip()
@@ -337,7 +335,7 @@ def create_app(
     # --- Lochos Multi-Agent Squad API ---
 
     @app.get("/v1/lochos/squad")
-    async def get_lochos_squad() -> Dict[str, Any]:
+    async def get_lochos_squad(_: bool = Depends(require_service_auth)) -> Dict[str, Any]:
         """Retrieve active Lochos multi-agent squad status, seats, and active tasks."""
         return lochos_squad.to_status_dict()
 
@@ -345,6 +343,7 @@ def create_app(
     async def get_lochos_queue(
         status: Optional[str] = None,
         seat_id: Optional[str] = None,
+        _: bool = Depends(require_service_auth),
     ) -> List[Dict[str, Any]]:
         """Retrieve work items tracked in the Lochos SQLite queue."""
         tasks = lochos_squad.queue.list_tasks(status=status, seat_id=seat_id)
@@ -395,7 +394,7 @@ def create_app(
         return item.to_dict()
 
     @app.get("/v1/lochos/seats/{seat_id}/brief")
-    async def get_lochos_seat_brief(seat_id: str) -> Dict[str, Any]:
+    async def get_lochos_seat_brief(seat_id: str, _: bool = Depends(require_service_auth)) -> Dict[str, Any]:
         """Retrieve the continuity/restore brief for a squad seat."""
         seat = lochos_squad.get_seat(seat_id)
         if not seat:
@@ -408,6 +407,7 @@ def create_app(
         from_seat: str,
         to_seat: str,
         note: Optional[str] = None,
+        _: bool = Depends(require_service_auth),
     ) -> Dict[str, Any]:
         """Generate a peer handoff brief between squad seats."""
         try:
@@ -421,7 +421,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(err))
 
     @app.get("/v1/lochos/attention")
-    async def get_lochos_attention() -> List[Dict[str, Any]]:
+    async def get_lochos_attention(_: bool = Depends(require_service_auth)) -> List[Dict[str, Any]]:
         """Retrieve cross-seat attention reconciliation requests."""
         return lochos_squad.get_attention_summary()
 
@@ -505,17 +505,25 @@ def create_app(
         category: Optional[str] = None,
         risk_tier: Optional[str] = None,
         limit: int = 50,
+        _: bool = Depends(require_service_auth),
     ) -> List[Dict[str, Any]]:
         """List or search tools from Pinax catalogue."""
         return pinax.lookup(query=query, category=category, risk_tier=risk_tier, limit=limit)
 
     @app.get("/v1/pinax/tools/{tool_id:path}/docs")
-    async def get_pinax_tool_docs(tool_id: str, max_bytes: int = 4096) -> Dict[str, Any]:
+    async def get_pinax_tool_docs(
+        tool_id: str,
+        max_bytes: int = 4096,
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
         """Fetch documentation slice for a tool (Level 2 size-capped)."""
         return pinax.get_tool_docs(tool_id, max_bytes=max_bytes)
 
     @app.get("/v1/pinax/tools/{tool_id:path}")
-    async def get_pinax_tool_detail(tool_id: str) -> Dict[str, Any]:
+    async def get_pinax_tool_detail(
+        tool_id: str,
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
         """Get Level 1 detailed specification, schema, and capabilities for a tool."""
         res = pinax.get_tool_detail(tool_id)
         if not res:
@@ -532,7 +540,10 @@ def create_app(
         return pinax.scan_environment(path_dirs=path_dirs)
 
     @app.post("/v1/pinax/evaluate")
-    async def evaluate_pinax_invocation(data: Dict[str, Any]) -> Dict[str, Any]:
+    async def evaluate_pinax_invocation(
+        data: Dict[str, Any],
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
         """Evaluate invocation risk for a tool call against catalogue overrides."""
         tool_name = data.get("tool_name", "")
         args = data.get("args", [])

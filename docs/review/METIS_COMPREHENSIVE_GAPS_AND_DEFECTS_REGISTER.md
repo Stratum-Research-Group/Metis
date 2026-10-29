@@ -618,6 +618,59 @@
      - ASML EUV purchase orders, Zeiss commercial invoices, TSMC wafer probing reports, Hellenic Oncology clinical protocols, Metis 10-K balance sheets, quantum semiconductor patents, ISO cleanroom lab specs, commercial lease agreements, FAA airworthiness certificates, and material transfer agreements.
   4. Added 3 unit tests in `stoma/tests/test_ocr_structured.py` and 6 unit tests in `dokime/tests/test_vrdu.py` (185 Dokime tests + 118 Stoma tests passing).
 
+### Item 87: Security & Architectural Audit Remediation (F-02, F-03, F-04, F-05, F-07, F-08)
+- **Category:** Monorepo Security & Robustness (Code Mode AST, WebRTC Auth, Zero-Loopback Model, Path Traversal, Phylax Gate Fallthrough, Krisis Polarity Clash)
+- **Priority:** P0 (Defense-in-Depth, Authentication & Remote Sandbox Escape Prevention)
+- **Status:** Resolved & Verified
+- **Affected Subsystems:**
+  - `kybernetes/kybernetes/tools/code_mode.py`
+  - `kybernetes/tests/test_code_mode.py`
+  - `prosopon/prosopon/server.py`
+  - `prosopon/prosopon/config.py`
+  - `prosopon/tests/test_server_api.py`
+  - `kybernetes/kybernetes/server/app.py`
+  - `kybernetes/kybernetes/cli.py`
+  - `kybernetes/tests/test_lochos_api.py`
+  - `kybernetes/tests/test_pinax.py`
+  - `kybernetes/tests/test_server_api.py`
+  - `kybernetes/kybernetes/engine/pipeline.py`
+  - `kybernetes/kybernetes/routing/router.py`
+  - `kybernetes/tests/test_session_and_pipeline.py`
+  - `kybernetes/kybernetes/adapters/krisis.py`
+  - `kybernetes/tests/test_adapters.py`
+- **Root Cause & Rationale:**
+  - **F-02 (Code Mode Generator Frame Traversal Sandbox Escape):** In Python, generator execution frames can be traversed to extract module globals (`(yield 1).gi_frame.f_globals["os"]`) without accessing traditional dunder attributes. Furthermore, Python format string traversal (`"{0.__class__}".format(...)`) provides another introspection vector. Additionally, `run_code_mode` was marked with `READ_ONLY` side effects instead of `SYSTEM_EXECUTION`, bypassing Phylax approval checks when approvals were enforced.
+  - **F-03 (Prosopon WebRTC Offer Unauthenticated Device ID Injection):** In `/api/webrtc/offer`, `target_dev_id` initialized directly from `req.device_id` in the request body. If the caller provided arbitrary `device_id` and omitted auth headers, `target_dev_id` was non-null, bypassing the `if not target_dev_id:` check and allowing unauthenticated callers to negotiate WebRTC data channels.
+  - **F-04 (Kybernetes Loopback Trust & Unauthenticated Lochos/Pinax Route Exposure):** `require_service_auth` in Kybernetes trusted `127.0.0.1`, `::1`, and `localhost`, allowing local processes, reverse proxies, and SSRF attacks to bypass auth. Furthermore, Lochos squad routes (`/v1/lochos/squad`, `/v1/lochos/queue`, `/v1/lochos/seats/{seat_id}/brief`, `/v1/lochos/transfer/brief`, `/v1/lochos/attention`) and Pinax routes (`/v1/pinax/tools`, `/v1/pinax/tools/{tool_id:path}/docs`, `/v1/pinax/tools/{tool_id:path}`, `/v1/pinax/evaluate`) lacked the `require_service_auth` dependency. Additionally, `ToolRegistry` constructed without an injected `phylax_adapter` created an isolated adapter instance, desynchronizing approval state.
+  - **F-05 (Prosopon Workbench File Sensitive Credential & Database Disclosure):** `/api/workbench/file` guarded against directory traversal outside `workspace_root`, but allowed authenticated callers to read sensitive workspace files: `.host_owner_token`, `metis.env`, `paired_tokens.json`, SQLite databases (`*.db`, `*.sqlite`), and internal snapshot/policy directories (`.admin_snapshots/`, `.phylax/`).
+  - **F-07 (Kybernetes Execution Pipeline Phylax Hard Deny Fallthrough):** In `pipeline.py`, when Phylax evaluated an action as `not permitted` and returned `app_req is None` (hard security policy DENY, or non-interactive mode), the pipeline checked `if app_req:` which evaluated to `False`, and subsequently fell through to execute the tool! Additionally, `router.py` generated `tool_name = "guarded_action"`, an unregistered tool name.
+  - **F-08 (Krisis Adapter Claim Negation False Contradiction Polarity Clash):** `KrisisAdapter.verify_response()` flagged any sentence containing contradiction keywords (`"not"`, `"no"`, `"never"`) as `conflict_detected = True`, even when both the claim and the cited passage were negative (i.e. in agreement).
+- **Remediation & Behavioral Guarantees:**
+  1. **F-02 Hardening:**
+     - Added generator frame attributes (`gi_frame`, `cr_frame`, `ag_frame`, `f_back`, `f_globals`, `f_locals`, `f_builtins`, `f_code`, `format`, `format_map`, `__dict__`, `__closure__`) to `FORBIDDEN_ATTRIBUTES` in `SafeCodeMode`.
+     - Explicitly blocked `ast.Yield` and `ast.YieldFrom` in the AST safety walk.
+     - Blocked `.format(...)` and `.format_map(...)` attribute calls in AST.
+     - Reclassified `run_code_mode` as `ToolSideEffectClass.SYSTEM_EXECUTION` to mandate Phylax approval tokens when `enforce_approvals=True`.
+     - Added regression tests in `kybernetes/tests/test_code_mode.py` (11 passing).
+  2. **F-03 Hardening:**
+     - In `prosopon/prosopon/server.py:webrtc_offer`, initialized `target_dev_id = None`. Authenticated only via valid `x-host-owner-token` header or validated Bearer session/pairing token. Unauthenticated callers are rejected with 401 Unauthorized.
+     - Added regression test `test_webrtc_offer_unauthenticated_device_id_rejection` in `prosopon/tests/test_server_api.py`.
+  3. **F-04 Hardening:**
+     - Removed local loopback bypass in Kybernetes `require_service_auth` (enforcing zero-loopback security model).
+     - Protected all Lochos squad endpoints and Pinax tool lookup/detail/docs/evaluate endpoints with `Depends(require_service_auth)`.
+     - Injected shared `phylax_adapter` instance into `ToolRegistry(phylax_adapter=phylax_adapter)` in both `create_app()` and CLI entry points.
+     - Updated `kybernetes/tests/test_server_api.py`, `test_lochos_api.py`, and `test_pinax.py` to enforce authentication tokens on loopback requests.
+  4. **F-05 Hardening:**
+     - In `prosopon/prosopon/server.py:workbench_file`, added strict path denylisting blocking `.host_owner_token`, `metis.env`, `paired_tokens.json`, `.env`, files ending with `.key`, `.db`, `.sqlite`, `.sqlite3`, `.pem`, and paths within `.admin_snapshots/`, `.phylax/`, or `.git/` with 403 Forbidden.
+     - Added `workspace_root` configuration to `ProsoponConfig` and added regression test `test_workbench_file_sensitive_path_denial` in `prosopon/tests/test_server_api.py`.
+  5. **F-07 Hardening:**
+     - In `kybernetes/kybernetes/engine/pipeline.py`, when `not permitted`, if `not app_req` or `not needs_interactive`, immediately emit `TurnOutcomeStatus.DENIED` completed event and return. Never fall through to tool execution.
+     - In `kybernetes/kybernetes/routing/router.py`, replaced non-existent `"guarded_action"` with registered `"write_file"` tool.
+     - Added regression test `test_pipeline_hard_policy_denial_no_approval_req` in `kybernetes/tests/test_session_and_pipeline.py`.
+  6. **F-08 Hardening:**
+     - In `kybernetes/kybernetes/adapters/krisis.py`, replaced naive negation keyword check with semantic polarity clash detection. A contradiction is flagged if and only if the claim and the cited evidence share semantic entity anchor tokens (`len(shared_tokens) >= 2`) and have conflicting truth-value polarity (`claim_neg != cit_neg`).
+     - Added regression test `test_krisis_polarity_clash_detection` in `kybernetes/tests/test_adapters.py`.
+
 ---
 
 ## Summary & Verification Matrix
@@ -641,27 +694,28 @@
 | **Active Selective Prediction (ASPEST)** | Item 84 | Krisis + Paideia (Active Abstained Batch Curation & CLI) | **Integrated & Verified** | 40 Krisis + 46 Paideia tests passing (9 ASPEST tests) |
 | **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 185 Dokime tests passing (9 ScaNN/ANN tests) |
 | **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 185 Dokime tests passing (9 VRDU tests) |
+| **Security Audit Remediations (Round 5)**| Item 87 | Kybernetes, Prosopon, Phylax, Krisis (F-02, F-03, F-04, F-05, F-07, F-08)| **Remediated & Verified** | 193 Kybernetes + 73 Prosopon tests passing (0 loopback leaks) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,073 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,078 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **190** | 0 | 19.88s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **193** | 0 | 18.62s | **PASS** |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **185** | 0 | 2.07s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.25s | **PASS** |
-| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **71** | 0 | 43.82s | **PASS** |
+| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 43.49s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **46** | 0 | 1.70s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.64s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.27s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,073** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,078** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 

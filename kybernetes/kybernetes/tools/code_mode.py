@@ -65,7 +65,7 @@ class SafeCodeMode:
         "None": None,
     }
 
-    # Explicitly forbidden attribute patterns to prevent sandbox escapes
+    # Explicitly forbidden attribute patterns to prevent sandbox escapes (Finding F-02)
     FORBIDDEN_ATTRIBUTES = {
         "__subclasses__",
         "__globals__",
@@ -75,6 +75,30 @@ class SafeCodeMode:
         "__class__",
         "__mro__",
         "__bases__",
+        "__dict__",
+        "__closure__",
+        # Generator, coroutine, and frame traversal escapes
+        "gi_frame",
+        "gi_code",
+        "gi_running",
+        "gi_yieldfrom",
+        "cr_frame",
+        "cr_code",
+        "cr_running",
+        "cr_await",
+        "ag_frame",
+        "ag_code",
+        "ag_running",
+        "ag_await",
+        "f_back",
+        "f_globals",
+        "f_locals",
+        "f_builtins",
+        "f_code",
+        "f_trace",
+        # Format string traversal
+        "format",
+        "format_map",
     }
 
     def __init__(self, allowed_roots: Optional[List[Path]] = None):
@@ -93,7 +117,7 @@ class SafeCodeMode:
                 "list_dir(path, pattern), parse_ast(path), calculate(expr), print(*args). "
                 "Assign output to 'result' or return from a main() function."
             ),
-            side_effect_class=ToolSideEffectClass.READ_ONLY,
+            side_effect_class=ToolSideEffectClass.SYSTEM_EXECUTION,
             parameters_schema={
                 "type": "object",
                 "properties": {
@@ -124,9 +148,19 @@ class SafeCodeMode:
                     "Direct module imports are prohibited in Code Mode. Use the pre-injected tools and libraries."
                 )
 
-            # Prohibit dangerous attribute access
+            # Prohibit generators and coroutines (generators expose frames without dunders)
+            if isinstance(node, (ast.Yield, ast.YieldFrom)):
+                raise CodeModeSecurityError(
+                    "Generator and coroutine yield expressions are prohibited in Code Mode."
+                )
+
+            # Prohibit dangerous attribute access and private internals
             if isinstance(node, ast.Attribute):
-                if node.attr in self.FORBIDDEN_ATTRIBUTES or (node.attr.startswith("__") and node.attr.endswith("__")):
+                if (
+                    node.attr in self.FORBIDDEN_ATTRIBUTES
+                    or node.attr.startswith("_")
+                    or (node.attr.startswith("__") and node.attr.endswith("__"))
+                ):
                     raise CodeModeSecurityError(
                         f"Prohibited access to internal dunder attribute '{node.attr}' in Code Mode."
                     )
@@ -136,6 +170,9 @@ class SafeCodeMode:
                 if isinstance(node.func, ast.Name):
                     if node.func.id in ("eval", "exec", "open", "compile", "__import__"):
                         raise CodeModeSecurityError(f"Use of builtin function '{node.func.id}' is prohibited.")
+                elif isinstance(node.func, ast.Attribute):
+                    if node.func.attr in ("format", "format_map"):
+                        raise CodeModeSecurityError("Use of string format/format_map methods is prohibited in Code Mode.")
 
             # Prohibit format-spec dunder traversal in string literals (Finding A6)
             if isinstance(node, ast.Constant) and isinstance(node.value, str):

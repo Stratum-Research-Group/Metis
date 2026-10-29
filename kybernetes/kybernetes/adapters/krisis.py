@@ -138,9 +138,7 @@ class KrisisAdapter:
             s_clean = re.sub(r"\[[^\]]+\]", "", s).lower()
             s_words = set(re.findall(r"\b[a-z]{3,}\b", s_clean)) - stopwords
 
-            # Check for contradiction signals
-            if any(neg in s_clean.split() for neg in contradiction_keywords):
-                contradiction_found = True
+            claim_neg = any(neg in re.findall(r"\b[a-z]+\b", s_clean) for neg in contradiction_keywords)
 
             for m in s_markers:
                 cit = known_markers.get(m) or known_markers.get(f"[{m}]")
@@ -148,14 +146,21 @@ class KrisisAdapter:
                     unsupported_count += 1
                     continue
 
-                cit_words = set(re.findall(r"\b[a-z]{3,}\b", cit.text.lower())) - stopwords
+                cit_clean = cit.text.lower()
+                cit_words = set(re.findall(r"\b[a-z]{3,}\b", cit_clean)) - stopwords
                 title_words = set(re.findall(r"\b[a-z]{3,}\b", cit.source_title.lower())) - stopwords
+                shared_tokens = s_words & (cit_words | title_words)
 
                 # If citation has substantial text content, require semantic grounding overlap
-                if len(cit_words) > 1 and not (s_words & (cit_words | title_words)):
+                if len(cit_words) > 1 and not shared_tokens:
                     unsupported_count += 1
                 else:
                     supported_count += 1
+
+                # F-08: Polarity clash detection between claim and citation text
+                cit_neg = any(neg in re.findall(r"\b[a-z]+\b", cit_clean) for neg in contradiction_keywords)
+                if len(shared_tokens) >= 2 and (claim_neg != cit_neg):
+                    contradiction_found = True
 
         if contradiction_found:
             return KrisisVerificationReport(

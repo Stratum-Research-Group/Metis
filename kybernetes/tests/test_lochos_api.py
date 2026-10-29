@@ -30,8 +30,12 @@ async def test_lochos_squad_api_endpoints(tmp_path):
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        # 1. Get squad status
-        resp = await client.get("/v1/lochos/squad")
+        # 0. Unauthenticated request must return 401 (Zero-Loopback security, Finding F-04)
+        unauth_resp = await client.get("/v1/lochos/squad")
+        assert unauth_resp.status_code == 401
+
+        # 1. Get squad status with valid Bearer token
+        resp = await client.get("/v1/lochos/squad", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["rig_name"] == "api-test-squad"
@@ -56,7 +60,7 @@ async def test_lochos_squad_api_endpoints(tmp_path):
         assert task_data["baton_owner"] == "coder@api-test-squad"
 
         # 3. Check queue
-        resp = await client.get("/v1/lochos/queue?status=in_progress")
+        resp = await client.get("/v1/lochos/queue?status=in_progress", headers=headers)
         assert resp.status_code == 200
         items = resp.json()
         assert len(items) == 1
@@ -86,7 +90,7 @@ async def test_lochos_squad_api_endpoints(tmp_path):
             details={"action": "edit_block"},
         )
 
-        resp = await client.get("/v1/lochos/attention")
+        resp = await client.get("/v1/lochos/attention", headers=headers)
         assert resp.status_code == 200
         attn_list = resp.json()
         assert len(attn_list) == 1
@@ -107,12 +111,12 @@ async def test_lochos_squad_api_endpoints(tmp_path):
         assert resolved_task["status"] == "in_progress"
 
         # Verify attention cleared
-        resp = await client.get("/v1/lochos/attention")
+        resp = await client.get("/v1/lochos/attention", headers=headers)
         assert resp.status_code == 200
         assert len(resp.json()) == 0
 
         # 7. Check seat brief endpoint
-        resp = await client.get("/v1/lochos/seats/coder/brief")
+        resp = await client.get("/v1/lochos/seats/coder/brief", headers=headers)
         assert resp.status_code == 200
         brief = resp.json()
         assert brief["id"] == "coder"
@@ -120,7 +124,8 @@ async def test_lochos_squad_api_endpoints(tmp_path):
 
         # 8. Check transfer brief endpoint
         resp = await client.get(
-            f"/v1/lochos/transfer/brief?task_id={task_id}&from_seat=coder&to_seat=reviewer&note=Check+this"
+            f"/v1/lochos/transfer/brief?task_id={task_id}&from_seat=coder&to_seat=reviewer&note=Check+this",
+            headers=headers,
         )
         assert resp.status_code == 200
         transfer_brief = resp.json()

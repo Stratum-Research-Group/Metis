@@ -768,7 +768,7 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         if authorization and authorization.startswith("Bearer "):
             token = authorization[len("Bearer "):].strip()
 
-        target_dev_id = req.device_id
+        target_dev_id = None
         host_owner_hdr = request.headers.get("x-host-owner-token")
         if host_owner_hdr and pairing_mgr.validate_host_owner_token(host_owner_hdr):
             target_dev_id = "host_owner"
@@ -776,6 +776,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             res = access_store.validate_session_token(token)
             if res:
                 target_dev_id = res[0].device_id
+            elif pairing_mgr.validate_token(token):
+                target_dev_id = "legacy_token"
 
         if not target_dev_id:
             raise HTTPException(
@@ -1377,7 +1379,8 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=f"Paideia run proxy error: {exc}")
 
     # 10. Workbench API
-    workspace_root = Path(__file__).resolve().parents[2]
+    workspace_root = getattr(cfg, "workspace_root", None) or Path(__file__).resolve().parents[2]
+    app.state.workspace_root = workspace_root
 
     @app.get("/api/workbench/tree")
     async def workbench_tree(_: bool = Depends(require_auth)) -> List[Dict[str, Any]]:
@@ -1417,9 +1420,19 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="Invalid file path")
         target = (workspace_root / path).resolve()
         try:
-            target.relative_to(workspace_root)
+            rel = target.relative_to(workspace_root)
         except ValueError:
             raise HTTPException(status_code=403, detail="Access denied: file is outside workspace root")
+
+        # F-05: Block sensitive credential stores, DBs, and internal state paths
+        parts = rel.parts
+        file_name = target.name.lower()
+        if (
+            any(p.startswith(".admin_snapshots") or p.startswith(".phylax") or p == ".git" for p in parts)
+            or file_name in (".host_owner_token", "metis.env", "paired_tokens.json", ".env")
+            or file_name.endswith((".key", ".db", ".sqlite", ".sqlite3", ".pem"))
+        ):
+            raise HTTPException(status_code=403, detail="Access denied: sensitive workspace resource")
 
         if not target.exists() or not target.is_file():
             raise HTTPException(status_code=404, detail=f"File not found: {path}")
