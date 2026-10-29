@@ -409,7 +409,109 @@ class TwoResponsesChecker(InstructionChecker):
         return True, "Two distinct responses verified"
 
 
-# Registry mapping rule names to checker implementations
+class NoCommaChecker(InstructionChecker):
+    """Verifies that the response contains no commas (or at most max_commas)."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        max_commas = kwargs.get("max_commas", 0)
+        comma_count = target.count(",")
+        if comma_count > max_commas:
+            return False, f"Found {comma_count} commas, expected at most {max_commas}"
+        return True, "No forbidden commas found"
+
+
+class BulletListChecker(InstructionChecker):
+    """Verifies that the response contains an unordered bullet list (*, -, •, +)."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        exact_count = kwargs.get("exact_count")
+        min_count = kwargs.get("min_count")
+        max_count = kwargs.get("max_count")
+
+        bullet_pattern = r"(?:^|\n)\s*([*•\-+]|\([*•\-+]\))\s+(.+)"
+        bullets = re.findall(bullet_pattern, target)
+        count = len(bullets)
+
+        if exact_count is not None and count != exact_count:
+            return False, f"Found {count} bullet points, expected exactly {exact_count}"
+        if min_count is not None and count < min_count:
+            return False, f"Found {count} bullet points, expected at least {min_count}"
+        if max_count is not None and count > max_count:
+            return False, f"Found {count} bullet points, expected at most {max_count}"
+        if exact_count is None and min_count is None and count == 0:
+            return False, "No bullet points found"
+
+        return True, f"Bullet list constraint satisfied ({count} items)"
+
+
+class AllLowercaseChecker(InstructionChecker):
+    """Verifies that all letters in the response are entirely lowercase."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        # Find any uppercase characters
+        uppercases = [c for c in target if c.isupper()]
+        if uppercases:
+            sample = "".join(uppercases[:5])
+            return False, f"Found uppercase character(s) (e.g. '{sample}'), expected all lowercase"
+        return True, "All lowercase constraint satisfied"
+
+
+class TitleWrapChecker(InstructionChecker):
+    """Verifies that the response contains a title wrapped in double angle brackets <<Title>> or markdown header."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        wrapper = kwargs.get("wrapper", "angle_brackets")  # angle_brackets or markdown
+
+        if wrapper == "angle_brackets":
+            match = re.search(r"<<([^\n<>]+)>>", target)
+            if not match or not match.group(1).strip():
+                return False, "Title wrapped in double angle brackets '<<Title>>' not found"
+            return True, f"Found wrapped title: '<<{match.group(1).strip()}>>'"
+        elif wrapper == "markdown":
+            match = re.search(r"(?:^|\n)#\s+([^\n]+)", target)
+            if not match or not match.group(1).strip():
+                return False, "Markdown title header '# Title' not found"
+            return True, f"Found markdown title: '# {match.group(1).strip()}'"
+        else:
+            pattern = kwargs.get("pattern", rf"{re.escape(wrapper)}[^\n]+{re.escape(wrapper)}")
+            if not re.search(pattern, target):
+                return False, f"Title wrapped in '{wrapper}' not found"
+            return True, "Wrapped title found"
+
+
+class LetterFrequencyChecker(InstructionChecker):
+    """Verifies the occurrence frequency of a specific character/letter."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        letter = kwargs.get("letter", "").lower()
+        if not letter:
+            return False, "Missing 'letter' keyword in rule configuration"
+
+        case_sensitive = kwargs.get("case_sensitive", False)
+        search_target = target if case_sensitive else target.lower()
+        search_char = letter if case_sensitive else letter.lower()
+
+        count = search_target.count(search_char)
+        exact_count = kwargs.get("exact_frequency")
+        min_count = kwargs.get("min_frequency")
+        max_count = kwargs.get("max_frequency")
+
+        if exact_count is not None and count != exact_count:
+            return False, f"Found character '{letter}' {count} times, expected exactly {exact_count}"
+        if min_count is not None and count < min_count:
+            return False, f"Found character '{letter}' {count} times, expected at least {min_count}"
+        if max_count is not None and count > max_count:
+            return False, f"Found character '{letter}' {count} times, expected at most {max_count}"
+
+        return True, f"Letter '{letter}' frequency constraint satisfied ({count} occurrences)"
+
+
+# Registry mapping rule names to checker implementations (20 total checkers)
 CHECKER_REGISTRY: Dict[str, InstructionChecker] = {
     "json_format": JsonFormatChecker(),
     "word_count": WordCountChecker(),
@@ -426,6 +528,11 @@ CHECKER_REGISTRY: Dict[str, InstructionChecker] = {
     "quotation": QuotationChecker(),
     "highlight_section": HighlightSectionChecker(),
     "two_responses": TwoResponsesChecker(),
+    "no_comma": NoCommaChecker(),
+    "bullet_list": BulletListChecker(),
+    "all_lowercase": AllLowercaseChecker(),
+    "title_wrap": TitleWrapChecker(),
+    "letter_frequency": LetterFrequencyChecker(),
 }
 
 
@@ -440,3 +547,4 @@ def verify_instruction(
     if not checker:
         return False, f"Unknown instruction rule type: '{rule_type}'"
     return checker.check(response, kwargs, loose=loose)
+

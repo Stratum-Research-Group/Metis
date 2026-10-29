@@ -205,6 +205,49 @@
       {"rule_type": "word_count", "kwargs": {"max_words": 40}}
     ],
     "category": "compound"
+  },
+  {
+    "id": "ifeval-26",
+    "prompt": "Explain the purpose of write-ahead logging in storage systems. Do not use any commas in your response.",
+    "rules": [
+      {"rule_type": "no_comma", "kwargs": {"max_commas": 0}},
+      {"rule_type": "sentence_count", "kwargs": {"min_sentences": 2}}
+    ],
+    "category": "punctuation"
+  },
+  {
+    "id": "ifeval-27",
+    "prompt": "List exactly 4 key benefits of static typing in software codebases using an unordered bullet list (*).",
+    "rules": [
+      {"rule_type": "bullet_list", "kwargs": {"exact_count": 4}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-28",
+    "prompt": "explain the concept of tail call optimization. your entire response must be written in lowercase letters only with no capital letters.",
+    "rules": [
+      {"rule_type": "all_lowercase", "kwargs": {}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-29",
+    "prompt": "Provide an architectural overview of zero-copy networking. Include a title wrapped in double angle brackets at the beginning, like <<Zero-Copy Networking>>.",
+    "rules": [
+      {"rule_type": "title_wrap", "kwargs": {"wrapper": "angle_brackets"}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-30",
+    "prompt": "Summarize how consistent hashing balances load across cache nodes. The letter 'h' must appear at least 8 times in your summary, and your response must not exceed 60 words.",
+    "rules": [
+      {"rule_type": "letter_frequency", "kwargs": {"letter": "h", "min_frequency": 8}},
+      {"rule_type": "word_count", "kwargs": {"max_words": 60}}
+    ],
+    "category": "compound"
   }
 ]
+
 

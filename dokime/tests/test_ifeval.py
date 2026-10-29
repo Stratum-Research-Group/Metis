@@ -7,12 +7,16 @@ import pytest
 from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.ifeval_checkers import (
     CHECKER_REGISTRY,
+    AllLowercaseChecker,
+    BulletListChecker,
     CapitalLettersChecker,
     ForbiddenWordsChecker,
     HighlightSectionChecker,
     JsonFormatChecker,
     KeywordFrequencyChecker,
     KeywordPresenceChecker,
+    LetterFrequencyChecker,
+    NoCommaChecker,
     NumberedListChecker,
     ParagraphCountChecker,
     PostscriptChecker,
@@ -20,6 +24,7 @@ from dokime.tasks.ifeval_checkers import (
     SectionHeaderChecker,
     SentenceCountChecker,
     StartEndConstraintChecker,
+    TitleWrapChecker,
     TwoResponsesChecker,
     WordCountChecker,
     verify_instruction,
@@ -293,7 +298,7 @@ def test_ifeval_task_load_and_properties():
     assert task.dataset_path.exists()
 
     queries = task.load()
-    assert len(queries) == 25
+    assert len(queries) == 30
     assert all(isinstance(q, Query) for q in queries)
     assert queries[0].id == "ifeval-01"
     assert "rules" in queries[0].metadata
@@ -340,4 +345,84 @@ def test_ifeval_registry_discovery():
 
     info = list_task_info()
     ifeval_info = next(item for item in info if item["task_id"] == "ifeval_instruction_following")
-    assert ifeval_info["items"] == 25
+    assert ifeval_info["items"] >= 25
+
+
+def test_no_comma_checker():
+    checker = NoCommaChecker()
+    valid = "Operating systems allocate memory and schedule processes on physical cores."
+    invalid = "Operating systems allocate memory, schedule processes, and handle interrupts."
+
+    ok, _ = checker.check(valid, {})
+    assert ok is True
+
+    ok, msg = checker.check(invalid, {})
+    assert ok is False
+    assert "Found 2 commas" in msg
+
+    # With max_commas allowance
+    ok, _ = checker.check(invalid, {"max_commas": 2})
+    assert ok is True
+
+
+def test_bullet_list_checker():
+    checker = BulletListChecker()
+    valid = "Key components:\n* Memory management\n* CPU scheduler\n* File system"
+    invalid = "Key components:\n1. Memory management\n2. CPU scheduler"
+
+    ok, msg = checker.check(valid, {"exact_count": 3})
+    assert ok is True
+    assert "3 items" in msg
+
+    ok, msg = checker.check(valid, {"min_count": 2})
+    assert ok is True
+
+    ok, msg = checker.check(invalid, {"exact_count": 2})
+    assert ok is False
+
+
+def test_all_lowercase_checker():
+    checker = AllLowercaseChecker()
+    valid = "this text is completely lowercase and contains no uppercase characters."
+    invalid = "This text contains Uppercase Characters."
+
+    ok, _ = checker.check(valid, {})
+    assert ok is True
+
+    ok, msg = checker.check(invalid, {})
+    assert ok is False
+    assert "Found uppercase character" in msg
+
+
+def test_title_wrap_checker():
+    checker = TitleWrapChecker()
+    valid_angle = "<<Operating System Architecture>>\nThis overview explains microkernels."
+    valid_markdown = "# Operating System Architecture\nThis overview explains microkernels."
+    invalid = "Operating System Architecture\nThis overview explains microkernels."
+
+    ok, msg = checker.check(valid_angle, {"wrapper": "angle_brackets"})
+    assert ok is True
+    assert "<<Operating System Architecture>>" in msg
+
+    ok, msg = checker.check(valid_markdown, {"wrapper": "markdown"})
+    assert ok is True
+    assert "# Operating System Architecture" in msg
+
+    ok, msg = checker.check(invalid, {"wrapper": "angle_brackets"})
+    assert ok is False
+
+
+def test_letter_frequency_checker():
+    checker = LetterFrequencyChecker()
+    text = "The quick brown fox jumps over the lazy dog."  # 'o' appears 4 times (brown, fox, over, dog)
+
+    ok, _ = checker.check(text, {"letter": "o", "exact_frequency": 4})
+    assert ok is True
+
+    ok, _ = checker.check(text, {"letter": "o", "min_frequency": 3})
+    assert ok is True
+
+    ok, msg = checker.check(text, {"letter": "o", "exact_frequency": 2})
+    assert ok is False
+    assert "Found character 'o' 4 times, expected exactly 2" in msg
+
