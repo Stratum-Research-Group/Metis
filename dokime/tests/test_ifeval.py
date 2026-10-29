@@ -335,6 +335,46 @@ def test_ifeval_task_score_detailed():
     assert detailed["loose_rule_accuracy"] == 1.0
 
 
+def test_ifeval_task_score_new_suite_items():
+    task = IFEvalTask()
+    queries = {q.id: q for q in task.load()}
+
+    # ifeval-26 (no_comma + sentence_count >= 2)
+    q26 = queries["ifeval-26"]
+    valid_26 = "Write-ahead logging guarantees durability in storage systems. Changes are appended to an immutable disk log before applying updates."
+    invalid_26 = "Write-ahead logging guarantees durability, and it ensures consistency."
+    assert task.score(q26, valid_26) == 1.0
+    assert task.score(q26, invalid_26) == 0.0
+
+    # ifeval-27 (bullet_list exact 4)
+    q27 = queries["ifeval-27"]
+    valid_27 = "* Early compile-time bug detection\n* Improved refactoring confidence\n* Machine-verifiable code documentation\n* Enhanced IDE autocompletion and navigation"
+    invalid_27 = "* Early compile-time bug detection\n* Improved refactoring confidence"
+    assert task.score(q27, valid_27) == 1.0
+    assert task.score(q27, invalid_27) == 0.0
+
+    # ifeval-28 (all_lowercase)
+    q28 = queries["ifeval-28"]
+    valid_28 = "tail call optimization reuses the active stack frame when the final action of a function is a recursive invocation."
+    invalid_28 = "Tail call optimization reuses the active stack frame."
+    assert task.score(q28, valid_28) == 1.0
+    assert task.score(q28, invalid_28) == 0.0
+
+    # ifeval-29 (title_wrap angle_brackets)
+    q29 = queries["ifeval-29"]
+    valid_29 = "<<Zero-Copy Networking>>\nZero-copy networking transmits packet buffers directly between hardware network interfaces and application memory."
+    invalid_29 = "Zero-copy networking transmits packet buffers directly between hardware network interfaces."
+    assert task.score(q29, valid_29) == 1.0
+    assert task.score(q29, invalid_29) == 0.0
+
+    # ifeval-30 (letter_frequency 'h' >= 8 and word_count <= 60)
+    q30 = queries["ifeval-30"]
+    valid_30 = "Consistent hashing hashes cache keys onto a continuous hash ring. Each hash node handles hashes within its designated hash horizon. This healthy hashing approach smoothly shifts cached shards when nodes halt or join."
+    invalid_30 = "Consistent hashing balances load across nodes."
+    assert task.score(q30, valid_30) == 1.0
+    assert task.score(q30, invalid_30) == 0.0
+
+
 def test_ifeval_registry_discovery():
     available = discover_tasks()
     assert "ifeval_instruction_following" in available

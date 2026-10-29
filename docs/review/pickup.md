@@ -2,8 +2,8 @@
 
 **Last Updated:** 2026-10-29  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `3a7ac1f2385b0d061763156cfc4f03901b0f15c7`  
-**Working Tree Status:** All services active under systemd; 1,087 passing tests verified across all 11 monorepo packages + root + VS Code Void IDE client (100% green, 1 skipped).
+**Current HEAD Commit:** `754b082bb493dd6a5cb966cf2c2874136691c95e`  
+**Working Tree Status:** All services active under systemd; 1,088 passing tests verified across all 11 monorepo packages + root + VS Code Void IDE client (100% green, 1 skipped).
 
 ---
 
@@ -18,7 +18,7 @@ systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma
 # 2. Run Kybernetes orchestrator & tools test suite (193 tests)
 ./.venv/bin/pytest kybernetes/tests -q
 
-# 3. Run Dokime evaluation & release gate test suite (194 tests)
+# 3. Run Dokime evaluation & release gate test suite (195 tests)
 ./.venv/bin/pytest dokime/tests -q
 
 # 4. Run LTHCM Poincaré memory engine test suite (133 tests)
@@ -54,7 +54,7 @@ systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma
 # 14. Compile VS Code Void IDE client (0 errors)
 npm --prefix vscode run compile
 
-# Monorepo Total: 1,087 tests passing across all 11 subsystems + root (100% green, 1 skipped)
+# Monorepo Total: 1,088 tests passing across all 11 subsystems + root (100% green, 1 skipped)
 ```
 
 ---
@@ -278,7 +278,7 @@ npm --prefix vscode run compile
    - **Horizon 2 Bubblewrap Sandboxing Lockdown**: Enforced default `--unshare-net` network namespace isolation and confined `HOME=<cwd>`, `TMPDIR=/tmp` env vars in `BubblewrapBackend` to block rogue socket connections and prevent exfiltration during coding agent runs. Verified via unit tests in `kybernetes/tests/test_execution_backend.py`.
 
 8. **Phase 12: Google Research Evaluation Integration (Tracks A through G) (Completed)**:
-   - **Track A (Verifiable Instruction Following - IFEval)**: Implemented 20 programmatic instruction constraint checkers in `dokime/src/dokime/tasks/ifeval_checkers.py` (JSON format/schema, word count, sentence count, paragraph count, keyword presence, forbidden words with inflection guards, keyword frequency, section headers, start/end constraints, numbered lists, postscripts, letter casing constraints, quotation constraints, highlight section markdown constraints, two-response delimiters, no-comma punctuation constraints, bullet lists, all-lowercase constraints, title wrapping delimiters, and letter frequency constraints) and `IFEvalTask` in `dokime/src/dokime/tasks/ifeval.py` evaluated against 30 dense test prompts in `dokime/src/dokime/tasks/data/ifeval_suite.json`. Verified via 24 unit/integration tests in `dokime/tests/test_ifeval.py`.
+   - **Track A (Verifiable Instruction Following - IFEval)**: Implemented 20 programmatic instruction constraint checkers in `dokime/src/dokime/tasks/ifeval_checkers.py` (JSON format/schema, word count, sentence count, paragraph count, keyword presence, forbidden words with inflection guards, keyword frequency, section headers, start/end constraints, numbered lists, postscripts, letter casing constraints, quotation constraints, highlight section markdown constraints, two-response delimiters, no-comma punctuation constraints, bullet lists, all-lowercase constraints, title wrapping delimiters, and letter frequency constraints) and `IFEvalTask` in `dokime/src/dokime/tasks/ifeval.py` evaluated against 30 dense test prompts in `dokime/src/dokime/tasks/data/ifeval_suite.json`. Verified via 25 unit/integration tests in `dokime/tests/test_ifeval.py`.
    - **Track B (Conformal Uncertainty Prediction Sets - KnowNo)**: Implemented `ConformalCalibrator` and `ConformalPredictionSet` with exact finite-sample coverage guarantees ($1 - \alpha$) in `krisis/krisis/gates/conformal.py`. Fully wired into `KrisisSelector.evaluate()` with 7 unit tests in `krisis/tests/test_conformal.py`.
    - **Track C (Sufficient Input Subsets - SIS Explainer)**: Implemented backward greedy token attribution in `dokime/src/dokime/explainers/sis.py` and `dokime explain` CLI command. Isolates minimal sufficient rationales preserving prediction fidelity ($\ge \tau$) with 9 unit tests in `dokime/tests/test_sis.py`.
    - **Track D (Speculative Cascades Serving)**: Implemented speculative drafter-verifier cascading engine in `hestia/src/hestia/cascade/engine.py` and exposed `POST /v1/cascade/completions` API endpoints and `model="cascade:<draft>:<verifier>"` transparent routing. Verified via 5 tests in `hestia/tests/test_speculative_cascades.py`.

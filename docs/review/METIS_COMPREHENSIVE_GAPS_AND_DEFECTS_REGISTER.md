@@ -469,7 +469,7 @@
   1. Implemented `dokime.tasks.ifeval_checkers` providing 20 programmatic instruction checkers (JSON format/schema, word count, sentence count, paragraph count, keyword presence, forbidden words with inflection guards, keyword frequency, section headers, start/end constraints, numbered lists, postscripts, letter casing constraints, quotation constraints, highlight section markdown constraints, two-response delimiters, no-comma punctuation constraints, bullet lists, all-lowercase constraints, title wrapping delimiters, and letter frequency constraints).
   2. Implemented `IFEvalTask` in `dokime.tasks.ifeval` supporting strict and loose prompt/rule accuracy without LLM judges.
   3. Created curated 30-prompt verifiable evaluation suite `dokime/src/dokime/tasks/data/ifeval_suite.json`.
-  4. Registered `ifeval_instruction_following` in `BUILTIN_TASKS` and verified 194/194 Dokime tests pass (including 24 unit/integration tests).
+  4. Registered `ifeval_instruction_following` in `BUILTIN_TASKS` and verified 195/195 Dokime tests pass (including 25 unit/integration tests).
 
 ### 81. Track B: KnowNo Conformal Prediction Uncertainty Sets in Krisis
 - **Category:** Statistical Uncertainty & Adaptive Escalation Engine (Google Research Takeaways: KnowNo, Ren et al., arXiv:2307.01928)
@@ -687,23 +687,23 @@
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
-| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 194 Dokime tests passing (24 IFEval unit/integration tests) |
+| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 195 Dokime tests passing (25 IFEval unit/integration tests) |
 | **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 40 Krisis tests passing (7 conformal unit/integration tests) |
-| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 194 Dokime tests passing (9 SIS unit/integration tests) |
+| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 195 Dokime tests passing (9 SIS unit/integration tests) |
 | **Speculative Cascades Serving** | Item 83 | Hestia (Speculative Drafter-Verifier Cascades & Deferral) | **Integrated & Verified** | 77 Hestia tests passing (5 cascade unit/API tests) |
 | **Active Selective Prediction (ASPEST)** | Item 84 | Krisis + Paideia (Active Abstained Batch Curation & CLI) | **Integrated & Verified** | 40 Krisis + 46 Paideia tests passing (9 ASPEST tests) |
-| **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 194 Dokime tests passing (9 ScaNN/ANN tests) |
-| **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 194 Dokime tests passing (9 VRDU tests) |
+| **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 195 Dokime tests passing (9 ScaNN/ANN tests) |
+| **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 195 Dokime tests passing (9 VRDU tests) |
 | **Security Audit Remediations (Round 5)**| Item 87 | Kybernetes, Prosopon, Phylax, Krisis (F-02, F-03, F-04, F-05, F-07, F-08)| **Remediated & Verified** | 193 Kybernetes + 73 Prosopon tests passing (0 loopback leaks) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,087 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,088 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **193** | 0 | 18.62s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **194** | 0 | 2.89s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **195** | 0 | 2.20s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
@@ -715,7 +715,7 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 22.75s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,087** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,088** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 
