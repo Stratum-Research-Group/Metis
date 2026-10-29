@@ -9,7 +9,7 @@ models:
     type: chat
     gguf_path: /home/akarta/models/Gemma-4-26B-A4B-Abliterated.Q3_K_M.gguf
     quantization: Q3_K_M
-    context_size: 8192
+    context_size: 4096
     vram_estimate_mb: 13500
     gpu_target: rtx-5060-ti
     sampling:

@@ -524,16 +524,36 @@ class ExecutableGraphRolloutSuite:
                 token_use = 45
 
                 if policy == "live_hestia" and client is not None:
-                    # Live model generation
-                    resp_obj = client.complete(
-                        prompt=q.prompt,
-                        model=model_name,
-                        temperature=0.7,
-                        max_tokens=128,
+                    # Live model generation via served Hestia instance
+                    fixture_context = "\n".join(
+                        f"- {f.fact_id}: ({f.subject}, {f.relation}, {f.object})"
+                        for f in SYNTHETIC_KNOWLEDGE_FIXTURE
                     )
-                    raw_text = getattr(resp_obj, "text", str(resp_obj))
-                    latency = getattr(resp_obj, "latency", 0.15)
-                    token_use = getattr(resp_obj, "tokens", 60)
+                    sys_prompt = (
+                        "You are an expert knowledge graph question answering engine.\n"
+                        "Answer the query based ONLY on the following facts:\n\n"
+                        f"{fixture_context}\n\n"
+                        "Respond with a JSON object containing:\n"
+                        '  "answers": [list of entity IDs answering the question],\n'
+                        '  "evidence": [list of fact IDs like "f_cs_01" supporting the answer]\n'
+                        'If no facts in the knowledge base answer the query, return: {"answers": [], "evidence": []}.'
+                    )
+                    try:
+                        raw_text, latency_ms = client.chat_completion(
+                            model=model_name,
+                            prompt=q.prompt,
+                            seed=seed,
+                            temperature=0.7,
+                            max_tokens=256,
+                            system_prompt=sys_prompt,
+                        )
+                        latency = round(latency_ms / 1000.0, 4)
+                        token_use = max(1, len(raw_text.split()))
+                    except Exception as exc:
+                        raw_text = f"error: {exc}"
+                        latency = 0.0
+                        token_use = 0
+
                     detailed = self.task.score_detailed(q, raw_text)
                     fl = None
                     if detailed["answer_F1"] < 1.0:

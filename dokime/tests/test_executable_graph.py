@@ -238,3 +238,31 @@ def test_cli_graph_rollout(tmp_path):
     assert data[0]["case_id"].startswith("case_eg_")
     assert "score" in data[0]
 
+
+def test_rollout_live_hestia_policy_mock():
+    """Verify live_hestia policy invokes client.chat_completion and parses responses."""
+    class MockHestiaClient:
+        def __init__(self):
+            self.calls = []
+
+        def chat_completion(self, model, prompt, seed=42, temperature=0.7, max_tokens=256, system_prompt=None):
+            self.calls.append({"model": model, "prompt": prompt, "seed": seed, "system_prompt": system_prompt})
+            # Return sample structured JSON
+            return json.dumps({"answers": ["c_lang", "unix"], "evidence": ["f_cs_02", "f_cs_03"]}), 150.0
+
+    mock_client = MockHestiaClient()
+    suite = ExecutableGraphRolloutSuite()
+    records, report = suite.run_rollouts(
+        num_attempts=2,
+        policy="live_hestia",
+        model_name="gemma-4-26b-a4b-abliterated",
+        client=mock_client,
+    )
+
+    assert len(records) == 40
+    assert len(mock_client.calls) == 40
+    assert mock_client.calls[0]["model"] == "gemma-4-26b-a4b-abliterated"
+    assert "f_cs_01" in mock_client.calls[0]["system_prompt"]
+    assert report.total_cases == 20
+    assert report.policy == "live_hestia"
+

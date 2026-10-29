@@ -132,11 +132,11 @@ class LlamaCppBackend(Backend):
             args.append("--embedding")
         elif model.model_type == ModelType.CHAT:
             args.append("--skip-chat-parsing")
-            # For deep contexts (>= 16k), use 8-bit quantized KV cache to halve VRAM usage
-            if model.context_size >= 16384:
+            # For deep contexts (>= 16k) or high-VRAM models (>= 12GB), use 8-bit quantized KV cache to halve VRAM usage
+            if model.context_size >= 16384 or model.vram_estimate_mb >= 12000:
                 args.extend(["-ctk", "q8_0", "-ctv", "q8_0"])
-            # For contexts > 16k (e.g. 32k), allocate 1 dedicated slot so the session gets the full window within GPU VRAM
-            if model.context_size > 16384:
+            # For contexts > 16k or high-VRAM models (>= 12GB), allocate 1 dedicated slot so the session fits comfortably within GPU VRAM
+            if model.context_size > 16384 or model.vram_estimate_mb >= 12000:
                 args.extend(["-np", "1"])
 
         # Speculative decoding options

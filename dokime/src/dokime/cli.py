@@ -768,14 +768,23 @@ def handle_graph_rollout(args: argparse.Namespace) -> int:
 
     print(f"[*] Running Executable Graph Rollouts (Policy={args.policy}, Attempts={args.attempts})...\n")
     client = None
+    model_name = args.model
     if args.policy == "live_hestia":
         client = HestiaClient()
+        available = client.get_auto_selectable_chat_models()
+        if not available:
+            print("[!] Warning: No chat models available on Hestia. Falling back to retrieval_baseline.", file=sys.stderr)
+            args.policy = "retrieval_baseline"
+        elif model_name not in available:
+            if model_name == "qwen2.5-coder-7b" or not model_name:
+                model_name = available[0]
+                print(f"[*] Auto-selected served Hestia chat model: '{model_name}'\n")
 
     suite = ExecutableGraphRolloutSuite()
     records, report = suite.run_rollouts(
         num_attempts=args.attempts,
         policy=args.policy,
-        model_name=args.model,
+        model_name=model_name,
         client=client,
     )
 

@@ -759,16 +759,16 @@
 | **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 195 Dokime tests passing (9 VRDU tests) |
 | **Security Audit Remediations (Round 5)**| Item 87 | Kybernetes, Prosopon, Phylax, Krisis (F-02, F-03, F-04, F-05, F-07, F-08)| **Remediated & Verified** | 193 Kybernetes + 73 Prosopon tests passing (0 loopback leaks) |
 | **Symbolon Retrieval Benchmark & Yardstick** | Item 88 | Dokime Tasks (Symbolon Task, 4-Arm Suite & CLI) | **Integrated & Verified** | 201 Dokime tests passing (6 Symbolon benchmark tests) |
-| **Executable Graph Reasoning & Grounds** | Item 89 | Dokime Tasks (Deterministic Executor, Hashed Fixture, Task Plugin, Rollouts)| **Integrated & Verified** | 212 Dokime tests passing (11 executable graph tests) |
+| **Executable Graph Reasoning & Grounds** | Item 89 | Dokime Tasks (Deterministic Executor, Hashed Fixture, Task Plugin, Rollouts)| **Integrated & Verified** | 213 Dokime tests passing (12 executable graph tests) |
 | **Boundary-Aware Practice Selection** | Item 90 | Paideia (Attempt Rollout Variance, Stratified Selection & CLI)| **Integrated & Verified** | 50 Paideia tests passing (4 boundary sampler tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,109 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,110 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **212** | 0 | 9.82s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **213** | 0 | 10.71s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **193** | 0 | 18.62s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
@@ -781,7 +781,7 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.54s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,109** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,110** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 
