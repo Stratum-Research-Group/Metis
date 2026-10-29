@@ -45,3 +45,23 @@ def test_dianoia_interchange_verification(test_config, shared_embedder, temp_wor
     assert "contains 0 graph edges" in res["cli_stderr"]
     assert res["status"] == "direct_cli_walk_unsupported_zero_edges"
     assert "0 graph edges" in res["reason"]
+
+
+def test_dianoia_interchange_untrusted_pickle_rejected(test_config, shared_embedder, temp_workspace, monkeypatch):
+    """
+    Assert that verify_dianoia_interchange fails closed with 'untrusted_pickle_rejected'
+    if allow_trusted_pickle is False and no authorization env var is set.
+    """
+    indexer = StomaIndexer(config=test_config, embedder=shared_embedder)
+    doc = temp_workspace / "interchange_doc2.txt"
+    doc.write_text("Interchange test document.", encoding="utf-8")
+    indexer.ingest_file(doc)
+
+    monkeypatch.delenv("STOMA_ALLOW_TRUSTED_PICKLE", raising=False)
+    monkeypatch.delenv("DIANOIA_ALLOW_TRUSTED_PICKLE", raising=False)
+
+    res = verify_dianoia_interchange(test_config.index_path, allow_trusted_pickle=False)
+    assert res["compatible"] is False
+    assert res["status"] == "untrusted_pickle_rejected"
+    assert "without explicit authorization" in res["message"]
+

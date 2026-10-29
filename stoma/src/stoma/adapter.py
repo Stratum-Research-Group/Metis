@@ -241,12 +241,14 @@ class StomaLTHCMAdapter:
         query_timestamp: Optional[float] = None,
         enforce_causality: bool = True,
         envelope: Optional[Any] = None,
+        allow_causal_fallback: bool = True,
     ) -> Dict[str, Any]:
         """
         Query LTHCM topological memory and attach Stoma provenance to every returned candidate.
         Fails closed with UnresolvedProvenanceError if any candidate lacks matching provenance.
         Crucial: passes query_timestamp = current epoch seconds (time.time()) so past documents
-        are inside the Lorentzian light cone and causal_fallback is False!
+        are inside the Lorentzian light cone. If all candidates are spacelike (e.g. sub-second ingestion),
+        allow_causal_fallback governs whether raw candidates are served or causally_empty is returned.
         Validates mathematical integrity of query vector (rejects NaN, Inf, zero-norm).
         """
         self.validate_shapes()
@@ -279,6 +281,7 @@ class StomaLTHCMAdapter:
             use_stochastic_resonance=False,    # Direct retrieval
             use_spectral_wormhole=False,       # No graph edges in v1
             enable_gauge_transport=False,      # B13: do not perturb embeddings with unseeded/untrained gauge transport
+            allow_causal_fallback=allow_causal_fallback,
         )
 
         results = raw_result.get("results", [])

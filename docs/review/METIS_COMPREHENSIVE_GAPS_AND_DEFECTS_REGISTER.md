@@ -125,12 +125,12 @@
 ### 17. Do Not Overstate File Path Race Protection (P1)
 * **Where:** `phylax/phylax/gateway/file_adapter.py:28-46`
 * **Defect:** `O_NOFOLLOW` only checked the leaf file component; parent directories were vulnerable to symlink substitutions after policy check.
-* **Fix:** Utilized verified directory file descriptors (`openat`/`dirfd`) relative to the sandbox root and unique exclusive temporary filenames.
+* **Fix:** Utilized `O_NOFOLLOW` descriptor opening with `os.fstat(fd)` vs `os.stat(target_str)` device and inode equality verification, regular file mode validation (`stat.S_ISREG`), and atomic exclusive temporary file (`.{name}.tmp-{pid}-{rand}`) write/fsync/rename.
 
 ### 18. Stop Selecting an Old Krisis Snapshot When Rebuild Is Possible (P1)
-* **Where:** `krisis/krisis/engine/selector.py:46-54`
+* **Where:** `krisis/krisis/engine/selector.py:46-62`
 * **Defect:** When evidence changed under `rebuilds_remaining > 0`, the selector still returned the stale candidate.
-* **Fix:** Return a typed `stale_rebuild_required` signal forcing candidate regeneration before selection.
+* **Fix:** Return typed signals: `status=DecisionStatus.REBUILD_REQUIRED`, `reason=Reason.STALE` when budget remains, and `status=DecisionStatus.ABSTAINED`, `reason=Reason.STALE` when budget is exhausted.
 
 ### 19. Replace Advertised Live Modules with Real Wiring or Honest Demo Labels (P1)
 * **Where:** `kybernetes/kybernetes/server/app.py:70-85`, `kybernetes/adapters/`
@@ -148,9 +148,9 @@
 * **Fix:** Enforced temporal light-cone ordering and seed citation provenance verification on all MCTS branch expansions.
 
 ### 22. Remove Untrusted Pickle from Shared Index Loads (P1)
-* **Where:** `dianoia/dianoia/cli.py:156-181`, `stoma/src/stoma/adapter.py:325-350`
-* **Defect:** Ingestion loaded indices using standard Python `pickle.load()` without prior schema or hash verification.
-* **Fix:** Replaced untrusted pickle deserialization with structured, validated data-only JSON and SQLite-vec tensor formats.
+* **Where:** `dianoia/dianoia/cli.py:156-181`, `stoma/src/stoma/adapter.py:368-380`, `stoma/src/stoma/interchange.py:24`, `stoma/src/stoma/graph_builder.py:24`
+* **Defect:** Ingestion loaded indices using standard Python `pickle.load()` without prior authorization or hash verification.
+* **Fix:** Enforced `allow_trusted_pickle=False` default across Dianoia loader, Stoma adapter, Stoma interchange, and offline graph builder, strictly requiring explicit `--allow-trusted-pickle` or `STOMA_ALLOW_TRUSTED_PICKLE=1` / `DIANOIA_ALLOW_TRUSTED_PICKLE=1` authorization.
 
 ### 23. Repair Hestia Backend Port Collision (P1)
 * **Where:** `hestia/hestia.yaml:14-16`, `scripts/run_stack.sh:13,102`
@@ -334,7 +334,7 @@
 ### 58. Stream Desynchronization on Partial Hestia Error Chunks
 * **Submodule / Location:** `kybernetes/kybernetes/engine/pipeline.py:556-600`
 * **Defect:** When a model crashed midway through token streaming, tokens already emitted to the client could not be recalled, causing appended fallback text.
-* **Remediation:** Tagged real-time SSE token chunks as provisional and transmitted explicit error delta events on model failure.
+* **Remediation:** Emitted interruption delta events (`payload={"text": notice, "stream_interrupted": True, "error": err_msg}`, `status=TurnOutcomeStatus.DRAFT`) appending an explicit notice and breaking the stream without concatenating unrelated fallback completions.
 
 ### 59. Subagent Daemon Threads Lacking Process Restart Durability
 * **Submodule / Location:** `kybernetes/kybernetes/lochos/subagent.py`
@@ -361,9 +361,9 @@
 * **Remediation:** Enforced `@torch.no_grad()` on test-time memory steps.
 
 ### 63. Silent Causal Light-Cone Fallback Serving Invalid Candidates (P2)
-* **Submodule / Location:** `LTHCM/lthcm/engine/pipeline.py:436-447`
+* **Submodule / Location:** `LTHCM/lthcm/engine/pipeline.py:436-447`, `stoma/src/stoma/adapter.py:241-285`
 * **Defect:** When zero candidates satisfied the Minkowski relativistic light-cone condition ($ds^2 \le 0$), the pipeline silently fell back to raw candidates, serving time-reversed evidence.
-* **Remediation:** Added `allow_causal_fallback` parameter (defaulting to fail-closed `status="causally_empty"` when disabled).
+* **Remediation:** Added explicit `allow_causal_fallback` parameter (returning `status="causally_empty"` when disabled), while allowing document adapters to explicitly declare fallback policy for sub-second ingestion intervals.
 
 ### 64. Unsafe Pickle Deserialization in Sheaf Checkpoint Loading (P1)
 * **Submodule / Location:** `LTHCM/lthcm/core/contrastive_sheaf.py:234`

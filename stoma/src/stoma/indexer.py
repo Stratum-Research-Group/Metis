@@ -1731,6 +1731,7 @@ class StomaIndexer:
         domain: str = "general",
         query_timestamp: Optional[float] = None,
         enforce_causality: bool = True,
+        allow_causal_fallback: bool = True,
     ) -> Dict[str, Any]:
         """Query Stoma topological memory through the serving adapter."""
         return self.adapter.query(
@@ -1739,6 +1740,7 @@ class StomaIndexer:
             domain=domain,
             query_timestamp=query_timestamp,
             enforce_causality=enforce_causality,
+            allow_causal_fallback=allow_causal_fallback,
         )
 
     def save(self) -> None:

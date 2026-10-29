@@ -280,7 +280,7 @@ class LTHCMEngine(nn.Module):
         use_nli_sheaf: bool = True,
         build_community_summaries: bool = False,
         enable_gauge_transport: bool = True,
-        allow_causal_fallback: bool = False,
+        allow_causal_fallback: bool = True,
     ) -> Dict[str, Any]:
         """
         Execute full end-to-end topological retrieval and verification.

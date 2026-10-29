@@ -14,8 +14,9 @@ from stoma.interchange import verify_dianoia_interchange
 
 
 @pytest.fixture
-def mock_index_file(tmp_path: Path) -> Path:
+def mock_index_file(tmp_path: Path, monkeypatch) -> Path:
     """Create a minimal LTHCMEngine pickle with two highly aligned embeddings and 0 edges."""
+    monkeypatch.setenv("STOMA_ALLOW_TRUSTED_PICKLE", "1")
     idx_path = tmp_path / "test_index.pkl"
     engine = LTHCMEngine(d_model=384, num_facets=1, device="cpu")
 
@@ -82,3 +83,17 @@ def test_cli_graph_build(mock_index_file: Path, tmp_path: Path):
     assert result.exit_code == 0
     assert "Nodes in index: 3" in result.output
     assert "Edges added:" in result.output
+
+
+def test_graph_builder_untrusted_pickle_rejected(mock_index_file: Path, monkeypatch):
+    """Verify that build_knn_knowledge_graph fails closed if untrusted pickle is not authorized."""
+    monkeypatch.delenv("STOMA_ALLOW_TRUSTED_PICKLE", raising=False)
+    monkeypatch.delenv("DIANOIA_ALLOW_TRUSTED_PICKLE", raising=False)
+
+    with pytest.raises(PermissionError, match="Untrusted pickle index loading refused"):
+        build_knn_knowledge_graph(
+            index_path=mock_index_file,
+            similarity_threshold=0.75,
+            allow_trusted_pickle=False,
+        )
+

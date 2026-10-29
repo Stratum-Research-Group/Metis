@@ -215,10 +215,11 @@ def status(config: StomaConfig):
 
 
 @cli.command()
+@click.option("--allow-trusted-pickle", is_flag=True, default=False, help="Explicitly permit trusted pickle deserialization.")
 @click.pass_obj
-def interchange(config: StomaConfig):
+def interchange(config: StomaConfig, allow_trusted_pickle: bool):
     """Test direct index interchange with Dianoia's load requirements."""
-    res = verify_dianoia_interchange(config.index_path)
+    res = verify_dianoia_interchange(config.index_path, allow_trusted_pickle=allow_trusted_pickle)
 
     click.echo("\n=== Dianoia Interchange Verification ===")
     click.echo(f"Index Path:               {config.index_path}")
@@ -265,8 +266,9 @@ def graph_group():
 @click.option("--index", "index_path", type=click.Path(exists=True), help="Path to index file (defaults to config index_path).")
 @click.option("--threshold", "-t", default=0.75, type=float, help="Cosine similarity threshold tau for edge creation (default 0.75).")
 @click.option("--k-neighbors", "-k", default=5, type=int, help="Maximum number of nearest neighbors per passage (default 5).")
+@click.option("--allow-trusted-pickle", is_flag=True, default=False, help="Explicitly permit trusted pickle deserialization.")
 @click.pass_obj
-def build_graph(config: StomaConfig, index_path: Optional[str], threshold: float, k_neighbors: int):
+def build_graph(config: StomaConfig, index_path: Optional[str], threshold: float, k_neighbors: int, allow_trusted_pickle: bool):
     """Build semantic cosine similarity edges across chunk embeddings into the wormhole graph."""
     from stoma.graph_builder import build_knn_knowledge_graph
     target_path = Path(index_path) if index_path else config.index_path
@@ -275,6 +277,7 @@ def build_graph(config: StomaConfig, index_path: Optional[str], threshold: float
         index_path=target_path,
         similarity_threshold=threshold,
         max_k_neighbors=k_neighbors,
+        allow_trusted_pickle=allow_trusted_pickle,
     )
     click.echo(f"Nodes in index: {res['nodes_count']}")
     click.echo(f"Edges added:    {res['edges_added']}")

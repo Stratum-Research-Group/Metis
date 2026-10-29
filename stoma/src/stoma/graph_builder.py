@@ -7,6 +7,7 @@ and adds wormhole edges to turn flat index into a multi-hop navigable knowledge 
 from __future__ import annotations
 
 import logging
+import os
 import pickle
 from pathlib import Path
 from typing import Any, Dict
@@ -23,6 +24,7 @@ def build_knn_knowledge_graph(
     index_path: Path,
     similarity_threshold: float = 0.75,
     max_k_neighbors: int = 5,
+    allow_trusted_pickle: bool = False,
 ) -> Dict[str, Any]:
     """
     Load index, compute cosine-similarity edges for node pairs with similarity >= threshold,
@@ -31,6 +33,13 @@ def build_knn_knowledge_graph(
     path = Path(index_path).resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Index file not found: {path}")
+
+    is_trusted = allow_trusted_pickle or bool(os.environ.get("STOMA_ALLOW_TRUSTED_PICKLE")) or bool(os.environ.get("DIANOIA_ALLOW_TRUSTED_PICKLE"))
+    if not is_trusted:
+        raise PermissionError(
+            f"Untrusted pickle index loading refused for '{path}'. "
+            "Pass --allow-trusted-pickle or set STOMA_ALLOW_TRUSTED_PICKLE=1 to authorize."
+        )
 
     with open(path, "rb") as f:
         engine = pickle.load(f)

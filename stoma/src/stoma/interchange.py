@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = True) -> Dict[str, Any]:
+def verify_dianoia_interchange(index_path: Path, allow_trusted_pickle: bool = False) -> Dict[str, Any]:
     """
     Test direct interchange against Dianoia's actual CLI load and query path.
     1. Check serialization format (pickle) and engine type (LTHCMEngine).

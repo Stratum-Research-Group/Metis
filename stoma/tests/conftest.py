@@ -31,8 +31,9 @@ def temp_workspace():
 
 
 @pytest.fixture
-def test_config(temp_workspace):
+def test_config(temp_workspace, monkeypatch):
     """Create a StomaConfig pointing to isolated temporary directories."""
+    monkeypatch.setenv("STOMA_ALLOW_TRUSTED_PICKLE", "1")
     storage = temp_workspace / ".stoma"
     storage.mkdir(parents=True, exist_ok=True)
     cfg = StomaConfig(
