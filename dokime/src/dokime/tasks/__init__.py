@@ -3,7 +3,12 @@
 from dokime.tasks.arc import ArcEasy25Task
 from dokime.tasks.base_mc import MultipleChoiceTask
 from dokime.tasks.epistemic import EpistemicAdversarialTask, EpistemicAdversarialV2Task
-from dokime.tasks.executable_graph import ExecutableGraphTask
+from dokime.tasks.executable_graph import (
+    ExecutableGraphRolloutReport,
+    ExecutableGraphRolloutSuite,
+    ExecutableGraphTask,
+    RolloutCaseSummary,
+)
 from dokime.tasks.gpqa import GPQADiamondTask, GPQADiamondV2Task
 from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetitionMathV2Task
@@ -20,6 +25,8 @@ __all__ = [
     "AIMECompetitionMathV2Task",
     "EpistemicAdversarialTask",
     "EpistemicAdversarialV2Task",
+    "ExecutableGraphRolloutReport",
+    "ExecutableGraphRolloutSuite",
     "ExecutableGraphTask",
     "GPQADiamondTask",
     "GPQADiamondV2Task",
@@ -27,6 +34,7 @@ __all__ = [
     "MultipleChoiceTask",
     "PinaxLookup50Task",
     "Query",
+    "RolloutCaseSummary",
     "SymbolonBenchmarkTask",
     "SymbolonRetrievalBenchmarkSuite",
     "Task",

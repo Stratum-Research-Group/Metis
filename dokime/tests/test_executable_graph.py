@@ -5,6 +5,8 @@ import pytest
 from dokime.tasks.executable_graph import (
     FIXTURE_HASH,
     SYNTHETIC_KNOWLEDGE_FIXTURE,
+    ExecutableGraphRolloutReport,
+    ExecutableGraphRolloutSuite,
     ExecutableGraphTask,
     Fact,
     GraphQueryExecutor,
@@ -192,3 +194,47 @@ def test_registry_integration():
     assert isinstance(task, ExecutableGraphTask)
     queries = task.load()
     assert len(queries) == 20
+
+
+def test_rollout_suite_execution():
+    """Verify ExecutableGraphRolloutSuite generates proper attempt records and category stratification."""
+    suite = ExecutableGraphRolloutSuite()
+    records, report = suite.run_rollouts(num_attempts=3, policy="retrieval_baseline")
+
+    assert len(records) == 60  # 20 cases * 3 attempts
+    assert report.total_cases == 20
+    assert report.total_attempts == 60
+    assert report.boundary_count > 0
+    assert report.retention_count > 0
+
+    md = report.to_markdown()
+    assert "# Dokime Executable Graph Repeated Rollout Diagnostic" in md
+    assert "Taxonomy Breakdown" in md
+
+
+def test_rollout_oracle_policy():
+    """Verify oracle policy scores 1.0 across all cases with 0 variance."""
+    suite = ExecutableGraphRolloutSuite()
+    records, report = suite.run_rollouts(num_attempts=2, policy="oracle")
+
+    assert len(records) == 40
+    assert report.retention_count == 20
+    assert report.boundary_count == 0
+    assert report.hard_count == 0
+    assert report.mean_overall_score == 1.0
+
+
+def test_cli_graph_rollout(tmp_path):
+    """Verify dokime CLI graph-rollout subcommand execution."""
+    from dokime.cli import main
+
+    out_file = tmp_path / "attempts.json"
+    exit_code = main(["graph-rollout", "-n", "2", "-o", str(out_file), "--policy", "retrieval_baseline"])
+    assert exit_code == 0
+    assert out_file.exists()
+
+    data = json.loads(out_file.read_text(encoding="utf-8"))
+    assert len(data) == 40
+    assert data[0]["case_id"].startswith("case_eg_")
+    assert "score" in data[0]
+

@@ -711,7 +711,7 @@
   - Built `GraphQueryExecutor` supporting forward chains (1-hop, 2-hop, 3-hop), reverse chains, and multi-constraint intersections with path-level fact tracking to eliminate irrelevant dead-end facts.
   - Designed formal record schema `ExecutableCaseRecord` and generated 20 wording-audited benchmark cases in `executable_graph_suite.json` across 6 distinct query patterns and test/practice splits.
   - Implemented `ExecutableGraphTask` (`task_id="executable_graph_qa"`) providing set-based answer Precision, Recall, F1, exact match, and separate evidence support Precision/Recall/F1 to ensure unsupported correct guesses fail `evidence_grounded_success`.
-  - Registered `executable_graph_qa` in Dokime's task registry and verified via `dokime tasks` and 8 unit tests in `dokime/tests/test_executable_graph.py` (209 Dokime tests passing).
+  - Registered `executable_graph_qa` in Dokime's task registry and added `dokime graph-rollout` CLI subcommand with `ExecutableGraphRolloutSuite` for repeated-attempt rollout exports. Verified via `dokime tasks` and 11 unit tests in `dokime/tests/test_executable_graph.py` (212 Dokime tests passing).
 
 ### Item 90: Paideia Boundary-Aware Practice Selection & Rollout Variance Diagnostic
 - **Category:** Training Data & Policy Difficulty Diagnostics (Paideia Contracts, Boundary Sampler, Rollout Variance, Stratified Selection)
@@ -759,16 +759,16 @@
 | **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 195 Dokime tests passing (9 VRDU tests) |
 | **Security Audit Remediations (Round 5)**| Item 87 | Kybernetes, Prosopon, Phylax, Krisis (F-02, F-03, F-04, F-05, F-07, F-08)| **Remediated & Verified** | 193 Kybernetes + 73 Prosopon tests passing (0 loopback leaks) |
 | **Symbolon Retrieval Benchmark & Yardstick** | Item 88 | Dokime Tasks (Symbolon Task, 4-Arm Suite & CLI) | **Integrated & Verified** | 201 Dokime tests passing (6 Symbolon benchmark tests) |
-| **Executable Graph Reasoning & Grounds** | Item 89 | Dokime Tasks (Deterministic Executor, Hashed Fixture, Task Plugin)| **Integrated & Verified** | 209 Dokime tests passing (8 executable graph tests) |
+| **Executable Graph Reasoning & Grounds** | Item 89 | Dokime Tasks (Deterministic Executor, Hashed Fixture, Task Plugin, Rollouts)| **Integrated & Verified** | 212 Dokime tests passing (11 executable graph tests) |
 | **Boundary-Aware Practice Selection** | Item 90 | Paideia (Attempt Rollout Variance, Stratified Selection & CLI)| **Integrated & Verified** | 50 Paideia tests passing (4 boundary sampler tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,106 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,109 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **209** | 0 | 9.75s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **212** | 0 | 9.82s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **193** | 0 | 18.62s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
@@ -781,7 +781,7 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.54s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,106** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,109** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 

@@ -327,6 +327,39 @@ def create_parser() -> argparse.ArgumentParser:
         help="Path to save benchmark report JSON.",
     )
 
+    # Subcommand: graph-rollout (EoG repeated rollout diagnostic)
+    rollout_parser = subparsers.add_parser(
+        "graph-rollout",
+        help="Run repeated rollout evaluations over executable graph reasoning cases.",
+    )
+    rollout_parser.add_argument(
+        "--attempts",
+        "-n",
+        type=int,
+        default=5,
+        help="Number of rollout attempts per case (default: 5).",
+    )
+    rollout_parser.add_argument(
+        "--policy",
+        type=str,
+        default="retrieval_baseline",
+        choices=["retrieval_baseline", "oracle", "live_hestia"],
+        help="Execution policy (default: retrieval_baseline).",
+    )
+    rollout_parser.add_argument(
+        "--model",
+        type=str,
+        default="qwen2.5-coder-7b",
+        help="Model name identifier (default: qwen2.5-coder-7b).",
+    )
+    rollout_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help="Path to export CaseAttemptRecord JSON array for Paideia boundary sampling.",
+    )
+
     return parser
 
 
@@ -729,6 +762,35 @@ def handle_symbolon_benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_graph_rollout(args: argparse.Namespace) -> int:
+    """Handle 'dokime graph-rollout' subcommand."""
+    from dokime.tasks.executable_graph import ExecutableGraphRolloutSuite
+
+    print(f"[*] Running Executable Graph Rollouts (Policy={args.policy}, Attempts={args.attempts})...\n")
+    client = None
+    if args.policy == "live_hestia":
+        client = HestiaClient()
+
+    suite = ExecutableGraphRolloutSuite()
+    records, report = suite.run_rollouts(
+        num_attempts=args.attempts,
+        policy=args.policy,
+        model_name=args.model,
+        client=client,
+    )
+
+    print(report.to_markdown())
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(records, f, indent=2)
+        print(f"\n[+] Saved {len(records)} attempt records to {out_path}")
+
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Main CLI entry point."""
     parser = create_parser()
@@ -746,6 +808,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return handle_ann_benchmark(args)
     elif args.subcommand == "symbolon-benchmark":
         return handle_symbolon_benchmark(args)
+    elif args.subcommand == "graph-rollout":
+        return handle_graph_rollout(args)
     return 0
 
 

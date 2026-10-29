@@ -2,8 +2,8 @@
 
 **Last Updated:** 2026-10-29  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `4394e62`  
-**Working Tree Status:** All services active under systemd; 1,106 passing tests verified across all 11 monorepo packages + root + VS Code Void IDE client (100% green, 1 skipped).
+**Current HEAD Commit:** `bc10774`  
+**Working Tree Status:** All services active under systemd; 1,109 passing tests verified across all 11 monorepo packages + root + VS Code Void IDE client (100% green, 1 skipped).
 
 ---
 
@@ -18,7 +18,7 @@ systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma
 # 2. Run Kybernetes orchestrator & tools test suite (193 tests)
 ./.venv/bin/pytest kybernetes/tests -q
 
-# 3. Run Dokime evaluation & release gate test suite (209 tests)
+# 3. Run Dokime evaluation & release gate test suite (212 tests)
 ./.venv/bin/pytest dokime/tests -q
 
 # 4. Run LTHCM Poincaré memory engine test suite (133 tests)
@@ -54,7 +54,7 @@ systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma
 # 14. Compile VS Code Void IDE client (0 errors)
 npm --prefix vscode run compile
 
-# Monorepo Total: 1,106 tests passing across all 11 subsystems + root (100% green, 1 skipped)
+# Monorepo Total: 1,109 tests passing across all 11 subsystems + root (100% green, 1 skipped)
 ```
 
 ---
@@ -308,9 +308,9 @@ npm --prefix vscode run compile
     - **Dokime Executable Graph QA (`dokime/src/dokime/tasks/executable_graph.py`)**: Implemented verifiable multi-hop reasoning benchmark evaluated against deterministic executions over frozen, SHA-256 hashed synthetic fact fixture (`07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e`). `GraphQueryExecutor` evaluates forward/reverse multi-hop chains and multi-constraint intersections with path-level fact attribution. `ExecutableGraphTask` (`task_id="executable_graph_qa"`) scores answer precision/recall/F1, exact match, and evidence citation support, refusing evidence-grounded credit to unsupported guesses.
     - **Suite Dataset (`dokime/src/dokime/tasks/data/executable_graph_suite.json`)**: Curated 20 wording-audited test and practice benchmark cases across single-hop, chain-2hop, chain-3hop, intersection, multi-answer, and negative/empty queries.
     - **Paideia Boundary Practice Selection (`paideia/paideia/data/boundary_sampler.py`)**: Implemented variance-based practice batch selector over repeated rollout attempts ($N \ge 2$), prioritizing learning frontier tasks ($\sigma^2 > 0$) with stratified quotas for retention checks (all-pass) and hard diagnostics (all-fail). Included uniform random baseline sampler for matched-budget empirical comparison.
-    - **Paideia CLI Command (`paideia dataset sample-boundary`)**: Added CLI subcommand supporting custom budget, stratum ratios, variance thresholds, uniform baseline comparisons, and JSON audit report export.
-    - **Unit & Integration Test Suites**: 8 tests passing in `dokime/tests/test_executable_graph.py` (209 Dokime tests passing) and 4 tests passing in `paideia/tests/test_boundary_sampler.py` (50 Paideia tests passing).
-    - **Monorepo Total**: **1,106 tests passed** across all 11 core subsystems + root + VS Code Void IDE client (100% green, 1 skipped).
+    - **Dokime CLI Command (`dokime graph-rollout`)**: Added repeated rollout suite (`ExecutableGraphRolloutSuite`) and CLI command for repeated-attempt rollout evaluation and category stratification across policies.
+    - **Unit & Integration Test Suites**: 11 tests passing in `dokime/tests/test_executable_graph.py` (212 Dokime tests passing) and 4 tests passing in `paideia/tests/test_boundary_sampler.py` (50 Paideia tests passing).
+    - **Monorepo Total**: **1,109 tests passed** across all 11 core subsystems + root + VS Code Void IDE client (100% green, 1 skipped).
 
 ---
 
