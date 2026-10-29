@@ -1,0 +1,82 @@
+[
+  {
+    "id": "q_biochem",
+    "prompt": "What is the binding mechanism and Ki of methotrexate to dihydrofolate reductase?",
+    "expected": "doc_sci_01",
+    "metadata": {
+      "gold_relevant": ["doc_sci_01"],
+      "contradiction_docs": ["doc_sci_03_contradiction"],
+      "category": "biochemistry"
+    }
+  },
+  {
+    "id": "q_merkel_summit",
+    "prompt": "Where did Chancellor Angela Merkel meet for European Union northern economic corridor talks?",
+    "expected": "doc_geo_01",
+    "metadata": {
+      "gold_relevant": ["doc_geo_01"],
+      "contradiction_docs": ["doc_geo_03_contradiction"],
+      "category": "geopolitics"
+    }
+  },
+  {
+    "id": "q_apollo_fuel",
+    "prompt": "How much propellant did the Apollo 11 Saturn V burn per second across F-1 engines?",
+    "expected": "doc_space_01",
+    "metadata": {
+      "gold_relevant": ["doc_space_01"],
+      "contradiction_docs": ["doc_space_03_contradiction"],
+      "category": "aerospace"
+    }
+  },
+  {
+    "id": "q_sheaf_drift",
+    "prompt": "How does cellular sheaf Laplacian bound topological drift across multi-agent graphs?",
+    "expected": "doc_math_01",
+    "metadata": {
+      "gold_relevant": ["doc_math_01"],
+      "contradiction_docs": ["doc_math_03_contradiction"],
+      "category": "topology"
+    }
+  },
+  {
+    "id": "q_semiconductor_euv",
+    "prompt": "What numerical aperture and laser wavelength are utilized in High-NA EUV lithography systems?",
+    "expected": "doc_semi_01",
+    "metadata": {
+      "gold_relevant": ["doc_semi_01"],
+      "contradiction_docs": ["doc_semi_03_contradiction"],
+      "category": "semiconductor"
+    }
+  },
+  {
+    "id": "q_cryptographic_chain",
+    "prompt": "How does SHA-256 hash chaining guarantee immutability in access audit ledgers?",
+    "expected": "doc_crypto_01",
+    "metadata": {
+      "gold_relevant": ["doc_crypto_01"],
+      "contradiction_docs": ["doc_crypto_03_contradiction"],
+      "category": "cryptography"
+    }
+  },
+  {
+    "id": "q_cleanroom_iso",
+    "prompt": "What maximum particulate concentration per cubic meter is permitted under ISO Class 4 cleanroom standards?",
+    "expected": "doc_clean_01",
+    "metadata": {
+      "gold_relevant": ["doc_clean_01"],
+      "contradiction_docs": ["doc_clean_03_contradiction"],
+      "category": "standards"
+    }
+  },
+  {
+    "id": "q_raft_consensus",
+    "prompt": "What conditions must a Raft candidate satisfy to be elected leader during a term transition?",
+    "expected": "doc_dist_01",
+    "metadata": {
+      "gold_relevant": ["doc_dist_01"],
+      "contradiction_docs": ["doc_dist_03_contradiction"],
+      "category": "distributed_systems"
+    }
+  }
+]

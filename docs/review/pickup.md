@@ -295,6 +295,15 @@ npm --prefix vscode run compile
    - **F-08 (Krisis Claim Negation False Contradiction Polarity Clash)**: Replaced naive contradiction keyword checks with semantic polarity clash analysis between claim and evidence in `kybernetes/kybernetes/adapters/krisis.py`.
    - **Pickle Security Hardening**: Flipped `allow_trusted_pickle=False` default across Stoma graph builder and interchange modules.
 
+10. **Phase 14: Dokime Symbolon Discrete Code Retrieval Benchmark Suite (Completed)**:
+    - **Symbolon Task Plugin (`dokime/src/dokime/tasks/symbolon_benchmark.py`)**: Implemented `SymbolonBenchmarkTask` conforming to `Task` protocol (`task_id="symbolon_code_retrieval"`, `load()`, `score()`, `score_detailed()`) and registered in `BUILTIN_TASKS` and `list_task_info()`.
+    - **Diagnostic Benchmark Dataset (`dokime/src/dokime/tasks/data/symbolon_suite.json`)**: Curated 8 multi-domain benchmark queries across biochemistry, EU geopolitics, aerospace rocketry, topological sheaf theory, EUV lithography, and SHA-256 hash chaining with explicit gold relevance and contradiction labels.
+    - **4-Arm Comparative Benchmark Suite (`SymbolonRetrievalBenchmarkSuite`)**: Evaluates (1) Flat dense baseline (LTHCM Flat), (2) Symbolon discrete overlap alone (L4), (3) Uncapped additive union ($C_{\text{base}} \cup C_{\text{sym}}$), and (4) Capped RRF fusion (matched top-$k$). Computes mean recall@k, contradiction retention, retriever agreement, candidate expansion factor, and paired bootstrap deltas.
+    - **CLI Command (`dokime symbolon-benchmark`)**: Added CLI subcommand supporting `--top-k`, `--level`, and `--output <path>` JSON report export. Produces formatted GitHub-style Markdown tables and enforces `ARCHIVE_UNCAPPED_NO_LOSS_RECORDED` decision verdict tracking.
+    - **Unit & Integration Test Suite (`dokime/tests/test_symbolon_benchmark.py`)**: 6 tests passing covering task protocol compliance, response parsing, metric computation, 4-arm comparative suite execution, and CLI command execution.
+    - **Total Dokime Tests**: **201 passed** (up from 195).
+    - **Total Metis Monorepo Tests**: **1,094 passed** across all 11 core subsystems.
+
 ---
 
 ## 3. Implementation Status Summary
@@ -332,7 +341,7 @@ All prioritized synthesis roadmap tasks, review remediation circuits, Google Res
 
 ## 5. Deployment Horizons & Future Options
 
-With all core engine components, security perimeters (Pyle/Phylax), memory subsystems (Stoma/LTHCM), deliberative walks (Dianoia/Kleroterion), multi-agent coordination (Kybernetes/Lochos/Prosopon), and sandboxed execution (Bubblewrap) verified with 1,082 passing tests:
+With all core engine components, security perimeters (Pyle/Phylax), memory subsystems (Stoma/LTHCM), deliberative walks (Dianoia/Kleroterion), multi-agent coordination (Kybernetes/Lochos/Prosopon), and sandboxed execution (Bubblewrap) verified with 1,094 passing tests:
 
 ### Horizon 1: Full-Stack Sovereign Local Service Deployment (Completed)
 * Systemd user units (`metis-hestia.service`, `metis-kybernetes.service`, `metis-prosopon.service`, `metis-stoma-watcher.service`) active and persistent.

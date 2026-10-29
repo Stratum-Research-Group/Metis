@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -296,6 +297,30 @@ def create_parser() -> argparse.ArgumentParser:
         help="Random seed for deterministic vector generation (default: 42).",
     )
     ann_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Path to save benchmark report JSON.",
+    )
+
+    # Subcommand: symbolon-benchmark (Symbolon candidate capture & fusion study)
+    symbolon_parser = subparsers.add_parser(
+        "symbolon-benchmark",
+        help="Benchmark Symbolon discrete code retrieval and candidate fusion against flat baselines.",
+    )
+    symbolon_parser.add_argument(
+        "--top-k",
+        type=int,
+        default=3,
+        help="Number of nearest neighbors to retrieve (default: 3).",
+    )
+    symbolon_parser.add_argument(
+        "--level",
+        type=int,
+        default=4,
+        help="Symbolon discrete codebook level to evaluate (default: 4).",
+    )
+    symbolon_parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -665,6 +690,45 @@ def handle_ann_benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_symbolon_benchmark(args: argparse.Namespace) -> int:
+    """Handle 'dokime symbolon-benchmark' subcommand."""
+    from dokime.tasks.symbolon_benchmark import SymbolonRetrievalBenchmarkSuite
+
+    print(f"[*] Running Symbolon Retrieval Benchmark (Top-K={args.top_k}, Level={args.level})...\n")
+    suite = SymbolonRetrievalBenchmarkSuite(top_k=args.top_k, level=args.level)
+    report = suite.run_benchmark()
+
+    print(report.to_markdown())
+
+    if args.output:
+        out_dict = {
+            "total_queries": report.total_queries,
+            "top_k": report.top_k,
+            "level_evaluated": report.level_evaluated,
+            "decision_verdict": report.decision_verdict,
+            "decision_rationale": report.decision_rationale,
+            "arms": {
+                name: {
+                    "arm_name": arm.arm_name,
+                    "mean_recall": arm.mean_recall,
+                    "contradiction_retention": arm.contradiction_retention,
+                    "proxy_agreement": arm.proxy_agreement,
+                    "candidate_expansion": arm.candidate_expansion,
+                    "total_dropped_gold": arm.total_dropped_gold,
+                    "delta_vs_baseline": arm.delta_vs_baseline,
+                }
+                for name, arm in report.arms.items()
+            },
+        }
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(out_dict, f, indent=2)
+        print(f"\n[+] Report saved to {out_path}")
+
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Main CLI entry point."""
     parser = create_parser()
@@ -680,6 +744,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return handle_explain(args)
     elif args.subcommand == "ann-benchmark":
         return handle_ann_benchmark(args)
+    elif args.subcommand == "symbolon-benchmark":
+        return handle_symbolon_benchmark(args)
     return 0
 
 

@@ -322,9 +322,9 @@
 * **Remediation:** Issued `ARCHIVE_NO_ADOPTION` verdict; kept Schedion disabled by default.
 
 ### 56. Symbolon Discrete Code Overlap Dilution
-* **Submodule / Location:** `symbolon/symbolon/study.py`, `docs/review/symbolon-candidate-fusion-e2-report.md`
+* **Submodule / Location:** `symbolon/symbolon/study.py`, `dokime/src/dokime/tasks/symbolon_benchmark.py`, `docs/review/symbolon-candidate-fusion-e2-report.md`
 * **Defect:** VQ-VAE discrete multiscale code overlap achieved only 25% recall, expanding candidate sets without improving top-$k$ accuracy over dense embeddings.
-* **Remediation:** Issued `ARCHIVE_UNCAPPED_NO_LOSS_RECORDED` verdict; barred Symbolon from replacing LTHCM Poincaré retrieval.
+* **Remediation:** Issued `ARCHIVE_UNCAPPED_NO_LOSS_RECORDED` verdict; barred Symbolon from replacing LTHCM Poincaré retrieval. Implemented `symbolon_code_retrieval` Task plugin and `dokime symbolon-benchmark` CLI command into Dokime with 8-query multi-domain suite (`symbolon_suite.json`) and 4-arm comparative report generator to permanently serve as an empirical yardstick.
 
 ### 57. Anadrome Walk Policy Statistical Inconclusiveness
 * **Submodule / Location:** `dianoia/dianoia/anadrome/study.py`, `docs/review/anadrome-frozen-live-walk-milestone3-report.md`
@@ -695,15 +695,16 @@
 | **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 195 Dokime tests passing (9 ScaNN/ANN tests) |
 | **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 195 Dokime tests passing (9 VRDU tests) |
 | **Security Audit Remediations (Round 5)**| Item 87 | Kybernetes, Prosopon, Phylax, Krisis (F-02, F-03, F-04, F-05, F-07, F-08)| **Remediated & Verified** | 193 Kybernetes + 73 Prosopon tests passing (0 loopback leaks) |
+| **Symbolon Retrieval Benchmark & Yardstick** | Item 88 | Dokime Tasks (Symbolon Task, 4-Arm Suite & CLI) | **Integrated & Verified** | 201 Dokime tests passing (6 Symbolon benchmark tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,088 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,094 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **193** | 0 | 18.62s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **195** | 0 | 2.20s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **201** | 0 | 9.34s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
@@ -715,7 +716,7 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 22.75s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,088** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,094** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 
