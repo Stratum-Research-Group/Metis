@@ -1,0 +1,299 @@
+[
+  {
+    "id": "vrdu_01_asml_purchase_order",
+    "prompt": "DOCUMENT:\nPURCHASE ORDER\nOrder Number: PO-2026-8911\nDate: 2026-09-12\nVendor: ASML Netherlands B.V.\nAddress: De Run 6501, 5504 DR Veldhoven, Netherlands\nBuyer: Global Foundries Fab-21, Phoenix AZ, USA\nCurrency: EUR\n\nItems:\n1. Extreme Ultraviolet (EUV) Collector Optics Subsystem | Qty: 2 | Unit Price: 22,600,000.00 | Total: 45,200,000.00\n2. High-Numerical-Aperture (High-NA) Reticle Stage | Qty: 1 | Unit Price: 8,400,000.00 | Total: 8,400,000.00\n\nSubtotal: 53,600,000.00\nTax (VAT 0% - Export): 0.00\nShipping & Insurance: 650,000.00\nTotal Due: 54,250,000.00\nPayment Terms: Net 45\nDelivery Date: 2026-11-30\n\nExtract the structured fields from this document into valid JSON with keys: order_number, date, vendor, buyer, currency, total_due, payment_terms, delivery_date, items.",
+    "target_fields": {
+      "order_number": "PO-2026-8911",
+      "date": "2026-09-12",
+      "vendor": "ASML Netherlands B.V.",
+      "buyer": "Global Foundries Fab-21",
+      "currency": "EUR",
+      "total_due": 54250000.0,
+      "payment_terms": "Net 45",
+      "delivery_date": "2026-11-30",
+      "items": [
+        {"description": "Extreme Ultraviolet (EUV) Collector Optics Subsystem", "quantity": 2, "total": 45200000.0},
+        {"description": "High-Numerical-Aperture (High-NA) Reticle Stage", "quantity": 1, "total": 8400000.0}
+      ]
+    }
+  },
+  {
+    "id": "vrdu_02_clinical_trial_summary",
+    "prompt": "DOCUMENT:\nCLINICAL PROTOCOL REGISTRATION SUMMARY\nNCT Number: NCT09182314\nProtocol ID: ONC-2026-METIS-04\nBrief Title: Phase 2 Study of MET-819 in Advanced Refractory NSCLC\nLead Sponsor: Hellenic Oncology Therapeutics Inc.\nPrincipal Investigator: Dr. Elena Alexiou, MD, PhD\nPhase: Phase 2\nEnrollment: 120 participants\nPrimary Endpoint: Progression-Free Survival (PFS) at 12 months\nStart Date: 2026-03-01\nEstimated Completion Date: 2028-06-30\nIntervention: MET-819 (150mg oral daily) + Pembrolizumab (200mg IV Q3W)\n\nExtract the structured fields into JSON with keys: nct_number, protocol_id, brief_title, lead_sponsor, principal_investigator, phase, enrollment, primary_endpoint, start_date.",
+    "target_fields": {
+      "nct_number": "NCT09182314",
+      "protocol_id": "ONC-2026-METIS-04",
+      "brief_title": "Phase 2 Study of MET-819 in Advanced Refractory NSCLC",
+      "lead_sponsor": "Hellenic Oncology Therapeutics Inc.",
+      "principal_investigator": "Dr. Elena Alexiou",
+      "phase": "Phase 2",
+      "enrollment": 120,
+      "primary_endpoint": "Progression-Free Survival (PFS) at 12 months",
+      "start_date": "2026-03-01"
+    }
+  },
+  {
+    "id": "vrdu_03_commercial_invoice_zeiss",
+    "prompt": "DOCUMENT:\nCOMMERCIAL INVOICE\nInvoice #: INV-SMT-2026-0491\nInvoice Date: October 14, 2026\nDue Date: November 15, 2026\nSupplier: Carl Zeiss SMT GmbH (Oberkochen, Germany)\nTax ID: DE811122334\nCustomer: TSMC R&D Center (Hsinchu, Taiwan)\nVAT / Tax Rate: 19%\nTotal Before Tax: 14,200,000.00 USD\nTax Amount: 2,698,000.00 USD\nFinal Invoice Amount: 16,898,000.00 USD\nStatus: UNPAID\n\nExtract fields into JSON with keys: invoice_number, invoice_date, due_date, supplier, tax_id, customer, tax_rate, total_before_tax, final_invoice_amount, status.",
+    "target_fields": {
+      "invoice_number": "INV-SMT-2026-0491",
+      "invoice_date": "2026-10-14",
+      "due_date": "2026-11-15",
+      "supplier": "Carl Zeiss SMT GmbH",
+      "tax_id": "DE811122334",
+      "customer": "TSMC R&D Center",
+      "tax_rate": "19%",
+      "total_before_tax": 14200000.0,
+      "final_invoice_amount": 16898000.0,
+      "status": "UNPAID"
+    }
+  },
+  {
+    "id": "vrdu_04_sec_10k_balance_sheet",
+    "prompt": "DOCUMENT:\nCONSOLIDATED BALANCE SHEET SUMMARY (Unaudited)\nCompany: Metis Quantum Semiconductor Corp.\nPeriod Ended: September 30, 2026\nCurrency: USD in Millions\n\nASSETS:\nCash and Cash Equivalents: $1,420\nShort-term Marketable Securities: $3,180\nAccounts Receivable: $890\nInventories: $640\nTotal Current Assets: $6,130\nProperty, Plant and Equipment (Net): $8,950\nGoodwill and Intangibles: $2,410\nTotal Assets: $17,490\n\nLIABILITIES:\nAccounts Payable: $720\nShort-term Debt: $450\nTotal Current Liabilities: $1,170\nLong-term Debt: $4,200\nTotal Liabilities: $5,370\nTotal Stockholders' Equity: $12,120\n\nExtract fields into JSON with keys: company, period_ended, currency, cash_and_equivalents, total_current_assets, total_assets, total_current_liabilities, total_liabilities, total_equity.",
+    "target_fields": {
+      "company": "Metis Quantum Semiconductor Corp.",
+      "period_ended": "2026-09-30",
+      "currency": "USD in Millions",
+      "cash_and_equivalents": 1420.0,
+      "total_current_assets": 6130.0,
+      "total_assets": 17490.0,
+      "total_current_liabilities": 1170.0,
+      "total_liabilities": 5370.0,
+      "total_equity": 12120.0
+    }
+  },
+  {
+    "id": "vrdu_05_patent_bibliographic_data",
+    "prompt": "DOCUMENT:\nPATENT PUBLICATION DETAILS\nPatent Number: US 12,492,810 B2\nIssue Date: August 18, 2026\nFiling Date: March 24, 2024\nTitle: Topological Quantum Memory With Cellular Sheaf Error Suppression\nInventors: Alexios Kartalis (Athens, GR), Maria Varda (Heraklion, GR)\nAssignee: National Technical University of Athens Research Foundation\nApplication Number: 18/615,221\nPrimary CPC Class: G06N 10/40\nNumber of Claims: 28\n\nExtract fields into JSON with keys: patent_number, issue_date, filing_date, title, assignee, application_number, primary_cpc_class, num_claims.",
+    "target_fields": {
+      "patent_number": "US 12,492,810 B2",
+      "issue_date": "2026-08-18",
+      "filing_date": "2024-03-24",
+      "title": "Topological Quantum Memory With Cellular Sheaf Error Suppression",
+      "assignee": "National Technical University of Athens Research Foundation",
+      "application_number": "18/615,221",
+      "primary_cpc_class": "G06N 10/40",
+      "num_claims": 28
+    }
+  },
+  {
+    "id": "vrdu_06_laboratory_reagent_spec",
+    "prompt": "DOCUMENT:\nCERTIFICATE OF ANALYSIS\nCatalog Number: RGT-9941-X\nProduct Name: Recombinant DNA Polymerase Taq-HyperUltra\nLot Number: LOT-20260904-B\nManufacturer: Synthetica Biosystems LLC\nManufacture Date: 2026-09-04\nExpiration Date: 2028-09-04\nStorage Temperature: -20°C\nConcentration: 50.0 U/uL\nPurity: 99.4% (SDS-PAGE)\nEndonuclease Activity: None detected\nResidual Host DNA: < 0.01 pg/U\nStatus: PASSED\n\nExtract fields into JSON with keys: catalog_number, product_name, lot_number, manufacturer, expiration_date, storage_temperature, concentration, purity, status.",
+    "target_fields": {
+      "catalog_number": "RGT-9941-X",
+      "product_name": "Recombinant DNA Polymerase Taq-HyperUltra",
+      "lot_number": "LOT-20260904-B",
+      "manufacturer": "Synthetica Biosystems LLC",
+      "expiration_date": "2028-09-04",
+      "storage_temperature": "-20°C",
+      "concentration": "50.0 U/uL",
+      "purity": "99.4%",
+      "status": "PASSED"
+    }
+  },
+  {
+    "id": "vrdu_07_real_estate_lease_agreement",
+    "prompt": "DOCUMENT:\nCOMMERCIAL LEASE AGREEMENT SUMMARY\nLease ID: LEASE-SF-2026-77\nProperty Address: 450 Mission Street, Suite 1800, San Francisco, CA 94105\nLandlord: Pacific Transbay Properties LP\nTenant: Dianoia AI Labs Inc.\nCommencement Date: November 1, 2026\nExpiration Date: October 31, 2031\nTerm: 60 Months\nRentable Square Feet: 12,450 sq ft\nInitial Base Rent: $85.00 / sq ft / year ($88,187.50 monthly)\nAnnual Rent Escalation: 3.5%\nSecurity Deposit: $264,562.50\nPermitted Use: General Office and R&D Computer Laboratory\n\nExtract fields into JSON with keys: lease_id, property_address, landlord, tenant, commencement_date, term_months, square_feet, monthly_rent, security_deposit.",
+    "target_fields": {
+      "lease_id": "LEASE-SF-2026-77",
+      "property_address": "450 Mission Street, Suite 1800, San Francisco, CA 94105",
+      "landlord": "Pacific Transbay Properties LP",
+      "tenant": "Dianoia AI Labs Inc.",
+      "commencement_date": "2026-11-01",
+      "term_months": 60,
+      "square_feet": 12450,
+      "monthly_rent": 88187.5,
+      "security_deposit": 264562.5
+    }
+  },
+  {
+    "id": "vrdu_08_gpu_cluster_provisioning_ticket",
+    "prompt": "DOCUMENT:\nINFRASTRUCTURE ALLOCATION TICKET\nTicket ID: TIK-HPC-88910\nRequester: Paideia Pretraining Team (Dr. Marcus Vance)\nDatacenter Region: us-central1-a (Council Bluffs, IA)\nCluster Name: apollo-deep-cluster-04\nAccelerator Type: NVIDIA H100 SXM5 80GB\nGPU Count: 512 GPUs (64 nodes x 8 GPUs)\nInterconnect: Quantum-2 InfiniBand 3.2 Tbps (NDR)\nNode Memory: 2.0 TB DDR5 per node\nNVMe Scratch: 30.0 TB per node\nTarget Slurm Partition: h100-extreme\nAllocation Window: 2026-10-01 to 2026-11-15\nBilling Account: ACCT-AI-RESEARCH-99\n\nExtract fields into JSON with keys: ticket_id, requester, region, cluster_name, gpu_type, gpu_count, node_count, interconnect, start_date, end_date.",
+    "target_fields": {
+      "ticket_id": "TIK-HPC-88910",
+      "requester": "Paideia Pretraining Team",
+      "region": "us-central1-a",
+      "cluster_name": "apollo-deep-cluster-04",
+      "gpu_type": "NVIDIA H100 SXM5 80GB",
+      "gpu_count": 512,
+      "node_count": 64,
+      "interconnect": "Quantum-2 InfiniBand 3.2 Tbps (NDR)",
+      "start_date": "2026-10-01",
+      "end_date": "2026-11-15"
+    }
+  },
+  {
+    "id": "vrdu_09_freight_shipping_bill",
+    "prompt": "DOCUMENT:\nINTERNATIONAL BILL OF LADING\nBill of Lading Number: BOL-MAERSK-2026-0921\nCarrier: Maersk Line A/S\nVessel Name: Maersk Mc-Kinney Moller (Voyage 2618W)\nPort of Loading: Port of Rotterdam, Netherlands\nPort of Discharge: Port of Los Angeles, California, USA\nShipper: Philips Medical Systems Nederland B.V.\nConsignee: Stanford Healthcare Imaging Pavilion\nCargo Description: 3x 3.0T High-Field MRI Scanner Gantries\nContainer Numbers: MSKU9182310, MSKU8829104, MSKU1209845\nTotal Gross Weight: 42,500 KG\nTotal Volume: 185.4 CBM\nFreight Terms: Prepaid\nDeparture Date: 2026-09-20\nETA: 2026-10-18\n\nExtract fields into JSON with keys: bol_number, carrier, vessel, port_of_loading, port_of_discharge, shipper, consignee, gross_weight_kg, departure_date, eta.",
+    "target_fields": {
+      "bol_number": "BOL-MAERSK-2026-0921",
+      "carrier": "Maersk Line A/S",
+      "vessel": "Maersk Mc-Kinney Moller",
+      "port_of_loading": "Port of Rotterdam",
+      "port_of_discharge": "Port of Los Angeles",
+      "shipper": "Philips Medical Systems Nederland B.V.",
+      "consignee": "Stanford Healthcare Imaging Pavilion",
+      "gross_weight_kg": 42500.0,
+      "departure_date": "2026-09-20",
+      "eta": "2026-10-18"
+    }
+  },
+  {
+    "id": "vrdu_10_satellite_telemetry_report",
+    "prompt": "DOCUMENT:\nSPACECRAFT ORBITAL TELEMETRY RECORD\nSpacecraft ID: AEGIS-EO-4B\nNorad Catalog ID: 61892\nOperator: Hellenic Space Command\nEpoch Timestamp: 2026-10-28T04:15:00Z\nOrbit Semi-Major Axis: 6928.4 km\nOrbital Altitude: 550.2 km (Sun-Synchronous)\nInclination: 97.54 deg\nEccentricity: 0.00114\nOrbital Period: 95.6 minutes\nSolar Array Power Output: 2,840 Watts\nBattery State of Charge: 94.2%\nMain Bus Voltage: 28.1 V\nPayload Status: OPERATIONAL - RADAR IMAGING\n\nExtract fields into JSON with keys: spacecraft_id, norad_id, operator, altitude_km, inclination_deg, solar_power_w, battery_soc_percent, payload_status.",
+    "target_fields": {
+      "spacecraft_id": "AEGIS-EO-4B",
+      "norad_id": 61892,
+      "operator": "Hellenic Space Command",
+      "altitude_km": 550.2,
+      "inclination_deg": 97.54,
+      "solar_power_w": 2840.0,
+      "battery_soc_percent": 94.2,
+      "payload_status": "OPERATIONAL"
+    }
+  },
+  {
+    "id": "vrdu_11_iso_certification_audit",
+    "prompt": "DOCUMENT:\nMANAGEMENT SYSTEM CERTIFICATE\nCertificate Number: CERT-ISO-27001-2026-01\nAccredited Registrar: TÜV SÜD Management Service GmbH\nCertified Entity: Krisis Verification Technologies Ltd.\nScope of Certification: Secure automated claim verification and conformal AI gating infrastructure\nStandard: ISO/IEC 27001:2022\nEffective Date: 2026-08-01\nExpiration Date: 2029-07-31\nSurveillance Audit Cycle: Annual (Months 12 and 24)\nLead Auditor: Johann Schmidt, CISSP, CISA\nStatus: ACCREDITED\n\nExtract fields into JSON with keys: certificate_number, registrar, certified_entity, standard, effective_date, expiration_date, status.",
+    "target_fields": {
+      "certificate_number": "CERT-ISO-27001-2026-01",
+      "registrar": "TÜV SÜD Management Service GmbH",
+      "certified_entity": "Krisis Verification Technologies Ltd.",
+      "standard": "ISO/IEC 27001:2022",
+      "effective_date": "2026-08-01",
+      "expiration_date": "2029-07-31",
+      "status": "ACCREDITED"
+    }
+  },
+  {
+    "id": "vrdu_12_quantum_processor_wafer_test",
+    "prompt": "DOCUMENT:\nWAFER ACCEPTANCE PROBE REPORT\nWafer ID: WFR-SC-2026-Q88\nSubstrate Material: High-Resistivity Float-Zone Silicon (HR-Si)\nDiameter: 300 mm\nFoundry: IMEC Microelectronics R&D, Leuven\nFabrication Process: 3D Superconducting Transmon Qubit V4.2\nDie Count: 48 QPU dice\nDie Yield: 42 functional dice (87.5% Yield)\nMean Qubit Coherence T1: 184.2 us (+- 12.4 us)\nMean Qubit Dephasing T2*: 142.6 us (+- 10.8 us)\nSingle-Qubit Gate Fidelity: 99.96% (Clifford RB)\nTwo-Qubit CZ Gate Fidelity: 99.62%\nRecommendation: APPROVED FOR PACKAGING\n\nExtract fields into JSON with keys: wafer_id, substrate, diameter_mm, foundry, die_count, functional_dice, yield_percent, mean_t1_us, mean_t2_us, single_qubit_fidelity, two_qubit_fidelity.",
+    "target_fields": {
+      "wafer_id": "WFR-SC-2026-Q88",
+      "substrate": "High-Resistivity Float-Zone Silicon (HR-Si)",
+      "diameter_mm": 300,
+      "foundry": "IMEC Microelectronics R&D",
+      "die_count": 48,
+      "functional_dice": 42,
+      "yield_percent": 87.5,
+      "mean_t1_us": 184.2,
+      "mean_t2_us": 142.6,
+      "single_qubit_fidelity": 99.96,
+      "two_qubit_fidelity": 99.62
+    }
+  },
+  {
+    "id": "vrdu_13_cybersecurity_incident_report",
+    "prompt": "DOCUMENT:\nINCIDENT RESPONSE POST-MORTEM\nIncident Reference: INC-SEC-2026-10-09\nSeverity: P1 - Major\nAffected Service: Prosopon WebRTC Signaling Gateway\nIncident Commander: Sarah Lin (Principal Security Engineer)\nDetection Timestamp: 2026-10-09T03:14:22Z\nResolution Timestamp: 2026-10-09T04:48:10Z\nTotal Downtime: 93 minutes 48 seconds\nAttack Vector: Distributed Denial of Service (UDP Amplification) + Session Token Flooding\nPeak Traffic: 840 Gbps / 112 Mpps\nImpacted Users: 14,200 concurrent WebRTC sessions disconnected\nData Loss / Exfiltration: 0 bytes (Verified by Phylax Audit Chain)\nRoot Cause: Ephemeral token validation rate limit bypassed due to upstream reverse proxy header stripping\nAction Item: Enable eBPF-based hardware XDP firewall drop rules at border gateway\n\nExtract fields into JSON with keys: incident_ref, severity, affected_service, incident_commander, downtime_minutes, peak_traffic_gbps, impacted_users, data_loss, status.",
+    "target_fields": {
+      "incident_ref": "INC-SEC-2026-10-09",
+      "severity": "P1 - Major",
+      "affected_service": "Prosopon WebRTC Signaling Gateway",
+      "incident_commander": "Sarah Lin",
+      "downtime_minutes": 93.8,
+      "peak_traffic_gbps": 840.0,
+      "impacted_users": 14200,
+      "data_loss": "0 bytes",
+      "status": "Resolved"
+    }
+  },
+  {
+    "id": "vrdu_14_employment_offer_letter",
+    "prompt": "DOCUMENT:\nEXECUTIVE EMPLOYMENT OFFER\nCandidate Name: Dr. Nikos Katsaros\nPosition: Chief Scientist - Non-Euclidean Memory\nDepartment: LTHCM Topological Systems\nReporting Manager: Chief Technology Officer\nBase Salary: $385,000.00 USD per annum\nSign-on Bonus: $75,000.00 USD\nEquity Grant: 120,000 Incentive Stock Options (ISO), 4-year vesting with 1-year cliff\nAnnual Target Performance Bonus: 30% of base salary ($115,500.00)\nLocation: Athens, Greece / Remote Hybrid\nProposed Start Date: December 1, 2026\nOffer Expiration Date: November 15, 2026\n\nExtract fields into JSON with keys: candidate_name, position, department, base_salary, sign_on_bonus, stock_options, start_date, expiration_date.",
+    "target_fields": {
+      "candidate_name": "Dr. Nikos Katsaros",
+      "position": "Chief Scientist - Non-Euclidean Memory",
+      "department": "LTHCM Topological Systems",
+      "base_salary": 385000.0,
+      "sign_on_bonus": 75000.0,
+      "stock_options": 120000,
+      "start_date": "2026-12-01",
+      "expiration_date": "2026-11-15"
+    }
+  },
+  {
+    "id": "vrdu_15_power_utility_bill",
+    "prompt": "DOCUMENT:\nINDUSTRIAL HIGH-VOLTAGE POWER UTILITY STATEMENT\nAccount Number: UTIL-PGE-88192-09\nService Address: Metis Data Center East, 100 Powerhouse Road, Ashburn, VA 20147\nBilling Period: 2026-09-01 to 2026-09-30\nMeter Reading Current: 89,410,200 kWh\nMeter Reading Previous: 84,210,000 kWh\nTotal Consumption: 5,200,200 kWh\nPeak Demand: 8,450 kW\nDemand Charges: $118,300.00 ($14.00 / kW)\nEnergy Charges: $364,014.00 ($0.070 / kWh)\nTransmission and Environmental Surcharges: $28,410.00\nVirginia State Tax (5%): $25,536.20\nTotal Due: $536,260.20\nPayment Due Date: October 25, 2026\n\nExtract fields into JSON with keys: account_number, service_address, billing_period, consumption_kwh, peak_demand_kw, total_due, due_date.",
+    "target_fields": {
+      "account_number": "UTIL-PGE-88192-09",
+      "service_address": "Metis Data Center East, 100 Powerhouse Road, Ashburn, VA 20147",
+      "billing_period": "2026-09-01 to 2026-09-30",
+      "consumption_kwh": 5200200.0,
+      "peak_demand_kw": 8450.0,
+      "total_due": 536260.2,
+      "due_date": "2026-10-25"
+    }
+  },
+  {
+    "id": "vrdu_16_aircraft_maintenance_log",
+    "prompt": "DOCUMENT:\nAIRCRAFT AIRWORTHINESS INSPECTION RECORD\nTail Number: SX-DGY\nAircraft Model: Airbus A321neo XLR\nSerial Number (MSN): 11982\nOperator: Aegean Airlines SA\nTotal Flight Hours: 4,812.5 hrs\nTotal Flight Cycles: 1,940 cycles\nInspection Type: Heavy Maintenance Check C\nInspection Facility: Athens International Airport Maintenance Hangar 2\nLead Inspector: Capt. G. Papandreou, EASA Part-66 License #EL.66.0491\nDiscrepancies Noted: 4 non-critical avionics sensor recalibrations (Cleared)\nEngine 1 (CFM LEAP-1A) EGT Margin: +18.4°C\nEngine 2 (CFM LEAP-1A) EGT Margin: +19.1°C\nCertification: Returned to service in airworthy condition\nRelease Date: 2026-10-22\nNext Scheduled Check: 2028-10-22\n\nExtract fields into JSON with keys: tail_number, aircraft_model, msn, operator, total_flight_hours, total_flight_cycles, inspection_type, release_date, next_check_date.",
+    "target_fields": {
+      "tail_number": "SX-DGY",
+      "aircraft_model": "Airbus A321neo XLR",
+      "msn": 11982,
+      "operator": "Aegean Airlines SA",
+      "total_flight_hours": 4812.5,
+      "total_flight_cycles": 1940,
+      "inspection_type": "Check C",
+      "release_date": "2026-10-22",
+      "next_check_date": "2028-10-22"
+    }
+  },
+  {
+    "id": "vrdu_17_pharmaceutical_batch_record",
+    "prompt": "DOCUMENT:\nSTERILE INJECTABLE BATCH RECORD\nProduct Name: Pembrolizumab Biosimilar 25 mg/mL\nBatch Number: BATCH-2026-PB-008\nManufacturing Facility: BioHellas Sterile Suite 3, Larissa, Greece\nBatch Size: 20,000 Vials (10 mL each)\nFormulation Date: 2026-09-18\nFilling Date: 2026-09-19\nVisual Inspection Yield: 19,842 Vials (99.21% Acceptance Rate)\nSterility Test (14-day incubation): STERILE (No growth detected)\nEndotoxin Level: < 0.20 EU/mg (Spec: < 0.50 EU/mg)\nOsmolality: 295 mOsm/kg (Spec: 280-320 mOsm/kg)\npH: 5.52 (Spec: 5.2 - 5.8)\nQuality Assurance Officer: Dr. K. Diamantis, PharmD\nDisposition: RELEASED FOR DISTRIBUTION\n\nExtract fields into JSON with keys: product_name, batch_number, facility, batch_size, yield_vials, sterility, endotoxin_level, ph, disposition.",
+    "target_fields": {
+      "product_name": "Pembrolizumab Biosimilar 25 mg/mL",
+      "batch_number": "BATCH-2026-PB-008",
+      "facility": "BioHellas Sterile Suite 3",
+      "batch_size": 20000,
+      "yield_vials": 19842,
+      "sterility": "STERILE",
+      "endotoxin_level": "< 0.20 EU/mg",
+      "ph": 5.52,
+      "disposition": "RELEASED FOR DISTRIBUTION"
+    }
+  },
+  {
+    "id": "vrdu_18_customs_import_declaration",
+    "prompt": "DOCUMENT:\nCUSTOMS IMPORT ENTRY SUMMARY\nEntry Number: CUS-US-2026-991204\nImporter of Record: NVIDIA Corporation (Santa Clara, CA)\nCountry of Origin: Taiwan (TW)\nPort of Entry: 2704 - Los Angeles International Airport\nMode of Transport: Air Cargo\nMaster Airway Bill: 023-88912340\nTotal Declared Value: $28,450,000.00 USD\nHTS Classification Code: 8542.31.0001 (Electronic Integrated Circuits - Processors)\nCustoms Duty Rate: 0.0% (ITA Agreement)\nMerchandise Processing Fee (MPF): $614.35\nTotal Customs Fees Due: $614.35\nFiler Code: 99B - DHL Global Forwarding\nEntry Date: 2026-10-11\n\nExtract fields into JSON with keys: entry_number, importer, country_of_origin, hts_code, declared_value, customs_fees_due, entry_date.",
+    "target_fields": {
+      "entry_number": "CUS-US-2026-991204",
+      "importer": "NVIDIA Corporation",
+      "country_of_origin": "Taiwan",
+      "hts_code": "8542.31.0001",
+      "declared_value": 28450000.0,
+      "customs_fees_due": 614.35,
+      "entry_date": "2026-10-11"
+    }
+  },
+  {
+    "id": "vrdu_19_bank_wire_transfer_receipt",
+    "prompt": "DOCUMENT:\nFEDWIRE FUNDS SERVICE CONFIRMATION\nReference Number: 20261019MMQF001298\nDate & Time: October 19, 2026 14:22:45 EST\nOriginator: Metis Treasury Operations\nOriginator Bank: JPMorgan Chase Bank NA, New York (ABA: 021000021)\nBeneficiary: Hellenic Telecommunications Organization (OTE SA)\nBeneficiary Bank: National Bank of Greece, Athens (SWIFT: ETHNGRAA)\nBeneficiary Account: GR8801101250000012548910023\nTransfer Amount: $4,500,000.00 USD\nWire Fee: $25.00\nTotal Debited: $4,500,025.00 USD\nPayment Details: Q3 Dark Fiber Lease Contract #OTE-DF-8812\nStatus: SETTLED - COMPLETED\n\nExtract fields into JSON with keys: reference_number, date, originator, beneficiary, beneficiary_iban, transfer_amount, status.",
+    "target_fields": {
+      "reference_number": "20261019MMQF001298",
+      "date": "2026-10-19",
+      "originator": "Metis Treasury Operations",
+      "beneficiary": "Hellenic Telecommunications Organization (OTE SA)",
+      "beneficiary_iban": "GR8801101250000012548910023",
+      "transfer_amount": 4500000.0,
+      "status": "SETTLED - COMPLETED"
+    }
+  },
+  {
+    "id": "vrdu_20_scientific_instrument_calibration",
+    "prompt": "DOCUMENT:\nCALIBRATION AND METROLOGY CERTIFICATE\nDevice Name: Ultra-High Vacuum Scanning Tunneling Microscope (UHV-STM)\nSerial Number: STM-OMICRON-2026-V8\nOwner: Quantum Materials Laboratory, FORTH Institute, Heraklion\nCalibration Standard: NIST Gold Single Crystal Au(111) Herringbone Reconstruction\nLateral Resolution (X/Y): 0.08 nm (Verified on atomic lattice)\nVertical Resolution (Z): 0.005 nm (Noise floor: 3.2 pm RMS)\nBias Voltage Accuracy: +- 0.02% across -10.0V to +10.0V\nTunneling Current Sensitivity: 1.0 pA to 50.0 nA (Gain: 10^9 V/A)\nCalibration Temperature: 4.2 K (Liquid Helium Cryostat)\nCalibrated By: Dr. Ioanna Sfakianaki, Metrology Lead\nCalibration Date: 2026-10-05\nRecalibration Due: 2027-10-05\nCertificate Status: VALID\n\nExtract fields into JSON with keys: device_name, serial_number, owner, lateral_resolution_nm, vertical_resolution_nm, temperature, calibration_date, recalibration_due, status.",
+    "target_fields": {
+      "device_name": "Ultra-High Vacuum Scanning Tunneling Microscope (UHV-STM)",
+      "serial_number": "STM-OMICRON-2026-V8",
+      "owner": "Quantum Materials Laboratory, FORTH Institute",
+      "lateral_resolution_nm": 0.08,
+      "vertical_resolution_nm": 0.005,
+      "temperature": "4.2 K",
+      "calibration_date": "2026-10-05",
+      "recalibration_due": "2027-10-05",
+      "status": "VALID"
+    }
+  }
+]

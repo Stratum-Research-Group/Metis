@@ -9,6 +9,7 @@ from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetiti
 from dokime.tasks.pinax_lookup import PinaxLookup50Task
 from dokime.tasks.protocol import Query, Task
 from dokime.tasks.registry import discover_tasks, get_task, list_task_info
+from dokime.tasks.vrdu import VRDUTask
 from dokime.tasks.zebra import ZebraHardLogicTask, ZebraHardLogicV2Task
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "PinaxLookup50Task",
     "Query",
     "Task",
+    "VRDUTask",
     "ZebraHardLogicTask",
     "ZebraHardLogicV2Task",
     "discover_tasks",

@@ -148,7 +148,114 @@ class OCRPlugin(SourcePlugin):
                     )
                 )
 
+            # Check for structured tables (DePlot / document intelligence format)
+            if "tables" in data and isinstance(data["tables"], list):
+                for t_idx, table in enumerate(data["tables"], start=1):
+                    if isinstance(table, dict):
+                        t_title = table.get("title", table.get("caption", f"Table {t_idx}"))
+                        page = table.get("page", 1)
+                        headers = table.get("headers", table.get("columns", []))
+                        rows = table.get("rows", table.get("data", []))
+                        md_table = self._format_markdown_table(headers, rows)
+                        if md_table:
+                            content = f"### {t_title}\n\n{md_table}"
+                            passages.append(
+                                RawPassage(
+                                    content=content,
+                                    location={"page": page, "table_index": t_idx, "ocr": True, "type": "table"},
+                                    section=f"Page {page} - {t_title}",
+                                )
+                            )
+                    elif isinstance(table, str) and table.strip():
+                        passages.append(
+                            RawPassage(
+                                content=table.strip(),
+                                location={"page": 1, "table_index": t_idx, "ocr": True, "type": "table"},
+                                section=f"Table {t_idx}",
+                            )
+                        )
+
+            # Check for structured charts (DePlot / MatCha format)
+            if "charts" in data and isinstance(data["charts"], list):
+                for c_idx, chart in enumerate(data["charts"], start=1):
+                    if isinstance(chart, dict):
+                        c_title = chart.get("title", f"Chart {c_idx}")
+                        c_type = chart.get("type", "chart")
+                        page = chart.get("page", 1)
+                        summary = chart.get("summary", chart.get("description", ""))
+                        table_data = chart.get("table", chart.get("series", []))
+                        
+                        parts = [f"### Chart: {c_title} ({c_type})"]
+                        if summary:
+                            parts.append(summary)
+                        if isinstance(table_data, dict) and "headers" in table_data:
+                            md_table = self._format_markdown_table(
+                                table_data.get("headers", []), table_data.get("rows", [])
+                            )
+                            if md_table:
+                                parts.append(md_table)
+                        elif isinstance(table_data, list) and table_data and isinstance(table_data[0], list):
+                            md_table = self._format_markdown_table([], table_data)
+                            if md_table:
+                                parts.append(md_table)
+                        
+                        content = "\n\n".join(parts)
+                        passages.append(
+                            RawPassage(
+                                content=content,
+                                location={"page": page, "chart_index": c_idx, "ocr": True, "type": "chart"},
+                                section=f"Page {page} - Chart {c_title}",
+                            )
+                        )
+
+            # Check for structured key-value fields (VRDU format)
+            kv_source = data.get("fields") or data.get("key_values") or data.get("entities")
+            if kv_source:
+                page = data.get("page", 1)
+                kv_lines = []
+                if isinstance(kv_source, dict):
+                    for k, v in kv_source.items():
+                        kv_lines.append(f"- **{k}**: {v}")
+                elif isinstance(kv_source, list):
+                    for item in kv_source:
+                        if isinstance(item, dict):
+                            k = item.get("key", item.get("field", item.get("name", "Unknown")))
+                            v = item.get("value", item.get("text", ""))
+                            kv_lines.append(f"- **{k}**: {v}")
+                
+                if kv_lines:
+                    content = f"### Structured Fields (Page {page})\n" + "\n".join(kv_lines)
+                    passages.append(
+                        RawPassage(
+                            content=content,
+                            location={"page": page, "ocr": True, "type": "key_values"},
+                            section=f"Page {page} - Structured Fields",
+                        )
+                    )
+
         return passages
+
+    @staticmethod
+    def _format_markdown_table(headers: List[Any], rows: List[List[Any]]) -> str:
+        """Render a clean markdown table from list of headers and rows."""
+        if not headers and not rows:
+            return ""
+        if not headers and rows:
+            headers = [f"Col {i+1}" for i in range(len(rows[0]))]
+        
+        col_count = len(headers)
+        clean_headers = [str(h).strip().replace("|", "\\|") for h in headers]
+        header_line = "| " + " | ".join(clean_headers) + " |"
+        sep_line = "| " + " | ".join([":---"] * col_count) + " |"
+        
+        row_lines = []
+        for r in rows:
+            cells = [str(c).strip().replace("|", "\\|") for c in r[:col_count]]
+            if len(cells) < col_count:
+                cells.extend([""] * (col_count - len(cells)))
+            row_lines.append("| " + " | ".join(cells) + " |")
+        
+        return "\n".join([header_line, sep_line] + row_lines)
 
     def _parse_ocr_text(self, text: str) -> List[RawPassage]:
         passages: List[RawPassage] = []

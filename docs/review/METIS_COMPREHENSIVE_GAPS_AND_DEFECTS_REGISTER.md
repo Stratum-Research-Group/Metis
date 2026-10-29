@@ -588,6 +588,38 @@
 
 ---
 
+### Item 86: Visually-Rich Document Understanding (VRDU) Extraction & Stoma Structured Ingestion
+- **Category:** Document Understanding & Multimodal Ingestion (Google Research VRDU & DePlot / MatCha Integration)
+- **Priority:** P2 (Empirical Capability & Ingestion Quality)
+- **Status:** Resolved & Verified
+- **Affected Subsystems:**
+  - `stoma/src/stoma/plugins/ocr.py`
+  - `stoma/tests/test_ocr_structured.py`
+  - `dokime/src/dokime/tasks/vrdu.py`
+  - `dokime/src/dokime/tasks/data/vrdu_suite.json`
+  - `dokime/src/dokime/tasks/registry.py`
+  - `dokime/src/dokime/tasks/__init__.py`
+  - `dokime/tests/test_vrdu.py`
+- **Root Cause & Rationale:**
+  - Real-world technical documentation ingested by Stoma (semiconductor purchase orders, cleanroom equipment specifications, clinical trial protocols, SEC 10-K balance sheets, patents, wafer probing reports) frequently contains dense visual structures: multi-column tables, chart data series, and key-value forms.
+  - Previously, Stoma's OCR plugin (`stoma/src/stoma/plugins/ocr.py`) flattened OCR bounding boxes into unformatted text streams, discarding table column boundaries, chart points, and key-value pairings essential for downstream vector search and LLM extraction.
+  - Furthermore, Dokime lacked a benchmark task for measuring structured document extraction precision, recall, and F1 across rich entity schemas, leaving Metis without empirical yardsticks for document understanding capabilities.
+- **Remediation & Behavioral Guarantees:**
+  1. Enhanced `stoma/src/stoma/plugins/ocr.py` with structured parsing:
+     - Formats detected tabular grids into clean, aligned Markdown table passages with headers (`| col1 | col2 |`).
+     - Formats chart data series into DePlot / MatCha style summary passages (`# Chart: Title`, `Series: X | Y`).
+     - Formats key-value pairs (`Key: Value`) into dedicated structured entity passages for exact relational and vector retrieval.
+     - Preserves full backwards compatibility with unstructured raw OCR text streams.
+  2. Implemented `VRDUTask` in `dokime/src/dokime/tasks/vrdu.py` conforming to the Dokime `Task` protocol (`task_id = "vrdu_document_extraction"`):
+     - Robust multi-format JSON extraction (markdown fenced code blocks, raw JSON, embedded outer braces).
+     - Flexible normalization: date formats (ISO `YYYY-MM-DD` vs `Month DD, YYYY`), numeric tolerance (with currency symbol and comma stripping), whitespace-collapsed case-insensitive string matching, entity substring containment, and recursive nested list/dict matching.
+     - Computes micro-averaged Precision, Recall, and F1 across target schema fields.
+  3. Created a 20-sample dense semi-structured document benchmark suite in `dokime/src/dokime/tasks/data/vrdu_suite.json`:
+     - ASML EUV purchase orders, Zeiss commercial invoices, TSMC wafer probing reports, Hellenic Oncology clinical protocols, Metis 10-K balance sheets, quantum semiconductor patents, ISO cleanroom lab specs, commercial lease agreements, FAA airworthiness certificates, and material transfer agreements.
+  4. Added 3 unit tests in `stoma/tests/test_ocr_structured.py` and 6 unit tests in `dokime/tests/test_vrdu.py` (185 Dokime tests + 118 Stoma tests passing).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -602,23 +634,24 @@
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
-| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 179 Dokime tests passing (15 IFEval unit/integration tests) |
+| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 185 Dokime tests passing (15 IFEval unit/integration tests) |
 | **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 40 Krisis tests passing (7 conformal unit/integration tests) |
-| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 179 Dokime tests passing (9 SIS unit/integration tests) |
+| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 185 Dokime tests passing (9 SIS unit/integration tests) |
 | **Speculative Cascades Serving** | Item 83 | Hestia (Speculative Drafter-Verifier Cascades & Deferral) | **Integrated & Verified** | 77 Hestia tests passing (5 cascade unit/API tests) |
 | **Active Selective Prediction (ASPEST)** | Item 84 | Krisis + Paideia (Active Abstained Batch Curation & CLI) | **Integrated & Verified** | 40 Krisis + 46 Paideia tests passing (9 ASPEST tests) |
-| **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 179 Dokime tests passing (9 ScaNN/ANN tests) |
+| **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 185 Dokime tests passing (9 ScaNN/ANN tests) |
+| **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 185 Dokime tests passing (9 VRDU tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,062 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,073 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **190** | 0 | 19.88s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **179** | 0 | 1.93s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **185** | 0 | 2.07s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **113** | 0 | 233.92s | **PASS** |
+| **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.25s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **71** | 0 | 43.82s | **PASS** |
@@ -628,7 +661,8 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,062** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,073** | **1** | **~9.5 min** | **ALL GATES PASS** |
+
 
 
 

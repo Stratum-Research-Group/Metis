@@ -13,6 +13,7 @@ from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetitionMathV2Task
 from dokime.tasks.pinax_lookup import PinaxLookup50Task
 from dokime.tasks.protocol import Task
+from dokime.tasks.vrdu import VRDUTask
 from dokime.tasks.zebra import ZebraHardLogicTask, ZebraHardLogicV2Task
 
 # Built-in tasks fallback
@@ -28,6 +29,7 @@ BUILTIN_TASKS: dict[str, type[Task] | Task] = {
     "epistemic_adversarial_v2": EpistemicAdversarialV2Task,
     "pinax_lookup_50": PinaxLookup50Task,
     "ifeval_instruction_following": IFEvalTask,
+    "vrdu_document_extraction": VRDUTask,
 }
 
 
