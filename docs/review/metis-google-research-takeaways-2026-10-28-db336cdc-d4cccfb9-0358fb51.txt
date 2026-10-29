@@ -1,0 +1,138 @@
+METIS - WHAT GOOGLE-RESEARCH/GOOGLE-RESEARCH IS WORTH TO YOU
+Repo reviewed: github.com/google-research/google-research @ db336cdca06c1bed170c672c20f00a1559e6242b (last commit 2026-10-27; rechecked unchanged at write time)
+Date: 2026-10-28
+Status: takeaways only. No code pulled into Metis, no implementation. Every
+integration suggested below is a PROPOSAL - no adapter implemented or verified in this review.
+
+COVERAGE AND METHOD (auditable)
+757 top-level directories exist at this commit (git tree API, untruncated; 763
+entries including files). That is a name-level inventory, not full purpose
+understanding of 757 projects. I
+README-inspected 46 candidates (2 further shortlisted names 404'd at this commit:
+performer, zero_shot_structured_reflection). For the top picks I read actual
+code: KnowNo's demo notebook (the conformal core), IFEval's checker classes,
+ScaNN's Python API and release notes. Everything else stands on README/paper
+level and is labelled accordingly.
+
+HEADLINE VERDICT
+Most useful inspected item for Metis: KnowNo - conformal-prediction uncertainty
+(krisis abstain, kybernetes ask-the-user), with requirements and limits stated
+honestly below. Then IFEval for dokime (code-verified runnable), then speculative
+cascades as hestia's drafter/verifier reference design.
+
+1. KnowNo - uncertainty with statistical guarantees
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/language_model_uncertainty
+   Paper: Ren et al., arXiv 2307.01928, CoRL 2023.
+   Code (read directly): three colabs only, no packaged library. Core mechanics
+   verified in the demo notebook: temperature-scaled softmax over candidate
+   options; prediction set = every option scoring >= 1 - qhat; ask for help when
+   the set is not a singleton; qhat (0.928 in the demo) comes from conformal
+   calibration on held-out examples.
+   Requirements, precisely:
+   - a way to score CANDIDATE answers (option logprobs in the multiple-choice
+     setting shown; open-ended generation needs the paper's sampling +
+     similarity-clustering variant);
+   - a calibration set of real task examples to compute qhat;
+   - exchangeability between calibration and deployment data.
+   Limits, precisely: the guarantee is COVERAGE of the prediction SET at the
+   chosen confidence level - it is not a correctness guarantee for any single
+   conclusion. Set coverage is marginal: it says the true answer falls inside
+   the set at the chosen confidence; it does NOT imply any accuracy guarantee
+   for a singleton answer conditional on the set coming out a singleton. The
+   whole guarantee degrades when the candidate set or the data shift.
+   No fine-tuning, but not plug-and-play on arbitrary prompts.
+   Metis fit: krisis (prediction-set size as the abstain signal instead of a
+   heuristic threshold) and kybernetes (the help branch = when to come back to
+   you). Calibration data can come out of dokime runs. Extra cost is sampling /
+   scoring only. PROPOSED integration; none implemented or verified in this review.
+
+2. IFEval - verifiable instruction following
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/instruction_following_eval
+   Paper: arXiv 2311.07911.
+   Code (read directly): a real package - evaluation_main.py, ~25 checker classes
+   in instructions.py (word/sentence counts, keyword presence/frequency, JSON
+   format, sections, paragraphs, language, forbidden words, rephrasing, start/end
+   constraints), a registry, unit tests. jsonl in (prompt, response); strict and
+   loose accuracy out. All checks programmatic - no judge model.
+   Metis fit: dokime, as a task suite, and as the pattern for writing verifiable
+   checks for your own recurring failure modes. Runs anywhere; cost is model
+   inference for the responses.
+
+3. Speculative cascades
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/speculative_cascades
+   Paper: "Faster Cascades via Speculative Decoding", ICLR 2025 (openreview
+   vo9t20wsmd). Code: one illustrative colab, Gemma 2B drafter + 9B verifier.
+   Metis fit: hestia. Reference design for the drafter/verifier serving experiment
+   already on your list: deferral rules and measured cost-quality curves are what
+   to port; the colab is illustration, not a serving stack. Hardware: a 2B+9B
+   pair is in the size class a 16GB card can host at 4-bit, but exact fit depends
+   on precision and KV-cache budget - unverified on your card.
+
+4. ASPEST - selective prediction meets active learning
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/active_selective_prediction
+   Paper: arXiv 2304.03870. Code: full TF training/eval (Python 3.7 era;
+   README-level only).
+   Metis fit: krisis + paideia. KnowNo gives the coverage guarantee; ASPEST gives
+   rejection-score mechanics and the loop that picks which abstained cases are
+   worth labelling - how abstains become training data. Adapt the strategy; the
+   TF plumbing is not worth porting.
+
+5. Distributed Shampoo
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/scalable_shampoo
+   Code: JAX distributed second-order optimizer (full-matrix Adagrad variant).
+   Metis fit: paideia, cautiously. Wins are demonstrated at large scale; there is
+   no evidence here of benefit at QLoRA scale on your tasks, and preconditioners
+   add memory. Candidate to benchmark against AdamW on a small real run, not a
+   default. JAX, not your PyTorch/unsloth path.
+
+6. DePlot / MatCha - charts to tables
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/deplot
+   Papers: DePlot, MatCha; code + public checkpoints on the pix2struct codebase
+   (arXiv 2210.03347).
+   Metis fit: stoma, conditionally. Where a PDF's information lives in charts,
+   text extraction alone captures none of it; a DePlot-style pass turns chart
+   images into tables LTHCM can index and cite. Whether stoma needs this depends
+   on its current PDF handling - check the current source before scoping the work.
+   Cost: the pix2struct JAX/gin stack, as a separate stoma stage (proposed).
+
+7. VRDU - extraction benchmark for complex documents
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/vrdu
+   Paper: arXiv 2211.15421. Dataset + tasks for structured field extraction from
+   complex forms (nested/repeated fields, many layouts).
+   Metis fit: stoma + dokime, as the quality yardstick if structured extraction is
+   added: field-level scores, not vibes.
+
+8. HyperAttention (parked idea)
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/hyperattention
+   Paper: "HyperAttention: Long-context Attention in Near-Linear Time" (Han et
+   al.). Code: JAX only, minimal README.
+   Flash attention (what llama.cpp gives you) is
+   exact and memory-efficient but still quadratic COMPUTE; HyperAttention trades
+   exactness for near-linear compute at very long contexts - a different axis,
+   with approximation error. Only interesting if you push contexts past what
+   quadratic attention tolerates on your card. Park it.
+
+9. N-Grammer (parked idea, scoped)
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/ngrammer
+   Paper: arXiv 2207.06366. Code: JAX.
+   Latent n-gram augmentation, designed and evaluated as a PRETRAINING-time
+   architecture change. Whether it transfers to fine-tuning an existing model is
+   unestablished here. Park it unless you pretrain a small model.
+
+CHECKED, LIMITED OR NO CURRENT FIT (scoped to what I inspected)
+- robust_loss (https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/robust_loss): Barron's adaptive loss family, arXiv
+  1701.03077 - a REGRESSION loss (image restoration origin), not a drop-in for
+  cross-entropy LM training or DPO. Keep only if a noisy regression subproblem
+  appears.
+- scaling_transformer_inference_efficiency: PaLM 540B TPU code with internal
+  weight paths; not portable.
+- speculative_kd: README's own setup requires 8x A100 80GB; idea only.
+- readtwice: depends on TPU ops per its README.
+- aqt: stub, moved to github.com/google/aqt.
+- proxy_rewards: empty stub.
+- uq_benchmark_2019: unmaintained; moved to google/uncertainty-baselines.
+- memory_efficient_attention: TPU colab; llama.cpp's flash attention already
+  covers exact memory-efficient attention.
+- smart_eval: summarization metric; only relevant if you evaluate summaries.
+- dipper, docent, dense_representations_for_entity_retrieval: no Metis fit found
+  at README level.

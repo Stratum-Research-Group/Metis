@@ -1,0 +1,61 @@
+LTHCM - WHAT GOOGLE-RESEARCH/GOOGLE-RESEARCH IS WORTH TO YOU
+Repo reviewed: github.com/google-research/google-research @ db336cdca06c1bed170c672c20f00a1559e6242b (last commit 2026-10-27; rechecked unchanged at write time)
+Date: 2026-10-28
+Status: takeaways only. No code pulled into LTHCM; integration below is a
+PROPOSAL; no adapter implemented or verified in this review.
+
+Coverage: 757-directory name-level inventory (not full purpose
+understanding); 46 candidates README-inspected; ScaNN's Python API and release
+notes read directly for this file.
+
+VERDICT (scoped)
+Among the 46 candidates I inspected, ScaNN is the most directly usable artifact
+for LTHCM: a maintained, pip-installable ANN library. It is a candidate to
+EVALUATE as your vector index, not a proven fit - the call belongs to a dokime
+benchmark on your own embeddings.
+
+1. ScaNN
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/scann
+   Papers: Anisotropic Vector Quantization (ICML 2020, arXiv 1908.10396); SOAR
+   (NeurIPS 2023, arXiv 2404.00774).
+   Maintenance (read from docs/releases.md): active - 1.4.2 adds Python 3.13 and
+   ARM binaries; since 1.4.0, plain "pip install scann" no longer requires
+   TensorFlow. x86 wheels require AVX and FMA instruction support per the README;
+   whether your CPU exposes those is a one-command check on your machine, not
+   something I can verify from here.
+   API semantics (read from scann_ops_pybind.py / scann_builder.py / the updates
+   test) - the parts that matter for a memory store:
+   - Builder: fluent config - builder(db, k, distance).tree(...).score_ah(...) or
+     score_brute_force(), .build(docids=...). Distance measures include dot
+     product and Euclidean.
+   - Search: search / search_batched / search_batched_parallel with
+     leaves_to_search and reorder knobs (recall vs latency is a runtime dial).
+   - Mutation: upsert(docids, vectors) and delete(docids) EXIST, and the repo's
+     own updates test verifies insert/delete against a brute-force config with
+     docids. Upsert raises if the index was built without docids. Whether
+     upsert/delete behaves equally well on quantized tree-AH indexes is NOT
+     established by what I read (a builder "IncrementalMode" enum exists;
+     semantics unexplored) - verify before designing LTHCM's append path around
+     incremental updates; worst case you rebuild quantized indexes periodically.
+   - Persistence: serialize(artifacts_dir) + load path exists.
+   Honest adoption path: external dependency behind LTHCM's retrieval interface;
+   benchmark recall@k and latency against your current index on YOUR embeddings
+   in dokime before switching; writing the store-API adapter is real work, not a
+   flag flip.
+
+2. Negative Cache
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/negative_cache
+   Paper: NeurIPS 2021. Code: small, self-contained TF (README-level).
+   A streaming cache of negative embeddings so a dual encoder trains with
+   effectively huge batches in limited memory. Only relevant if you train or
+   fine-tune your own embedding model for the memory store; adapt the cache-loss
+   idea, replace the TF plumbing. Irrelevant while LTHCM uses off-the-shelf
+   embeddings.
+
+3. Dense representations for entity retrieval (lineage note)
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/dense_representations_for_entity_retrieval
+   2019 dual-encoder entity linking; superseded by modern embedding models. Noted
+   so it is not mistaken for current state of the art. Skip.
+
+Cross-reference: abstain over retrieved candidates (KnowNo/ASPEST) is in the
+Metis txt; it sits on top of whatever index LTHCM uses.

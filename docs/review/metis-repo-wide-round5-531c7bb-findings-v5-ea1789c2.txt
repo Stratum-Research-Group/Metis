@@ -1,0 +1,222 @@
+METIS REPO-WIDE REVIEW - ROUND 5, FINAL
+Repo: https://gitlab.com/akarta-315h/metis (paths below are repo-relative)
+Commit: 531c7bb68f1155e57f431074302d0871264339a6 (origin/main, re-fetched at closeout 2026-10-20 12:36 SAST)
+Findings verified at 509d70cceb770b8b227ec99ec1ba0d2de7c8cd67; delta 509d70c..531c7bb is only the vscode
+submodule link (https://gitlab.com/akarta-315h/metis-vscode gitlink + .gitmodules/.gitignore) - no Python
+changes. MSS Void content is a separate repo review, not covered here.
+Base for delta: round 4 @ 369939e. 69 commits since round 4.
+Scope: repo-wide purpose/delta/source coverage - all 11 subsystems + schedion + symbolon +
+kybernetes-internal lochos/pinax + prosopon-internal pyle + harness + scripts + deploy + docs + root
+tests. Explicitly NOT a claim that every line of every file was re-read; the unverified residue is
+listed per item in section 2 and consolidated as open checks in section 4.
+Labels: REPRODUCED (executed here) | SOURCE (read at this commit) | NOT-VERIFIED | NOT-LOCATED
+(targeted read found no trace; not proof of absence).
+Review boundary: no production code changes; one empty placeholder doc file
+(kleroterion/Kleroterion_stochastic_decision_submodule.md) in the disposable clone as the F1 build
+workaround; pip installs into the scratch venv only (pypdf, watchdog, stoma editable). Nothing pushed.
+
+===============================================================================
+0. TEST RESULTS (this sandbox; environment limits explicit)
+===============================================================================
+Environment: Python 3.12.14, uv venv, torch CPU (dependency chain), 2 CPU / 1GB RAM.
+Per-module (separate invocations, hard timeouts):
+  kybernetes 187 passed | dokime 152 | dianoia 93 | hestia 72 passed 1 skipped | prosopon 71
+  paideia 41 | kleroterion 43 (F1-workaround clone only) | krisis 29 | phylax 36 | root tests 39
+  stoma 69 passed (31 core + 10 manifest + 11 sources + 2 watcher + 15 round2), 1 failed (see G30),
+    43 not run (round1: kernel-OOM exit 137 ~1.5GB RSS; round3: exceeded 2-minute ceiling;
+    round4: not attempted after those two)
+  LTHCM 53 passed (build_edges 22, recovery_comparisons 14, recovery_plan 12, paged_memory 3,
+    run_bundle 2), 66 not run (community_graphrag, contrastive_sheaf, lthcm, real_benchmarks,
+    retriever_parity - same RAM ceiling)
+Arithmetic: 187+152+93+72+71+41+43+36+29+39 = 763; +69 +53 = 885 PASSED; +1 failed +1 skipped +109
+not-run = 996 collected here. The register claims 1,003 passed + 1 skipped on Nick's machine.
+Difference: LTHCM collected 119 here vs 127 claimed (8 tests, env dependency difference). Every suite
+run to completion matched the claimed per-module count; unrun suites remain his-machine claims, not
+independent verification. No unified single-invocation run (would repeat the stoma OOM).
+
+===============================================================================
+1. CONFIRMED FINDINGS (7: four HIGH, one MEDIUM, two LOW)
+===============================================================================
+1. [REPRODUCED, HIGH] kleroterion uninstallable at HEAD (509d70c and 531c7bb).
+   kleroterion/pyproject.toml:9 readme = "Kleroterion_stochastic_decision_submodule.md" - the file was
+   moved to docs/review/ in 509d70c. `uv pip install -e ./kleroterion` -> hatchling "OSError: Readme
+   file does not exist". Fix: readme = "README.md" (exists).
+
+2. [SOURCE, HIGH] Autonomous coding path self-approves its own approval requests.
+   kybernetes/kybernetes/engine/coding_agent.py:167-176: no token + no interactive flag ->
+   is_action_permitted() -> resolve_approval(app_req["approval_id"], "allow_once") -> uses it as its
+   own token. The standing policy demands a HUMAN for these tools (default_policy.yaml:145-173:
+   edit_file_block, write_file, sandboxed_bash = effect "ask", "Require human approval..."), so
+   self-resolution contradicts the policy. Interactive path (:146-165, break on AWAITING_APPROVAL) is
+   correct. Separately, run_code_mode is policy effect "allow" (no ask) - its only barrier is the A6
+   subprocess sandbox. Fix: deny by default in autonomous mode or an explicit policy-flagged safe
+   subset; record the resolving principal in audit.
+
+3. [SOURCE, HIGH] Sandbox silently degrades when bwrap is missing.
+   execution/backend.py:283-306: get_default_execution_backend() returns LocalProcessBackend when bwrap
+   is unavailable - on auto-detect AND on explicit request (preferred_backend="bwrap" or
+   METIS_EXECUTION_BACKEND=bubblewrap) - with no error or warning. tools/sandboxed_bash.py:29 accepts
+   the default; the result labels "backend" (:157) but nothing fails/warns/gates on it. Fix: fail
+   closed or hard-warn through result + audit; document bwrap as a hard dependency for MSS coding runs.
+
+4. [REPRODUCED, HIGH] Token-like secrets tracked in git.
+   deploy/metis.env (tracked since 509d70c) holds 48-hex token values; hestia and kybernetes share one
+   identical value (values redacted here; they sit in public repo history). pickup.md says local CLIs
+   resolve HESTIA_SERVICE_TOKEN from this file - live use inferred from docs, NOT verified. The repo
+   was publicly cloneable during this review: treat values as exposed if used - rotate both, one token
+   per service, untrack deploy/metis.env (gitignore; keep metis.env.example), scrub history or treat
+   as burned.
+
+5. [SOURCE, MEDIUM] Simulation defaults still on: admin/batch_runner.py:129 smoke_test=True,
+   :295 allow_simulated=True. A default admin batch can still substitute mock/simulated results for
+   measurement. Flip to explicit opt-in.
+
+6. [SOURCE, LOW] resolve_approval swallows errors: adapters/phylax.py:277 except Exception: pass.
+   (The other three excepts - :73/:163/:181 - checked and acceptable.)
+
+7. [SOURCE, LOW] Count hygiene: pickup.md shows "614/614 across 7 suites" and "1,003 across 11
+   subsystems" at the same HEAD without noting they are different subsets; register title says "73
+   Items", HEAD commit message says "items 1-76".
+
+===============================================================================
+2. PRIOR-ISSUE STATUS AT HEAD (per-item; includes partials)
+===============================================================================
+Round-4 items, status verified this round:
+  FIXED: A1 (registry.py:288-298 enforcement + consume_approval), A4 (adapters/phylax.py:92-127
+  verb/class/tool_id mapping via gateway.decide, matching policy schema), A5 (:163-165 fail-closed),
+  A6 (code_mode.py:140-155 format-spec block + :246/:307 child-process hard timeout), A7
+  (checkpoint.py:81-100 no git clean -fd; deletes only post-checkpoint files), A8 (session.py:121-133
+  traversal validation; redaction called :267,:276,:277), A9 (monkeypatch chdir), A11
+  (validators.py:142-147 overlap rule), A12b (dokime/runs gitignored), A13 (run_stack.sh:80-119 random
+  per-boot tokens), A14 (dokime client.py:36,45-49 Bearer; dianoia walk.py:274-281 env), R1
+  (changesets.py:301,307 REDACTED guard), R3 (local-token endpoint removed; server.py:250-324
+  host-owner guards, zero loopback exemption), R4 (evaluator.py:158-168 exact/glob destination), R5
+  (pipeline.py:729-733 final_status from v_report or DRAFT), R7 (benchmark verdicts derived
+  :155-170), R8 (real MRR demo_niah.py:242-254), R9 (kleroterion README updated), B2
+  (session.py:204-224 subscribe-before-snapshot), B5 (lochos SQLite queue), B7 (docs relocated), B12
+  (indexer.py:826-828 deepcopy), B13a (hdc_vsa.py:81 sha256 seeds), B15 (pipeline.py:522 no_grad),
+  B16 (categorical.py:351 dx=2 for vectorless candidates).
+  PARTIAL: A2 (interactive halt fixed :146-165; autonomous self-approval hole = finding 2), A3
+  (BubblewrapBackend exists and is used; silent local fallback = finding 3), R2 (0o600/0o700 snapshot
+  perms verified :129,188,205,521; SQLite rollback-index half not verified), B13 (seeds fixed and
+  stoma disables gauge transport adapter.py:281; engine-level default for direct callers not
+  re-verified), R6 (old mechanism removed - is_turn_simulated now from adapter flags
+  pipeline.py:162-164; Hestia-down fallback labeling path NOT-LOCATED).
+  NOT RE-VERIFIED (no claim either way): A10, A12a/c, C1-C3, B1, B6, B18 (file not found at round-4
+  path), R10 (paideia honest SIMULATED labeling stands).
+
+Register items (docs/review/METIS_COMPREHENSIVE_GAPS_AND_DEFECTS_REGISTER.md), status verified:
+  FIXED (source-verified): 13 (krisis fail-closed candidate.py:54-58), 16 (AccessStore), 19
+  (ProbeRegistry wired), 20 (generational manifest + hash adapters/lthcm.py:66-68), 23 (port pool
+  9000+ hestia.yaml:16), 24 (admission queue finally-decrement server/__init__.py:180-203), 25/26
+  (global admission lock + GpuDeviceLease), 30 (honest voice
+  unavailability), 31 (textContent escaping), 51 (capped dead-letter queues + drop counters), 52
+  (ZeroPagePDFError), 53 (commit_marker.json verification), 60 (gauge transport off in stoma), 64
+  (weights_only=True), 65 (turn-buffer prune), 66 (active futures timeout registry.py:337), 67
+  (edit fail-closed on syntax), 68 (=A11), 70 (=A13), 73 (wordnet honest disclaimer), 74 (draft-model
+  fields), 75 (thinking budget config).
+  PARTIAL: 22 (pickle remains the interchange format: dianoia cli.py:152-156 gates with
+  allow_trusted_pickle=False default; stoma interchange.py:24 verify helper defaults True), 29 (bounds
+  exist but are 1000 files/50MB/depth 6, not the register's 100/1MB), 63 (allow_causal_fallback param
+  exists but engine default is still True, pipeline.py:283 - fail-closed is opt-in).
+  NOT-LOCATED (not proof of absence): 17 (dirfd/openat parent-fd handling; only O_NOFOLLOW found),
+  18 ("stale_rebuild_required"; no "stale" in krisis selector), 33 (hestia weight checksums in
+  api/app.py/registry.py), 58 (no "provisional"/error-delta tagging in pipeline.py).
+  NOT RE-VERIFIED: 1-7 (dashboard telemetry panes), 21 (as_of spot-verified; full walk review not
+  repeated), 27-28, 32 (CI file exists; CI runs not verified), 34, 48 (=R6), 54-57, 59 (subagent
+  reorganized into lochos; durability via SQLite queue verified), 61 (=B13a), 62 (=B15), 71
+  (=finding 3 area), 72 (local-machine claim, not repo-verifiable), 76 (invariant doc; krisis
+  fail-closed itself verified).
+
+===============================================================================
+3. PER-MODULE COVERAGE (purpose + verification depth)
+===============================================================================
+  LTHCM      Poincare/sheaf/causal memory substrate. 53 tests passed, 66 env-gated. Verified: causal
+             fallback param, no_grad, hdc seeds, benchmark honesty, weights_only.
+  dianoia    Walk/deliberation engine + anadrome replay harness (RFC 8785 canonical hashing, contracts,
+             zero-imputation replay, policy zoo, bootstrap evaluator, frozen-walk study). 93 passed.
+  stoma      Ingestion/chunking/indexing + opt-in offline KNN graph builder (graph_builder.py; loads
+             index via pickle). 69 passed, 43 env-gated. Verified: gauge-off, commit markers,
+             zero-page PDF, dead-letter caps.
+  kleroterion Stochastic decision policy. 43 passed (workaround clone). Finding 1; R9 fixed.
+  hestia     Model serving. 72+1s passed. Verified: admission queue, admission lock, GPU leases, port
+             pool, draft-model fields.
+  krisis     Claim grounding/selection. 29 passed. Verified: fail-closed gates.
+  dokime     Evaluation harness. 152 passed. Verified: Hestia auth header.
+  phylax     Capability gateway. 36 passed. Verified: R4, O_NOFOLLOW.
+  kybernetes Orchestrator + MSS + lochos (worktree seats, restore briefs, RuntimeAdapter ABC, durable
+             SQLite queue) + pinax (passive stat-only scanner, use-time hash verification, FTS5 BM25 +
+             LIKE fallback, side-effect-free prober with env sanitization). 187 passed.
+  prosopon   Interface + Pyle remote plane (WebRTC: PermissionError before session webrtc.py:87,
+             <500ms revoke teardown :481; WebAuthn: library-verified ceremonies, TTL challenge store).
+             71 passed. UI: api.js wired client; workbench/squad/pinax views call window.API ->
+             /api/workbench/* endpoints that exist auth-gated (server.py:1382-1441).
+  paideia    Training harness. 41 passed. Honest SIMULATED labeling stands.
+  schedion   NCM candidate generator - archived ARCHIVE_NO_ADOPTION, disabled by default; GPU study
+             code, not run here.
+  symbolon   VQ-VAE code-overlap adapter - archived, not adopted; GPU study code, not run.
+  harness    Dynamic skill learner: synthesizes reusable skills from trajectories into .metis/skills.
+  scripts    run_stack.sh launcher. A13 verified fixed.
+  deploy     systemd units + metis.env. Finding 4. Unit files not line-audited.
+  docs       Review archive (137 files). Finding 7.
+  tests      Root integration suite. 39 passed.
+
+===============================================================================
+4. RISKS & OPEN CHECKS (not confirmed defects)
+===============================================================================
+- Deployment prerequisite note: admin/batch_runner.py:180 lazily imports dokime.client while dokime is
+  not a root project dependency. Fine under the documented per-module venv layout; a root-only install
+  cannot serve the batch endpoint. If a root-unified install is a supported workflow, this breaks it.
+- UI integration: workbench/squad/pinax views are wired through window.API to auth-gated endpoints
+  (source-verified), but whether the handlers return live data in practice and how the views render
+  was not exercised (no browser here). Workbench ships hardcoded default tabs/diff placeholders
+  (workbench.js:10-35) shown until the API responds.
+- R6 residue: exact labeling of Hestia-down fallback responses - not located, unverified.
+- Register partials/not-located items in section 2 (17/18/22/29/33/58/63).
+- Test gates:
+  G1  Heavy suites (109 tests): stoma round1 (OOM-killed), round3 (>2min), round4 (not attempted),
+      LTHCM 5 torch-heavy files (RAM ceiling) - Nick's machine only.
+  G22 UI render check - no browser here.
+  G25 Unified single-invocation run - not attempted (OOM risk).
+  G27 Live runtime: A14 401 + A4 approval chain end-to-end - no live stack here.
+  G30 Rerun stoma suite with stoma installed (one failure was a missing-package artifact; true status
+      undetermined here).
+  G31 Rerun kleroterion on pristine HEAD after finding-1 fix (this round used the placeholder).
+  G32 Pyle live pairing + revoke-teardown timing (claims <500ms; code-verified only).
+
+===============================================================================
+5. OPTIONAL HOUSEKEEPING (not required fixes)
+===============================================================================
+- kybernetes_budget.db default path is relative (cli.py:86): lands in the current working directory;
+  gitignored, so untracked clutter rather than a leak. Pin to a data dir if stable budget history
+  matters across working directories.
+- file_search caps (1000 files/50MB/depth 6) differ from the register's stated targets (100/1MB) -
+  reconcile the doc or the constants.
+- allow_causal_fallback engine default True (LTHCM pipeline.py:283): fail-closed exists as opt-in;
+  decide which default the stack wants.
+
+===============================================================================
+6. FIX ORDER (confirmed findings only)
+===============================================================================
+1. Finding 4 (rotate + untrack + scrub tokens; repo public) and finding 1 (readme = "README.md").
+2. Finding 2 (no self-approval on the autonomous path) and finding 3 (fail closed when bwrap absent)
+   before the MSS coding loop touches valuable files.
+3. Finding 5 (flip simulation defaults).
+4. Findings 6-7. Then the section-4 open checks on the big box.
+
+===============================================================================
+7. DO-NOT-TOUCH / SAFETY
+===============================================================================
+- Read-only review: no production code changes, nothing pushed; disposable-clone placeholder +
+  scratch-venv installs only (header). Nothing here is authorization for any mutation.
+- Do not run the autonomous coding loop against valuable files until findings 2 and 3 are closed.
+- Treat committed deploy/metis.env values as exposed; rotate before relying on them.
+- No GPU/model-training jobs here; heavyweight retries stopped at the box limit (box-safety rule).
+  OOM-gated suites belong on Nick's machine.
+
+VERDICT: NOT CLEAN. 7 confirmed findings (4 HIGH, 1 MEDIUM, 2 LOW). The round-4 approval/sandbox work
+landed but is partially remediated: finding 2 (self-approval on the autonomous path) and finding 3
+(silent sandbox degradation) keep the two biggest round-4 themes open in narrowed form. Everything
+runnable in this sandbox matches the repo's claimed per-suite counts; the 1,003 total is not fully
+independently reproduced here (885 verified passed, 109 environment-gated, 8-test LTHCM discovery
+difference).

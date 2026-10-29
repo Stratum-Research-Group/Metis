@@ -1,0 +1,79 @@
+DIOPTRA - WHAT GOOGLE-RESEARCH/GOOGLE-RESEARCH IS WORTH TO YOU
+Repo reviewed: github.com/google-research/google-research @ db336cdca06c1bed170c672c20f00a1559e6242b (last commit 2026-10-27; rechecked unchanged at write time)
+Date: 2026-10-28
+Status: takeaways only. Integrations below are PROPOSALS; no adapter implemented or verified in this review.
+
+Coverage: 757-directory name-level inventory; 46 candidates
+README-inspected; sis.py read in full for this file.
+
+VERDICT (scoped)
+Among inspected candidates, Dioptra is the best-matched of your projects to this
+repo. Two items are plausibly runnable on your hardware as published; two more
+supply method and self-validation discipline.
+
+1. Dissecting factual predictions
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/dissecting_factual_predictions
+   Paper: Geva et al. 2023, arXiv 2304.14767. Code: Jupyter notebook + utils.py
+   with hooks for intermediate-activation extraction and intervention; pins
+   torch==1.12.1, transformers==4.27.4 (old - expect version friction). The paper
+   ran GPT-2 XL experiments on "a single GPU (V100 for GPT2-xl, A100 for GPT-J)";
+   the V100's memory variant is not stated. GPT-2 XL is 1.5B parameters (~6GB
+   fp32, ~3GB fp16), which fits a 16GB card by arithmetic, but your end-to-end
+   run on the V100 16GB is unverified until tried.
+   Dioptra fit: a reference implementation of what dioptra is for - knock out
+   per-layer MLP/attention contributions to a factual prediction and watch the
+   logit move. Port the hook/intervention pattern and the measurement protocol
+   into dioptra's model-loading layer rather than depending on the notebook.
+
+2. Sufficient Input Subsets (SIS) - code read in full (sis.py, 618 lines)
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/sufficient_input_subsets
+   What it actually computes (verified in code):
+   - BackSelect is GREEDY backward selection: at each step it batch-evaluates f
+     on every input with one more position masked, then masks the position whose
+     removal keeps f highest. Ties break to the lowest index, so the procedure is
+     deterministic GIVEN a deterministic f. Any nondeterminism enters through f
+     itself (e.g. sampled LLM scores), not through SIS.
+   - The result is minimal along the greedy path (nothing more could be removed
+     without dropping f below threshold) - NOT a globally minimum subset. The
+     code's own FindSIS notes it cannot always be certain the full-input
+     prediction was >= threshold; edge cases return the whole stack.
+   - Threshold tau is a user-set scalar on f's output: a subset counts as
+     sufficient when f(subset) >= tau, and the paper recommends tying tau to
+     the model's decision threshold. For a non-monotone f, raising tau need
+     not simply enlarge subsets. There is no global-minimality guarantee and
+     no cost guarantee.
+   - Cost: O(remaining positions) batched f-calls per removal step - roughly
+     quadratic in input dimension per SIS. Fine for paragraphs, expensive for
+     whole books; batch or window long inputs.
+   - sis_collection finds multiple DISJOINT rationales by masking earlier ones.
+   Black-box: needs only f(x), no gradients, no training - so it also works
+   through hestia's API on served GGUF models where activation hooks are
+   unavailable. Good first implementation target for dioptra (proposed).
+
+3. LM fact tracing
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/lm_fact_tracing
+   Paper: arXiv 2205.11482 - first quantitative benchmark for training-data
+   attribution. Key result: gradient-based and embedding-based attribution both
+   LOSE to a plain BM25 retrieval baseline on proponent precision.
+   Dioptra fit: sets expectations for any "where did the model learn this"
+   feature - start from retrieval baselines; fancier attribution is open
+   research. Relevant to dioptra's evidence records.
+
+4. TextGenSHAP - long-document explanations
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/llm_longdoc_interpretability
+   Paper: arXiv 2312.01279. Hierarchical Shapley/Banzhaf values scaling post-hoc
+   explanation to long documents. Natural partner to LTHCM provenance (which
+   retrieved parts drove the answer). Warning: many model calls per explanation;
+   budget it.
+
+5. ROAR - validate the explainers (honest caveats)
+   URL: https://github.com/google-research/google-research/tree/db336cdca06c1bed170c672c20f00a1559e6242b/interpretability_benchmark
+   Paper: arXiv 1806.10758. Remove-And-Retrain measures whether a feature-
+   importance method identifies what the model actually uses.
+   Caveat: ROAR and its in-paper control KAR both require RETRAINING the model
+   per explanation method per dataset - expensive, and this repo offers no
+   validated cheap substitute. Masking-without-retraining proxies are weaker
+   evidence. Treat ROAR as one task-specific evaluation design, validated in the
+   paper's own settings: useful evidence about an explanation method, not
+   proof of causal correctness, and not a mandatory gate for every method
+   dioptra ships.
