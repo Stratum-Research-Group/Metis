@@ -83,7 +83,7 @@ def doctor():
 @cli.command("serve")
 @click.option("--host", default="127.0.0.1", help="Bind host address")
 @click.option("--port", default=8081, help="Bind port number")
-@click.option("--db-path", default="kybernetes_budget.db", help="SQLite database path")
+@click.option("--db-path", default=None, help="SQLite database path (defaults to config or :memory:)")
 @click.option("--memory-root", default=None, help="Path to Stoma/LTHCM memory root directory")
 @click.option("--config", "config_file", default=None, help="Path to YAML configuration file")
 @click.option("--admin-token", default=None, help="Admin bearer token for /v1/admin endpoints")
@@ -91,7 +91,7 @@ def doctor():
 def serve(
     host: str,
     port: int,
-    db_path: str,
+    db_path: Optional[str] = None,
     memory_root: Optional[str] = None,
     config_file: Optional[str] = None,
     admin_token: Optional[str] = None,
@@ -107,13 +107,13 @@ def serve(
         cfg.service_token = service_token
     if memory_root:
         cfg.memory_root = memory_root
-    if db_path:
+    if db_path is not None:
         cfg.db_path = db_path
 
     app = create_app(
-        db_path=db_path,
-        memory_root=memory_root,
-        service_token=service_token,
+        db_path=cfg.db_path,
+        memory_root=cfg.memory_root,
+        service_token=cfg.service_token,
         config=cfg,
     )
     uvicorn.run(app, host=host, port=port, log_level="info")

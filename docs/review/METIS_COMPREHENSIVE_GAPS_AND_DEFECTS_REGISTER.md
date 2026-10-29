@@ -185,7 +185,7 @@
 ### 29. Enforce Tool Bounds Rather Than Only Declaring Timeouts (P1)
 * **Where:** `kybernetes/kybernetes/tools/file_search.py:77-120`, `kybernetes/tools/calculator.py:76-134`
 * **Defect:** File search scanned unlimited directory trees on no-match queries; calculator lacked AST expression depth bounds.
-* **Fix:** Enforced max-match bounds (100 files, 1MB max scan) and AST node recursion depth caps ($\le 50$).
+* **Fix:** Enforced max-match bounds (1,000 files, 50MB max scan, depth $\le 6$) and AST node recursion depth caps ($\le 50$).
 
 ### 30. Make Voice Fail Honestly and Clean Up Resources (P1)
 * **Where:** `prosopon/prosopon/voice/whisper_stt.py:12-49`, `prosopon/voice/piper_tts.py:35-59`
