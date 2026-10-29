@@ -1,0 +1,190 @@
+METIS: EXECUTABLE EVALUATION CASES AND BOUNDARY-AWARE TASK SELECTION
+Evolve on Graph takeaways | 28 October 2026
+
+Status: two proposed Metis adaptations, not implemented features or authority to
+change code, train models, download datasets, or start expensive jobs. This file
+is separate from the earlier Google Research takeaways.
+
+RECOMMENDATION
+
+Borrow the executable-answer-key idea for dokime first. Only then consider
+using repeated attempts to choose practice tasks for paideia. Do not adopt the
+whole EoG self-play training framework or add a knowledge graph solely to use it.
+Using Metis does not require training Metis.
+
+Metis context: dokime is the evaluation harness; paideia is the training harness;
+dianoia is the reasoning layer over LTHCM. These module purposes come from the
+recorded Metis architecture. No fresh repository audit was performed for this
+file. Record fields, adapters and workflow steps below are proposed contracts,
+not claims that the current modules expose these interfaces. Earlier reviews
+reported simulated training paths in paideia; verify the current backend before
+any training experiment or completion claim.
+
+WHAT THE PAPER ESTABLISHES, AND WHAT IT DOES NOT
+
+Evolve on Graph trains a shared model as a question Proposer and graph-exploring
+Solver. It samples formal query structures, executes the queries on a knowledge
+graph to obtain answer sets, and generates English questions from the structures.
+Its curriculum rewards variation in Solver answer scores across repeated attempts.
+
+The authors report improved knowledge-graph QA results. Those results are not
+Metis results and were not independently reproduced for this review. The paper
+reports 140 training steps on eight GH200 GPUs and five Solver rollouts per task.
+That is their setup, not a demonstrated minimum. Local training cost, memory use,
+latency and quality on Nick's hardware remain unmeasured.
+
+Two limits must survive any adaptation:
+- A complete answer set is complete for one formal query on one graph snapshot.
+  It is not a claim that the graph contains all true facts about the world.
+- Executing a query proves its answer set, not that the generated English asks
+  the same thing. The paper uses the shared Solver with the Proposer's retrieved
+  evidence as a verifier. One verification trajectory is not an independent
+  semantic proof. Shared blind spots and false rejections remain possible.
+
+ITEM 1: DOKIME EXECUTABLE MULTI-HOP EVALUATION CASES
+
+Purpose
+Build inspectable reasoning tests whose expected answers come from deterministic
+execution rather than an LLM-written answer key. This should expose missed
+constraints, incomplete answer sets, unsupported answers and broken evidence
+chains in dianoia.
+
+Scope
+Start with a small, synthetic, read-only fact fixture and a deterministic query
+executor. It may be a graph or another structured store that can express the
+same joins and intersections. Do not assume LTHCM already exposes a suitable
+query engine or that its retrieval results are a complete fact store. A fixture
+adapter is a test dependency, not a redesign of LTHCM.
+
+Proposed workflow
+1. Freeze and hash the fixture, relation meanings and query implementation.
+2. Begin with short chains and intersections. Add nested patterns only after
+   the simpler executor and scoring tests pass. EoG uses six patterns; copying
+   all six is not a prerequisite for this pilot.
+3. Instantiate a formal query and execute it. Keep every matching answer ID,
+   including alternate valid answers, rather than one sampled walk endpoint.
+4. Write an English question. Keep its formal query and supporting facts.
+5. Audit wording against the query before admitting the case. Check relation
+   direction, scope, conjunctions, entity aliases and hidden assumptions.
+   An LLM answer-set check can flag cases, but cannot be the sole authority.
+   Use independently reviewed templates or a separate human-reviewed sample;
+   record residual semantic uncertainty rather than calling it proven.
+6. Give the system under test only the question and its permitted evidence or
+   retrieval access. Keep gold answers, query traces and hidden labels out of
+   the solver prompt. Any supplied anchors must be identical across test arms.
+7. Save predictions, retrieved evidence, reasoning actions where available,
+   and deterministic scores. Preserve failures for inspection.
+
+Proposed case record
+case_id; fixture_hash; schema_version; query_text; query_executor_version;
+query_pattern; anchor_ids; question_text; gold_answer_ids; evidence_fact_ids;
+wording_review_status; split; generator_version; seed.
+
+Proposed run record
+case_id; model_and_config; tested_revision; retrieval_budget; attempt_seed;
+predicted_answer_ids; citations_or_evidence_ids; answer_precision;
+answer_recall; answer_F1; exact_set_match; latency; token_use; failure_label.
+
+Keep identity scoring separate from display labels so aliases do not create
+false failures. Score evidence support separately from answer correctness: a
+correct entity guessed without support is not evidence-grounded success.
+
+Comparison and safeguards
+- Compare model alone, a simple retrieval baseline and the Metis reasoning path
+  on identical held-out cases, with comparable evidence and inference budgets.
+  Report differences in access instead of calling unequal arms equivalent.
+- Separate training/practice cases from evaluation cases. Hold out query
+  instances, and where practical relation combinations or fixture regions.
+  Do not tune the generator against the final test set.
+- Add multi-answer cases, reversed relations, distractors, conflicting facts and
+  missing-fact cases. For conflicts and missing facts, define expected behavior
+  explicitly; a graph's closed-world answer is not automatically Metis's best
+  real-world response. Report abstention separately.
+- Keep a fixed evaluation set. A moving practice curriculum must not make the
+  reported benchmark easier or silently replace earlier failures.
+
+Acceptance gate
+Executor unit tests must demonstrate known complete answer sets. The admitted
+English cases must pass the documented wording audit, with rejected and uncertain
+cases retained in the audit log. All comparison arms must use the same scoring
+rules. Claim a reasoning improvement only after held-out results show it without
+an unacceptable loss in evidence support, runtime or abstention behavior.
+If Metis loses to simple retrieval, keep the result and fix the measured failure.
+
+ITEM 2: PAIDEIA BOUNDARY-AWARE PRACTICE SELECTION
+
+Purpose
+Use repeated attempts to find tasks where the current model sometimes succeeds
+and sometimes fails, rather than selecting only easy tasks or impossible ones.
+This can begin as an offline diagnostic, without any weight updates.
+
+Important distinction
+The paper uses variation in answer F1 across five rollouts, not simply a binary
+50% success target. The theoretical maximum variance on scores in [0,1] is 1/4,
+attained by an equal split of zeros and ones. Five binary attempts cannot split
+exactly in half. Partial answers also matter. Do not implement a rigid rule that
+all useful tasks must have 50% success.
+
+Proposed workflow
+1. Take only admitted cases from the Item 1 pipeline. Bad answer keys or ambiguous
+   wording must not become supposedly difficult training examples.
+2. Freeze the candidate model, prompt, tool access, budgets and sampling settings.
+3. Run repeated attempts with recorded seeds. Five follows the paper's setting,
+   but is a noisy estimate, not a validated Metis requirement.
+4. Record per-attempt answer F1, mean, variance, cost and failure labels. Separate
+   reasoning variation from timeouts, tool failures and malformed outputs.
+5. Propose a practice batch with some high-variation cases, plus easy retention
+   checks and hard diagnostic cases. Keep the mixture explicit. All-pass and
+   all-fail cases still have evaluation and diagnostic value.
+6. Reassess difficulty after a genuine model or policy change. Do not infer
+   learning merely because random samples improve on reused practice cases.
+
+Why this is a proposal, not a direct port
+EoG's group-relative optimization gets little answer-reward contrast when every
+attempt scores alike. That observation belongs to its training setup. It does
+not prove that every Metis objective, supervised update or walk-policy learner
+should discard equal-score groups. Format rewards and other objectives must be
+tracked separately from answer-score variance.
+
+Training gate
+Before paideia updates anything, verify that a real backend runs, parameters
+actually change, a checkpoint can be loaded, and a held-out evaluation completes.
+Choose the target explicitly: answer model, router or dianoia walk policy. These
+are different experiments; this file does not select one or treat their rewards
+as interchangeable. Any future GRPO walk-policy proposal remains separate.
+
+Compare boundary-selected practice with uniform sampling at matched rollout and
+training budgets. Report held-out answer quality, evidence support, retention,
+latency and total cost. If selection adds cost without measurable benefit, keep
+uniform sampling. A small local diagnostic must be measured before estimating a
+larger run; no local feasibility or hardware sufficiency is established here.
+
+ORDER OF WORK
+
+First: fixture, executor, wording audit and fixed dokime baseline.
+Second: offline repeated-attempt analysis and task-selection comparison.
+Later, only with separate approval: real paideia training against a measured
+failure, followed by held-out evaluation and a rollback path.
+
+No production memory writes, self-activation, autonomous retraining, or new graph
+infrastructure are implied. These are the two Metis items selected from this
+paper review, not a complete Metis roadmap or a list for other projects.
+
+SOURCES AND PROVENANCE
+
+Paper: Evolve on Graph: Self-Evolving Knowledge Graph Reasoning without Question
+Annotations, arXiv 2610.35598, v1, 26 October 2026.
+https://arxiv.org/abs/2610.35598
+https://arxiv.org/html/2610.35598v1
+
+Mechanics: Sections 3.2-3.4. Query execution and wording verification: Section
+3.3. Boundary-aware curriculum: Section 3.4. Hardware and rollouts: Section 4.1.
+Paper findings are author-reported; no experiments were run for this file.
+
+Public code: https://github.com/Szy5/EoG
+Availability checked in the preceding review; implementation not code-reviewed.
+
+Metis module purposes and prior backend cautions: recorded Metis architecture and
+prior project reviews, not a current checkout or runtime verification. All case
+schemas, acceptance gates and Metis workflow choices in this file are proposed
+adaptations, not interfaces or results established by EoG.

@@ -21,6 +21,14 @@ from paideia.data.aspest_sampler import (
     load_krisis_active_records,
     save_krisis_active_records,
 )
+from paideia.data.boundary_sampler import (
+    compute_attempt_stats_by_case,
+    compute_case_stats,
+    load_case_attempts,
+    save_case_attempts,
+    select_boundary_practice_batch,
+    select_uniform_practice_batch,
+)
 
 __all__ = [
     "load_router_dataset",
@@ -39,4 +47,10 @@ __all__ = [
     "compute_distance",
     "load_krisis_active_records",
     "save_krisis_active_records",
+    "compute_attempt_stats_by_case",
+    "compute_case_stats",
+    "load_case_attempts",
+    "save_case_attempts",
+    "select_boundary_practice_batch",
+    "select_uniform_practice_batch",
 ]

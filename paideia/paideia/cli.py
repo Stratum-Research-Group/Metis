@@ -81,6 +81,65 @@ def sample_active(input_path: Path, output: Path, budget: int, beta: float, min_
     click.echo(f"\nSaved {len(selected)} high-yield active queries to: {output}")
 
 
+@dataset.command("sample-boundary")
+@click.argument("input_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--output", "-o", type=click.Path(dir_okay=False, path_type=Path), required=False, help="Optional destination JSON path for selected case IDs and report")
+@click.option("--budget", "-b", default=20, help="Number of practice cases to select")
+@click.option("--boundary-ratio", default=0.6, help="Target ratio of boundary cases (sigma^2 > 0)")
+@click.option("--retention-ratio", default=0.2, help="Target ratio of retention checks (mean=1.0, sigma^2=0)")
+@click.option("--hard-ratio", default=0.2, help="Target ratio of hard diagnostic cases (mean=0.0, sigma^2=0)")
+@click.option("--min-variance", default=1e-4, help="Minimum sample variance to qualify as boundary")
+@click.option("--baseline-uniform", is_flag=True, default=False, help="Run uniform random sampling as baseline comparison")
+@click.option("--seed", default=42, help="RNG seed")
+def sample_boundary(
+    input_path: Path,
+    output: Optional[Path],
+    budget: int,
+    boundary_ratio: float,
+    retention_ratio: float,
+    hard_ratio: float,
+    min_variance: float,
+    baseline_uniform: bool,
+    seed: int,
+):
+    """Select boundary-aware practice batch from repeated rollout attempts (EoG Item 2)."""
+    from paideia.contracts.boundary_schema import BoundarySelectionConfig
+    from paideia.data.boundary_sampler import (
+        compute_attempt_stats_by_case,
+        load_case_attempts,
+        select_boundary_practice_batch,
+        select_uniform_practice_batch,
+    )
+
+    records = load_case_attempts(input_path)
+    stats = compute_attempt_stats_by_case(records, min_variance=min_variance)
+
+    if baseline_uniform:
+        selected, report = select_uniform_practice_batch(stats, budget=budget, seed=seed)
+    else:
+        cfg = BoundarySelectionConfig(
+            budget=budget,
+            boundary_ratio=boundary_ratio,
+            retention_ratio=retention_ratio,
+            hard_ratio=hard_ratio,
+            min_variance=min_variance,
+            seed=seed,
+        )
+        selected, report = select_boundary_practice_batch(stats, cfg)
+
+    click.echo("\n=== Paideia Boundary Practice Selection Audit ===")
+    click.echo(report.model_dump_json(indent=2))
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump({
+                "report": report.model_dump(),
+                "selected_cases": selected,
+            }, f, indent=2)
+        click.echo(f"\nSaved {len(selected)} practice cases and audit report to: {output}")
+
+
 @cli.command()
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--task", type=click.Choice(["type", "best_route"]), default="type", help="Target task")

@@ -1,0 +1,465 @@
+[
+  {
+    "case_id": "case_eg_001",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "reverse_chain(dennis_ritchie, [invented_by])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "multi_answer_single_hop",
+    "anchor_ids": [
+      "dennis_ritchie"
+    ],
+    "question_text": "Which systems or programming languages in the knowledge base were invented by Dennis Ritchie?",
+    "gold_answer_ids": [
+      "c_lang",
+      "unix"
+    ],
+    "evidence_fact_ids": [
+      "f_cs_02",
+      "f_cs_03"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 42
+  },
+  {
+    "case_id": "case_eg_002",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "reverse_chain(pbp, [inhibits])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "single_hop",
+    "anchor_ids": [
+      "pbp"
+    ],
+    "question_text": "Which pharmaceutical compound inhibits penicillin-binding proteins (PBP)?",
+    "gold_answer_ids": [
+      "penicillin"
+    ],
+    "evidence_fact_ids": [
+      "f_bio_06"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 43
+  },
+  {
+    "case_id": "case_eg_003",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(apollo_11, [launch_vehicle])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "single_hop",
+    "anchor_ids": [
+      "apollo_11"
+    ],
+    "question_text": "What was the launch vehicle for the Apollo 11 mission?",
+    "gold_answer_ids": [
+      "saturn_v"
+    ],
+    "evidence_fact_ids": [
+      "f_aero_01"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 44
+  },
+  {
+    "case_id": "case_eg_004",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(raft, [designed_by])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "single_hop",
+    "anchor_ids": [
+      "raft"
+    ],
+    "question_text": "Who designed the Raft distributed consensus algorithm?",
+    "gold_answer_ids": [
+      "diego_ongaro"
+    ],
+    "evidence_fact_ids": [
+      "f_dist_07"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 45
+  },
+  {
+    "case_id": "case_eg_005",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(python, [invented_by, employed_at])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_2hop",
+    "anchor_ids": [
+      "python"
+    ],
+    "question_text": "What research institution employed the creator of the Python programming language?",
+    "gold_answer_ids": [
+      "cwi_amsterdam"
+    ],
+    "evidence_fact_ids": [
+      "f_cs_01",
+      "f_cs_15"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 46
+  },
+  {
+    "case_id": "case_eg_006",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(methotrexate, [inhibits, catalyzes])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_2hop",
+    "anchor_ids": [
+      "methotrexate"
+    ],
+    "question_text": "Which biochemical pathway is catalyzed by the target enzyme inhibited by methotrexate?",
+    "gold_answer_ids": [
+      "folate_pathway"
+    ],
+    "evidence_fact_ids": [
+      "f_bio_01",
+      "f_bio_03"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 47
+  },
+  {
+    "case_id": "case_eg_007",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(saturn_v, [engine_stage_1, oxidizer])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_2hop",
+    "anchor_ids": [
+      "saturn_v"
+    ],
+    "question_text": "What chemical oxidizer is consumed by the stage 1 engine of the Saturn V rocket?",
+    "gold_answer_ids": [
+      "liquid_oxygen"
+    ],
+    "evidence_fact_ids": [
+      "f_aero_03",
+      "f_aero_06"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 48
+  },
+  {
+    "case_id": "case_eg_008",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(raft, [designed_by, institution])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_2hop",
+    "anchor_ids": [
+      "raft"
+    ],
+    "question_text": "Which university employed the computer scientist who designed the Raft consensus algorithm?",
+    "gold_answer_ids": [
+      "stanford_university"
+    ],
+    "evidence_fact_ids": [
+      "f_dist_07",
+      "f_dist_09"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 49
+  },
+  {
+    "case_id": "case_eg_009",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(python, [invented_by, employed_at, located_in])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_3hop",
+    "anchor_ids": [
+      "python"
+    ],
+    "question_text": "In which city was the institution located that employed the creator of Python?",
+    "gold_answer_ids": [
+      "amsterdam"
+    ],
+    "evidence_fact_ids": [
+      "f_cs_01",
+      "f_cs_15",
+      "f_cs_16"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 50
+  },
+  {
+    "case_id": "case_eg_010",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(aminopterin, [inhibits, catalyzes, synthesizes])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_3hop",
+    "anchor_ids": [
+      "aminopterin"
+    ],
+    "question_text": "What essential cellular metabolite is synthesized by the pathway catalyzed by the enzyme inhibited by aminopterin?",
+    "gold_answer_ids": [
+      "thymidylate"
+    ],
+    "evidence_fact_ids": [
+      "f_bio_02",
+      "f_bio_03",
+      "f_bio_04"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 51
+  },
+  {
+    "case_id": "case_eg_011",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(saturn_v, [engine_stage_1, manufacturer, located_in])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_3hop",
+    "anchor_ids": [
+      "saturn_v"
+    ],
+    "question_text": "In which city was the manufacturer of Saturn V's stage 1 engine located?",
+    "gold_answer_ids": [
+      "canoga_park"
+    ],
+    "evidence_fact_ids": [
+      "f_aero_03",
+      "f_aero_09",
+      "f_aero_10"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 52
+  },
+  {
+    "case_id": "case_eg_012",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(raft, [designed_by, institution, located_in])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "chain_3hop",
+    "anchor_ids": [
+      "raft"
+    ],
+    "question_text": "In which city is the academic institution located where the designer of Raft conducted research?",
+    "gold_answer_ids": [
+      "stanford"
+    ],
+    "evidence_fact_ids": [
+      "f_dist_07",
+      "f_dist_09",
+      "f_dist_10"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 53
+  },
+  {
+    "case_id": "case_eg_013",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "reverse_chain(dhfr, [inhibits])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "multi_answer",
+    "anchor_ids": [
+      "dhfr"
+    ],
+    "question_text": "Which therapeutic drugs in the knowledge base inhibit dihydrofolate reductase (DHFR)?",
+    "gold_answer_ids": [
+      "aminopterin",
+      "methotrexate"
+    ],
+    "evidence_fact_ids": [
+      "f_bio_01",
+      "f_bio_02"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 54
+  },
+  {
+    "case_id": "case_eg_014",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "forward_chain(python, [paradigms])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "multi_answer",
+    "anchor_ids": [
+      "python"
+    ],
+    "question_text": "Which programming paradigms are explicitly supported by Python according to the knowledge base?",
+    "gold_answer_ids": [
+      "functional",
+      "object_oriented"
+    ],
+    "evidence_fact_ids": [
+      "f_cs_08",
+      "f_cs_09"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 55
+  },
+  {
+    "case_id": "case_eg_015",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "intersection([(saturn_v, engine_stage_2), (liquid_hydrogen, propellant)])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "intersection",
+    "anchor_ids": [
+      "saturn_v",
+      "liquid_hydrogen"
+    ],
+    "question_text": "Which rocket engine is mounted on Saturn V's second stage AND consumes liquid hydrogen as its propellant?",
+    "gold_answer_ids": [
+      "j2_engine"
+    ],
+    "evidence_fact_ids": [
+      "f_aero_04",
+      "f_aero_07"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 56
+  },
+  {
+    "case_id": "case_eg_016",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "intersection([(leader_based, consensus_family), (leslie_lamport, designed_by)])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "intersection",
+    "anchor_ids": [
+      "leader_based",
+      "leslie_lamport"
+    ],
+    "question_text": "Which consensus algorithm belongs to the leader-based consensus family AND was designed by Leslie Lamport?",
+    "gold_answer_ids": [
+      "paxos"
+    ],
+    "evidence_fact_ids": [
+      "f_dist_02",
+      "f_dist_08"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 57
+  },
+  {
+    "case_id": "case_eg_017",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "intersection([(dhfr, inhibits), (antifolate, drug_class)])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "intersection",
+    "anchor_ids": [
+      "dhfr",
+      "antifolate"
+    ],
+    "question_text": "Which drugs in the knowledge base inhibit DHFR AND belong to the antifolate drug class?",
+    "gold_answer_ids": [
+      "aminopterin",
+      "methotrexate"
+    ],
+    "evidence_fact_ids": [
+      "f_bio_01",
+      "f_bio_02",
+      "f_bio_08",
+      "f_bio_09"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 58
+  },
+  {
+    "case_id": "case_eg_018",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "intersection([(dennis_ritchie, invented_by), (ken_thompson, invented_by)])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "intersection",
+    "anchor_ids": [
+      "dennis_ritchie",
+      "ken_thompson"
+    ],
+    "question_text": "Which software system was invented by Dennis Ritchie AND also co-invented by Ken Thompson?",
+    "gold_answer_ids": [
+      "unix"
+    ],
+    "evidence_fact_ids": [
+      "f_cs_03",
+      "f_cs_04"
+    ],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 59
+  },
+  {
+    "case_id": "case_eg_019",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "intersection([(pbp, inhibits), (antifolate, drug_class)])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "negative_empty",
+    "anchor_ids": [
+      "pbp",
+      "antifolate"
+    ],
+    "question_text": "Which pharmaceutical compounds inhibit penicillin-binding proteins (PBP) AND belong to the antifolate drug class?",
+    "gold_answer_ids": [],
+    "evidence_fact_ids": [],
+    "wording_review_status": "APPROVED",
+    "split": "test",
+    "generator_version": "1.0.0",
+    "seed": 60
+  },
+  {
+    "case_id": "case_eg_020",
+    "fixture_hash": "07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e",
+    "schema_version": "1.0.0",
+    "query_text": "intersection([(byzantine_fault, fault_model), (leader_based, consensus_family)])",
+    "query_executor_version": "1.0.0",
+    "query_pattern": "negative_empty",
+    "anchor_ids": [
+      "byzantine_fault",
+      "leader_based"
+    ],
+    "question_text": "Which consensus algorithms tolerate byzantine faults AND belong to the leader-based consensus family?",
+    "gold_answer_ids": [],
+    "evidence_fact_ids": [],
+    "wording_review_status": "APPROVED",
+    "split": "practice",
+    "generator_version": "1.0.0",
+    "seed": 61
+  }
+]

@@ -19,6 +19,13 @@ from paideia.contracts.krisis_schema import (
     ActiveSamplingConfig,
     ASPESTAuditReport,
 )
+from paideia.contracts.boundary_schema import (
+    BoundarySelectionConfig,
+    BoundarySelectionReport,
+    CaseAttemptCategory,
+    CaseAttemptRecord,
+    CaseAttemptStats,
+)
 
 __all__ = [
     "DianoiaStep",
@@ -33,4 +40,9 @@ __all__ = [
     "KrisisActiveRecord",
     "ActiveSamplingConfig",
     "ASPESTAuditReport",
+    "BoundarySelectionConfig",
+    "BoundarySelectionReport",
+    "CaseAttemptCategory",
+    "CaseAttemptRecord",
+    "CaseAttemptStats",
 ]

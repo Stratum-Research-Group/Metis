@@ -693,6 +693,47 @@
   - Added `dokime symbolon-benchmark` CLI subcommand supporting `--top-k`, `--level`, and `--output <path>` JSON report export.
   - Verified with 6 unit and integration tests in `dokime/tests/test_symbolon_benchmark.py` (201 Dokime tests passing).
 
+### Item 89: Dokime Executable Multi-Hop Graph Reasoning Task & Verifiable Grounding
+- **Category:** Evaluation & Multi-Hop Reasoning Diagnostics (Dokime Tasks, Deterministic Executor, Hashed Fixture, Grounded Evidence Support)
+- **Priority:** P2 (Diagnostic & Release Gating Integrity)
+- **Status:** Resolved & Verified
+- **Affected Subsystems:**
+  - `dokime/src/dokime/tasks/executable_graph.py`
+  - `dokime/src/dokime/tasks/data/executable_graph_suite.json`
+  - `dokime/src/dokime/tasks/registry.py`
+  - `dokime/src/dokime/tasks/__init__.py`
+  - `dokime/tests/test_executable_graph.py`
+- **Root Cause & Specification Requirement:**
+  - Multi-hop reasoning benchmarks often suffer from LLM answer key hallucinations, missed path constraints, incomplete answer sets, and false credits for ungrounded guessing.
+  - Per Evolve on Graph (arXiv:2610.35598) Section 78–81 takeaways for Metis, Dokime requires inspectable multi-hop reasoning test cases where expected answers and citation chains derive from deterministic query execution over a frozen, SHA-256 hashed synthetic fact fixture (`07295795b5fe11657898373822caf8376e0e283f6f3cbf7d978ae8a3846de12e`).
+- **Remediation & Behavioral Guarantees:**
+  - Implemented canonical 40-fact directed graph fixture (`SYNTHETIC_KNOWLEDGE_FIXTURE`) spanning Computer Science, Biochemistry, Aerospace, and Distributed Consensus with tamper-evident hashing (`compute_fixture_hash()`).
+  - Built `GraphQueryExecutor` supporting forward chains (1-hop, 2-hop, 3-hop), reverse chains, and multi-constraint intersections with path-level fact tracking to eliminate irrelevant dead-end facts.
+  - Designed formal record schema `ExecutableCaseRecord` and generated 20 wording-audited benchmark cases in `executable_graph_suite.json` across 6 distinct query patterns and test/practice splits.
+  - Implemented `ExecutableGraphTask` (`task_id="executable_graph_qa"`) providing set-based answer Precision, Recall, F1, exact match, and separate evidence support Precision/Recall/F1 to ensure unsupported correct guesses fail `evidence_grounded_success`.
+  - Registered `executable_graph_qa` in Dokime's task registry and verified via `dokime tasks` and 8 unit tests in `dokime/tests/test_executable_graph.py` (209 Dokime tests passing).
+
+### Item 90: Paideia Boundary-Aware Practice Selection & Rollout Variance Diagnostic
+- **Category:** Training Data & Policy Difficulty Diagnostics (Paideia Contracts, Boundary Sampler, Rollout Variance, Stratified Selection)
+- **Priority:** P2 (Diagnostic & Release Gating Integrity)
+- **Status:** Resolved & Verified
+- **Affected Subsystems:**
+  - `paideia/paideia/contracts/boundary_schema.py`
+  - `paideia/paideia/data/boundary_sampler.py`
+  - `paideia/paideia/contracts/__init__.py`
+  - `paideia/paideia/data/__init__.py`
+  - `paideia/paideia/cli.py`
+  - `paideia/tests/test_boundary_sampler.py`
+- **Root Cause & Specification Requirement:**
+  - Training or fine-tuning models on tasks that are either universally solved ($\bar{s} = 1.0$) or universally failed ($\bar{s} = 0.0$) yields zero answer-reward contrast and wastes compute.
+  - Per Evolve on Graph (arXiv:2610.35598) Item 2 takeaways for Metis, Paideia requires boundary-aware task selection that evaluates sample variance $\sigma^2$ across repeated rollout attempts ($N \ge 2$), identifying the active learning frontier while maintaining a principled mixture of retention checks and hard diagnostics.
+- **Remediation & Behavioral Guarantees:**
+  - Defined versioned Pydantic contract schemas (`CaseAttemptRecord`, `CaseAttemptStats`, `BoundarySelectionConfig`, `BoundarySelectionReport`) categorizing tasks into `BOUNDARY` ($\sigma^2 > \text{min\_var}$), `RETENTION_CHECK` ($\bar{s}=1.0, \sigma^2=0$), `HARD_DIAGNOSTIC` ($\bar{s}=0.0, \sigma^2=0$), and `CONSISTENT_PARTIAL` ($0 < \bar{s} < 1.0, \sigma^2=0$).
+  - Implemented `boundary_sampler.py` computing unbiased sample variance $s^2 = \frac{1}{N-1}\sum (s_i - \bar{s})^2$ and selecting practice batches with configurable mixture ratios (default 60% boundary, 20% retention, 20% hard), prioritizing highest-variance cases.
+  - Implemented `select_uniform_practice_batch` to provide an exact matched-budget baseline comparison.
+  - Added CLI command `paideia dataset sample-boundary` supporting custom budget, stratum ratios, variance threshold, uniform baseline comparison, and JSON audit report export.
+  - Verified with 4 unit tests in `paideia/tests/test_boundary_sampler.py` (50 Paideia tests passing).
+
 ---
 
 ## Summary & Verification Matrix
@@ -718,27 +759,29 @@
 | **VRDU Document Extraction & Ingestion** | Item 86 | Stoma + Dokime (Structured Table/Chart/KV Ingestion & VRDU Task) | **Integrated & Verified** | 118 Stoma + 195 Dokime tests passing (9 VRDU tests) |
 | **Security Audit Remediations (Round 5)**| Item 87 | Kybernetes, Prosopon, Phylax, Krisis (F-02, F-03, F-04, F-05, F-07, F-08)| **Remediated & Verified** | 193 Kybernetes + 73 Prosopon tests passing (0 loopback leaks) |
 | **Symbolon Retrieval Benchmark & Yardstick** | Item 88 | Dokime Tasks (Symbolon Task, 4-Arm Suite & CLI) | **Integrated & Verified** | 201 Dokime tests passing (6 Symbolon benchmark tests) |
+| **Executable Graph Reasoning & Grounds** | Item 89 | Dokime Tasks (Deterministic Executor, Hashed Fixture, Task Plugin)| **Integrated & Verified** | 209 Dokime tests passing (8 executable graph tests) |
+| **Boundary-Aware Practice Selection** | Item 90 | Paideia (Attempt Rollout Variance, Stratified Selection & CLI)| **Integrated & Verified** | 50 Paideia tests passing (4 boundary sampler tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,094 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,106 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **209** | 0 | 9.75s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **193** | 0 | 18.62s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **201** | 0 | 9.34s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **118** | 0 | 234.15s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.25s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 43.49s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **46** | 0 | 1.70s | **PASS** |
+| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **50** | 0 | 0.79s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.64s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.27s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
-| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 22.75s | **PASS** |
+| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.54s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,094** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,106** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 
