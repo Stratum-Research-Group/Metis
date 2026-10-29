@@ -562,6 +562,30 @@
   5. Added `paideia dataset sample-active` subcommand to Paideia CLI.
   6. Added 4 unit tests in `krisis/tests/test_active_learning.py` (all 40 Krisis tests passing) and 5 unit/CLI tests in `paideia/tests/test_aspest_sampler.py` (all 46 Paideia tests passing).
 
+### 85. Google Research Takeaway Track F: ScaNN Approximate Nearest Neighbor Indexing & Dokime ANN Yardstick
+- **Affected Module(s):**
+  - `LTHCM/lthcm/core/scann_index.py`
+  - `LTHCM/lthcm/core/__init__.py`
+  - `LTHCM/lthcm/engine/retriever.py`
+  - `LTHCM/pyproject.toml`
+  - `LTHCM/tests/test_scann_index.py`
+  - `dokime/src/dokime/tasks/ann_benchmark.py`
+  - `dokime/src/dokime/cli.py`
+  - `dokime/tests/test_ann_benchmark.py`
+  - `stoma/vendored_provenance.json`
+  - `stoma/src/stoma/vendored_provenance.json`
+- **Root Cause & Rationale:**
+  - In LTHCM's deterministic retrieval pipeline (`LTHCMRetriever.search()`), Stage 1 candidate generation relied on exhaustive $O(N \cdot D)$ linear dot-product scans (`np.dot(self.doc_embeddings, q_emb)`). As document collections scale into hundreds of thousands of passages, unquantized linear scans dominate search latency.
+  - Google Research evaluation identified ScaNN (Anisotropic Vector Quantization & SOAR, ICML 2020 / NeurIPS 2023; pip-installable wheel without TensorFlow on modern AVX/FMA hardware) as the highest-utility artifact for LTHCM, with the explicit mandate to benchmark empirical Recall@k, latency percentiles, and QPS against exact ground truth on active embeddings before adoption.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `ScannIndex` and `ScannConfig` in `LTHCM/lthcm/core/scann_index.py`, providing a complete typed adapter over `scann.scann_ops_pybind` with tree-AH anisotropic quantization, brute force SIMD fallback, docid mapping, upsert/delete mutation tracking, and filesystem serialization/loading.
+  2. Integrated `ann_backend: str = "exact"` ("exact", "scann", "faiss"), `ann_leaves_to_search`, and `ann_reorder_k` into `RetrievalConfig` and `LTHCMRetriever` (`LTHCM/lthcm/engine/retriever.py`), allowing callers to select sub-linear vector search with stage trace telemetry (`traces["ann_backend"] = "scann"`).
+  3. Added `scann>=1.4.0` optional dependencies under `bench`, `ann`, and `all` in `LTHCM/pyproject.toml`. Recomputed LTHCM content digest (`2985bf1b819197ce15a63b9d2ee6fd59292ca8395fea0dc67aaf38f3d302f5af`) and synchronized `stoma/vendored_provenance.json` and `stoma/src/stoma/vendored_provenance.json`.
+  4. Implemented `ANNBenchmarkSuite`, `ANNBenchmarkConfig`, and `ANNBenchmarkReport` in `dokime/src/dokime/tasks/ann_benchmark.py`, evaluating Recall@1, Recall@K, latency percentiles (mean, p50, p95, p99 ms), QPS, and build times against exact linear dot-product ground truth.
+  5. Added `dokime ann-benchmark` subcommand to Dokime CLI (`dokime/src/dokime/cli.py`) with optional JSON report export (`--output`).
+  6. Verified via Dokime benchmark at $N=3,000$, $D=128$: ScaNN Tree-AH achieves **85,962 QPS (6.64x speedup)** over exact linear scan; ScaNN Brute-Force SIMD achieves **38,865 QPS (3.00x speedup)** with **1.0000 exact recall**.
+  7. Added 6 unit tests in `LTHCM/tests/test_scann_index.py` (133 LTHCM tests passing) and 3 unit/CLI tests in `dokime/tests/test_ann_benchmark.py` (179 Dokime tests passing).
+
 ---
 
 ## Summary & Verification Matrix
@@ -578,21 +602,22 @@
 | **Reasoning & Serving Efficiency** | Items 74–76 | Speculative decoding, thinking budget bounds, latent grounding | **Hardened & Tested** | 1,003 tests passed across 11 modules + 0 TS compile errors |
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
-| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 176 Dokime tests passing (15 IFEval unit/integration tests) |
+| **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 179 Dokime tests passing (15 IFEval unit/integration tests) |
 | **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 40 Krisis tests passing (7 conformal unit/integration tests) |
-| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 176 Dokime tests passing (9 SIS unit/integration tests) |
+| **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 179 Dokime tests passing (9 SIS unit/integration tests) |
 | **Speculative Cascades Serving** | Item 83 | Hestia (Speculative Drafter-Verifier Cascades & Deferral) | **Integrated & Verified** | 77 Hestia tests passing (5 cascade unit/API tests) |
 | **Active Selective Prediction (ASPEST)** | Item 84 | Krisis + Paideia (Active Abstained Batch Curation & CLI) | **Integrated & Verified** | 40 Krisis + 46 Paideia tests passing (9 ASPEST tests) |
+| **ANN Indexing & Empirical Yardstick** | Item 85 | LTHCM + Dokime (Google ScaNN Anisotropic Tree-AH & Benchmarks) | **Integrated & Verified** | 133 LTHCM + 179 Dokime tests passing (9 ScaNN/ANN tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,053 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,062 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **190** | 0 | 19.88s | **PASS** |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **176** | 0 | 2.59s | **PASS** |
-| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **127** | 0 | 233.53s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **179** | 0 | 1.93s | **PASS** |
+| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 237.10s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **113** | 0 | 233.92s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.25s | **PASS** |
@@ -603,7 +628,8 @@
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,053** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,062** | **1** | **~9.5 min** | **ALL GATES PASS** |
+
 
 
 

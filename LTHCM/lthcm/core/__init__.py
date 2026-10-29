@@ -41,6 +41,7 @@ from .categorical import (
     FisherRaoRankingMorphism,
     PersistentHomologyAuditMorphism,
 )
+from .scann_index import ScannConfig, ScannIndex
 
 __all__ = [
     "SuperpositionMemoryStore",
@@ -88,6 +89,8 @@ __all__ = [
     "CausalFilterMorphism",
     "FisherRaoRankingMorphism",
     "PersistentHomologyAuditMorphism",
+    "ScannConfig",
+    "ScannIndex",
 ]
 
 

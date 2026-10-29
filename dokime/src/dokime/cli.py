@@ -260,6 +260,48 @@ def create_parser() -> argparse.ArgumentParser:
         help="Maximum number of disjoint subsets to uncover (default: 3).",
     )
 
+    # Subcommand: ann-benchmark (Google Research ScaNN vs FAISS vs Exact)
+    ann_parser = subparsers.add_parser(
+        "ann-benchmark",
+        help="Benchmark vector retrieval backends (ScaNN Tree-AH, FAISS, Exact).",
+    )
+    ann_parser.add_argument(
+        "--num-docs",
+        type=int,
+        default=1000,
+        help="Number of document vectors to index (default: 1000).",
+    )
+    ann_parser.add_argument(
+        "--dim",
+        type=int,
+        default=64,
+        help="Embedding vector dimension (default: 64).",
+    )
+    ann_parser.add_argument(
+        "--num-queries",
+        type=int,
+        default=50,
+        help="Number of queries to benchmark (default: 50).",
+    )
+    ann_parser.add_argument(
+        "--top-k",
+        type=int,
+        default=10,
+        help="Number of nearest neighbors to retrieve (default: 10).",
+    )
+    ann_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for deterministic vector generation (default: 42).",
+    )
+    ann_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Path to save benchmark report JSON.",
+    )
+
     return parser
 
 
@@ -571,6 +613,58 @@ def handle_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_ann_benchmark(args: argparse.Namespace) -> int:
+    """Handle 'dokime ann-benchmark' subcommand comparing vector retrieval backends."""
+    import json
+    from dokime.tasks.ann_benchmark import ANNBenchmarkConfig, ANNBenchmarkSuite
+
+    config = ANNBenchmarkConfig(
+        num_documents=args.num_docs,
+        d_model=args.dim,
+        num_queries=args.num_queries,
+        top_k=args.top_k,
+        seed=args.seed,
+    )
+
+    print(f"[*] Running ANN Vector Benchmark (Docs={args.num_docs}, Dim={args.dim}, Queries={args.num_queries}, Top-K={args.top_k})...")
+    suite = ANNBenchmarkSuite(config=config)
+    report = suite.run()
+
+    print()
+    print(report.format_table())
+    print()
+
+    if args.output:
+        out_dict = {
+            "num_documents": report.num_documents,
+            "d_model": report.d_model,
+            "num_queries": report.num_queries,
+            "top_k": report.top_k,
+            "algorithms": {
+                name: {
+                    "algorithm_name": r.algorithm_name,
+                    "build_time_s": r.build_time_s,
+                    "mean_latency_ms": r.mean_latency_ms,
+                    "p50_latency_ms": r.p50_latency_ms,
+                    "p95_latency_ms": r.p95_latency_ms,
+                    "p99_latency_ms": r.p99_latency_ms,
+                    "qps": r.qps,
+                    "recall_at_1": r.recall_at_1,
+                    "recall_at_k": r.recall_at_k,
+                    "speedup_vs_exact": r.speedup_vs_exact,
+                }
+                for name, r in report.algorithms.items()
+            },
+        }
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(out_dict, f, indent=2)
+        print(f"[+] Report saved to {out_path}")
+
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Main CLI entry point."""
     parser = create_parser()
@@ -584,6 +678,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return handle_compare(args)
     elif args.subcommand == "explain":
         return handle_explain(args)
+    elif args.subcommand == "ann-benchmark":
+        return handle_ann_benchmark(args)
     return 0
 
 

@@ -48,6 +48,9 @@ class RetrievalConfig:
     use_fisher_rao: bool = False
     update_online_memory: bool = False  # Strictly False by default for read-only inference
     audit_completeness: bool = False
+    ann_backend: str = "exact"  # "exact", "scann", "faiss"
+    ann_leaves_to_search: Optional[int] = None
+    ann_reorder_k: Optional[int] = None
     seed: int = 42
 
 
@@ -97,6 +100,7 @@ class LTHCMRetriever:
         self.doc_embeddings: Optional[np.ndarray] = None
         self.doc_titles: List[str] = []
         self.edges: List[Tuple[str, str, str, float]] = []
+        self.scann_index: Optional[Any] = None
 
     def index(
         self,
@@ -122,7 +126,7 @@ class LTHCMRetriever:
             did = str(d.get("id", d.get("doc_id", f"doc_{idx}")))
             title = str(d.get("title", did)).strip()
             text = str(d.get("text", d.get("paragraph", d.get("content", "")))).strip()
-            item = {"id": did, "title": title, "text": text}
+            item = {"id": did, "title": title, "text": text, "idx": idx}
             self.docs.append(item)
             self.doc_map[did] = item
             self.doc_titles.append(title)
@@ -173,6 +177,22 @@ class LTHCMRetriever:
         for src, dst, rel, perm in self.edges:
             self.wormhole.add_wormhole(src, dst, rel, permeability=perm)
 
+        # Build ScaNN index if requested
+        if cfg.ann_backend == "scann":
+            from lthcm.core.scann_index import ScannConfig, ScannIndex
+            scann_cfg = ScannConfig(
+                distance_measure="dot_product",
+                num_neighbors=cfg.top_k,
+                num_leaves_to_search=cfg.ann_leaves_to_search,
+                reorder_num_neighbors=cfg.ann_reorder_k,
+            )
+            self.scann_index = ScannIndex(config=scann_cfg).build(
+                self.doc_embeddings,
+                doc_ids=[d["id"] for d in self.docs],
+            )
+        else:
+            self.scann_index = None
+
     def search(
         self,
         query: Union[str, torch.Tensor, np.ndarray],
@@ -215,9 +235,39 @@ class LTHCMRetriever:
             if q_norm > 1e-12:
                 q_emb = q_emb / q_norm
 
-        # 2. Stage 1: Base Inner-Product Similarity
-        base_sims = np.dot(self.doc_embeddings, q_emb)
-        ranked_seed_indices = np.argsort(base_sims, kind="stable")[::-1]
+        # 2. Stage 1: Candidate Generation (Exact Dot-Product or ScaNN ANN)
+        if cfg.ann_backend == "scann":
+            if self.scann_index is None:
+                from lthcm.core.scann_index import ScannConfig, ScannIndex
+                scann_cfg = ScannConfig(
+                    distance_measure="dot_product",
+                    num_neighbors=max(k, 10),
+                    num_leaves_to_search=cfg.ann_leaves_to_search,
+                    reorder_num_neighbors=cfg.ann_reorder_k,
+                )
+                self.scann_index = ScannIndex(config=scann_cfg).build(
+                    self.doc_embeddings,
+                    doc_ids=[d["id"] for d in self.docs],
+                )
+            k_ann = min(len(self.docs), max(k * 4, 20))
+            ann_doc_ids, ann_scores = self.scann_index.search(
+                q_emb,
+                top_k=k_ann,
+                leaves_to_search=cfg.ann_leaves_to_search,
+            )
+            ranked_seed_indices = [self.doc_map[did]["idx"] for did in ann_doc_ids if did in self.doc_map]
+            if len(ranked_seed_indices) < len(self.docs):
+                seen = set(ranked_seed_indices)
+                ranked_seed_indices.extend([i for i in range(len(self.docs)) if i not in seen])
+            base_sims = np.zeros(len(self.docs), dtype=np.float32)
+            for did, score in zip(ann_doc_ids, ann_scores):
+                if did in self.doc_map:
+                    base_sims[self.doc_map[did]["idx"]] = float(score)
+            traces["ann_backend"] = "scann"
+        else:
+            base_sims = np.dot(self.doc_embeddings, q_emb)
+            ranked_seed_indices = np.argsort(base_sims, kind="stable")[::-1]
+            traces["ann_backend"] = "exact"
 
         traces["stage1_latency_s"] = time.perf_counter() - t0
         traces["top_seed_id"] = self.docs[ranked_seed_indices[0]]["id"]
