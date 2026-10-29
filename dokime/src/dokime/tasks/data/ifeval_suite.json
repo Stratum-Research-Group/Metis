@@ -164,5 +164,47 @@
       {"rule_type": "postscript", "kwargs": {}}
     ],
     "category": "compound"
+  },
+  {
+    "id": "ifeval-21",
+    "prompt": "Write a critical system alert informing engineers of an emergency database failover. The entire alert MUST be written in ALL CAPITAL LETTERS.",
+    "rules": [
+      {"rule_type": "letter_case", "kwargs": {"all_capital": true}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-22",
+    "prompt": "State the definition of idempotent operations in computer systems. Your entire response must be enclosed in double quotation marks.",
+    "rules": [
+      {"rule_type": "quotation", "kwargs": {"wrapped_in_quotes": true}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-23",
+    "prompt": "Compare event-driven I/O mechanisms across platforms. You must explicitly highlight both '*epoll*' and '*kqueue*' using markdown asterisks.",
+    "rules": [
+      {"rule_type": "highlight_section", "kwargs": {"highlighted_keywords": ["epoll", "kqueue"]}}
+    ],
+    "category": "format"
+  },
+  {
+    "id": "ifeval-24",
+    "prompt": "Give two alternative explanations for why microservices increase operational complexity. Separate your two responses with three asterisks '***'.",
+    "rules": [
+      {"rule_type": "two_responses", "kwargs": {"delimiter": "\\*\\*\\*"}}
+    ],
+    "category": "structure"
+  },
+  {
+    "id": "ifeval-25",
+    "prompt": "Provide a brief security reminder about credential safety. Your response must contain at least 2 uppercase words and must not exceed 40 words total.",
+    "rules": [
+      {"rule_type": "letter_case", "kwargs": {"min_capital_words": 2}},
+      {"rule_type": "word_count", "kwargs": {"max_words": 40}}
+    ],
+    "category": "compound"
   }
 ]
+

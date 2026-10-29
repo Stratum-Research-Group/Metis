@@ -315,6 +315,100 @@ class PostscriptChecker(InstructionChecker):
         return True, "Postscript present"
 
 
+class CapitalLettersChecker(InstructionChecker):
+    """Verifies casing constraints: all uppercase, all lowercase, or count of capitalized words."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response.strip()
+        all_capital = kwargs.get("all_capital", False)
+        all_lowercase = kwargs.get("all_lowercase", False)
+        min_capital_words = kwargs.get("min_capital_words")
+
+        if all_capital:
+            alpha_chars = [c for c in target if c.isalpha()]
+            if not alpha_chars or not all(c.isupper() for c in alpha_chars):
+                return False, "Response is not entirely in uppercase characters"
+
+        if all_lowercase:
+            alpha_chars = [c for c in target if c.isalpha()]
+            if not alpha_chars or not all(c.islower() for c in alpha_chars):
+                return False, "Response is not entirely in lowercase characters"
+
+        if min_capital_words is not None:
+            words = re.findall(r"\b[A-Za-z0-9_]+\b", target)
+            caps = [w for w in words if len(w) >= 2 and w.isalpha() and w.isupper()]
+            if len(caps) < min_capital_words:
+                return False, f"Found {len(caps)} uppercase words, expected at least {min_capital_words}"
+
+        return True, "Casing constraint satisfied"
+
+
+class QuotationChecker(InstructionChecker):
+    """Verifies that the response is wrapped in quotation marks or contains quoted segments."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response.strip()
+        wrapped_in_quotes = kwargs.get("wrapped_in_quotes", False)
+        exact_quotes = kwargs.get("exact_quotes", [])
+
+        if wrapped_in_quotes:
+            is_quoted = (
+                (target.startswith('"') and target.endswith('"') and len(target) >= 2)
+                or (target.startswith("'") and target.endswith("'") and len(target) >= 2)
+                or (target.startswith("“") and target.endswith("”") and len(target) >= 2)
+            )
+            if not is_quoted:
+                return False, "Response is not wrapped in quotation marks"
+
+        if exact_quotes:
+            found_quotes = set(re.findall(r'["“\']([^"”\']+)["”\']', target))
+            missing = [q for q in exact_quotes if q not in found_quotes]
+            if missing:
+                return False, f"Missing required quoted phrases: {missing}"
+
+        return True, "Quotation constraint satisfied"
+
+
+class HighlightSectionChecker(InstructionChecker):
+    """Verifies that designated sections or keywords are highlighted via Markdown asterisks."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        keywords = kwargs.get("highlighted_keywords", [])
+        min_highlighted = kwargs.get("min_highlighted")
+
+        highlights = re.findall(r"\*{1,2}([^*\n]+)\*{1,2}", target)
+        found_set = {h.strip().lower() for h in highlights if h.strip()}
+
+        if keywords:
+            missing = [k for k in keywords if k.strip().lower() not in found_set]
+            if missing:
+                return False, f"Missing highlighted markdown sections: {missing}"
+
+        if min_highlighted is not None and len(highlights) < min_highlighted:
+            return False, f"Found {len(highlights)} highlighted elements, expected at least {min_highlighted}"
+
+        return True, "Highlighting constraint satisfied"
+
+
+class TwoResponsesChecker(InstructionChecker):
+    """Verifies that the response provides two distinct responses separated by a delimiter."""
+
+    def check(self, response: str, kwargs: Dict[str, Any], loose: bool = False) -> Tuple[bool, str]:
+        target = clean_loose_text(response) if loose else response
+        delimiter = kwargs.get("delimiter", r"(?:\*{3,}|-{3,}|Response\s*2:)")
+
+        parts = re.split(delimiter, target, maxsplit=2)
+        if len(parts) < 2 or not parts[0].strip() or not parts[1].strip():
+            p1 = re.search(r"Response\s*1:\s*(.+?)(?=Response\s*2:|$)", target, re.DOTALL | re.IGNORECASE)
+            p2 = re.search(r"Response\s*2:\s*(.+?)$", target, re.DOTALL | re.IGNORECASE)
+            if p1 and p2 and p1.group(1).strip() and p2.group(1).strip():
+                return True, "Two labeled responses verified"
+            return False, "Response does not contain two distinct responses separated by delimiter"
+
+        return True, "Two distinct responses verified"
+
+
 # Registry mapping rule names to checker implementations
 CHECKER_REGISTRY: Dict[str, InstructionChecker] = {
     "json_format": JsonFormatChecker(),
@@ -328,6 +422,10 @@ CHECKER_REGISTRY: Dict[str, InstructionChecker] = {
     "start_end": StartEndConstraintChecker(),
     "numbered_list": NumberedListChecker(),
     "postscript": PostscriptChecker(),
+    "letter_case": CapitalLettersChecker(),
+    "quotation": QuotationChecker(),
+    "highlight_section": HighlightSectionChecker(),
+    "two_responses": TwoResponsesChecker(),
 }
 
 

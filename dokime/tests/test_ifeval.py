@@ -7,16 +7,20 @@ import pytest
 from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.ifeval_checkers import (
     CHECKER_REGISTRY,
+    CapitalLettersChecker,
     ForbiddenWordsChecker,
+    HighlightSectionChecker,
     JsonFormatChecker,
     KeywordFrequencyChecker,
     KeywordPresenceChecker,
     NumberedListChecker,
     ParagraphCountChecker,
     PostscriptChecker,
+    QuotationChecker,
     SectionHeaderChecker,
     SentenceCountChecker,
     StartEndConstraintChecker,
+    TwoResponsesChecker,
     WordCountChecker,
     verify_instruction,
 )
@@ -199,6 +203,85 @@ def test_postscript_checker():
     assert fail is False
 
 
+def test_capital_letters_checker():
+    checker = CapitalLettersChecker()
+
+    # All capital
+    ok_caps, _ = checker.check("EMERGENCY FAILOVER IN PROGRESS", {"all_capital": True})
+    assert ok_caps is True
+
+    fail_caps, _ = checker.check("Emergency failover in progress", {"all_capital": True})
+    assert fail_caps is False
+
+    # All lowercase
+    ok_lower, _ = checker.check("all lower text without any caps", {"all_lowercase": True})
+    assert ok_lower is True
+
+    fail_lower, _ = checker.check("All lower text with Cap", {"all_lowercase": True})
+    assert fail_lower is False
+
+    # Min capital words
+    ok_min, _ = checker.check("The CPU and GPU must synchronize", {"min_capital_words": 2})
+    assert ok_min is True
+
+    fail_min, _ = checker.check("The CPU must synchronize", {"min_capital_words": 2})
+    assert fail_min is False
+
+
+def test_quotation_checker():
+    checker = QuotationChecker()
+
+    # Wrapped in double quotes
+    ok_wrapped, _ = checker.check('"An operation is idempotent if f(f(x)) = f(x)."', {"wrapped_in_quotes": True})
+    assert ok_wrapped is True
+
+    fail_wrapped, _ = checker.check('An operation without wrapping quotes.', {"wrapped_in_quotes": True})
+    assert fail_wrapped is False
+
+    # Exact quotes
+    text = 'Security guidelines require "zero trust" and "least privilege" controls.'
+    ok_exact, _ = checker.check(text, {"exact_quotes": ["zero trust", "least privilege"]})
+    assert ok_exact is True
+
+    fail_exact, _ = checker.check(text, {"exact_quotes": ["zero trust", "defense in depth"]})
+    assert fail_exact is False
+
+
+def test_highlight_section_checker():
+    checker = HighlightSectionChecker()
+    text = "Linux supports *epoll* while BSD uses *kqueue* for event demuxing."
+
+    ok_hi, _ = checker.check(text, {"highlighted_keywords": ["epoll", "kqueue"]})
+    assert ok_hi is True
+
+    fail_hi, _ = checker.check(text, {"highlighted_keywords": ["epoll", "iocp"]})
+    assert fail_hi is False
+
+
+def test_two_responses_checker():
+    checker = TwoResponsesChecker()
+
+    # Delimited by ***
+    text = (
+        "Microservices introduce distributed consensus challenges.\n"
+        "***\n"
+        "Alternatively, network partitioning degrades latency budgets."
+    )
+    ok_delim, _ = checker.check(text, {"delimiter": r"\*\*\*"})
+    assert ok_delim is True
+
+    fail_delim, _ = checker.check("Only one single response provided.", {"delimiter": r"\*\*\*"})
+    assert fail_delim is False
+
+    # Labeled Response 1 and Response 2
+    labeled = (
+        "Response 1: Monoliths simplify transactional consistency.\n"
+        "Response 2: Microservices offer team deployment autonomy."
+    )
+    ok_labeled, _ = checker.check(labeled, {})
+    assert ok_labeled is True
+
+
 # -------------------------------------------------------------------------
 # Integration Tests for IFEvalTask
 # -------------------------------------------------------------------------
@@ -210,7 +293,7 @@ def test_ifeval_task_load_and_properties():
     assert task.dataset_path.exists()
 
     queries = task.load()
-    assert len(queries) == 20
+    assert len(queries) == 25
     assert all(isinstance(q, Query) for q in queries)
     assert queries[0].id == "ifeval-01"
     assert "rules" in queries[0].metadata
@@ -257,4 +340,4 @@ def test_ifeval_registry_discovery():
 
     info = list_task_info()
     ifeval_info = next(item for item in info if item["task_id"] == "ifeval_instruction_following")
-    assert ifeval_info["items"] == 20
+    assert ifeval_info["items"] == 25
