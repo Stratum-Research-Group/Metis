@@ -14,6 +14,12 @@ from paideia.contracts.kybernetes_schema import KybernetesRouteDefinition
 from paideia.contracts.hestia_schema import HestiaAdapterRegistryEntry
 from paideia.contracts.manifest_schema import RunManifest
 
+from paideia.contracts.krisis_schema import (
+    KrisisActiveRecord,
+    ActiveSamplingConfig,
+    ASPESTAuditReport,
+)
+
 __all__ = [
     "DianoiaStep",
     "DianoiaVerification",
@@ -24,4 +30,7 @@ __all__ = [
     "KybernetesRouteDefinition",
     "HestiaAdapterRegistryEntry",
     "RunManifest",
+    "KrisisActiveRecord",
+    "ActiveSamplingConfig",
+    "ASPESTAuditReport",
 ]

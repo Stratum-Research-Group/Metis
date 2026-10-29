@@ -61,6 +61,26 @@ def validate_walk(path: Path):
     click.echo(f"\nExtracted {len(samples)} defensible policy training steps.")
 
 
+@dataset.command("sample-active")
+@click.argument("input_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--output", "-o", type=click.Path(dir_okay=False, path_type=Path), required=True, help="Destination JSONL path")
+@click.option("--budget", "-b", default=50, help="Number of active queries to select")
+@click.option("--beta", default=0.6, help="Weight on uncertainty (0.0=diversity only, 1.0=uncertainty only)")
+@click.option("--min-score", default=0.0, help="Minimum rejection score to be eligible")
+def sample_active(input_path: Path, output: Path, budget: int, beta: float, min_score: float):
+    """Run ASPEST active selection over Krisis abstentions and prediction ambiguities."""
+    from paideia.contracts.krisis_schema import ActiveSamplingConfig
+    from paideia.data.aspest_sampler import ASPESTSampler, load_krisis_active_records, save_krisis_active_records
+
+    records = load_krisis_active_records(input_path)
+    cfg = ActiveSamplingConfig(budget=budget, beta=beta, min_rejection_score=min_score)
+    selected, report = ASPESTSampler.select_active_batch(records, cfg)
+    save_krisis_active_records(selected, output)
+    click.echo("\n=== ASPEST Active Selection Audit ===")
+    click.echo(report.model_dump_json(indent=2))
+    click.echo(f"\nSaved {len(selected)} high-yield active queries to: {output}")
+
+
 @cli.command()
 @click.argument("path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--task", type=click.Choice(["type", "best_route"]), default="type", help="Target task")

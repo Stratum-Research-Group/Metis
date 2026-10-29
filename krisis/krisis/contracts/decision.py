@@ -38,3 +38,12 @@ class KrisisDecision(BaseModel):
     trust_flags: dict[str, str] = Field(default_factory=dict)
     normalized_question_class: str | None = None
     conformal: dict[str, Any] | None = None
+
+    def to_active_record(
+        self,
+        request: Any,
+        embedding: list[float] | None = None,
+    ) -> Any:
+        """Derive an active selective prediction record (ASPEST) from this decision."""
+        from krisis.contracts.active_learning import derive_active_record
+        return derive_active_record(self, request, embedding=embedding)

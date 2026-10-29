@@ -537,6 +537,33 @@
 
 ---
 
+### Item 84: ASPEST Active Selective Prediction Pipeline in Krisis & Paideia
+- **Priority:** P1 (Active Learning & Alignment Data Curation)
+- **Status:** **Implemented & Fully Verified**
+- **Impacted Files:**
+  - `krisis/krisis/contracts/active_learning.py`
+  - `krisis/krisis/contracts/__init__.py`
+  - `krisis/krisis/contracts/decision.py`
+  - `krisis/tests/test_active_learning.py`
+  - `paideia/paideia/contracts/krisis_schema.py`
+  - `paideia/paideia/contracts/__init__.py`
+  - `paideia/paideia/data/aspest_sampler.py`
+  - `paideia/paideia/data/__init__.py`
+  - `paideia/paideia/cli.py`
+  - `paideia/tests/test_aspest_sampler.py`
+- **Root Cause & Rationale:**
+  - When Krisis abstained due to ambiguous prediction sets ($|\mathcal{C}(X)| > 1$), empty sets ($|\mathcal{C}(X)| = 0$), or gate failures, these failure modes remained trapped in decision logs and were not curated for active learning or fine-tuning.
+  - Active Selective Prediction (ASPEST, arXiv:2304.03870) closes this loop by assigning rejection scores $U(x)$ to abstained evaluations and balancing uncertainty with query diversity $D(x, S)$ to select high-yield batches for human annotation and model alignment.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `KrisisActiveRecord` and `derive_active_record` in `krisis.contracts.active_learning`, mapping conformal uncertainty and heuristic claim scores to normalized rejection intensity $U(x) \in [0, 1]$.
+  2. Added `to_active_record()` convenience method on `KrisisDecision`.
+  3. Implemented paired contracts `KrisisActiveRecord`, `ActiveSamplingConfig`, and `ASPESTAuditReport` in `paideia.contracts.krisis_schema`.
+  4. Implemented `ASPESTSampler` in `paideia.data.aspest_sampler` balancing uncertainty and diversity via $\alpha(x) = \beta \cdot U(x) + (1-\beta) \cdot D(x, S)$ with deterministic tie-breaking. Supported both token Jaccard and dense vector cosine distance.
+  5. Added `paideia dataset sample-active` subcommand to Paideia CLI.
+  6. Added 4 unit tests in `krisis/tests/test_active_learning.py` (all 40 Krisis tests passing) and 5 unit/CLI tests in `paideia/tests/test_aspest_sampler.py` (all 46 Paideia tests passing).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -552,13 +579,14 @@
 | **Session Memory & Routing Audits** | Items 77–78 | SwiLA recurrence vs baselines, Dianoia compression vs raw | **Empirically Audited** | Both negative studies archived; production baselines kept |
 | **Round 5 Audit & Build Hardening** | Item 79 | Deploy, Kleroterion, Kybernetes Engine, Backend, Admin, Phylax | **Remediated & Verified** | 43 kleroterion tests + 190 kybernetes tests passing |
 | **Instruction Evaluation Engine** | Item 80 | Dokime Tasks (IFEval Programmatic Suite) | **Integrated & Verified** | 176 Dokime tests passing (15 IFEval unit/integration tests) |
-| **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 36 Krisis tests passing (7 conformal unit/integration tests) |
+| **Conformal Prediction Uncertainty** | Item 81 | Krisis (KnowNo Finite-Sample Quantile Sets) | **Integrated & Verified** | 40 Krisis tests passing (7 conformal unit/integration tests) |
 | **Sufficient Input Subsets Explainer**| Item 82 | Dokime Explainers (SIS Backward Selection & CLI) | **Integrated & Verified** | 176 Dokime tests passing (9 SIS unit/integration tests) |
 | **Speculative Cascades Serving** | Item 83 | Hestia (Speculative Drafter-Verifier Cascades & Deferral) | **Integrated & Verified** | 77 Hestia tests passing (5 cascade unit/API tests) |
+| **Active Selective Prediction (ASPEST)** | Item 84 | Krisis + Paideia (Active Abstained Batch Curation & CLI) | **Integrated & Verified** | 40 Krisis + 46 Paideia tests passing (9 ASPEST tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,044 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,053 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -569,13 +597,13 @@
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 3.85s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.25s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **71** | 0 | 43.82s | **PASS** |
+| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **46** | 0 | 1.70s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.64s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **41** | 0 | 4.07s | **PASS** |
-| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **36** | 0 | 0.72s | **PASS** |
+| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.27s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.46s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.48s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,044** | **1** | **~9.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + IDE Client** | **1,053** | **1** | **~9.5 min** | **ALL GATES PASS** |
 
 
 

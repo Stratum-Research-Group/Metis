@@ -55,9 +55,10 @@ logs/
 *.db
 
 .stoma/
-data/
+/data/
 !dokime/src/dokime/tasks/data/
 !experiments/dianoia_compression/data/
+!paideia/paideia/data/
 
 
 

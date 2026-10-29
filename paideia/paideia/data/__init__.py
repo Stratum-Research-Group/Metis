@@ -15,6 +15,12 @@ from paideia.data.splitter import (
     derive_question_family_key,
 )
 from paideia.data.card import DatasetCard
+from paideia.data.aspest_sampler import (
+    ASPESTSampler,
+    compute_distance,
+    load_krisis_active_records,
+    save_krisis_active_records,
+)
 
 __all__ = [
     "load_router_dataset",
@@ -29,4 +35,8 @@ __all__ = [
     "compute_split_hash",
     "derive_question_family_key",
     "DatasetCard",
+    "ASPESTSampler",
+    "compute_distance",
+    "load_krisis_active_records",
+    "save_krisis_active_records",
 ]
