@@ -1,4 +1,4 @@
-# Metis Comprehensive Gaps, Defects & Telemetry Register (73 Items)
+# Metis Comprehensive Gaps, Defects & Telemetry Register (88 Items)
 
 **Status:** Canonical Subsystem Audit & Defect Catalog  
 **Last Updated:** 2026-10-20  
@@ -670,6 +670,28 @@
   6. **F-08 Hardening:**
      - In `kybernetes/kybernetes/adapters/krisis.py`, replaced naive negation keyword check with semantic polarity clash detection. A contradiction is flagged if and only if the claim and the cited evidence share semantic entity anchor tokens (`len(shared_tokens) >= 2`) and have conflicting truth-value polarity (`claim_neg != cit_neg`).
      - Added regression test `test_krisis_polarity_clash_detection` in `kybernetes/tests/test_adapters.py`.
+
+### Item 88: Symbolon Discrete Code Retrieval Benchmark & Comparative Fusion Yardstick
+- **Category:** Evaluation & Retrieval Diagnostics (Dokime Tasks, VQ-VAE Discrete Overlap, Candidate Fusion, Contradiction Retention)
+- **Priority:** P2 (Diagnostic & Release Gating Integrity)
+- **Status:** Resolved & Verified
+- **Affected Subsystems:**
+  - `dokime/src/dokime/tasks/symbolon_benchmark.py`
+  - `dokime/src/dokime/tasks/data/symbolon_suite.json`
+  - `dokime/src/dokime/tasks/registry.py`
+  - `dokime/src/dokime/tasks/__init__.py`
+  - `dokime/src/dokime/cli.py`
+  - `dokime/tests/test_symbolon_benchmark.py`
+- **Root Cause & Specification Requirement:**
+  - The offline Symbolon E2 candidate fusion study established that coarse acoustic-style VQ-VAE discrete codebook overlap alone achieves only 25.0% recall and 25.0% contradiction retention. Uncapped additive union ($C_{\text{base}} \cup C_{\text{sym}}$) preserves 100% of gold evidence at the cost of 1.75x candidate set expansion and verification overhead, while capped Reciprocal Rank Fusion ($k=3$) produces no improvement ($\Delta = 0.0000$) over flat dense embeddings (`ARCHIVE_UNCAPPED_NO_LOSS_RECORDED`).
+  - To prevent future regressions, permanently bar naive discrete code filtering from LTHCM production retrieval, and provide an empirical testbed for future geometric codebook improvements, this benchmark needed formal integration into Dokime's task suite and CLI.
+- **Remediation & Behavioral Guarantees:**
+  - Implemented `SymbolonBenchmarkTask` conforming to Dokime's `Task` protocol (`task_id="symbolon_code_retrieval"`, `load()`, `score()`, `score_detailed()`).
+  - Added robust response parser `extract_retrieved_doc_ids()` handling JSON arrays, Markdown code blocks, free text `doc_*` token matching, and newline/comma-delimited outputs.
+  - Added multi-domain diagnostic dataset (`symbolon_suite.json`) containing 8 query-corpus pairs spanning biochemistry, EU geopolitics, Apollo 11 aerospace, topological sheaf Laplacians, EUV lithography, and SHA-256 audit chaining with explicit gold relevance and contradiction labels.
+  - Implemented `SymbolonRetrievalBenchmarkSuite` executing 4 comparative arms (Flat dense baseline, Symbolon alone, Uncapped union, Capped RRF) with statistical metric computation and GitHub-style Markdown report tables.
+  - Added `dokime symbolon-benchmark` CLI subcommand supporting `--top-k`, `--level`, and `--output <path>` JSON report export.
+  - Verified with 6 unit and integration tests in `dokime/tests/test_symbolon_benchmark.py` (201 Dokime tests passing).
 
 ---
 
