@@ -8,6 +8,7 @@ Compares:
 
 from __future__ import annotations
 
+import argparse
 import json
 import random
 from collections import defaultdict
@@ -58,20 +59,40 @@ def classify_comparison(ci_lower: float, ci_upper: float, delta: float = 0.03) -
     return "inconclusive"
 
 
-def analyze():
+def analyze(
+    results_path: Path | None = None,
+    extractions_path: Path | None = None,
+    output_path: Path | None = None,
+    max_stories: int | None = None,
+):
     base_dir = Path(__file__).parent
-    phase2_res_path = base_dir / "phase2_results.jsonl"
-    phase2_ext_path = base_dir / "phase2_extractions.jsonl"
+    phase2_res_path = results_path or (base_dir / "phase2_results.jsonl")
+    phase2_ext_path = extractions_path or (base_dir / "phase2_extractions.jsonl")
     conf_res_path = base_dir / "confirmatory_results.jsonl"
 
-    # 1. Load Phase 2 extractions (strictly 40 frozen stories conf_s001 - conf_s040)
-    frozen_pilot_ids = set([f"conf_s{i:03d}" for i in range(1, 41)])
+    # 1. Identify stories available in Phase 2 results
+    available_story_ids = set()
+    with open(phase2_res_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            available_story_ids.add(rec["story_id"])
+
+    # If max_stories is specified, limit to the first N sorted story IDs
+    if max_stories:
+        sorted_ids = sorted(list(available_story_ids))[:max_stories]
+        target_story_ids = set(sorted_ids)
+    else:
+        target_story_ids = available_story_ids
+
+    # 2. Load Phase 2 extractions for target stories
     extractions = []
     with open(phase2_ext_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 rec = json.loads(line)
-                if rec["story_id"] in frozen_pilot_ids:
+                if rec["story_id"] in target_story_ids:
                     extractions.append(rec)
 
     fidelities = [e["metrics"]["overall_fidelity"] for e in extractions]
@@ -81,23 +102,22 @@ def analyze():
     time_mismatches_total = sum(len(e["metrics"].get("timestamp_mismatches", [])) for e in extractions)
     dur_mismatches_total = sum(len(e["metrics"].get("duration_mismatches", [])) for e in extractions)
 
-    # 2. Load Phase 2 results
-    p2_story_arm_q: Dict[Tuple[str, str], Dict[str, int]] = defaultdict(dict)  # (story_id, arm) -> q_type -> is_correct
+    # 3. Load Phase 2 results
     p2_story_arm_acc: Dict[Tuple[str, str], List[float]] = defaultdict(list)
     p2_arm_qtype_scores: Dict[Tuple[str, str], List[int]] = defaultdict(list)  # (arm, q_type) -> [0/1]
     finish_reasons: Dict[str, int] = defaultdict(int)
     arm_finish_reasons: Dict[Tuple[str, str], int] = defaultdict(int)
 
-    pilot_story_ids = set()
+    story_ids_with_results = set()
     with open(phase2_res_path, "r", encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
             rec = json.loads(line)
             sid = rec["story_id"]
-            if sid not in frozen_pilot_ids:
+            if sid not in target_story_ids:
                 continue
-            pilot_story_ids.add(sid)
+            story_ids_with_results.add(sid)
             arm = rec["arm"]
             qtype = rec["qtype"]
             corr = 1 if rec["correct"] else 0
@@ -107,7 +127,7 @@ def analyze():
             finish_reasons[fr] += 1
             arm_finish_reasons[(arm, fr)] += 1
 
-    # 3. Load Confirmatory Phase 1 results for the matched 40 stories
+    # 4. Load Confirmatory Phase 1 results for the matched stories
     p1_matched_arm_acc: Dict[Tuple[str, float], Dict[str, float]] = defaultdict(dict)  # (arm, corrupt_rate) -> sid -> mean_acc
     p1_matched_arm_qtype: Dict[Tuple[str, float, str], List[int]] = defaultdict(list)  # (arm, corrupt_rate, qtype) -> [0/1]
 
@@ -117,7 +137,7 @@ def analyze():
                 continue
             rec = json.loads(line)
             sid = rec["story_id"]
-            if sid not in pilot_story_ids:
+            if sid not in story_ids_with_results:
                 continue
             arm = rec["arm"]
             crate = rec["level"]
@@ -139,27 +159,33 @@ def analyze():
         p2_story_means[arm][sid] = sum(vals) / len(vals)
 
     # Arm A from Phase 1 is our baseline (Text Only, intact)
-    arm_a_story_means = p1_story_means[("A", 0.0)]
-    arm_a_acc = sum(arm_a_story_means.values()) / len(arm_a_story_means)
+    arm_a_story_means = p1_story_means.get(("A", 0.0), {})
+    arm_a_acc = sum(arm_a_story_means.values()) / len(arm_a_story_means) if arm_a_story_means else 0.0
+
+    num_stories = len(story_ids_with_results)
+    total_evals = sum(len(vals) for vals in p2_story_arm_acc.values())
 
     print(f"================================================================================")
-    print(f"PHASE 2 REAL EXTRACTOR NOISE PILOT ANALYSIS (N = {len(pilot_story_ids)} stories, 640 evals)")
+    print(f"PHASE 2 REAL EXTRACTOR NOISE ANALYSIS (N = {num_stories} stories, {total_evals} evals)")
     print(f"================================================================================")
     print(f"\n--- EXTRACTION FIDELITY SUMMARY ---")
     print(f"Stories analyzed: {len(extractions)}")
-    print(f"Mean graph fidelity: {sum(fidelities)/len(fidelities):.4f} ({min(fidelities)*100:.1f}% - {max(fidelities)*100:.1f}%)")
-    print(f"Perfect extractions (100%): {perfect_count}/{len(extractions)} ({perfect_count/len(extractions)*100:.1f}%)")
-    print(f"Total missing events (omissions): {missing_ev_total}")
-    print(f"Total hallucinated events: {hallucinated_ev_total}")
-    print(f"Total timestamp mismatches: {time_mismatches_total}")
-    print(f"Total duration mismatches: {dur_mismatches_total}")
+    if extractions:
+        print(f"Mean graph fidelity: {sum(fidelities)/len(fidelities):.4f} ({min(fidelities)*100:.1f}% - {max(fidelities)*100:.1f}%)")
+        print(f"Perfect extractions (100%): {perfect_count}/{len(extractions)} ({perfect_count/len(extractions)*100:.1f}%)")
+        print(f"Total missing events (omissions): {missing_ev_total}")
+        print(f"Total hallucinated events: {hallucinated_ev_total}")
+        print(f"Total timestamp mismatches: {time_mismatches_total}")
+        print(f"Total duration mismatches: {dur_mismatches_total}")
 
     print(f"\n--- GENERATION FINISH REASONS (TELEMETRY) ---")
     for fr, cnt in sorted(finish_reasons.items()):
-        print(f"  finish_reason '{fr}': {cnt}/{len(pilot_story_ids)*16} ({cnt/(len(pilot_story_ids)*16)*100:.1f}%)")
+        pct = (cnt / total_evals * 100) if total_evals > 0 else 0.0
+        print(f"  finish_reason '{fr}': {cnt}/{total_evals} ({pct:.1f}%)")
     for arm in ["B", "C", "D", "F"]:
+        arm_total = sum(arm_finish_reasons[(arm, fr)] for fr in finish_reasons.keys())
         arm_fr_str = ", ".join([f"{fr}: {arm_finish_reasons[(arm, fr)]}" for fr in sorted(finish_reasons.keys())])
-        print(f"  Arm {arm}: {arm_fr_str}")
+        print(f"  Arm {arm} (N={arm_total}): {arm_fr_str}")
 
     print(f"\n--- ACCURACY BY ARM ---")
     print(f"{'Arm':<35} | {'Acc (Phase 2)':<15} | {'Phase 1 (Synthetic 30%)':<22} | {'Phase 1 (Intact)':<15}")
@@ -167,12 +193,13 @@ def analyze():
 
     p2_overall_acc = {}
     for arm in ["B", "C", "D", "F"]:
-        p2_acc = sum(p2_story_means[arm].values()) / len(p2_story_means[arm])
+        arm_scores = p2_story_means.get(arm, {})
+        p2_acc = sum(arm_scores.values()) / len(arm_scores) if arm_scores else 0.0
         p2_overall_acc[arm] = p2_acc
-        
-        p1_synth_acc = sum(p1_story_means.get((arm, 0.30), {}).values()) / len(pilot_story_ids) if (arm, 0.30) in p1_story_means else 0.0
-        p1_intact_acc = sum(p1_story_means.get((arm, 0.0), {}).values()) / len(pilot_story_ids) if (arm, 0.0) in p1_story_means else 0.0
-        
+
+        p1_synth_acc = sum(p1_story_means.get((arm, 0.30), {}).values()) / num_stories if (arm, 0.30) in p1_story_means and num_stories > 0 else 0.0
+        p1_intact_acc = sum(p1_story_means.get((arm, 0.0), {}).values()) / num_stories if (arm, 0.0) in p1_story_means and num_stories > 0 else 0.0
+
         arm_name = {
             "B": "Arm B (Graph Only)",
             "C": "Arm C (Text + Graph)",
@@ -184,15 +211,15 @@ def analyze():
     print(f"{'Arm A (Text Only Baseline)':<35} | {'[Matched P1]':<15} | {'N/A':<22} | {arm_a_acc*100:>6.2f}%")
 
     print(f"\n--- HYPOTHESES TESTING UNDER REAL EXTRACTION NOISE (Story-Level Bootstrap N=10,000, delta=0.03) ---")
-    
+
     comparisons = [
-        ("H1' (Arm B Extracted vs Arm A Baseline)", p2_story_means["B"], arm_a_story_means),
-        ("H2' (Arm C Text+Extracted vs Arm A Baseline)", p2_story_means["C"], arm_a_story_means),
-        ("H3' (Arm C Text+Extracted vs Arm B Extracted)", p2_story_means["C"], p2_story_means["B"]),
-        ("H4' (Arm D Reconcile vs Arm F Matched Control)", p2_story_means["D"], p2_story_means["F"]),
-        ("Synthetic vs Real: Arm B (Real Ext) vs Arm B (Synth 30%)", p2_story_means["B"], p1_story_means[("B", 0.30)]),
-        ("Synthetic vs Real: Arm C (Real Ext) vs Arm C (Synth 30%)", p2_story_means["C"], p1_story_means[("C", 0.30)]),
-        ("Synthetic vs Real: Arm D (Real Ext) vs Arm D (Synth 30%)", p2_story_means["D"], p1_story_means[("D", 0.30)]),
+        ("H1' (Arm B Extracted vs Arm A Baseline)", p2_story_means.get("B", {}), arm_a_story_means),
+        ("H2' (Arm C Text+Extracted vs Arm A Baseline)", p2_story_means.get("C", {}), arm_a_story_means),
+        ("H3' (Arm C Text+Extracted vs Arm B Extracted)", p2_story_means.get("C", {}), p2_story_means.get("B", {})),
+        ("H4' (Arm D Reconcile vs Arm F Matched Control)", p2_story_means.get("D", {}), p2_story_means.get("F", {})),
+        ("Synthetic vs Real: Arm B (Real Ext) vs Arm B (Synth 30%)", p2_story_means.get("B", {}), p1_story_means.get(("B", 0.30), {})),
+        ("Synthetic vs Real: Arm C (Real Ext) vs Arm C (Synth 30%)", p2_story_means.get("C", {}), p1_story_means.get(("C", 0.30), {})),
+        ("Synthetic vs Real: Arm D (Real Ext) vs Arm D (Synth 30%)", p2_story_means.get("D", {}), p1_story_means.get(("D", 0.30), {})),
     ]
 
     results_table = []
@@ -219,14 +246,15 @@ def analyze():
     }
     print(f"{'Question Type':<28} | {'Arm A':<8} | {'Arm B (Ext)':<12} | {'Arm C (T+G)':<12} | {'Arm D (Rec)':<12} | {'Arm F (Ctrl)':<12}")
     print(f"{'-'*28}-|-{'-'*8}-|-{'-'*12}-|-{'-'*12}-|-{'-'*12}-|-{'-'*12}")
-    
+
     qtype_breakdown = {}
     for qt in qtypes:
-        acc_a = sum(p1_matched_arm_qtype[("A", 0.0, qt)]) / len(p1_matched_arm_qtype[("A", 0.0, qt)])
-        acc_b = sum(p2_arm_qtype_scores[("B", qt)]) / len(p2_arm_qtype_scores[("B", qt)])
-        acc_c = sum(p2_arm_qtype_scores[("C", qt)]) / len(p2_arm_qtype_scores[("C", qt)])
-        acc_d = sum(p2_arm_qtype_scores[("D", qt)]) / len(p2_arm_qtype_scores[("D", qt)])
-        acc_f = sum(p2_arm_qtype_scores[("F", qt)]) / len(p2_arm_qtype_scores[("F", qt)])
+        p1_a_scores = p1_matched_arm_qtype.get(("A", 0.0, qt), [])
+        acc_a = sum(p1_a_scores) / len(p1_a_scores) if p1_a_scores else 0.0
+        acc_b = sum(p2_arm_qtype_scores[("B", qt)]) / len(p2_arm_qtype_scores[("B", qt)]) if p2_arm_qtype_scores[("B", qt)] else 0.0
+        acc_c = sum(p2_arm_qtype_scores[("C", qt)]) / len(p2_arm_qtype_scores[("C", qt)]) if p2_arm_qtype_scores[("C", qt)] else 0.0
+        acc_d = sum(p2_arm_qtype_scores[("D", qt)]) / len(p2_arm_qtype_scores[("D", qt)]) if p2_arm_qtype_scores[("D", qt)] else 0.0
+        acc_f = sum(p2_arm_qtype_scores[("F", qt)]) / len(p2_arm_qtype_scores[("F", qt)]) if p2_arm_qtype_scores[("F", qt)] else 0.0
         qtype_breakdown[qt] = {
             "A": acc_a,
             "B": acc_b,
@@ -239,13 +267,13 @@ def analyze():
 
     # Save detailed summary
     out_summary = {
-        "num_stories": len(pilot_story_ids),
-        "total_evals": len(pilot_story_ids) * 16,
+        "num_stories": num_stories,
+        "total_evals": total_evals,
         "extraction_metrics": {
-            "mean_fidelity": sum(fidelities) / len(fidelities),
-            "min_fidelity": min(fidelities),
-            "max_fidelity": max(fidelities),
-            "perfect_extractions_pct": perfect_count / len(extractions),
+            "mean_fidelity": sum(fidelities) / len(fidelities) if fidelities else 0.0,
+            "min_fidelity": min(fidelities) if fidelities else 0.0,
+            "max_fidelity": max(fidelities) if fidelities else 0.0,
+            "perfect_extractions_pct": (perfect_count / len(extractions)) if extractions else 0.0,
             "total_missing_events": missing_ev_total,
             "total_hallucinated_events": hallucinated_ev_total,
             "total_timestamp_mismatches": time_mismatches_total,
@@ -253,20 +281,36 @@ def analyze():
         },
         "overall_accuracy": {
             "Arm_A_baseline": arm_a_acc,
-            "Arm_B_extracted": p2_overall_acc["B"],
-            "Arm_C_text_plus_extracted": p2_overall_acc["C"],
-            "Arm_D_reconcile": p2_overall_acc["D"],
-            "Arm_F_matched_control": p2_overall_acc["F"],
+            "Arm_B_extracted": p2_overall_acc.get("B", 0.0),
+            "Arm_C_text_plus_extracted": p2_overall_acc.get("C", 0.0),
+            "Arm_D_reconcile": p2_overall_acc.get("D", 0.0),
+            "Arm_F_matched_control": p2_overall_acc.get("F", 0.0),
         },
         "statistical_tests": results_table,
         "question_type_breakdown": qtype_breakdown,
     }
 
-    out_json_path = base_dir / "phase2_pilot_analysis.json"
+    out_json_path = output_path or (base_dir / ("phase2_pilot_analysis.json" if num_stories <= 40 else "phase2_confirmatory_analysis.json"))
     with open(out_json_path, "w", encoding="utf-8") as f:
         json.dump(out_summary, f, indent=2)
     print(f"\nWrote full analysis to {out_json_path}")
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Analyze Phase 2 results")
+    parser.add_argument("--results", type=Path, default=None, help="Path to phase2_results.jsonl")
+    parser.add_argument("--extractions", type=Path, default=None, help="Path to phase2_extractions.jsonl")
+    parser.add_argument("--output", type=Path, default=None, help="Path to output JSON")
+    parser.add_argument("--stories", type=int, default=None, help="Limit analysis to first N stories")
+    args = parser.parse_args()
+
+    analyze(
+        results_path=args.results,
+        extractions_path=args.extractions,
+        output_path=args.output,
+        max_stories=args.stories,
+    )
+
+
 if __name__ == "__main__":
-    analyze()
+    main()
