@@ -53,6 +53,7 @@ Thumbs.db
 *.log
 logs/
 *.db
+*.bak*
 
 .stoma/
 /data/
