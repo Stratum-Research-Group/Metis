@@ -88,6 +88,8 @@ def run_single_arm_question(
         "raw": raw_answer_text,
         "finish_reason": finish_reason,
         "pass1_finish_reason": pass1_finish_reason,
+        "max_tokens": 512,
+        "pass1_max_tokens": 250 if arm in ("D", "F") else None,
         "parsed": parsed_val,
         "gold": question.gold_answer,
         "correct": is_correct,

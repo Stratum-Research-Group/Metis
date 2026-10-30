@@ -1,6 +1,17 @@
 {
   "num_stories": 5,
   "total_evals": 80,
-  "avg_extraction_fidelity": 1.0,
-  "total_seconds": 192.73
+  "overall_accuracy": 0.9625,
+  "arm_accuracies": {
+    "B": 1.0,
+    "C": 0.95,
+    "D": 0.9,
+    "F": 1.0
+  },
+  "qtype_accuracies": {
+    "Q1": 1.0,
+    "Q2": 1.0,
+    "Q3": 0.85,
+    "Q4": 1.0
+  }
 }

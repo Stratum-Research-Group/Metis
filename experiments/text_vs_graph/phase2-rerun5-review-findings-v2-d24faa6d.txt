@@ -1,0 +1,114 @@
+PHASE 2 "FIX AND RERUN OF PART 1" - REVIEW OF CORRECTED RESULTS (v2)
+Scope of this review: new summary JSON, new QA JSONL (80 rows, conf_s001-s005,
+arms B/C/D/F, 4 questions each), new extraction JSONL (5 stories), compared
+row-by-row against the original Phase 2 pilot logs (656 QA rows, 41 extractions)
+and the prior prereview findings (v3). Review only - no code changed, no
+inference run.
+
+VERDICT
+The rerun changed no outcome on its five stories: 76 of 80 QA outputs are
+byte-identical to the original pilot, accuracy is unchanged at 77/80, and the
+same three rows still fail. The new finish_reason field is the real gain: it
+proves the conf_s002_q3 arm C response was cut by a length limit at exactly 512
+tokens (previously only strongly suspected). The extraction fidelity jump to
+1.0 comes from the grader, not the extractor - the graphs are byte-identical to
+ones previously scored lower - and this retroactively downgrades the pilot's
+"omitted events" claims. Treat this rerun as a five-story diagnostic, not as
+evidence the pilot issues are resolved.
+
+FINDINGS
+
+1. RERUN IS SCORE-NEUTRAL ON ITS SCOPE. 76/80 QA rows have byte-identical raw
+   outputs to the original pilot run. Zero rows changed correctness: 77/80
+   before and after (B 20/20, C 19/20, D 18/20, F 20/20; Q1/Q2/Q4 20/20,
+   Q3 17/20). The 4 rows that differ are all on conf_s004 (q3 D, q3 F, q4 C,
+   q4 D); 3 were and remain correct, 1 was and remains wrong (see finding 5).
+   Gold labels unchanged across runs.
+
+2. LENGTH LIMIT NOW PROVEN ON conf_s002_q3 ARM C - AND STILL BITING. That row:
+   finish_reason="length" at exactly tokens_out=512, output ends mid-sentence,
+   same failure as the original run. This confirms that response was truncated
+   by a length limit at 512 tokens. It does not by itself prove a configured
+   512 cap across the single-pass arms: arm B never hit any limit (max 351
+   tokens), so B's budget is unconstrained only as far as this log shows.
+   Configured max_tokens values are still not in the artifacts.
+
+3. ARM D TRUNCATION PERSISTS AT A DIFFERENT EFFECTIVE BUDGET. conf_s002_q3 arm
+   D: finish_reason="length" at tokens_out=592 with pass1_finish_reason="stop"
+   (pass 1 is short, ~95 tokens est.). Consistent with a per-pass 512 limit and
+   summed two-pass usage reporting (pass1 + limited pass2), but the configured
+   per-arm/per-pass max_tokens values are still not logged, so budget equality
+   across arms remains unproven either way.
+
+4. ARM F ABSORBS PASS-1 TRUNCATIONS HERE. 3 rows (conf_s001_q3, conf_s002_q3,
+   conf_s003_q3) show pass1_finish_reason="length" with final finish_reason=
+   "stop" and all three scored correct. Within these five stories the two-pass
+   graph arm recovered from a length-limited first pass every time it happened.
+
+5. NEW FAILURE MODE ON conf_s004_q3 ARM D: COMPLETED RESPONSE, NO ANSWER BLOCK.
+   Old run: mid-sentence truncation at 560 tokens. New run: finish_reason=
+   "stop" at 319 tokens, full prose reasoning that ends by stating the correct
+   set ("The events that would no longer occur (excluding E2) are E3, E4, E5,
+   E6, E7, E8.") - but no {"answer": ...} JSON was ever emitted, so parse_ok=
+   false and it scores wrong. The failure class changed from truncation to
+   missing-answer-block; the answer-format contract is still not enforced.
+
+6. TEMPLATE CONTAMINATION: CLEAN HERE, BUT THE KNOWN CASES ARE OUT OF SCOPE.
+   Zero "<|turn>" artifacts in any of the 80 new rows (including pass1_raw).
+   However the pilot's contaminated rows (conf_s031_q3 arm D fabricated user
+   turn; conf_s023 arm B degenerate 4-token outputs) are outside conf_s001-s005,
+   so this rerun cannot verify that fix.
+
+7. EXTRACTION FIDELITY 1.0 IS A GRADER-SIDE CHANGE, NOT AN EXTRACTOR CHANGE.
+   All 5 extracted_graph strings are byte-identical to the original pilot
+   (same tokens_out per story: 603/584/674/592/566), yet conf_s003 went from
+   fidelity 0.875 (missing E5) to 1.0 and conf_s004 from 0.875 (missing E2) to
+   1.0. The identical graphs literally contain "EVENT EV_E5:" (s003) and
+   "EV_E2" (s004). So the old matcher undercounted present events and the new
+   scoring counts them. CORRECTION TO THE PRIOR AUDIT: the pilot's "12 omitted
+   events, 8 of them clustered on E2" was scorer output treated as verified
+   extractor omissions; this rerun shows at least part of that pattern was a
+   grading artifact, and the E2-clustering observation should not be cited as
+   established extractor behaviour. The old 96.15% fidelity and the new 1.0
+   are not comparable numbers.
+
+8. SUMMARY JSON IS INTERNALLY CONSISTENT BUT OMITS ACCURACY. num_stories=5,
+   total_evals=80, avg_extraction_fidelity=1.0 all check out, and
+   total_seconds=192.73 equals the exact sum of QA + extraction seconds in the
+   logs. But accuracy (77/80 = 96.25%) is not reported in the summary - worth
+   adding for the full run so headline scores don't have to be recomputed.
+
+9. EXTRACTION LATENCY NOTE. Mean extraction time on these 5 stories is 6.71s
+   (range 5.72-9.17), close to the report's 6.78s figure the prereview flagged
+   against the 40-story mean of 5.75s. Small-sample scope; not a discrepancy,
+   but keep reporting per-story values in the full run.
+
+10. WHAT THIS RERUN DOES NOT ESTABLISH. Five stories cannot validate fixes for
+    issues observed elsewhere (s023/s031 contamination, s011/s032 C-arm
+    truncations, s028_q3 B over-propagation). The byte-identical outputs are an
+    observation only - they neither prove nor disprove that settings changed
+    between runs; deterministic decoding under unchanged settings and reuse of
+    saved outputs would both produce them. Valid comparison under any changed
+    cap/template/settings still requires a consistently applied paired rerun
+    across arms and stories, or a separately labelled sensitivity analysis.
+
+RECOMMENDATIONS FOR THE FULL RUN
+a. Log configured max_tokens per arm and per pass alongside finish_reason
+   (finish_reason capture is done and already paid off).
+b. Decide the single-pass output budget before the hours-long run: raise it,
+   or keep it and report it explicitly as a budget constraint - don't let an
+   unlogged limit shape Q3 scores again.
+c. If answer-block retries are added for completed-but-unparsed responses
+   (finding 5), predefine the retry policy, log every retry, account for its
+   cost, and apply it identically across arms; retried outputs are labelled
+   sensitivity data, never silent replacement scores.
+d. For extraction, the matcher change only requires consistently re-grading
+   the already-saved graphs from all 40 pilot stories - no new extraction
+   inference needed. Document the matcher diff so the fidelity jump is
+   attributable to a fixed bug rather than relaxed matching.
+e. Add accuracy per arm/qtype to the summary JSON.
+
+Reviewed artifacts: new summary JSON (5 stories/80 evals), new QA JSONL
+(finish_reason, pass1_finish_reason present), new extraction JSONL, original
+Phase 2 pilot QA + extraction logs. No source edits, no inference, no reruns
+performed on this side.

@@ -176,6 +176,44 @@ def run_phase2(
     print(f"\nPhase 2 Complete! Evaluated {total_evals} question calls across {len(completed_stories)} stories in {total_time:.2f}s.")
 
     # Write summary
+    # Compute accuracy breakdowns from results file
+    arm_counts = {}
+    qtype_counts = {}
+    total_correct = 0
+    all_evals = 0
+    if out_file.exists():
+        with open(out_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    r = json.loads(line)
+                    all_evals += 1
+                    corr = 1 if r.get("correct") else 0
+                    total_correct += corr
+                    arm = r.get("arm", "unknown")
+                    qt = r.get("qtype", "unknown")
+                    if arm not in arm_counts:
+                        arm_counts[arm] = {"correct": 0, "total": 0}
+                    arm_counts[arm]["total"] += 1
+                    arm_counts[arm]["correct"] += corr
+                    if qt not in qtype_counts:
+                        qtype_counts[qt] = {"correct": 0, "total": 0}
+                    qtype_counts[qt]["total"] += 1
+                    qtype_counts[qt]["correct"] += corr
+                except Exception:
+                    pass
+
+    arm_accuracies = {
+        arm: round(d["correct"] / d["total"], 4) if d["total"] > 0 else 0.0
+        for arm, d in sorted(arm_counts.items())
+    }
+    qtype_accuracies = {
+        qt: round(d["correct"] / d["total"], 4) if d["total"] > 0 else 0.0
+        for qt, d in sorted(qtype_counts.items())
+    }
+    overall_acc = round(total_correct / all_evals, 4) if all_evals > 0 else 0.0
+
     avg_fidelity = (
         sum(m["overall_fidelity"] for m in extraction_metrics_list) / len(extraction_metrics_list)
         if extraction_metrics_list
@@ -183,7 +221,10 @@ def run_phase2(
     )
     summary_data = {
         "num_stories": len(completed_stories),
-        "total_evals": total_evals,
+        "total_evals": all_evals,
+        "overall_accuracy": overall_acc,
+        "arm_accuracies": arm_accuracies,
+        "qtype_accuracies": qtype_accuracies,
         "avg_extraction_fidelity": round(avg_fidelity, 4),
         "total_seconds": round(total_time, 2),
     }
