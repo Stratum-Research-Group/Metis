@@ -70,7 +70,7 @@ The 40 stories evaluated in Phase 2 are directly matched with the exact same sto
 | **Arm A: Pure Text Baseline** | *[Matched P1 Baseline]* | N/A | **93.75%** (150/160) |
 | **Arm B: Extracted Graph Only** | **97.50%** (156/160) | 68.12% (109/160) | 98.75% (158/160) |
 | **Arm C: Text + Extracted Graph** | **98.12%** (157/160) | 85.62% (137/160) | 96.88% (155/160) |
-| **Arm D: Reconciled Presentation** | **96.88%** (155/160) | 92.50% (148/160) | 98.75% (158/160) |
+| **Arm D: Reconciled Presentation** | **96.25%** (154/160) | 92.50% (148/160) | 98.75% (158/160) |
 | **Arm F: Chronological Control** | **100.00%** (160/160) | 98.12% (157/160) | 99.38% (159/160) |
 
 ---
@@ -83,26 +83,28 @@ Accuracy across the four canonical reasoning modes:
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Q1: Temporal Precedence Ordering** | 100.0% (40/40) | 100.0% (40/40) | 100.0% (40/40) | 100.0% (40/40) | 100.0% (40/40) |
 | **Q2: Combined Duration Arithmetic** | 97.5% (39/40) | 97.5% (39/40) | 100.0% (40/40) | 100.0% (40/40) | 100.0% (40/40) |
-| **Q3: Counterfactual DAG Propagation** | **82.5%** (33/40) | **92.5%** (37/40) | **92.5%** (37/40) | **87.5%** (35/40) | **100.0%** (40/40) |
+| **Q3: Counterfactual DAG Propagation** | **82.5%** (33/40) | **92.5%** (37/40) | **92.5%** (37/40) | **85.0%** (34/40) | **100.0%** (40/40) |
 | **Q4: Conditional Rule Application** | 95.0% (38/40) | 100.0% (40/40) | 100.0% (40/40) | 100.0% (40/40) | 100.0% (40/40) |
 
 *\*Arm A figures represent the matched Phase 1 baseline for `conf_s001`–`conf_s040`.*
 
-### Complete Census of the 12 Observed Phase 2 Failures:
-Across all 640 evaluated questions in the 40-story pilot, exactly 12 failures occurred:
-1. **Output Truncation at Token Limit ($8$ rows)**:
-   - **Arm C ($3$ rows)**: `conf_s002_q3`, `conf_s011_q3`, `conf_s032_q3`—all 3 sit at exactly 512 `tokens_out`, cutting off mid-sentence before emitting `{"answer": ...}`.
-   - **Arm D ($4$ rows)**: `conf_s002_q3` (592 tok), `conf_s004_q3` (560 tok), `conf_s030_q3` (550 tok), `conf_s037_q3` (560 tok)—all cut off mid-sentence.
-   - **Arm B ($1$ row)**: `conf_s037_q3` (512 tok)—cut off mid-sentence.
-2. **Template Channel Anomalies ($2$ rows)**:
-   - `conf_s023_q2` and `conf_s023_q3` (Arm B): 4 tokens output (`<|channel>thought<tool_call|>`), opening a tool channel instead of generating completion text.
-3. **Multi-Turn Hallucination Contamination ($1$ row)**:
-   - `conf_s031_q3` (Arm D): Output contained a fabricated continuation dialog (`<|turn>user What is the start time of Event E6? ...`).
+### Telemetry & Census of Observed Failures (Re-run with Stop Tokens & Telemetry):
+Across all 640 evaluated questions in the clean 40-story re-run:
+- **`finish_reason: "stop"`**: **$633 / 640$ ($98.9\%$)**
+- **`finish_reason: "length"`**: **$7 / 640$ ($1.1\%$)**
+- **`<|turn>` Template Leaks**: **$0$** (strict stop tokens eliminated all multi-turn continuation leaks).
+
+Failure breakdown:
+1. **Length Limit Truncations ($7$ rows, all explicitly logged `finish_reason="length"`)**:
+   - **Arm C ($3$ rows)**: `conf_s002_q3`, `conf_s011_q3`, `conf_s032_q3`—all 3 sit at exactly 512 `tokens_out`, cutting off mid-sentence on Q3.
+   - **Arm D ($3$ rows)**: `conf_s002_q3` (592 tok), `conf_s030_q3` (550 tok), `conf_s037_q3` (560 tok)—all cut off mid-sentence.
+   - **Arm B ($1$ row)**: `conf_s037_q3` (512 tok)—cut off mid-sentence on Q3.
+2. **Missing Answer JSON Block on Arm D ($2$ rows)**:
+   - `conf_s004_q3` and `conf_s031_q3`: Both completed their chain of thought with `finish_reason="stop"`, correctly stating the affected events in prose, but failed to format the final line as `{"answer": [...]}`.
+3. **Template Channel Anomalies ($2$ rows)**:
+   - `conf_s023_q2` and `conf_s023_q3` (Arm B): 4 tokens output (`<|channel>thought<tool_call|>`).
 4. **Logical Over-propagation ($1$ row)**:
    - `conf_s028_q3` (Arm B): Completed output answered `["E4", "E5", "E8"]` vs gold `["E5", "E8"]` (fidelity 1.0).
-
-> [!NOTE]
-> **Key Analytical Takeaway**: $11$ of the $12$ failures ($91.7\%$) were output-level budget truncations or template stop-token artifacts, rather than mathematical or causal reasoning errors.
 
 ---
 
@@ -114,8 +116,11 @@ All hypothesis tests use **story-level cluster bootstrap** ($B = 10,000$ paired 
 | :--- | :---: | :---: | :---: | :--- |
 | **H1' (Arm B Extracted vs Arm A Baseline)** | **+0.0375** (+3.75 pp) | `[-0.0063, +0.0813]` | INCONCLUSIVE | Positive direction; pilot CI width crosses $+0.03$ margin. |
 | **H2' (Arm C Text+Extracted vs Arm A Baseline)** | **+0.0437** (+4.38 pp) | `[+0.0125, +0.0813]` | INCONCLUSIVE | Lower bound $> 0$ ($+1.25\text{ pp}$); pilot CI crosses $+0.03$. |
-| **H3' (Arm C Text+Extracted vs Arm B Extracted)** | **+0.0063** (+0.62 pp) | `[-0.0312, +0.0437]` | INCONCLUSIVE | Tight parity; text provides negligible marginal gain over graph. |
-| **H4' (Arm D Reconcile vs Arm F Control)** | **-0.0312** (-3.12 pp) | `[-0.0563, -0.0063]` | INCONCLUSIVE | Arm F superior (100% vs 96.88%); upper bound is negative ($-0.63\text{ pp}$). |
+| **H3' (Arm C Text+Extracted vs Arm B Extracted)** | **+0.0063** (+0.62 pp) | `[-0.0250, +0.0437]` | INCONCLUSIVE | Tight parity; text provides negligible marginal gain over graph. |
+| **H4' (Arm D Reconcile vs Arm F Control)** | **-0.0375** (-3.75 pp) | `[-0.0688, -0.0125]` | INCONCLUSIVE | Arm F superior (100% vs 96.25%); upper bound is negative ($-1.25\text{ pp}$). |
+| **Synthetic vs Real: Arm B (Real) vs Arm B (Synth 30%)** | **+0.2938** (+29.38 pp) | `[+0.2375, +0.3500]` | **BETTER** | Real extraction noise is far less damaging than synthetic corruption. |
+| **Synthetic vs Real: Arm C (Real) vs Arm C (Synth 30%)** | **+0.1250** (+12.50 pp) | `[+0.0875, +0.1625]` | **BETTER** | Natural text-graph synergy is preserved under real extraction. |
+| **Synthetic vs Real: Arm D (Real) vs Arm D (Synth 30%)** | **+0.0375** (+3.75 pp) | `[-0.0063, +0.0875]` | INCONCLUSIVE | Real extraction avoids synthetic structural contradictions. |
 | **Synthetic vs Real: Arm B (Real) vs Arm B (Synth 30%)** | **+0.2938** (+29.38 pp) | `[+0.2375, +0.3500]` | **BETTER** | Real extraction noise is far less damaging than synthetic corruption. |
 | **Synthetic vs Real: Arm C (Real) vs Arm C (Synth 30%)** | **+0.1250** (+12.50 pp) | `[+0.0875, +0.1625]` | **BETTER** | Natural text-graph synergy is preserved under real extraction. |
 | **Synthetic vs Real: Arm D (Real) vs Arm D (Synth 30%)** | **+0.0437** (+4.38 pp) | `[-0.0063, +0.0938]` | INCONCLUSIVE | Real extraction avoids synthetic structural contradictions. |

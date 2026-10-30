@@ -2,11 +2,11 @@
   "num_stories": 40,
   "total_evals": 640,
   "extraction_metrics": {
-    "mean_fidelity": 0.9614575000000001,
-    "min_fidelity": 0.875,
+    "mean_fidelity": 0.9989575,
+    "min_fidelity": 0.9583,
     "max_fidelity": 1.0,
-    "perfect_extractions_pct": 0.675,
-    "total_missing_events": 12,
+    "perfect_extractions_pct": 0.975,
+    "total_missing_events": 0,
     "total_hallucinated_events": 0,
     "total_timestamp_mismatches": 1,
     "total_duration_mismatches": 0
@@ -15,7 +15,7 @@
     "Arm_A_baseline": 0.9375,
     "Arm_B_extracted": 0.975,
     "Arm_C_text_plus_extracted": 0.98125,
-    "Arm_D_reconcile": 0.96875,
+    "Arm_D_reconcile": 0.9625,
     "Arm_F_matched_control": 1.0
   },
   "statistical_tests": [
@@ -42,9 +42,9 @@
     },
     {
       "hypothesis": "H4' (Arm D Reconcile vs Arm F Matched Control)",
-      "diff": -0.03125,
-      "ci_lower": -0.05625,
-      "ci_upper": -0.00625,
+      "diff": -0.0375,
+      "ci_lower": -0.06875,
+      "ci_upper": -0.0125,
       "verdict": "inconclusive"
     },
     {
@@ -63,9 +63,9 @@
     },
     {
       "hypothesis": "Synthetic vs Real: Arm D (Real Ext) vs Arm D (Synth 30%)",
-      "diff": 0.04375,
+      "diff": 0.0375,
       "ci_lower": -0.00625,
-      "ci_upper": 0.09375,
+      "ci_upper": 0.0875,
       "verdict": "inconclusive"
     }
   ],
@@ -88,7 +88,7 @@
       "A": 0.825,
       "B": 0.925,
       "C": 0.925,
-      "D": 0.875,
+      "D": 0.85,
       "F": 1.0
     },
     "Q4": {

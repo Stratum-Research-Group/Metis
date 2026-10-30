@@ -64,12 +64,15 @@ def analyze():
     phase2_ext_path = base_dir / "phase2_extractions.jsonl"
     conf_res_path = base_dir / "confirmatory_results.jsonl"
 
-    # 1. Load Phase 2 extractions
+    # 1. Load Phase 2 extractions (strictly 40 frozen stories conf_s001 - conf_s040)
+    frozen_pilot_ids = set([f"conf_s{i:03d}" for i in range(1, 41)])
     extractions = []
     with open(phase2_ext_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
-                extractions.append(json.loads(line))
+                rec = json.loads(line)
+                if rec["story_id"] in frozen_pilot_ids:
+                    extractions.append(rec)
 
     fidelities = [e["metrics"]["overall_fidelity"] for e in extractions]
     perfect_count = sum(1 for f in fidelities if f >= 0.999)
@@ -82,6 +85,8 @@ def analyze():
     p2_story_arm_q: Dict[Tuple[str, str], Dict[str, int]] = defaultdict(dict)  # (story_id, arm) -> q_type -> is_correct
     p2_story_arm_acc: Dict[Tuple[str, str], List[float]] = defaultdict(list)
     p2_arm_qtype_scores: Dict[Tuple[str, str], List[int]] = defaultdict(list)  # (arm, q_type) -> [0/1]
+    finish_reasons: Dict[str, int] = defaultdict(int)
+    arm_finish_reasons: Dict[Tuple[str, str], int] = defaultdict(int)
 
     pilot_story_ids = set()
     with open(phase2_res_path, "r", encoding="utf-8") as f:
@@ -90,12 +95,17 @@ def analyze():
                 continue
             rec = json.loads(line)
             sid = rec["story_id"]
+            if sid not in frozen_pilot_ids:
+                continue
             pilot_story_ids.add(sid)
             arm = rec["arm"]
             qtype = rec["qtype"]
             corr = 1 if rec["correct"] else 0
             p2_story_arm_acc[(sid, arm)].append(corr)
             p2_arm_qtype_scores[(arm, qtype)].append(corr)
+            fr = rec.get("finish_reason", "unknown")
+            finish_reasons[fr] += 1
+            arm_finish_reasons[(arm, fr)] += 1
 
     # 3. Load Confirmatory Phase 1 results for the matched 40 stories
     p1_matched_arm_acc: Dict[Tuple[str, float], Dict[str, float]] = defaultdict(dict)  # (arm, corrupt_rate) -> sid -> mean_acc
@@ -143,6 +153,13 @@ def analyze():
     print(f"Total hallucinated events: {hallucinated_ev_total}")
     print(f"Total timestamp mismatches: {time_mismatches_total}")
     print(f"Total duration mismatches: {dur_mismatches_total}")
+
+    print(f"\n--- GENERATION FINISH REASONS (TELEMETRY) ---")
+    for fr, cnt in sorted(finish_reasons.items()):
+        print(f"  finish_reason '{fr}': {cnt}/{len(pilot_story_ids)*16} ({cnt/(len(pilot_story_ids)*16)*100:.1f}%)")
+    for arm in ["B", "C", "D", "F"]:
+        arm_fr_str = ", ".join([f"{fr}: {arm_finish_reasons[(arm, fr)]}" for fr in sorted(finish_reasons.keys())])
+        print(f"  Arm {arm}: {arm_fr_str}")
 
     print(f"\n--- ACCURACY BY ARM ---")
     print(f"{'Arm':<35} | {'Acc (Phase 2)':<15} | {'Phase 1 (Synthetic 30%)':<22} | {'Phase 1 (Intact)':<15}")

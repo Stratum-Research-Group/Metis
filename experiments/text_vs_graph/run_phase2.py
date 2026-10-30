@@ -56,11 +56,49 @@ def run_phase2(
     extractions_path: str = "experiments/text_vs_graph/phase2_extractions.jsonl",
     model: str = "gemma-4-26b-a4b-abliterated",
     endpoint: str = "http://127.0.0.1:8080/v1/chat/completions",
+    force_rerun: bool = False,
+    reextract: bool = False,
 ) -> Dict[str, Any]:
     """Execute Phase 2 real extraction study."""
     out_file = Path(results_path)
     ext_file = Path(extractions_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    target_sids = {
+        f"conf_s{idx+1:03d}" if start_seed == 4001 else f"story_{start_seed + idx}"
+        for idx in range(num_stories)
+    }
+
+    if force_rerun and out_file.exists():
+        # Remove any existing records for the target stories so they are evaluated freshly
+        kept = []
+        with open(out_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        rec = json.loads(line)
+                        if rec.get("story_id") not in target_sids:
+                            kept.append(line)
+                    except Exception:
+                        pass
+        with open(out_file, "w", encoding="utf-8") as f:
+            for l in kept:
+                f.write(l)
+
+    if reextract and ext_file.exists():
+        kept_ext = []
+        with open(ext_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        rec = json.loads(line)
+                        if rec.get("story_id") not in target_sids:
+                            kept_ext.append(line)
+                    except Exception:
+                        pass
+        with open(ext_file, "w", encoding="utf-8") as f:
+            for l in kept_ext:
+                f.write(l)
 
     # Resume capability: check completed story IDs
     completed_stories = set()
@@ -106,7 +144,20 @@ def run_phase2(
         if story_id in cached_extractions:
             ext_record = cached_extractions[story_id]
             extracted_graph = ext_record["extracted_graph"]
-            fidelity_metrics = ext_record["metrics"]
+            # Recompute fidelity metrics using the updated robust parser
+            metrics_obj = analyze_extraction_fidelity(story.graph_block, extracted_graph)
+            fidelity_metrics = {
+                "gold_events": metrics_obj.gold_event_count,
+                "extracted_events": metrics_obj.extracted_event_count,
+                "missing_events": metrics_obj.missing_events,
+                "hallucinated_events": metrics_obj.hallucinated_events,
+                "timestamp_mismatches": metrics_obj.timestamp_mismatches,
+                "duration_mismatches": metrics_obj.duration_mismatches,
+                "overall_fidelity": metrics_obj.overall_fidelity,
+                "tokens_in": ext_record["metrics"].get("tokens_in", 0),
+                "tokens_out": ext_record["metrics"].get("tokens_out", 0),
+                "seconds": ext_record["metrics"].get("seconds", 0.0),
+            }
         else:
             t_ext0 = time.perf_counter()
             resp_ext = extract_story_graph(story, model=model, endpoint=endpoint)
@@ -242,6 +293,8 @@ if __name__ == "__main__":
     parser.add_argument("--results", type=str, default="experiments/text_vs_graph/phase2_results.jsonl", help="Path to results file")
     parser.add_argument("--summary", type=str, default="experiments/text_vs_graph/phase2_summary.json", help="Path to summary file")
     parser.add_argument("--extractions", type=str, default="experiments/text_vs_graph/phase2_extractions.jsonl", help="Path to extractions file")
+    parser.add_argument("--force-rerun", action="store_true", help="Force rerun of QA evaluation for target stories")
+    parser.add_argument("--reextract", action="store_true", help="Force re-extraction of graphs for target stories")
     args = parser.parse_args()
 
     run_phase2(
@@ -250,4 +303,6 @@ if __name__ == "__main__":
         results_path=args.results,
         summary_path=args.summary,
         extractions_path=args.extractions,
+        force_rerun=args.force_rerun,
+        reextract=args.reextract,
     )
