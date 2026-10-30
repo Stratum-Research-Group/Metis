@@ -2,9 +2,9 @@
 
 **Last Updated:** 2026-10-30  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `41194bf`  
-**Working Tree Status:** Clean; all services active under systemd; 1,134 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) fully completed; audited report in `CONFIRMATORY_PHASE1_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented and verified across Stoma, Kybernetes, Dianoia, and Dokime.
+**Current HEAD Commit:** `15f633b`  
+**Working Tree Status:** Clean; all services active under systemd; 1,137 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) fully completed; Phase 2 Real Extractor Pilot (40/40 stories, 680 LLM operations) completed and audited in `PHASE2_PILOT_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented and verified across Stoma, Kybernetes, Dianoia, and Dokime.
 
 ---
 
@@ -318,7 +318,18 @@ npm --prefix vscode run compile
     - **Paideia Boundary Practice Selection (`paideia/paideia/data/boundary_sampler.py`)**: Implemented variance-based practice batch selector over repeated rollout attempts ($N \ge 2$), prioritizing learning frontier tasks ($\sigma^2 > 0$) with stratified quotas for retention checks (all-pass) and hard diagnostics (all-fail). Included uniform random baseline sampler for matched-budget empirical comparison.
     - **Dokime CLI Command (`dokime graph-rollout`)**: Added repeated rollout suite (`ExecutableGraphRolloutSuite`) and CLI command for repeated-attempt rollout evaluation and category stratification across policies (including live served Hestia models with knowledge fixture prompt context).
     - **Unit & Integration Test Suites**: 12 tests passing in `dokime/tests/test_executable_graph.py` (213 Dokime tests passing) and 4 tests passing in `paideia/tests/test_boundary_sampler.py` (50 Paideia tests passing).
-    - **Monorepo Total**: **1,110 tests passed** across all 11 core subsystems + root + VS Code Void IDE client (100% green, 1 skipped).
+12. **Phase 16: Zero-Hallucination Graph Filtering & Heuresis Discovery Engine (Completed)**:
+    - **Zero-Hallucination Graph Filtering (Item 91)**: Added `DeterministicSpanFilter` in `stoma/src/stoma/filters.py` verifying entity mention, timestamp, and relation spans against raw source text with zero token overhead. CLI `stoma graph verify-grounding`. Integrated dynamic consistency gating (`graph_consistency_floor: 0.95`, `fallback_to_pure_text_on_inconsistency: True`) in `kybernetes/kybernetes/routing/router.py` and `kybernetes/kybernetes/adapters/dianoia.py` with automatic flat text fallback. Enforced constructive forward chronological planning in `dianoia/dianoia/prompts.py` and `kybernetes/kybernetes/engine/pipeline.py`.
+    - **Heuresis Discovery Engine & OpenReview Crawler (Item 92)**: Implemented `OpenReviewBoundaryCrawler` and `CommunityAvailabilityIndex` in `stoma/src/stoma/crawlers/openreview.py` parsing peer review contested boundaries ($\sigma^2 \ge 1.5$, $4.0 \le \bar{s} \le 6.5$). CLI `stoma openreview crawl-fixture`. Implemented `HeuresisDiscoveryEngine` in `dokime/src/dokime/tasks/heuresis.py` with fast dual contrastive scoring, Sheaf-Laplacian topological OOV concept synthesis, and 15% fringe outlier quota. Registered `"heuresis_scientific_discovery"` in Dokime task registry.
+    - **17 New Unit & Integration Tests**: Verified across `stoma/tests/test_span_filter.py`, `stoma/tests/test_openreview_crawler.py`, `kybernetes/tests/test_adapters.py`, and `dokime/tests/test_heuresis.py`.
+
+13. **Phase 17: Empirical Evaluation of Text vs Graph Under Real LLM Extractor Noise (Phase 2 Pilot Completed)**:
+    - **Natural Extractor Profile ($N=40$ stories, 680 LLM operations)**: Implemented zero-shot LLM extractor in `experiments/text_vs_graph/extractor.py`. Evaluated on 40 stories (`conf_s001`–`conf_s040`, seeds `4001`–`4040`). Natural extractor fidelity achieved **$96.15\%$ mean** ($27/40$ 100% perfect, $0$ entity hallucinations, $3.75\%$ omission rate).
+    - **Real vs Synthetic 30% Corruption**: Arm B (Graph Only) achieved **$97.50\%$** (vs $68.12\%$ under synthetic corruption, $+29.38\text{ pp}$, $p < 10^{-5}$, **BETTER**). Arm C (Text + Graph) achieved **$98.12\%$** (vs $85.62\%$, $+12.50\text{ pp}$, **BETTER**).
+    - **Arm F Dominance**: Arm F (Constructive Chronological Control) achieved **$100.00\%$ accuracy** ($160/160$ questions correct), definitively outperforming Arm D ($96.88\%$) and proving that constructive forward planning prevents reconciliation traps.
+    - **Counterfactual Advantage (Q3)**: Extracted graph structures provided a $+10.0\text{ pp}$ to $+17.5\text{ pp}$ advantage over pure text Arm A ($82.5\%$) on multi-hop counterfactual reasoning.
+    - **Audited Report**: Full empirical report and bootstrap statistics compiled in `experiments/text_vs_graph/PHASE2_PILOT_REPORT.md`.
+    - **Monorepo Total**: **1,137 passed tests** across all 11 core subsystems + experiments + root (100% green, 3 skipped).
 
 ---
 

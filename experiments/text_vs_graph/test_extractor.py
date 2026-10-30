@@ -56,3 +56,4 @@ EVENT E4: name=Auxiliary Purge, start_hour=20, duration_hours=1
     assert len(metrics.timestamp_mismatches) == 1
     assert metrics.timestamp_mismatches[0] == ("E1", 10, 12)
     assert metrics.overall_fidelity < 1.0
+

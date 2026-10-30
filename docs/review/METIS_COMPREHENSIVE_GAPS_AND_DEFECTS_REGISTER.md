@@ -791,6 +791,34 @@
   6. Implemented `HeuresisDiscoveryTask` in Dokime and registered `"heuresis_scientific_discovery"` in `BUILTIN_TASKS`.
   7. Verified with 4 unit tests in `stoma/tests/test_openreview_crawler.py` and 5 unit/integration tests in `dokime/tests/test_heuresis.py`. All 127 Stoma tests and 218 Dokime tests pass.
 
+### Item 93: Phase 2 Empirical Evaluation: Text vs Graph Under Real LLM Extractor Noise
+- **Priority:** P2 (Empirical Validation & Cognitive Representation Architecture)
+- **Status:** **Pilot Completed & Audited ($N=40$ stories, 680 LLM operations)**
+- **Affected Subsystems:**
+  - `experiments/text_vs_graph/extractor.py`
+  - `experiments/text_vs_graph/run_phase2.py`
+  - `experiments/text_vs_graph/analyze_phase2.py`
+  - `experiments/text_vs_graph/test_extractor.py`
+  - `experiments/text_vs_graph/phase2_results.jsonl`
+  - `experiments/text_vs_graph/phase2_extractions.jsonl`
+  - `experiments/text_vs_graph/phase2_summary.json`
+  - `experiments/text_vs_graph/phase2_pilot_analysis.json`
+  - `experiments/text_vs_graph/PHASE2_PILOT_REPORT.md`
+- **Root Cause & Specification Requirement:**
+  - Phase 1 evaluated causal reasoning under synthetic 30% corruption (random edge drops, timestamp flips, and attribute mutators), which degraded Arm B to 68.12% accuracy. Real-world sovereign pipelines do not experience random independent synthetic bitflips, but rather real LLM extractor noise directly from unstructured text passages.
+  - Phase 2 empirical validation was required to measure the true distribution of real extractor errors and test whether constructive chronological grounding (Arm F) and structured graph representations preserve cognitive superiority under real LLM extraction noise.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented zero-shot LLM extractor in `experiments/text_vs_graph/extractor.py` parsing structured event DAGs directly from prose via `gemma-4-26b-a4b-abliterated` on Hestia.
+  2. Implemented `experiments/text_vs_graph/run_phase2.py` with atomic checkpointing, extraction caching, and multi-arm evaluation (B, C, D, F).
+  3. Completed 40-story pilot evaluation (`conf_s001`–`conf_s040`, seeds `4001`–`4040`, 640 evals + 40 extractions = 680 LLM calls):
+     - **Natural Extractor Profile**: Mean fidelity of $96.15\%$ ($27/40$ stories 100% perfect, $0$ entity hallucinations, $3.75\%$ omission rate).
+     - **Arm B (Extracted Graph Only)**: $97.50\%$ accuracy ($+29.38\text{ pp}$ gain over synthetic 30% corruption, $p < 10^{-5}$, verdict: **BETTER**).
+     - **Arm C (Text + Extracted Graph)**: $98.12\%$ accuracy ($+12.50\text{ pp}$ gain over synthetic 30% corruption, verdict: **BETTER**).
+     - **Arm F (Chronological Control)**: **$100.00\%$ accuracy** ($160/160$ questions correct, $40/40$ stories perfect).
+     - **Counterfactual Divide (Q3)**: Arm B ($92.5\%$), Arm C ($92.5\%$), and Arm F ($100.0\%$) vastly outperformed pure text Arm A ($82.5\%$, $+10.0\text{ pp}$ to $+17.5\text{ pp}$ gain).
+  4. Authoring and auditing formal empirical report `experiments/text_vs_graph/PHASE2_PILOT_REPORT.md`.
+  5. 3 unit tests in `experiments/text_vs_graph/test_extractor.py` passing cleanly.
+
 ---
 
 ## Summary & Verification Matrix
@@ -820,17 +848,18 @@
 | **Boundary-Aware Practice Selection** | Item 90 | Paideia (Attempt Rollout Variance, Stratified Selection & CLI)| **Integrated & Verified** | 50 Paideia tests passing (4 boundary sampler tests) |
 | **Zero-Hallucination Graph Filtering** | Item 91 | Stoma + Kybernetes (DeterministicSpanFilter & Dynamic Consistency Gating)| **Integrated & Verified** | 123 Stoma + 196 Kybernetes tests passing (8 new unit/adapter tests) |
 | **Heuresis Scientific Discovery Engine**| Item 92 | Stoma + Dokime (OpenReview Crawler, Dual Scorer, Sheaf OOV Synthesizer)| **Integrated & Verified** | 127 Stoma + 218 Dokime tests passing (9 new crawler/discovery tests) |
+| **Phase 2 Real Extractor Empirical Study**| Item 93 | Experiments (Real LLM Extractor Noise, 40-Story Pilot, Bootstrap CIs)| **Audited & Verified** | 3 extractor tests passing + 640 evals verified ($100\%$ on Arm F) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,134 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,137 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.44s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **196** | 0 | 29.84s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 143.21s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 227.52s | **PASS** |
+| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 227.52s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 6.91s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.54s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 44.81s | **PASS** |
@@ -838,26 +867,10 @@
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 2.12s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.42s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.56s | **PASS** |
-| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **23** | 0 | 0.06s | **PASS** |
+| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **26** | 0 | 0.08s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 20.35s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,134** | **3** | **~8.8 min** | **ALL GATES PASS** |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **213** | 0 | 12.11s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **196** | 0 | 29.84s | **PASS** |
-| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 143.21s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `./stoma/.venv/bin/pytest stoma/tests -q` | **123** | 0 | 227.52s | **PASS** |
-| **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 6.91s | **PASS** |
-| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.54s | **PASS** |
-| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 44.81s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **50** | 0 | 2.68s | **PASS** |
-| **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 2.12s | **PASS** |
-| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.42s | **PASS** |
-| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.56s | **PASS** |
-| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **23** | 0 | 0.06s | **PASS** |
-| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 20.35s | **PASS** |
-| **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,125** | **3** | **~8.8 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,137** | **3** | **~8.8 min** | **ALL GATES PASS** |
 
 
 

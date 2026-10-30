@@ -96,10 +96,10 @@ def run_phase2(
 
     for idx in range(num_stories):
         seed = start_seed + idx
-        story_id = f"story_{seed}"
+        story_id = f"conf_s{idx+1:03d}" if start_seed == 4001 else f"story_{seed}"
 
         # 1. Generate story
-        story = generate_story(seed=seed, story_id=story_id)
+        story = generate_story(story_id=story_id, seed=seed)
 
         # 2. Extract or retrieve cached extraction
         if story_id in cached_extractions:

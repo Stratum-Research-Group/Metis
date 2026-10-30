@@ -1,0 +1,102 @@
+{
+  "num_stories": 40,
+  "total_evals": 640,
+  "extraction_metrics": {
+    "mean_fidelity": 0.9614575000000001,
+    "min_fidelity": 0.875,
+    "max_fidelity": 1.0,
+    "perfect_extractions_pct": 0.675,
+    "total_missing_events": 12,
+    "total_hallucinated_events": 0,
+    "total_timestamp_mismatches": 1,
+    "total_duration_mismatches": 0
+  },
+  "overall_accuracy": {
+    "Arm_A_baseline": 0.9375,
+    "Arm_B_extracted": 0.975,
+    "Arm_C_text_plus_extracted": 0.98125,
+    "Arm_D_reconcile": 0.96875,
+    "Arm_F_matched_control": 1.0
+  },
+  "statistical_tests": [
+    {
+      "hypothesis": "H1' (Arm B Extracted vs Arm A Baseline)",
+      "diff": 0.0375,
+      "ci_lower": -0.00625,
+      "ci_upper": 0.08125,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "H2' (Arm C Text+Extracted vs Arm A Baseline)",
+      "diff": 0.04375,
+      "ci_lower": 0.0125,
+      "ci_upper": 0.08125,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "H3' (Arm C Text+Extracted vs Arm B Extracted)",
+      "diff": 0.00625,
+      "ci_lower": -0.025,
+      "ci_upper": 0.04375,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "H4' (Arm D Reconcile vs Arm F Matched Control)",
+      "diff": -0.03125,
+      "ci_lower": -0.05625,
+      "ci_upper": -0.00625,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "Synthetic vs Real: Arm B (Real Ext) vs Arm B (Synth 30%)",
+      "diff": 0.29375,
+      "ci_lower": 0.2375,
+      "ci_upper": 0.35,
+      "verdict": "better"
+    },
+    {
+      "hypothesis": "Synthetic vs Real: Arm C (Real Ext) vs Arm C (Synth 30%)",
+      "diff": 0.125,
+      "ci_lower": 0.0875,
+      "ci_upper": 0.1625,
+      "verdict": "better"
+    },
+    {
+      "hypothesis": "Synthetic vs Real: Arm D (Real Ext) vs Arm D (Synth 30%)",
+      "diff": 0.04375,
+      "ci_lower": -0.00625,
+      "ci_upper": 0.09375,
+      "verdict": "inconclusive"
+    }
+  ],
+  "question_type_breakdown": {
+    "Q1": {
+      "A": 1.0,
+      "B": 1.0,
+      "C": 1.0,
+      "D": 1.0,
+      "F": 1.0
+    },
+    "Q2": {
+      "A": 0.975,
+      "B": 0.975,
+      "C": 1.0,
+      "D": 1.0,
+      "F": 1.0
+    },
+    "Q3": {
+      "A": 0.825,
+      "B": 0.925,
+      "C": 0.925,
+      "D": 0.875,
+      "F": 1.0
+    },
+    "Q4": {
+      "A": 0.95,
+      "B": 1.0,
+      "C": 1.0,
+      "D": 1.0,
+      "F": 1.0
+    }
+  }
+}
