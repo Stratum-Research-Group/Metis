@@ -57,3 +57,23 @@ EVENT E4: name=Auxiliary Purge, start_hour=20, duration_hours=1
     assert metrics.timestamp_mismatches[0] == ("E1", 10, 12)
     assert metrics.overall_fidelity < 1.0
 
+
+def test_parse_extracted_events_with_formatting():
+    """Verify that markdown emphasis (e.g. _8_) and typo prefixes (e.g. s3) parse correctly."""
+    graph_text = """
+=== STRUCTURED FACT GRAPH ===
+# Events and Timestamps:
+EVENT EV_E1: name=Thermal Sensor Calibration, start_hour=_10_, duration_hours=4
+EVENT E2: name=Coolant Loop Flush, start_hour=s14, duration_hours=_2_
+EVENT EV_E3: name=Reactor Vent [start_hour=16, duration_hours=3]
+"""
+    events = parse_extracted_events(graph_text)
+    assert len(events) == 3
+    assert events["E1"]["start_hour"] == 10
+    assert events["E1"]["duration_hours"] == 4
+    assert events["E2"]["start_hour"] == 14
+    assert events["E2"]["duration_hours"] == 2
+    assert events["E3"]["start_hour"] == 16
+    assert events["E3"]["duration_hours"] == 3
+
+

@@ -70,6 +70,8 @@ def run_single_arm_question(
     
     elapsed = time.perf_counter() - t0
     raw_answer_text = resp2["content"]
+    finish_reason = resp2.get("finish_reason", "unknown")
+    pass1_finish_reason = resp1.get("finish_reason") if arm in ("D", "F") else None
     parse_ok, parsed_val = parse_model_answer(raw_answer_text, question.answer_format)
     is_correct = score_answer(parsed_val, question.gold_answer, question.answer_format) if parse_ok else False
     
@@ -84,6 +86,8 @@ def run_single_arm_question(
         "level": level,
         "pass1_raw": pass1_raw,
         "raw": raw_answer_text,
+        "finish_reason": finish_reason,
+        "pass1_finish_reason": pass1_finish_reason,
         "parsed": parsed_val,
         "gold": question.gold_answer,
         "correct": is_correct,

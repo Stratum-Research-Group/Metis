@@ -48,41 +48,56 @@ class ExtractionErrorMetrics:
     overall_fidelity: float  # [0.0, 1.0]
 
 
+def _parse_int_token(token: str) -> Optional[int]:
+    """Extract integer digits from a token, tolerating markdown emphasis or typo prefixes."""
+    m = re.search(r"\d+", token)
+    return int(m.group(0)) if m else None
+
+
 def parse_extracted_events(graph_text: str) -> Dict[str, Dict[str, Any]]:
-    """Parse events from extracted or gold graph block."""
+    """Parse events from extracted or gold graph block.
+    
+    Supports both gold bracketed format and extractor key-value format,
+    with resilience against markdown emphasis (e.g. _8_) or prefixes.
+    """
     events = {}
 
     # Format 1: Gold format: EVENT E1: Subspace Beacon Ping [start_hour=6, duration_hours=3] [EV_E1]
     pat_gold = re.compile(
-        r"EVENT\s+([A-Za-z0-9_]+):\s*([^\[\n]+)\s*\[start_hour=(\d+),\s*duration_hours=(\d+)\]",
+        r"EVENT\s+([A-Za-z0-9_]+):\s*([^\[\n]+)\s*\[start_hour=([^,\]]+),\s*duration_hours=([^\]]+)\]",
         re.IGNORECASE,
     )
     for match in pat_gold.finditer(graph_text):
-        ev_id, name, start_h, dur_h = match.groups()
+        ev_id, name, start_h_str, dur_h_str = match.groups()
         norm_id = ev_id.strip()
         if norm_id.startswith("EV_"):
             norm_id = norm_id[3:]
-        events[norm_id] = {
-            "name": name.strip(),
-            "start_hour": int(start_h),
-            "duration_hours": int(dur_h),
-        }
+        s_val = _parse_int_token(start_h_str)
+        d_val = _parse_int_token(dur_h_str)
+        if s_val is not None and d_val is not None:
+            events[norm_id] = {
+                "name": name.strip(),
+                "start_hour": s_val,
+                "duration_hours": d_val,
+            }
 
     # Format 2: Extractor format: EVENT E1: name=Subspace Beacon Ping, start_hour=6, duration_hours=3
     pat_ext = re.compile(
-        r"EVENT\s+([A-Za-z0-9_]+):\s*(?:name=)?([^,\n]+),\s*start_hour=(\d+),\s*duration_hours=(\d+)",
+        r"EVENT\s+([A-Za-z0-9_]+):\s*(?:name=)?([^,\n]+),\s*start_hour=([^,\n]+),\s*duration_hours=([^\n]+)",
         re.IGNORECASE,
     )
     for match in pat_ext.finditer(graph_text):
-        ev_id, name, start_h, dur_h = match.groups()
+        ev_id, name, start_h_str, dur_h_str = match.groups()
         norm_id = ev_id.strip()
         if norm_id.startswith("EV_"):
             norm_id = norm_id[3:]
-        if norm_id not in events:
+        s_val = _parse_int_token(start_h_str)
+        d_val = _parse_int_token(dur_h_str)
+        if s_val is not None and d_val is not None and norm_id not in events:
             events[norm_id] = {
                 "name": name.strip(),
-                "start_hour": int(start_h),
-                "duration_hours": int(dur_h),
+                "start_hour": s_val,
+                "duration_hours": d_val,
             }
 
     return events

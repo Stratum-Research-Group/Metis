@@ -1,0 +1,184 @@
+PHASE 2 PILOT PRE-REVIEW - EVIDENCE AUDIT v3 FINAL (Instinct, 2026-10-30)
+Audited: pilot report (markdown, line refs "L#") against three raw logs: the Phase 2
+extraction log (41 records), the Phase 2 QA log (656 records), and the recovered Phase 1
+confirmatory results log (10,800 records). Method: recomputed every checkable aggregate and
+bootstrap from the raw logs; no code changes, no inference run, no source edits.
+
+VERDICT: The numbers reconcile end to end. Every Phase 2 aggregate matches the raw logs
+exactly over the report's stated 40-story scope, and every Phase 1 comparison figure the
+report quotes (all 9 subset accuracies, the Arm A per-question column, all five cross-run
+bootstrap rows) now verifies exactly against the recovered Phase 1 raw log. Grading integrity
+is clean in both phases. The real problems are failure attribution: the report's central Q3
+narrative ("the model struggles with multi-hop ablation") is built on rows that
+overwhelmingly show an output-truncation pattern at exactly 512 tokens - in BOTH phases -
+plus undisclosed generation settings, a 41-story/40-story scope discrepancy, and two
+misstated extraction stats. Do not lock Section 6 (L115-126) into the architecture docs
+until findings 1-6 are settled.
+
+NUMBERED FINDINGS
+
+1. SCOPE DISCREPANCY - the supplied Phase 2 logs contain 41 stories; the report freezes 40
+   (L8, L44). Extraction log: conf_s001-conf_s041 (seeds 4001-4041), 41 records. QA log:
+   656 rows = 41 stories x 4 arms (B, C, D, F) x 4 questions. Report scope (L8): 40 stories
+   (conf_s001-conf_s040, seeds 4001-4040), 640 evaluated responses + 40 extraction passes =
+   680 invocations. Every report aggregate matches the 40-story subset exactly, so the report
+   is internally consistent on 40 stories - but the data also contains conf_s041 / seed 4041
+   (all 16 QA rows correct, extraction fidelity 1.0). This may simply be a live snapshot
+   taken after the report froze its 40-story scope. A frozen 40-story pilot with conf_s041
+   assigned to the remaining run (L132: conf_s041-conf_s300) is a valid partition - but the
+   report, the logs and the full-run story list should be aligned on which scope was actually
+   run, and the already-computed conf_s041 results reused rather than re-run.
+
+2. ARM B AND C FAILURES CLUSTER AT EXACTLY 512 OUTPUT TOKENS - strong truncation evidence,
+   configured cap not proven. Observed: across 164 rows each, arms B and C never exceed 512
+   tokens_out (B max = 512 exactly, 1 row; C max = 512 exactly, 3 rows). Every row pinned at
+   512 is a parse failure scored wrong, each raw ending mid-sentence:
+     - conf_s002_q3 C (512 tok), conf_s011_q3 C (512), conf_s032_q3 C (512): 3 of Arm C's
+       3 total errors (157/160).
+     - conf_s037_q3 B (512).
+   The Phase 1 raw log shows the same ceiling: arms A/B/C max at exactly 512 tokens_out
+   (verified again here; Arm A global max = 512), and the earlier Phase 1 audit found 99.2%
+   of its parse failures at >=448 tokens. Exact clustering at one value plus mid-sentence
+   endings strongly supports output truncation at or near 512 tokens on the single-pass
+   arms - but neither phase's artifacts include request settings or finish_reason fields,
+   so the configured limit itself is not proven. The generation settings requested in the
+   Phase 1 audit (frozen prompts, per-arm max_tokens, temperature, stop tokens) are still
+   not in evidence.
+
+3. THE INHERITED ARM A BASELINE SHOWS THE SAME PATTERN - all 7 of its Q3 errors sit at the
+   512 ceiling. From the recovered Phase 1 log (level 0.0, conf_s001-s040): Arm A's Q3 errors
+   are conf_s002, conf_s018, conf_s027, conf_s029, conf_s030, conf_s037, conf_s040 - all
+   parse_ok=false, all tokens_out=512, all raws ending mid-sentence. conf_s037_q3 was cut
+   off while emitting a final answer JSON matching the gold set. Arm A's only Q2 error
+   (conf_s032_q2) and one of its two Q4 errors (conf_s006_q4) show the same pattern.
+   Consequence for the report's framing: L26-31, L85 and L89 present Q3 as the model
+   "struggling to follow multi-hop parent ablation" on pure text (Arm A 82.5% vs B/C 92.5%).
+   In the underlying data, both sides of that comparison have error sets dominated by the
+   512-token truncation pattern, not by completed-but-wrong reasoning. The direction of the
+   Q3 gap is consistent with the data; its measured size conflates reasoning difficulty with
+   output length. No counterfactual claim is possible from this data about what any arm would
+   score with a larger budget - that needs a consistently applied rerun.
+
+4. OBSERVED PHASE 2 FAILURE COMPOSITION OVER 40 STORIES (12 wrong rows of 640):
+   - 10 output-level failures, all Q3 except one: the four 512-token rows in finding 2;
+     four Arm D rows whose raws also end mid-sentence (conf_s002_q3 592 tok, conf_s004_q3
+     560, conf_s030_q3 550, conf_s037_q3 560); and two degenerate 4-token outputs
+     (conf_s023_q2 and conf_s023_q3, arm B: the entire raw is "<|channel>thought<tool_call|>" -
+     the model opened a tool-call channel and stopped).
+   - 1 row with template contamination: conf_s031_q3 arm D - the raw output contains a
+     fabricated continuation: a literal "<|turn>user" marker, an invented next question
+     ("What is the start time of Event E6?"), "<|turn>model", and an answer to the invented
+     question. This row was scored wrong (parsed [] vs gold [E3,E4,E5,E8]) - one score
+     failure coincided with this contamination; whether the contamination caused the score
+   is not established.
+   - 1 wrong answer in an otherwise complete response: conf_s028_q3 arm B over-propagated
+     the ablation (answered [E4,E5,E8], gold [E5,E8]; extraction fidelity 1.0 on that story).
+   Note the recurrence: conf_s002, conf_s030 and conf_s037 fail across multiple arms and both
+   phases, always with the truncation pattern - the failures concentrate on the same
+   long-reasoning stories.
+
+5. MULTI-TURN CONTAINMENT FAILURE BEYOND THAT ONE ROW. 8 of 656 QA rows contain a literal
+   "<|turn>" marker with a fabricated conversation continuation - all on Q3, all in the
+   two-pass arms (D x3, F x5); 5 land in pass 1, 3 in the final raw. Separately, 627/656 QA
+   raws and all 41 extraction graphs begin with a stray "<|channel>thought" marker, with
+   malformed variants observed ("<|channel>thoughtthought", "<|channel>thought_thought",
+   "<|thought|>"), and 171 pass-1 raws carry long reasoning text after the thought marker.
+   The parser absorbed almost all of this, but it is template fragility in the pinned
+   abliterated model that the report's clean 680-invocation framing (L8) does not mention.
+
+6. TWO-PASS TOKEN ACCOUNTING STILL UNRESOLVED - D/F exceed 512, cause not established.
+   Arm D tokens_out max = 592, Arm F max = 652, vs the 512 ceiling on B/C. Phase 1 showed
+   the same shape (D/F up to 762). This is consistent with token counts summed across the
+   two passes as planned, and does NOT by itself establish unequal output budgets across
+   arms - but without the per-pass request settings, neither explanation can be confirmed.
+
+7. Q3 CLAIMS REST ON AN INHERITED PHASE 1 BASELINE - and the mechanism language is still
+   unsupported. The Arm A column in Section 4 (L81-86) and the "matched P1 baseline" row
+   (L69) contain no Phase 2 Arm A rows - there are none in the Phase 2 QA log. The Arm A
+   figures themselves now verify exactly against the Phase 1 raw log (finding 11), and the
+   story seeds match across phases, so the pairing claim (L65) is sound. But the +10.0pp
+   graph-over-text Q3 gains (L29-30) compare Phase 2 arms against a carried-over baseline
+   whose own Q3 errors are all truncation-pattern rows (finding 3). Also: L34 and L123-124
+   repeat the "false-contradiction traps / error-hunting induces hallucinated contradictions"
+   mechanism language. The Phase 1 report review already flagged that the scores do not
+   establish WHY arms differ; that verdict still applies. Keep Arm F > Arm D as an observed
+   accuracy difference, not a validated mechanism.
+
+8. EXTRACTION LATENCY AND OUTPUT-TOKEN FIGURES DO NOT MATCH THE DATA (L55, L126).
+   Report: "Mean Extractor Latency 6.78s / story, ~870 tokens in, ~590 tokens out".
+   Data (40-story scope): mean 5.75s (median 5.89, range 4.95-9.01); 873.5 tokens in
+   (consistent with ~870); 553.4 tokens out (median 567.5, range 490-674) - not ~590.
+   Over all 41 stories: 5.83s, 873.3 in, 554.3 out. The reported 6.78s matches no statistic
+   of either scope.
+
+9. OMISSIONS ARE POSITIONALLY CLUSTERED - 8 of 12 missing events are E2. Observed missing
+   events: E2 x8, E8 x2, E5 x1, E6 x1 (L51's total of 12 reconciles). The report attributes
+   omissions "almost exclusively" to non-standard formatting tokens such as start_hour=_28_
+   (L22, L57-59). Partially visible in the data: underscore-wrapped tokens (_28_, _55_, _4_,
+   ...) appear in 11 extracted graphs, and 9 of those 11 stories had an omission - but 2
+   stories with such tokens extracted perfectly, 2 omission stories show no such token in the
+   extracted graph, and the story prose is not in the attachment set, so the causal
+   attribution cannot be fully verified. The E2 clustering (67% of omissions) is not
+   mentioned in the report and is worth isolating against the story template before the
+   full run.
+
+10. BOOTSTRAP VERIFICATION. Reproduced exactly (10,000 paired story-level resamples on the
+    raw logs): H1' +0.0375 [-0.0063, +0.0813] (L100), H2' +0.0437 [+0.0125, +0.0813] (L101),
+    H4' -0.0312 [-0.0563, -0.0063] (L103), and all three synthetic-vs-real rows (L104-106):
+    B +0.2938 [+0.2375, +0.3500], C +0.1250 [+0.0875, +0.1625], D +0.0437 [-0.0063, +0.0938].
+    One exception: H3' (C vs B, L102) - point +0.0063 matches, but my CI is
+    [-0.0312, +0.0437] vs the report's [-0.0250, +0.0437]; the lower bound differs by one
+    bootstrap quantum (1/160). Verdicts unaffected; the resampling method/seed is not stated.
+
+11. PHASE 1 COMPARISON FIGURES - NOW VERIFIED AGAINST THE RECOVERED RAW LOG. All nine
+    subset accuracies quoted for conf_s001-s040 match exactly: synthetic 30% noise (L70-73):
+    B 109/160 = 68.12%, C 137/160 = 85.62%, D 148/160 = 92.50%, F 157/160 = 98.12%; intact
+    gold (L69-73): A 150/160 = 93.75%, B 158/160 = 98.75%, C 155/160 = 96.88%,
+    D 158/160 = 98.75%, F 159/160 = 99.38%; and the Arm A per-question column (L83-86):
+    Q1 40/40, Q2 39/40, Q3 33/40, Q4 38/40. Story seeds match across the two phases for all
+    40 stories, supporting the "directly matched" claim (L65). Still unverified from any
+    supplied artifact: the frozen delta = 0.03 pre-registration (L9, L96), the frozen
+    prompts/settings/corruption log requested in the Phase 1 audit, and the pinned commit
+    15f633b11601ba4b0b944a769bd5f9fef8c965d5 (L5 - a report claim, not checked against a
+    live HEAD).
+
+12. FIDELITY FORMULA UNDOCUMENTED - verified as component-weighted. overall_fidelity =
+    1 - deductions/24 per story: a missing event costs 3/24 (event + timestamp + duration
+    components), a timestamp mismatch costs 1/24. Reproduces every record exactly (one
+    missing event = 0.875, matching L46; conf_s027's single timestamp mismatch E7: gold 47
+    vs extracted 147 = 0.9583). L45's 96.15% mean fidelity and L51's 3.75% event-level
+    omission rate measure different things; state the weighting or a reader will expect them
+    to reconcile directly.
+
+13. MINOR HYGIENE.
+    - All 656 Phase 2 QA rows carry level=999.0, a placeholder. Harmless here; will pollute
+      any pooled cross-phase analysis that groups by level (Phase 1 uses 0.0/0.3).
+    - Typo L23: "Real Extraction Vasty Outperforms".
+
+WHAT HELD UP (recomputed from raw logs, matched the report)
+- Phase 2 arm accuracies and all 16 per-question cells for B/C/D/F (L70-73, L83-86).
+- Extraction metrics (L44-54) over the 40-story scope; Arm F 100% holds over 40 and 41
+  stories (160/160, 164/164).
+- All Phase 1 comparison figures, the Arm A per-question column, and 5 of 6 cross-run
+  bootstrap rows - exact matches (finding 10-11).
+- Grading integrity in both phases: parsed == gold on every correct row; no duplicates;
+  per-row extraction_fidelity consistent across the Phase 2 logs.
+
+RECOMMENDATIONS (before the full run / before locking Section 6)
+a) Publish the frozen generation settings per arm and per pass (max_tokens, temperature,
+   stop tokens, finish_reason capture). This single artifact settles findings 2, 3 and 6.
+b) If any cap or template setting changes, re-run the affected configuration consistently
+   across arms and stories (or as a separately labelled sensitivity analysis). Re-running
+   only the failed rows is diagnostic - those scores are not valid replacements in the
+   paired comparison.
+c) Align the scope records: the frozen 40-story pilot plus conf_s041 in the remaining full
+   run is a valid partition even though the snapshot includes the already-run 41st story.
+   State in the report which scope was actually run, and reuse the conf_s041 results in the
+   full run's analysis instead of discarding or silently re-running them.
+d) Fix multi-turn containment (stop tokens / template boundaries) for the pinned model;
+   the <|turn> fabrication is rare (8/656) but lands on Q3, the load-bearing question type.
+e) Label the Arm A column and every Phase 1 comparison with its source run; drop or soften
+   the mechanism language (false-contradiction traps) to what the scores show.
+f) Correct the extraction latency (5.75s mean over 40) and tokens-out (~553) figures;
+   state the fidelity formula.
+g) Investigate the E2 omission clustering (8/12) against the story template.

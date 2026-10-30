@@ -1,0 +1,78 @@
+{
+  "manifest_id": "metis_text_vs_graph_phase2_generation_manifest_v1",
+  "created_at": "2026-10-30T20:30:00+02:00",
+  "scope": {
+    "total_stories": 300,
+    "pilot_scope": "conf_s001-conf_s040 (seeds 4001-4040)",
+    "confirmatory_scope": "conf_s001-conf_s300 (seeds 4001-4300)",
+    "questions_per_story": 4,
+    "arms_evaluated": ["B", "C", "D", "F"]
+  },
+  "serving_environment": {
+    "engine": "llama-server via Hestia backend",
+    "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+    "model": "gemma-4-26b-a4b-abliterated",
+    "quantization": "Q3_K_M GGUF",
+    "hardware": "Single NVIDIA GeForce RTX 5060 Ti 16GB"
+  },
+  "generation_hyperparameters": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "deterministic_seeds": true,
+    "stop_tokens": [
+      "<|turn>",
+      "<|turn_end|>",
+      "<end_of_turn>",
+      "<|start_header_id|>"
+    ]
+  },
+  "output_token_caps": {
+    "single_pass_arms": {
+      "arms": ["A", "B", "C"],
+      "max_tokens": 512,
+      "theoretical_ceiling": 512
+    },
+    "two_pass_arms": {
+      "arms": ["D", "F"],
+      "pass1_max_tokens": 250,
+      "pass2_max_tokens": 512,
+      "theoretical_ceiling": 762
+    },
+    "extractor_pass": {
+      "max_tokens": 768,
+      "stop_tokens": [
+        "<|turn>",
+        "<|turn_end|>",
+        "<end_of_turn>"
+      ]
+    }
+  },
+  "fidelity_scoring_specification": {
+    "slots_per_story": 24,
+    "components": [
+      "8 gold events * existence (1)",
+      "8 gold events * start_hour (1)",
+      "8 gold events * duration_hours (1)"
+    ],
+    "deduction_weights": {
+      "missing_event": 3,
+      "hallucinated_event": 3,
+      "timestamp_mismatch": 1,
+      "duration_mismatch": 1
+    },
+    "formula": "max(0.0, (24 - sum(deductions)) / 24)",
+    "parser_resilience": "Tolerates markdown emphasis tokens (_X_) and typo prefixes (sX) via regex digit extraction."
+  },
+  "statistical_evaluation_protocol": {
+    "unit_of_analysis": "Story level",
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 42,
+    "equivalence_margin_delta": 0.03,
+    "classification_criteria": {
+      "better": "95% bootstrap CI lower bound > +0.03",
+      "worse": "95% bootstrap CI upper bound < -0.03",
+      "equivalent": "95% bootstrap CI entirely within [-0.03, +0.03]",
+      "inconclusive": "95% bootstrap CI crosses +/-0.03 boundary"
+    }
+  }
+}

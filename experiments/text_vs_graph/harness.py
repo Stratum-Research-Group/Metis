@@ -237,6 +237,9 @@ def score_answer(parsed: Any, gold: Any, answer_format: str) -> bool:
     return False
 
 
+DEFAULT_STOP_TOKENS = ["<|turn>", "<|turn_end|>", "<end_of_turn>", "<|start_header_id|>"]
+
+
 def call_local_hestia_chat(
     system_prompt: str,
     user_prompt: str,
@@ -245,9 +248,11 @@ def call_local_hestia_chat(
     temperature: float = 0.0,
     max_tokens: int = 512,
     timeout: float = 60.0,
+    stop: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Dispatches a chat completion call to local Hestia endpoint."""
     t0 = time.perf_counter()
+    stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
     payload = {
         "model": model,
         "messages": [
@@ -256,6 +261,7 @@ def call_local_hestia_chat(
         ],
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "stop": stop_tokens,
     }
     req = urllib.request.Request(
         endpoint,
@@ -267,11 +273,14 @@ def call_local_hestia_chat(
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             elapsed = time.perf_counter() - t0
-            content = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            content = choice["message"]["content"]
+            finish_reason = choice.get("finish_reason", "unknown")
             usage = data.get("usage", {})
             return {
                 "success": True,
                 "content": content,
+                "finish_reason": finish_reason,
                 "tokens_in": usage.get("prompt_tokens", 0),
                 "tokens_out": usage.get("completion_tokens", 0),
                 "latency_seconds": elapsed,
@@ -282,6 +291,7 @@ def call_local_hestia_chat(
             "success": False,
             "error": str(e),
             "content": "",
+            "finish_reason": "error",
             "tokens_in": 0,
             "tokens_out": 0,
             "latency_seconds": elapsed,

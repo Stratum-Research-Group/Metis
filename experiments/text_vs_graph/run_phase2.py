@@ -43,6 +43,7 @@ def extract_story_graph(
         endpoint=endpoint,
         temperature=0.0,
         max_tokens=768,
+        stop=["<|turn>", "<|turn_end|>", "<end_of_turn>"],
     )
     return resp
 
