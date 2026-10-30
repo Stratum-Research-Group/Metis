@@ -1,0 +1,31 @@
+{
+  "num_stories": 5,
+  "num_questions": 100,
+  "total_llm_calls": 140,
+  "total_time_seconds": 283.06560284498846,
+  "seconds_per_call": 2.021897163178489,
+  "parity_audits_passed": 5,
+  "validity_audits_passed": 5,
+  "parse_rate": 92.0,
+  "accuracy_by_arm": {
+    "A": 0.95,
+    "B": 0.7,
+    "C": 0.85,
+    "D": 0.95,
+    "F": 0.95
+  },
+  "tokens_by_arm": {
+    "A": 987.6,
+    "B": 840.1,
+    "C": 1527.8,
+    "D": 3114.75,
+    "F": 3031.1
+  },
+  "latency_by_arm": {
+    "A": 1.825325,
+    "B": 2.28681,
+    "C": 2.346435,
+    "D": 4.0322000000000005,
+    "F": 3.662135
+  }
+}

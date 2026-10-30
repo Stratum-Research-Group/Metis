@@ -1,0 +1,71 @@
+{
+  "status": "COMPLETED_EXPLORATORY",
+  "num_stories": 40,
+  "num_evaluations": 1440,
+  "total_llm_calls": 2730,
+  "total_wall_time_seconds": 5674.003608635976,
+  "mean_latency_seconds": 2.7148342625052515,
+  "determinism_identical_rate": 100.0,
+  "parity_audits_passed": 40,
+  "validity_audits_passed": 40,
+  "parse_rate": 95.48611111111111,
+  "overall_accuracy": {
+    "A_lvl0": 0.925,
+    "B_lvl0": 0.9625,
+    "C_lvl0": 0.98125,
+    "D_lvl0": 0.99375,
+    "F_lvl0": 1.0,
+    "B_lvl30": 0.76875,
+    "C_lvl30": 0.875,
+    "D_lvl30": 0.91875,
+    "F_lvl30": 0.975
+  },
+  "story_variance": {
+    "A_lvl0": 0.016666666666666666,
+    "B_lvl0": 0.008173076923076922,
+    "C_lvl0": 0.004447115384615384,
+    "D_lvl0": 0.0015624999999999999,
+    "F_lvl0": 0.0,
+    "B_lvl30": 0.03649839743589743,
+    "C_lvl30": 0.016025641025641024,
+    "D_lvl30": 0.0140625,
+    "F_lvl30": 0.0057692307692307696
+  },
+  "hypotheses_pilot_deltas": {
+    "H1_B0_minus_A0": {
+      "mean": 0.0375,
+      "ci_95": [
+        -0.00625,
+        0.08125
+      ]
+    },
+    "H2_B30_minus_A0": {
+      "mean": -0.15625,
+      "ci_95": [
+        -0.21875,
+        -0.09375
+      ]
+    },
+    "H3_C30_minus_A0": {
+      "mean": -0.05,
+      "ci_95": [
+        -0.1,
+        0.0
+      ]
+    },
+    "H3_C30_minus_B30": {
+      "mean": 0.10625,
+      "ci_95": [
+        0.05,
+        0.1625
+      ]
+    },
+    "H4_D30_minus_F30": {
+      "mean": -0.05625,
+      "ci_95": [
+        -0.09375,
+        -0.01875
+      ]
+    }
+  }
+}

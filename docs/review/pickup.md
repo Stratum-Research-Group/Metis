@@ -1,19 +1,27 @@
 # Metis Development Resume Guide (`pickup.md`)
 
-**Last Updated:** 2026-10-29  
+**Last Updated:** 2026-10-30  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `bc10774`  
-**Working Tree Status:** All services active under systemd; 1,110 passing tests verified across all 11 monorepo packages + root + VS Code Void IDE client (100% green, 1 skipped).
+**Current HEAD Commit:** `41194bf`  
+**Working Tree Status:** Clean; all services active under systemd; 1,134 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) fully completed; audited report in `CONFIRMATORY_PHASE1_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented and verified across Stoma, Kybernetes, Dianoia, and Dokime.
 
 ---
 
-## 1. Quick Health Check (Run After Reboot)
+## 1. Quick Health Check & Experiment Resume (Run After Reboot)
 
 To verify all services and environments are operational after system reboot:
 
 ```bash
 # 1. Check systemd ambient background services
 systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma-watcher
+
+# 2. Resume Confirmatory Phase 1 Run (Picks up at Story 102/300)
+PYTHONPATH=. ./.venv/bin/python experiments/text_vs_graph/run_confirmatory.py
+
+# 3. Quick test suites sanity check (optional)
+./.venv/bin/pytest kybernetes/tests dokime/tests -q
+```
 
 # 2. Run Kybernetes orchestrator & tools test suite (193 tests)
 ./.venv/bin/pytest kybernetes/tests -q

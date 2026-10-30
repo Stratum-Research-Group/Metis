@@ -44,6 +44,14 @@ from stoma.safe_extract import (
     SafeExtractor,
 )
 
+from stoma.filters import DeterministicSpanFilter
+from stoma.crawlers.openreview import (
+    CommunityAvailabilityIndex,
+    OpenReviewBoundaryCrawler,
+    OpenReviewCrawlerConfig,
+    PeerReviewForumRecord,
+    ReviewerObjectionRecord,
+)
 from stoma.identity import (
     EmbeddingSpaceSpec,
     IdentityValidationError,
@@ -93,4 +101,10 @@ __all__ = [
     "IdentityValidationError",
     "IncompatibleSpaceError",
     "InvalidVectorPayloadError",
+    "DeterministicSpanFilter",
+    "OpenReviewBoundaryCrawler",
+    "OpenReviewCrawlerConfig",
+    "PeerReviewForumRecord",
+    "ReviewerObjectionRecord",
+    "CommunityAvailabilityIndex",
 ]

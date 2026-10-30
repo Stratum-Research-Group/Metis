@@ -1,0 +1,50 @@
+{
+  "frozen_at": "2026-10-30T08:04:00+02:00",
+  "source_spec": "experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt",
+  "status": "FROZEN_FOR_CONFIRMATORY_RUN",
+  "model": "gemma-4-26b-a4b-abliterated",
+  "serving_endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "practical_margin_delta": 0.03,
+  "confidence_level": 0.95,
+  "bootstrap_resamples": 10000,
+  "unit_of_analysis": "story",
+  "confirmatory_stories": 300,
+  "questions_per_story": 4,
+  "total_confirmatory_questions": 1200,
+  "story_seed_range": [4001, 4300],
+  "levels": [0.0, 0.30],
+  "arms": ["A", "B", "C", "D", "F"],
+  "token_caps": {
+    "pass1_notes": 250,
+    "pass2_answer": 512
+  },
+  "hypotheses": {
+    "H1": {
+      "statement": "At 0% corruption, B (graph only) is within practical margin of A (text only) or better: CI lower bound >= -0.03.",
+      "comparison": "B_lvl0 - A_lvl0",
+      "expected_outcome": "CI >= -0.03"
+    },
+    "H2": {
+      "statement": "At 30% corruption, B is worse than A by more than margin: CI upper bound < -0.03.",
+      "comparison": "B_lvl30 - A_lvl0",
+      "expected_outcome": "CI < -0.03"
+    },
+    "H3": {
+      "statement": "At 30% corruption, C (text + graph) is not worse than A by more than margin (CI lower >= -0.03) and C is better than B by more than margin (CI lower > +0.03).",
+      "comparison_a": "C_lvl30 - A_lvl0",
+      "comparison_b": "C_lvl30 - B_lvl30"
+    },
+    "H4": {
+      "statement": "At 30% corruption, D (reconcile) beats F (matched second pass without reconciliation) by more than margin: CI lower bound > +0.03.",
+      "comparison": "D_lvl30 - F_lvl30",
+      "expected_outcome": "CI > +0.03"
+    }
+  },
+  "decision_classification_rule": {
+    "better": "CI entirely above +delta (+0.03)",
+    "worse": "CI entirely below -delta (-0.03)",
+    "equivalent": "CI entirely inside [-delta, +delta] ([-0.03, +0.03])",
+    "inconclusive": "Anything else (straddles bound or crosses zero with wide interval)"
+  }
+}
+

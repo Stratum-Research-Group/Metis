@@ -1,0 +1,81 @@
+{
+  "status": "CONFIRMATORY_COMPLETED",
+  "num_stories": 300,
+  "total_evaluations": 10800,
+  "total_llm_calls": 15600,
+  "wall_time_seconds": 18016.627515447,
+  "mean_latency_seconds": 1.1549120202209615,
+  "parity_audits_passed": 300,
+  "validity_audits_passed": 300,
+  "parse_rate": 94.37037037037037,
+  "overall_accuracy": {
+    "A_lvl0": 0.9083333333333333,
+    "B_lvl0": 0.9591666666666666,
+    "C_lvl0": 0.9533333333333334,
+    "D_lvl0": 0.9775,
+    "F_lvl0": 0.9958333333333333,
+    "B_lvl30": 0.7383333333333333,
+    "C_lvl30": 0.8658333333333333,
+    "D_lvl30": 0.9333333333333333,
+    "F_lvl30": 0.9683333333333334
+  },
+  "story_variance": {
+    "A_lvl0": 0.019579152731326644,
+    "B_lvl0": 0.008569537346711259,
+    "C_lvl0": 0.009520624303232998,
+    "D_lvl0": 0.0051358695652173915,
+    "F_lvl0": 0.0010277313266443702,
+    "B_lvl30": 0.04501393534002229,
+    "C_lvl30": 0.01642906911928651,
+    "D_lvl30": 0.01226309921962096,
+    "F_lvl30": 0.00693701226309922
+  },
+  "hypotheses_verdicts": {
+    "H1": {
+      "mean": 0.050833333333333335,
+      "ci_95": [
+        0.03333333333333333,
+        0.06833333333333333
+      ],
+      "classification": "better",
+      "met": true
+    },
+    "H2": {
+      "mean": -0.17,
+      "ci_95": [
+        -0.19916666666666666,
+        -0.14083333333333334
+      ],
+      "classification": "worse",
+      "met": true
+    },
+    "H3_partA": {
+      "mean": -0.0425,
+      "ci_95": [
+        -0.06166666666666667,
+        -0.023333333333333334
+      ],
+      "classification": "inconclusive"
+    },
+    "H3_partB": {
+      "mean": 0.1275,
+      "ci_95": [
+        0.10166666666666667,
+        0.15416666666666667
+      ],
+      "classification": "better"
+    },
+    "H3_overall": {
+      "met": false
+    },
+    "H4": {
+      "mean": -0.035,
+      "ci_95": [
+        -0.05,
+        -0.02
+      ],
+      "classification": "inconclusive",
+      "met": false
+    }
+  }
+}

@@ -285,6 +285,82 @@ def build_graph(config: StomaConfig, index_path: Optional[str], threshold: float
     click.secho(f"\n{res['message']}", fg="green" if res['edges_added'] > 0 else "yellow")
 
 
+@graph_group.command("verify-grounding")
+@click.option("--graph-file", "-g", required=True, type=click.Path(exists=True), help="Path to JSON file containing extracted nodes and edges.")
+@click.option("--source-file", "-s", required=True, type=click.Path(exists=True), help="Path to raw source text document.")
+@click.option("--consistency-floor", "-c", default=0.95, type=float, help="Minimum consistency threshold [0.0, 1.0].")
+def verify_grounding(graph_file: str, source_file: str, consistency_floor: float):
+    """Verify extracted graph nodes and relations against source document using DeterministicSpanFilter."""
+    import json
+    from stoma.filters import DeterministicSpanFilter
+
+    g_path = Path(graph_file)
+    s_path = Path(source_file)
+
+    with open(g_path, "r", encoding="utf-8") as f:
+        graph_data = json.load(f)
+
+    with open(s_path, "r", encoding="utf-8") as f:
+        source_text = f.read()
+
+    nodes = graph_data.get("nodes", [])
+    edges = graph_data.get("edges", [])
+
+    flt = DeterministicSpanFilter()
+    v_nodes, v_edges, ratio = flt.filter_graph_block(nodes, edges, source_text)
+
+    click.echo(f"Total extracted elements: {len(nodes) + len(edges)}")
+    click.echo(f"Verified nodes:          {len(v_nodes)} / {len(nodes)}")
+    click.echo(f"Verified edges:          {len(v_edges)} / {len(edges)}")
+    click.echo(f"Consistency ratio:       {ratio:.4f} (floor={consistency_floor})")
+
+    if ratio < consistency_floor:
+        click.secho(f"REJECTED: Consistency ratio {ratio:.4f} fell below floor {consistency_floor}. Falling back to pure text.", fg="red")
+        sys.exit(1)
+    else:
+        click.secho(f"ACCEPTED: Graph block verified above consistency floor ({ratio:.4f} >= {consistency_floor}).", fg="green")
+
+
+@cli.group("openreview")
+def openreview_group():
+    """Peer-review boundary extraction and community availability analysis."""
+    pass
+
+
+@openreview_group.command("crawl-fixture")
+@click.option("--input-file", "-i", required=True, type=click.Path(exists=True), help="Path to OpenReview JSON export/fixture.")
+@click.option("--output-index", "-o", type=click.Path(), default=None, help="Path to write JSON availability index.")
+@click.option("--min-variance", "-v", default=1.5, type=float, help="Minimum rating variance for contested boundary.")
+def crawl_fixture(input_file: str, output_index: Optional[str], min_variance: float):
+    """Crawl OpenReview fixture, extract contested boundary papers, and compute availability scores."""
+    from stoma.crawlers.openreview import OpenReviewBoundaryCrawler, OpenReviewCrawlerConfig
+
+    crawler = OpenReviewBoundaryCrawler(
+        config=OpenReviewCrawlerConfig(min_variance_contested=min_variance)
+    )
+    records = crawler.crawl_local_fixture(Path(input_file))
+    contested = [r for r in records if r.is_contested_boundary]
+
+    click.echo(f"Total forums parsed:     {len(records)}")
+    click.echo(f"Contested boundary papers: {len(contested)} (variance >= {min_variance})")
+
+    avail_index = crawler.build_availability_index(records)
+    click.echo(f"Accepted co-occurrence pairs: {len(avail_index.accepted_co_occurrences)}")
+    click.echo(f"Contested boundary pairs:    {len(avail_index.contested_boundary_mentions)}")
+
+    if output_index:
+        out_p = Path(output_index)
+        out_data = {
+            "accepted_pairs": {f"{k[0]}::{k[1]}": v for k, v in avail_index.accepted_co_occurrences.items()},
+            "contested_pairs": {f"{k[0]}::{k[1]}": v for k, v in avail_index.contested_boundary_mentions.items()},
+            "total_forums": len(records),
+            "contested_count": len(contested),
+        }
+        with open(out_p, "w", encoding="utf-8") as f:
+            json.dump(out_data, f, indent=2)
+        click.secho(f"Availability index saved to: {out_p}", fg="green")
+
+
 def main():
     cli()
 

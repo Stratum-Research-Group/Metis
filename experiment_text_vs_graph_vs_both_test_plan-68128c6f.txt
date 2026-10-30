@@ -1,0 +1,246 @@
+EXPERIMENT: TEXT vs GRAPH vs BOTH, UNDER GRAPH CORRUPTION
+Test plan (design only). Nothing here has been run or built. No repo was read.
+Idea source: arXiv 2610.34094 (TCR-Agent / TCR-Former), https://arxiv.org/abs/2610.34094
+All paper numbers are author-reported, not verified by us.
+
+1. QUESTION
+When a model reasons over a structured event graph and/or the source text, does the graph
+help or hurt as it gets noisier, and does an explicit "check graph against text" step help
+beyond what an extra second pass alone would give?
+
+Paper claim being probed (author-reported, own benchmark): no graph 51.3 | graph only at
+30% node noise 42.3 | text + graph at 30% noise 57.2. We test the transferable pattern
+only. Not reproducing TCR-Former, not claiming causal identification.
+
+2. HYPOTHESES (written before running; frozen after the pilot)
+H1  Clean graph (0% corruption): B (graph only) is within the practical margin of A
+    (text only) or better. If B is clearly worse, that is a real finding (the graph
+    format hurts this model) and is kept as a result. Only objectively invalid harness or
+    prompt faults (parse bugs, parity audit failures, truncation) are fixed and re-run.
+H2  At 30% corruption: B is worse than A by more than the margin.
+H3  At 30% corruption: C (text + graph) is not worse than A by more than the margin, and
+    C is better than B by more than the margin.
+H4  At 30% corruption: D (reconcile) beats F (second pass without reconciliation) by
+    more than the margin.
+Each can fail. A failure is a result.
+
+3. ARMS (same model, same decoding, same question; only the evidence block and passes differ)
+A  Text only. No graph, so corruption does not apply; run once per question.
+B  Graph only (structured fact block, no prose).
+C  Text + graph, single pass.
+D  Text + graph + reconcile. Pass 1: list graph claims the text does not support or
+   contradicts. Pass 2: answer, text wins ties.
+F  Control for D. Text + graph, two passes. Pass 1: restate the facts relevant to the
+   question and your plan. Pass 2: answer. Same question, same evidence, same pass-1
+   token cap and same pass-2 text-authority rule as D; the only difference is that pass 1
+   does not ask for a graph-vs-text check. Actual token costs are logged per arm and
+   reported; compute is "matched by cap", not claimed equal.
+E  (optional) Text + random graph of the same size (is any graph-shaped block enough?).
+Graph arms (B, C, D, F, and E) run at each corruption level.
+
+4. DATA AND ANSWER KEY
+Source of truth is a generated fact set per story, rendered two ways: prose and a
+structured block. Gold answers are computed by program from the fact set. No LLM
+generates or grades any answer.
+
+Fact set per story (6-12 events):
+  - events with timestamps and durations
+  - TEMPORAL edges: "before" precedence, from timestamps. Separate edge type.
+  - DEPENDENCY edges: event E has a parent list and a rule, AND (needs all parents) or
+    OR (needs at least one). Stated explicitly in both renderings. Events with no parents
+    always occur.
+  - optional conditional rules for Q4, stated as "if P then Q" style facts
+  - 2-3 distractor facts not needed by any question (present in both renderings)
+
+Validity of the generated world (checked by program, item dropped otherwise):
+  - the dependency graph is a DAG and the temporal edges agree with the timestamps
+  - the factual world is consistent: with all roots occurring, every event's AND/OR rule
+    is satisfied, so every event occurs in the intact story
+  - Q3 target X is an event that occurs in the factual world. X may be a root (no
+    parents, so its own rule says it always occurs). The prompt states that X is
+    denied regardless of its rule; its children are then evaluated by their rules.
+
+Question types:
+  Q1 ordering: which of X, Y is earlier? Key from timestamps only.
+  Q2 duration/date arithmetic: key from timestamps/durations.
+  Q3 counterfactual: "Suppose X had not happened. Applying the dependency rules stated,
+     which events would no longer occur?" Key: remove X, then propagate in topological
+     order: an event occurs iff its rule (AND/OR) is satisfied by the surviving parents.
+     An OR node survives only if at least one of its parents survives. This is rule propagation, not
+     descendants-of-X and not a formal do-intervention. Say this in the prompt.
+  Q4 rule application: apply a stated conditional to reach a value or event. Key from
+     the rule table.
+Size: 300 CONFIRMATORY stories x 4 questions = 1200. The pilot uses 40 SEPARATE stories
+(different seeds, disjoint from the 300). Pilot stories are never reused in confirmatory
+results after any prompt or parameter tuning. Pilot results are exploratory and labelled
+exploratory everywhere they appear.
+
+Information parity (required): the graph block must contain every fact needed to answer
+the question: events, timestamps, durations, dependency rules with AND/OR, conditional
+rules. Program audit on every item before any run: each fact ID in the structured block
+appears in the prose and the reverse; any mismatch drops the item. The audit file is
+saved. Without this, A vs B would test unequal information and not format.
+
+Corruption operators (applied to the structured block only, seeded, logged):
+  drop-node, rewire-dependency, flip-AND/OR, shift-time, add-fake-event.
+Corruption level = (number of ORIGINAL nodes touched) / (original node count n), with n
+fixed per story. Each original node is touched at most once. Mapping:
+  drop-node touches the dropped node; rewire-dependency touches the child whose parent
+  list changes; flip-AND/OR touches that node; shift-time touches that node.
+  add-fake-event touches no original node. At the 0% level no operator is applied and
+  no fake nodes are added (fake_node_count = 0); the graph block equals the gold block. Fake events are added as a separate count
+  (same fraction of n, rounded up), logged as fake_node_count, and kept out of the
+  denominator and out of the touched count.
+Log whether the nodes needed for the specific
+question were touched ("exposed" questions). Report overall and exposed-only.
+The text is never corrupted.
+
+5. GRAPH SOURCE
+Phase 1: gold structured block + synthetic corruption (isolates reasoning from extraction).
+Phase 2: structured block extracted by the same model from the prose (1 extraction call
+per story). Compare extraction error types and rates with Phase 1 operators; do not assume
+they match.
+
+6. MODEL AND HARDWARE
+One 7-9B instruct model, 4-bit quant, local inference endpoint of your choice. Which
+card, whether it loads at the chosen context, and tokens/sec are all UNMEASURED. The
+pilot records: load success, peak VRAM, tokens/sec, wall time per arm. Go/no-go for the
+larger runs comes from those measured numbers. Temperature 0, fixed seed, fixed max tokens.
+Determinism check: re-run 50 pilot questions once; report % of identical outputs.
+
+7. CALL COUNTS (calls per question; each call holds the text and/or graph once)
+  A 1 | B 1 | C 1 | D 2 | F 2 | E 1 (optional)
+  Per graph level without E: B+C+D+F = 6; with E: 7.
+  Smoke test (before the pilot): 5 stories = 20 questions, level 30% only, arms A,B,C,D,F:
+    1 + 6 = 7 calls per question = 140 calls. Purpose: parse rate, parity audit, key,
+    truncation, timing. Nothing larger starts automatically from it.
+  Pilot: 40 stories = 160 questions, levels 0% and 30%, arms A,B,C,D,F:
+    per question 1 + 2x6 = 13 calls -> 2,080 calls. Determinism rerun, 50 questions:
+    650 calls. Pilot total about 2,730 calls.
+  Robust Phase 1 (optional): 300 stories = 1200 questions, levels 0/10/30/50, arms A-D,F:
+    1 + 4x6 = 25 per question -> 30,000 calls. With E: 1 + 4x7 = 29 -> 34,800.
+  Reduced Phase 1: levels 0 and 30 only: 13 per question -> 15,600 calls (18,000 with E:
+    1 + 2x7 = 15).
+  Phase 2 (extracted graph, one natural level, arms B,C,D,F): 300 extraction calls +
+    6 x 1200 = 7,200 -> 7,500 calls. A reuses Phase 1 results.
+Prompts are short, but token lengths are unmeasured; wall time comes from the pilot.
+
+8. METRICS AND STATISTICS
+  - Primary: exact-match accuracy, parsed from JSON output (section 13). Parse failures
+    count as wrong and are reported separately.
+  - Unit of analysis is the STORY. Questions within a story are correlated, so never
+    treat the 1200 questions as independent.
+  - Comparison between arms: per-story paired difference in accuracy (mean over that
+    story's questions). 95% CI by story-level bootstrap on those paired differences.
+  - Testing: sign-flip permutation test on per-story differences (or a mixed logistic
+    model with story as random effect). No plain McNemar across all questions.
+  - Practical margin delta = 3 percentage points. Set it after the pilot if you want to
+    use pilot variance, and freeze it (with prompts and hypotheses) BEFORE the
+    confirmatory run. It is not changed after confirmatory data is seen.
+  - Classification of each comparison, from the paired-difference CI:
+      better   CI entirely above +delta
+      worse    CI entirely below -delta
+      equivalent  CI entirely inside [-delta, +delta]
+      inconclusive  anything else
+    Overlapping marginal CIs of two arms are NOT used for this.
+  - Multiple comparisons: H1-H4 are primary; apply Holm correction across them.
+    Everything else is exploratory and labelled so.
+  - Secondary: tokens per question; for D, precision/recall of flagged nodes against logged
+    corruptions (descriptive only); failure taxonomy on 100 wrong answers per arm
+    (time-boundary, broken chain, rule mismatch, parse failure, other).
+
+9. DECISION RULES (apply to the confirmatory run only)
+  - H1 clearly fails: report it as "the graph format hurt this model at 0% corruption".
+    Only objectively invalid harness/prompt faults are fixed (and logged), then re-run.
+  - H2 and H3 both met: consistent with keeping source text next to generated structure,
+    for this model and task.
+  - If C is demonstrably worse than A beyond the margin at 30% (CI entirely below
+    -delta): possible reasons include distraction by the graph, longer context, or prompt
+    wording. Use E and the error taxonomy to investigate; do not conclude the model
+    "follows the graph" without that evidence.
+  - If H3 cannot be established, report which component failed (C vs A, or C vs B) or is
+    inconclusive. Do not infer harm from a failure to establish.
+  - H4 met: reconcile beats the matched second pass under this design. H4 equivalent or
+    worse: no incremental benefit of reconciliation shown under this design.
+  - D's flag precision/recall is descriptive. It does not decide H4.
+  - "equivalent" needs the paired CI inside the margin. Overlapping marginal CIs or a
+    nonsignificant test is "inconclusive".
+  - Phase 2 worse than Phase 1: not by itself evidence that extraction noise is worse.
+    Next step is to tabulate extracted-graph error types and distribution and compare
+    with the synthetic operators.
+
+10. WHAT THIS DOES NOT SHOW
+  - Not causal discovery or identification; dependency rules are stated, not discovered.
+  - Q3 tests rule propagation, not a formal do-intervention.
+  - Synthetic text is more regular than real documents.
+  - One model; effects may differ on others.
+  - The paper's learned attention / event-slot mechanism is untested.
+  - Local feasibility of TCR-Former training is not assessed. The authors used four
+    A100-40GB with LoRA and staged training. Code exists at
+    https://github.com/Translab-SCUT/TCR-Former and has not been reviewed.
+
+11. WHERE IT COULD LIVE (project not selected)
+  Option 1  Standalone script and JSONL files. Fastest, touches nothing.
+  Option 2  Proposed Dokime adapter: arms x corruption levels as tasks, results to its
+            own results store. Dokime's current config and interfaces were NOT checked
+            here, so verify its real entry points before writing the adapter.
+  Option 3  Dianoia/LTHCM walk output as an extra graph source, after the standalone
+            result. Per your recorded rule, LTHCM stays a pinned read-only submodule.
+  Option 4  Krisis: if D's flag output proves useful, a candidate input to a claim-support
+            verifier, with generator and verifier kept independent as your Krisis notes
+            require.
+Keep each project's items separate; picking one means none of the others get edited.
+
+12. RUN ORDER (each stage waits for your explicit go; no automatic full run)
+  1. Build generator, key, scorer, parity and validity audits. Unit-test the key by hand
+     on 10 stories, including AND/OR, alternative-cause, and denied-root Q3 cases.
+  2. SMOKE TEST: 5 stories, 140 calls. Check the parse rate, truncation, audits, timing.
+  3. PILOT (exploratory): 40 separate stories, arms A,B,C,D,F, levels 0% and 30%, plus
+     determinism rerun of 50 questions. Record timing, VRAM, story-level variance and CI
+     widths. Decide go/no-go from measured numbers.
+  4. Set delta; fix only objectively invalid faults; freeze hypotheses, prompts, margin.
+  5. Confirmatory Phase 1 on the 300 stories: reduced (levels 0/30) first; the robust
+     version (all levels, E) only if timing allows and you say go.
+  6. Optional Phase 2.
+  7. Failure taxonomy and write-up, with every failed hypothesis.
+
+13. PROMPT TEMPLATES AND OUTPUT SCHEMA
+Item record (JSONL, one per question):
+  {"story_id","qid","qtype","facts":[{"id","kind","..."}],"prose":"...",
+   "graph_block":"...","corruption":{"level","ops":[...],"exposed":true|false},
+   "question":"...","answer_format":"event_id|integer|id_list|value","gold":...}
+Result record: {"story_id","qid","arm","level","pass1_raw","raw","parsed","correct",
+  "parse_ok","tokens_in","tokens_out","seconds","seed"}
+
+Answer-pass system prompt (A, B, C, D pass 2, F pass 2):
+  You answer questions from the evidence provided. Reason briefly if needed, then end
+  with a single JSON object {"answer": <value>}. Use only the stated facts and rules.
+  Dependency rules: an event with rule AND occurs only if all its listed parents occur;
+  with rule OR it occurs if at least one parent occurs; an event with no parents occurs.
+  Ordering questions use timestamps only.
+  Text-authority rule (included in C, D pass 2 and F pass 2, identically worded): "If the
+  structured facts conflict with the text, treat the text as correct."
+  (A and B have only one evidence source, so the rule is omitted there.)
+
+Pass-1 system prompt (D and F pass 1; no JSON answer required):
+  You are preparing notes for a later answer. Do not answer the question. Write at most
+  {PASS1_TOKEN_CAP} tokens. Same cap for D and F.
+
+Arm A user prompt:   EVIDENCE (prose): {prose}\nQUESTION: {question}\nFormat: {answer_format}
+Arm B user prompt:   EVIDENCE (structured facts): {graph_block}\nQUESTION: ...
+Arm C user prompt:   TEXT: {prose}\nSTRUCTURED FACTS: {graph_block}\nQUESTION: ...
+Arm D pass 1 user:   TEXT: {prose}\nSTRUCTURED FACTS: {graph_block}\nQUESTION: {question}
+  Task: list each structured fact that the text does not support or contradicts, as a
+  JSON list of fact ids, plus brief reasons.
+Arm D pass 2 user:   same evidence and question + "Notes from the earlier check: {pass1}"
+Arm F pass 1 user:   TEXT: {prose}\nSTRUCTURED FACTS: {graph_block}\nQUESTION: {question}
+  Task: restate the facts relevant to this question and your plan for answering.
+Arm F pass 2 user:   same evidence and question + "Notes: {pass1}"
+Arm E: as C with a random block.
+Answer formats: Q1 event id; Q2 integer in the stated unit; Q3 sorted list of event ids
+  (empty list allowed); Q4 event id or value. Exact match after parsing and sorting lists.
+
+14. DELIVERABLES
+  parity and validity audit files, results.jsonl, per-question-type tables with paired-difference CIs,
+  H1-H4 outcome classification, D flag precision/recall, failure taxonomy counts, measured
+  timing and VRAM, half-page conclusion.

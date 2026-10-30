@@ -5,6 +5,11 @@ from pydantic import BaseModel, Field
 
 from kybernetes.contracts.turn import Citation
 
+try:
+    from stoma.filters import DeterministicSpanFilter
+except ImportError:
+    DeterministicSpanFilter = None  # type: ignore
+
 
 class DianoiaDeliberationResult(BaseModel):
     """Result of Dianoia graph deliberation."""
@@ -17,6 +22,8 @@ class DianoiaDeliberationResult(BaseModel):
     refined_citations: List[Citation] = Field(default_factory=list)
     conflicted: bool = False
     is_simulated: bool = Field(default=True, description="Whether deliberation was executed via simulated adapter")
+    consistency_ratio: float = 1.0
+    consistency_fallback_used: bool = False
 
 
 class DianoiaAdapter:
@@ -55,12 +62,37 @@ class DianoiaAdapter:
         max_steps: int = 5,
         force_zero_edges: bool = False,
         controller_policy: Optional[Any] = None,
+        consistency_floor: float = 0.95,
+        fallback_to_pure_text_on_inconsistency: bool = True,
+        extracted_graph_block: Optional[Dict[str, Any]] = None,
     ) -> DianoiaDeliberationResult:
         """
         Conduct bounded thought-graph walk.
-        If graph connectivity is absent (0 edges), cleanly activates flat fallback.
-        Discloses simulation or live engine status honestly.
+        If graph connectivity is absent (0 edges) or consistency drops below floor,
+        cleanly activates flat text fallback. Discloses simulation or live engine status honestly.
         """
+        # Dynamic consistency verification against raw passage text
+        if extracted_graph_block and DeterministicSpanFilter is not None:
+            source_text = "\n".join(c.text for c in seed_citations)
+            nodes = extracted_graph_block.get("nodes", [])
+            edges = extracted_graph_block.get("edges", [])
+            flt = DeterministicSpanFilter()
+            _, _, ratio = flt.filter_graph_block(nodes, edges, source_text)
+            if ratio < consistency_floor and fallback_to_pure_text_on_inconsistency:
+                return DianoiaDeliberationResult(
+                    success=True,
+                    walk_steps=0,
+                    edges_traversed=0,
+                    zero_edge_fallback_used=True,
+                    fallback_reason=f"Graph consistency ratio {ratio:.3f} fell below floor {consistency_floor}. Cleanly fell back to pure text passages.",
+                    deliberation_summary=f"Direct evidence aggregation via flat passage fallback (inconsistent graph evicted at ratio {ratio:.3f} < {consistency_floor}).",
+                    refined_citations=seed_citations,
+                    conflicted=False,
+                    is_simulated=self.is_simulated,
+                    consistency_ratio=round(ratio, 4),
+                    consistency_fallback_used=True,
+                )
+
         # Case 1: Simulated adapter execution
         if self.is_simulated:
             if force_zero_edges or len(seed_citations) <= 1:
@@ -157,6 +189,22 @@ class DianoiaAdapter:
                 )
         else:
             refined_citations = seed_citations
+
+        # Dynamic consistency fallback if walk returned conflicted evidence and fallback requested
+        if conflicted and fallback_to_pure_text_on_inconsistency:
+            return DianoiaDeliberationResult(
+                success=True,
+                walk_steps=steps_used,
+                edges_traversed=0,
+                zero_edge_fallback_used=True,
+                fallback_reason="Graph walk flagged internal contradiction/conflict. Falling back to pure text passages.",
+                deliberation_summary=f"Direct evidence aggregation via flat passage fallback (graph contradiction flagged).",
+                refined_citations=seed_citations,
+                conflicted=True,
+                is_simulated=False,
+                consistency_ratio=0.0,
+                consistency_fallback_used=True,
+            )
 
         is_zero_edge = (edges_traversed == 0)
         fallback_reason = "No graph relation edges traversed. Cleanly activated flat passage fallback." if is_zero_edge else None

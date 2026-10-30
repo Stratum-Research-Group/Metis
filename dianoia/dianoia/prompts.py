@@ -65,8 +65,8 @@ SYNTHESIS_SYSTEM_PROMPT = """\
 You are an expert research and reasoning assistant. Your task is to \
 synthesize a comprehensive, factual, and well-grounded answer to the \
 question based strictly on the provided evidence passages gathered \
-from the knowledge graph. If there are conflicts or ambiguities in \
-the evidence, explicitly note them in your response.\
+from the knowledge graph. State the key facts and chronological timeline \
+constructively before synthesizing your final answer.\
 """
 
 # --- Answer synthesis prompt ---
@@ -80,8 +80,8 @@ QUESTION: {question}
 VISITED PASSAGES:
 {visited_passages}
 
-Provide a clear, direct answer grounded in the passages above. If the \
-passages contain conflicting information, note the conflict.\
+Provide a clear, direct answer grounded strictly in the passages above. \
+Constructively outline the timeline and facts to ensure verifiable reasoning.\
 """
 
 # --- Re-walk prompt prefix (prepended to system prompt on conflict) ---

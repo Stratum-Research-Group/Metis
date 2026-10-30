@@ -10,6 +10,12 @@ from dokime.tasks.executable_graph import (
     RolloutCaseSummary,
 )
 from dokime.tasks.gpqa import GPQADiamondTask, GPQADiamondV2Task
+from dokime.tasks.heuresis import (
+    ConceptAtom,
+    DiscoveryCandidate,
+    HeuresisDiscoveryEngine,
+    HeuresisDiscoveryTask,
+)
 from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetitionMathV2Task
 from dokime.tasks.pinax_lookup import PinaxLookup50Task
@@ -30,6 +36,10 @@ __all__ = [
     "ExecutableGraphTask",
     "GPQADiamondTask",
     "GPQADiamondV2Task",
+    "HeuresisDiscoveryTask",
+    "HeuresisDiscoveryEngine",
+    "DiscoveryCandidate",
+    "ConceptAtom",
     "IFEvalTask",
     "MultipleChoiceTask",
     "PinaxLookup50Task",

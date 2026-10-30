@@ -126,6 +126,111 @@ def test_dianoia_live_walk_error_graceful_degradation():
     assert res.refined_citations == seed_citations
 
 
+def test_dianoia_inconsistency_span_filter_fallback():
+    dianoia = DianoiaAdapter()
+    seed_citations = [
+        Citation(
+            citation_id="[1]",
+            passage_id="p1",
+            source_id="d1",
+            source_title="Meeting Notes",
+            text="Alice attended the project meeting at hour 10 for duration 2 hours.",
+            score=0.9,
+        )
+    ]
+    # Graph block has hallucinated entity and wrong timestamp
+    inconsistent_graph = {
+        "nodes": [
+            {"id": "Bob", "timestamp": 14},  # Bob not in text, hour 14 not in text
+            {"id": "Alice", "timestamp": 10}, # Grounded
+        ],
+        "edges": [
+            {"src": "Bob", "dst": "Alice"}
+        ],
+    }
+
+    res = dianoia.deliberate(
+        query="what happened at meeting",
+        seed_citations=seed_citations,
+        consistency_floor=0.95,
+        fallback_to_pure_text_on_inconsistency=True,
+        extracted_graph_block=inconsistent_graph,
+    )
+    assert res.zero_edge_fallback_used is True
+    assert res.consistency_fallback_used is True
+    assert res.consistency_ratio < 0.95
+    assert "fell below floor 0.95" in res.fallback_reason
+    assert res.refined_citations == seed_citations
+
+
+def test_dianoia_consistent_graph_block_accepted():
+    dianoia = DianoiaAdapter()
+    seed_citations = [
+        Citation(
+            citation_id="[1]",
+            passage_id="p1",
+            source_id="d1",
+            source_title="Meeting Notes",
+            text="Alice attended the project meeting at hour 10.",
+            score=0.9,
+        ),
+        Citation(
+            citation_id="[2]",
+            passage_id="p2",
+            source_id="d2",
+            source_title="Project Roster",
+            text="Alice is the lead engineer on Metis.",
+            score=0.85,
+        ),
+    ]
+    consistent_graph = {
+        "nodes": [
+            {"id": "Alice", "timestamp": 10},
+        ],
+        "edges": [],
+    }
+
+    res = dianoia.deliberate(
+        query="what was Alice doing",
+        seed_citations=seed_citations,
+        consistency_floor=0.95,
+        fallback_to_pure_text_on_inconsistency=True,
+        extracted_graph_block=consistent_graph,
+    )
+    assert res.zero_edge_fallback_used is False
+    assert res.consistency_fallback_used is False
+    assert res.consistency_ratio == 1.0
+
+
+def test_dianoia_live_walk_conflict_triggers_fallback():
+    class ConflictedWalkController:
+        def walk(self, question: str, controller_policy=None):
+            return {
+                "answer": "Conflicted answer.",
+                "path": [{"step": 1}, {"step": 2}],
+                "visited_passages": [
+                    {"doc_id": "p1", "source_title": "D1", "content": "T1", "score": 0.9},
+                ],
+                "steps_used": 2,
+                "conflicted": True,  # Sheaf/NLI detected contradiction in graph walk
+            }
+
+    dianoia = DianoiaAdapter(walk_controller=ConflictedWalkController())
+    seed_citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="T1", score=0.9)
+    ]
+
+    res = dianoia.deliberate(
+        query="conflicted query",
+        seed_citations=seed_citations,
+        fallback_to_pure_text_on_inconsistency=True,
+    )
+    assert res.zero_edge_fallback_used is True
+    assert res.consistency_fallback_used is True
+    assert "internal contradiction/conflict" in res.fallback_reason
+    assert res.refined_citations == seed_citations
+
+
 @pytest.mark.asyncio
 async def test_phylax_interactive_approval():
     phylax = PhylaxAdapter()

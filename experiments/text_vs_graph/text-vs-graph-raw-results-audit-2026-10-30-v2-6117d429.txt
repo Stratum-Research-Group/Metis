@@ -1,0 +1,164 @@
+TEXT VS GRAPH EXPERIMENT - RAW RESULTS AUDIT (v2, corrected)
+2026-10-30 (supplements the same-day report review; replaces v1)
+
+SCOPE
+Audited the supplied results JSONL: 10,800 rows, one per scored final
+answer, fields: story_id, qid, qtype, arm, level, pass1_raw, raw, parsed,
+gold, correct, parse_ok, tokens_in, tokens_out, seconds, seed, exposed.
+This is raw-row verification of the report's numbers. The frozen manifest,
+prompts, corruption log, request/decoder settings (including output caps
+and finish reasons), code revision and model artifact were NOT supplied,
+so provenance, freeze, exposure-label and cap claims remain unverified.
+No code was changed and no inference was run.
+
+VERIFIED AGAINST RAW ROWS
+1. Grid: 300 stories x arms A,B,C,D,F; A at level 0 only (1,200 rows);
+   B,C,D,F at levels 0 and 0.3 (2,400 each). No missing cells, no
+   duplicates.
+2. Condition counts match the report's implied integers exactly:
+   A0 1090/1200, B0 1151, B30 886, C0 1144, C30 1039, D0 1173, D30 1120,
+   F0 1195, F30 1162. Totals: 9,960 correct, 840 errors.
+3. Parse policy: 608 parse failures, every one scored incorrect
+   (correct == parse_ok AND parsed==gold for all 10,800 rows, zero
+   exceptions). Parsed-but-wrong errors: 232. Parse failures are 72.38%
+   of errors, as the review inferred. F0 has 4 parse failures out of its
+   5 errors, consistent with the review's bound.
+4. Call accounting: pass1_raw is non-empty on exactly the 4,800 D/F rows
+   and nowhere else, which is consistent with 10,800 + 4,800 = 15,600
+   calls. This is inferred from result rows, not confirmed against an
+   execution log; retries or failed requests would not appear here.
+5. All five scorecard deltas reproduce exactly from the rows:
+   H1 +5.083, H2 -17.000, H3a +12.750, H3b -4.250, H4 -3.500 points.
+6. Reported CIs are consistent with a paired story-level cluster
+   bootstrap (resample 300 stories, percentile 95%, 10,000 resamples):
+   mine       H1 [+3.42,+6.83]  H2 [-20.00,-14.00]  H3b [-6.08,-2.33]
+              H4 [-5.00,-2.00]  H3a [+10.08,+15.42]
+   reported   H1 [+3.33,+6.83]  H2 [-19.92,-14.08]  H3b [-6.17,-2.33]
+              H4 [-5.00,-2.00]
+   Bounds differ by at most 0.09 points, plausibly RNG seed or resample
+   count; a slightly different bootstrap variant is not excluded. The
+   pairing structure is real: same qid and gold across arms within each
+   story, gold identical across levels, one seed per story, seeds
+   contiguous 4001-4300. Still document the exact method, resample count
+   and seed (review finding 4).
+7. Cost figures verify exactly from the token/second fields: at 30% D
+   averages 125.9 more recorded tokens and 0.90s more per question than
+   F; at 0% the ordering reverses (F +188.2 tokens, +0.64s). What the
+   token fields sum (see N2) remains to be stated by the authors.
+8. Scoring internals are clean: no row with parsed==gold marked wrong or
+   parsed!=gold marked correct; parsed values use the gold label space.
+
+NEW OBSERVATIONS FROM THE RAW ROWS
+
+N1. Parse failures are strongly consistent with output-length truncation.
+   99.2% of parse failures have tokens_out >= 448 (vs 9.2% of parsed
+   rows). The maximum observed tokens_out for arms A, B, C is exactly
+   512, with 568 rows sitting at exactly 512 (A 153, B 173, C 242), and
+   failure raw tails end mid-sentence. Example, row conf_s001_q3, arm C,
+   level 0.3, tokens_out 512, raw ends:
+     '...Text: "Event E8 requires parent events (E2, E5) under rule AND"
+      Structured Facts: "DEPENDENCY: E8 requires (E7) with rule'
+   This pattern strongly suggests an output-token limit near 512 for
+   these arms, but finish_reason and request caps were not supplied, so
+   it is not proven. 78.3% of all parse failures are Q3 (the dependency-
+   closure question); Q3 also contributes 77.4% of all 840 errors.
+   Rare other failure modes exist: 4 rows are a bare template artifact
+   (row conf_s002_q2, arm C, level 0: raw is exactly
+   '<|channel>thought<tool_call|>', tokens_out 4), and some D pass-1
+   outputs degenerate into repetition loops (row conf_s004_q1 pass1_raw
+   ends '_de_de_de_de_...', tokens_out 762).
+   Caution: these rows alone do not show how much of the arm differences
+   is attributable to output budget versus reasoning; that would need
+   the request settings and, ideally, a preregistered sensitivity
+   analysis. Do not present the budget explanation as established.
+
+N2. D and F reach a maximum tokens_out of exactly 762, versus 512 for
+   A, B, C. The rows cannot distinguish two explanations: a higher
+   output cap for the two-pass arms, or tokens_out summing both passes
+   of the two-pass design (which the plan may intend). If it is a sum,
+   the larger per-question token totals for D/F are by design, not a
+   protocol defect - but then cross-regime token/latency comparisons
+   (D/F vs A/B/C) mix a two-pass cost structure with single-pass costs
+   and must be labeled as such. H4's D-versus-F comparison is not shown
+   to be cap-equal either: equal observed maxima do not prove equal
+   answer-pass caps. Disclosure needed: per-arm output caps, whether
+   D/F token fields include pass 1, and pass-1/pass-2 split. No rerun
+   recommendation is made here; any cap-sensitivity check would be a
+   new, outcome-selected exploratory analysis, not a replacement or
+   completed confirmatory comparison.
+
+N3. Exposed-only breakdown (conditional on the exposed flag).
+   At 30% corruption, 627 of 1,200 questions per arm carry exposed=true,
+   with an identical exposure set across arms (pairing holds). Accuracy
+   on exposed=false questions is 96.2-99.5% in every arm; on
+   exposed=true questions: B 53.4%, C 77.7%, D 88.7%, F 94.4%. Paired
+   story-level exposed-only contrast C30-B30: +21.9 points
+   [+16.9, +26.8] (my bootstrap, same method as item 6).
+   Caveat: the exposed flag itself was not validated against a corruption
+   log, so these breakdowns are only as good as that labeling. If the
+   flag is accurate, the pattern is consistent with the intended
+   protection mechanism; that is a statement about consistency, not
+   established causation.
+
+N4. D's flag pass: observable behavior, not detection performance.
+   At level 0 (nothing to flag), 230 of 1,200 D pass-1 outputs contain
+   no JSON array: mostly benign prose equivalents of 'no issues', plus
+   some repetition loops (N1). 29 of 1,200 (2.4%) flagged at least one
+   item at zero corruption. At 30%, D produced at least one flag in 736
+   of 1,200 question passes, and 625 of 627 exposed questions (99.5%)
+   had at least one flag. That 99.5% is an any-flag rate per question,
+   NOT detection recall: true precision/recall requires matching flags
+   to the actual corrupted facts, which needs the corruption log (not
+   supplied). Question-level matching also overcounts false positives,
+   since a correct flag on a story appears on that story's unaffected
+   questions too.
+
+N5. Question-type profile (fills part of review finding 6).
+   Level 0 accuracy: Q1 99.7%, Q2 97.6%, Q3 86.7%, Q4 99.5%.
+   Level 0.3: Q1 97.1%, Q2 93.7%, Q3 62.5%, Q4 97.3%.
+   Q3 (dependency closure, long-form list answers) carries most of the
+   errors and most of the truncations. Claims about the benchmark are
+   mostly claims about Q3; the report should say so.
+
+STATUS OF THE SEVEN REVIEW FINDINGS
+1. Planned story-level tests / Holm: OPEN as reported output. The
+   report contains no raw or adjusted p-values. They CAN be computed
+   from these rows under a stated method (e.g. story-level sign-flip or
+   permutation test with Holm across H1-H4), but choosing the method now
+   is a post-hoc analysis decision, not recovery of a preregistered
+   one; label it accordingly.
+2. Parse failures per arm/level: RESOLVED as data (table below) and
+   refined by N1. Keep them in primary scoring, as done.
+   per-condition parse failures: A0 109, B0 48, B30 113, C0 56, C30 157,
+   D0 26, D30 67, F0 4, F30 28 (total 608).
+3. Conclusion wording: STILL REQUIRED. The raw data adds no mechanism
+   evidence; 'attention distraction', 'false-contradiction traps' and
+   'superior grounding' remain unestablished. N1 describes a plausible
+   rival contributor (output budget) for part of the arm differences -
+   also not established.
+4. Paired analysis evidence: LARGELY RESOLVED. Reported CIs are
+   consistent with a story-cluster paired bootstrap on these rows
+   (item 6). Remaining: publish method, resample count, seed, and the
+   300 paired differences.
+5. Provenance / freeze / model deviation: OPEN. Manifest, prompt hashes,
+   model artifact and freeze timestamp not supplied.
+6. Corruption and failure diagnostics: PARTIALLY FILLED by N3, N4, N5.
+   Still missing: touched-original-node fractions, operator distribution,
+   fact-level D flag precision/recall (needs corruption log), and
+   validation of the exposed flag.
+7. Cost accounting: PARTIALLY RESOLVED. Reported token/latency deltas
+   verified exactly from the fields; what the D/F token fields sum and
+   the per-arm caps remain undisclosed (N2).
+
+BOTTOM LINE
+Every report figure directly entailed by result rows checks out exactly:
+condition counts, deltas, parse rate, scoring consistency. Call totals
+are inferred from non-empty pass1_raw fields, not an execution log, and
+the CIs reproduce approximately, within bootstrap noise - both noted.
+No arithmetic or scoring contradiction exists. The main open scientific
+caveats: parse failures look like output-length truncations concentrated
+in Q3 (settings not supplied, so not proven), and the token accounting
+for two-pass arms needs disclosure before cross-regime cost comparisons
+are interpretable. Next artifacts needed: the corruption log (for N4
+precision and finding 6) and the frozen manifest plus request/decoder
+settings (findings 5, N1, N2).

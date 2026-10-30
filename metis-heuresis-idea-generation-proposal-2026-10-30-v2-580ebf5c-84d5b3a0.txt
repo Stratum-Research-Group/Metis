@@ -1,0 +1,171 @@
+METIS - Advanced Research Idea Generation
+Proposal inspired by "The Alien Space of Science" (arXiv 2603.01092v3, 21 Oct 2026)
+Pinned source: https://arxiv.org/pdf/2603.01092v3
+Prepared 2026-10-30. Status: proposal only. Not checked against current Metis code.
+No current interfaces, no implementation authority, no validated results claimed.
+Stays inside Metis: nothing here depends on ASOS.
+
+
+PROPOSED NAME
+
+Heuresis (proposed only, not accepted) - Greek heuresis, "discovery / a
+finding". Fits the Metis convention of the exact Greek word for what the
+component does (LTHCM remembers, dianoia thinks; heuresis would discover).
+
+
+WHAT THE PAPER OFFERS (v3, author-reported, not reproduced)
+
+The paper's useful idea is architectural: separate the search for concept
+combinations from the generation of prose about them.
+
+- An LLM distils papers into short method statements; HDBSCAN clusters them
+  into reusable "idea atoms" (their corpus: 16,068 LLM papers, 273 atoms,
+  about 3.35M candidate triples).
+- Coherence scorer: a small transformer (about 43M params) judging whether
+  atoms plausibly co-occur in one work.
+- Availability scorer: a two-encoder contrastive model over about 39.8k
+  author profiles, judging whether any existing community is positioned to
+  produce the combination. Their hypothesis: high coherence + low
+  availability marks under-explored candidates. That is a search hypothesis,
+  not evidence those candidates are good science.
+- Scores are normalised (z-scores) and blended; ranking about 3.35M triples
+  reportedly took under 15 minutes with no LLM call per candidate (corpus
+  prep, distillation and training are separate, unpriced costs). An LLM
+  writes up only the few selected candidates.
+- Forward-in-time test: everything built from pre-2025 data (191 atoms from
+  8,148 papers), tested against 2025 papers. Top 10,000 of about 1.14M
+  candidates recover 762 of 2,424 real 2025 combinations (35.9x chance); on
+  strictly novel combinations coherence alone finds 29 (2.35x) and adding
+  unavailability finds 40 (3.24x) while recovering fewer total. One future
+  year only.
+- Diversity: effective distinct ideas about 225 for their method vs 57/97 for
+  independent Claude/Gemini prompting; batch prompting reaches 198/183 and
+  random 250. Diversity is not quality.
+- Quality evidence is thin: human study of 10 ideas per method, their method
+  ties Claude at 4.03; automated research test judged by GPT-5.5 with 68%
+  expert agreement and a wide interval. Temporal recovery and diversity do
+  not measure scientific quality or feasibility.
+Code (MIT): https://github.com/alejandrohdez00/alien-space-of-science
+(contents listed, not reviewed or run).
+
+
+PROPOSED FIT FOR METIS
+
+Heuresis would be a research-idea module beside the existing stack. The
+mappings below are to each component's recorded purpose, not to verified
+current behaviour; no current interfaces are claimed, and every storage or
+write it needs is proposed and user-approved, not assumed.
+
+1. Corpus and atoms - stoma and LTHCM (proposed roles)
+   - stoma's recorded purpose is ingestion (PDFs, docs, repos, audio, chat
+     exports). Heuresis would propose a distillation mode alongside that
+     role: an LLM turns ingested papers into conceptual units as a batch job.
+   - LTHCM's recorded purpose is the memory substrate. Heuresis would propose
+     storing atoms and their provenance (atom -> units -> source documents)
+     there as new records, with the user's approval; no modification to LTHCM
+     itself is assumed.
+   - Units that do not cluster are proposed to be kept rather than dropped:
+     they are the pool from which genuinely new concepts could later emerge.
+
+2. Combination exploration - batch scoring, optionally dianoia later
+   - Scoring and ranking candidate atom combinations is a bounded batch job:
+     candidate triples in, scored candidates out. It does not need dianoia's
+     walk loop. A walk action for guided exploration is a later option only,
+     and would have to earn its place in dokime.
+   - The point for Metis: candidates come from a scored search over what is
+     actually in the corpus, with provenance - not from a model
+     free-associating "ideas" from its weights.
+
+3. Selection - krisis (proposed, calibrated)
+   - krisis' recorded purpose is deterministic selection with abstain.
+     Heuresis would propose abstain thresholds over the normalised scores,
+     calibrated on held-out data. This is a design proposal to be tuned and
+     measured, not a guaranteed clean mapping: if calibration shows the
+     thresholds do not separate useful candidates, the answer is to abstain
+     or redesign, not to lower the bar silently. Returning "nothing worth
+     proposing from this corpus" is a valid outcome.
+   - Each selected candidate record carries: the research question; the atom
+     IDs and source unit IDs as provenance; the normalised coherence and
+     community-availability scores kept separate; a novelty-search status
+     (not yet checked / checked against the literature with result) - low
+     community availability alone does not establish novelty; a proposed
+     falsifiable test and its failure criterion; and an estimated budget for
+     investigating it, marked unknown until measured.
+
+4. Scorers - paideia (requires a verified training backend)
+   - Both scorers are small trainable models; paideia is their proposed home.
+   - Historical caution, not a current verification: a past review (@
+     aacb3e58) found paideia's QLoRA runner reported COMPLETED without
+     actually training. Whether that still holds is unchecked. Requirement
+     for Heuresis: any training backend must be freshly verified to really
+     train before scorer training is attempted. No hardware assumptions;
+     local training and ranking cost is unmeasured.
+
+5. Write-up and eval - hestia and dokime
+   - Write-up of selected candidates would be served through hestia, with the
+     model choice left open and measured in dokime rather than assumed.
+     Write-up is the only LLM-per-candidate step.
+   - dokime gets two concrete, separate evals:
+     a. Ranking eval (the paper's forward-in-time test, directly reusable):
+        split the corpus by date and freeze everything (atomization, unit
+        extraction, clustering, both scorers) to the earlier slice, with the
+        later slice mapped onto that frozen vocabulary. Tune beta and
+        calibration on a validation cut of the earlier slice only; the final
+        future test runs once, untouched by tuning. Measure recovery of later
+        real combinations vs chance, plus diversity of the selected set. This
+        tests ranking behaviour, not idea quality.
+     b. Proposal-quality eval: blind human scoring of written-up candidates
+        on quality, feasibility and novelty against baselines (independent
+        LLM prompting, batch prompting, random). This is the test the paper
+        itself barely runs, and it matters more than (a) before trusting
+        output.
+
+6. Guardrails and interface - phylax, kybernetes, prosopon
+   - Heuresis proposes; phylax would gate anything beyond proposal. Results
+     and their scores/provenance would be proposed for the prosopon
+     dashboard. All orchestration through kybernetes is proposed wiring, not
+     an existing path.
+
+
+WHY THIS COULD BE WORTH BORROWING FOR METIS
+
+- It would give Metis a generative research capability grounded in its own
+  corpus: every proposal traceable to atoms, units and sources.
+- It reinforces the stack's split of duties instead of adding a monolithic
+  "idea prompt": search over memory, calibrated selection, separate write-up,
+  separate measurement.
+- The diversity result is the failure mode to design against: independent LLM
+  prompting concentrates on a few obvious combinations. Heuresis would exist
+  to beat that, and dokime would measure whether it does.
+- The main scientific caution: the method recombines concepts already in its
+  vocabulary. It does not demonstrate invention of genuinely new concepts,
+  and all its evidence comes from LLM research papers.
+
+
+BOUNDARIES
+
+- Spec-level proposal. The umbrella repo was not reviewed for this; no
+  current module is claimed to expose the interfaces described above, and
+  recorded component purposes are not verified current behaviour.
+- Paper results are author-reported; quality evidence is thin (10 ideas per
+  method, LLM judges). Promising, not proven.
+- The availability scorer assumes author-publication histories; on a private
+  corpus the analogue (source/project/topic groupings) is a new variant
+  needing its own validation.
+- Local cost (distillation volume, scorer training, ranking, write-up) is
+  unmeasured; no hardware fit is claimed.
+- Nothing here mixes with ASOS. If a shared corpus or shared scorers ever
+  make sense, that is a separate, explicit decision.
+
+
+SUGGESTED VALIDATION PATH (bounded first)
+
+1. Smoke test on a small bounded corpus (a few hundred papers): distillation,
+   clustering, both scorers (or a stand-in for availability), ranking. Goal:
+   real cost numbers and sane atoms. Full-scale reproduction of the paper's
+   pipeline is optional and cost-gated on user approval, not a prerequisite.
+2. dokime ranking eval: forward-in-time split on that corpus, recovery vs
+   chance and diversity coverage. Tests ranking, not quality.
+3. dokime proposal-quality eval: blind human scoring of written-up proposals
+   (quality, feasibility, novelty) against baselines, before Heuresis output
+   is treated as more than an experiment.

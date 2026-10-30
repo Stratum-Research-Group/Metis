@@ -10,6 +10,7 @@ from dokime.tasks.arc import ArcEasy25Task
 from dokime.tasks.epistemic import EpistemicAdversarialTask, EpistemicAdversarialV2Task
 from dokime.tasks.executable_graph import ExecutableGraphTask
 from dokime.tasks.gpqa import GPQADiamondTask, GPQADiamondV2Task
+from dokime.tasks.heuresis import HeuresisDiscoveryTask
 from dokime.tasks.ifeval import IFEvalTask
 from dokime.tasks.math_competition import AIMECompetitionMathTask, AIMECompetitionMathV2Task
 from dokime.tasks.pinax_lookup import PinaxLookup50Task
@@ -34,6 +35,7 @@ BUILTIN_TASKS: dict[str, type[Task] | Task] = {
     "vrdu_document_extraction": VRDUTask,
     "symbolon_code_retrieval": SymbolonBenchmarkTask,
     "executable_graph_qa": ExecutableGraphTask,
+    "heuresis_scientific_discovery": HeuresisDiscoveryTask,
 }
 
 

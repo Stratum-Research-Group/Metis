@@ -316,7 +316,15 @@ class ExecutionPipeline:
             elif stage_plan.stage == StageName.DELIBERATE:
                 components_used.append("Dianoia")
                 delib_steps = stage_plan.params.get("max_steps", self.thinking_budget_steps)
-                d_result = self.dianoia.deliberate(request.query, citations, max_steps=delib_steps)
+                consistency_floor = stage_plan.params.get("graph_consistency_floor", 0.95)
+                fallback_on_inconsistency = stage_plan.params.get("fallback_to_pure_text_on_inconsistency", True)
+                d_result = self.dianoia.deliberate(
+                    query=request.query,
+                    seed_citations=citations,
+                    max_steps=delib_steps,
+                    consistency_floor=consistency_floor,
+                    fallback_to_pure_text_on_inconsistency=fallback_on_inconsistency,
+                )
                 zero_edge_fallback = d_result.zero_edge_fallback_used
                 deliberation_summary = d_result.deliberation_summary
 
@@ -329,6 +337,8 @@ class ExecutionPipeline:
                         latency_ms=stage_lat,
                         output={
                             "zero_edge_fallback": zero_edge_fallback,
+                            "consistency_fallback": getattr(d_result, "consistency_fallback_used", False),
+                            "consistency_ratio": getattr(d_result, "consistency_ratio", 1.0),
                             "walk_steps": d_result.walk_steps,
                             "edges_traversed": d_result.edges_traversed,
                             "max_deliberation_steps": delib_steps,
@@ -601,6 +611,7 @@ class ExecutionPipeline:
                 prompt = (
                     f"Context Information:\n{context_str}\n\n"
                     f"User Query: {request.query}\n"
+                    f"State the key facts and chronological timeline constructively from the evidence passages before providing your direct answer. "
                     f"Provide a direct, accurate, and concise response using citations [1], [2] where applicable."
                 )
 
