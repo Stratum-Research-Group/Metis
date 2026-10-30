@@ -153,13 +153,14 @@ def run_phase2(
                     story=story,
                     question=q,
                     arm=arm,
-                    level=999.0,  # 999 indicates natural live extraction noise
+                    level=0.0,
                     corrupted_graph=extracted_graph,
                     model=model,
                     endpoint=endpoint,
                     seed=seed,
                 )
                 res["phase"] = 2
+                res["level_label"] = "natural_extraction"
                 res["extraction_fidelity"] = fidelity_metrics["overall_fidelity"]
                 story_results.append(res)
                 total_evals += 1
@@ -197,6 +198,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Phase 2 real extraction evaluation")
     parser.add_argument("--stories", type=int, default=5, help="Number of stories to evaluate")
     parser.add_argument("--start-seed", type=int, default=4001, help="Starting seed")
+    parser.add_argument("--results", type=str, default="experiments/text_vs_graph/phase2_results.jsonl", help="Path to results file")
+    parser.add_argument("--summary", type=str, default="experiments/text_vs_graph/phase2_summary.json", help="Path to summary file")
+    parser.add_argument("--extractions", type=str, default="experiments/text_vs_graph/phase2_extractions.jsonl", help="Path to extractions file")
     args = parser.parse_args()
 
-    run_phase2(start_seed=args.start_seed, num_stories=args.stories)
+    run_phase2(
+        start_seed=args.start_seed,
+        num_stories=args.stories,
+        results_path=args.results,
+        summary_path=args.summary,
+        extractions_path=args.extractions,
+    )
