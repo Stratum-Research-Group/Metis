@@ -179,3 +179,96 @@ def test_lochos_websocket_streaming(tmp_path):
             pong = ws.receive_text()
             assert pong == "pong"
 
+
+@pytest.mark.asyncio
+async def test_lochos_pipeline_api_endpoint(tmp_path):
+    admin_token = "secret-service-token-lochos"
+    cfg = KybernetesConfig(admin_token=admin_token)
+
+    import subprocess
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Metis Test"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@metis.local"], cwd=str(tmp_path), check=True)
+    (tmp_path / "baseline.txt").write_text("initial\n", encoding="utf-8")
+    subprocess.run(["git", "add", "baseline.txt"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=str(tmp_path), check=True)
+
+    rig = create_starter_rig("pipeline-api-squad")
+    db_path = tmp_path / "lochos.sqlite"
+    squad_manager = LochosSquadManager(
+        rig_spec=rig,
+        workspace_root=tmp_path,
+        queue=None,
+    )
+    squad_manager.queue.db_path = db_path
+    squad_manager.queue._init_db()
+
+    app = create_app(
+        config=cfg,
+        service_token=admin_token,
+        lochos_squad=squad_manager,
+    )
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # 1. Unauthenticated request must return 401
+        unauth_resp = await client.post("/v1/lochos/pipeline", json={"mission": "m", "slice_id": "s", "title": "t"})
+        assert unauth_resp.status_code == 401
+
+        # 2. Missing fields must return 400
+        bad_resp = await client.post("/v1/lochos/pipeline", headers=headers, json={"mission": "m"})
+        assert bad_resp.status_code == 400
+
+        # 3. Successful pipeline execution via /v1/lochos/pipeline
+        ok_resp = await client.post(
+            "/v1/lochos/pipeline",
+            headers=headers,
+            json={
+                "mission": "release-0.6.0",
+                "slice_id": "OPR.10",
+                "title": "API Multi-Agent Pipeline",
+                "test_command": "python3 -c 'assert True'",
+            },
+        )
+        assert ok_resp.status_code == 200
+        ok_data = ok_resp.json()
+        assert ok_data["success"] is True
+        assert ok_data["stage"] == "completed"
+        assert ok_data["verification_passed"] is True
+        assert "task-" in ok_data["task_id"]
+
+        # 4. Alias /api/lochos/pipeline also functions identically
+        alias_resp = await client.post(
+            "/api/lochos/pipeline",
+            headers=headers,
+            json={
+                "mission": "release-0.6.0",
+                "slice_id": "OPR.11",
+                "title": "Alias API Pipeline",
+                "test_command": "python3 -c 'assert True'",
+            },
+        )
+        assert alias_resp.status_code == 200
+        alias_data = alias_resp.json()
+        assert alias_data["success"] is True
+        assert alias_data["stage"] == "completed"
+
+        # 5. Pipeline failure with rollback
+        fail_resp = await client.post(
+            "/v1/lochos/pipeline",
+            headers=headers,
+            json={
+                "mission": "release-0.6.0",
+                "slice_id": "OPR.12",
+                "title": "Failing Pipeline",
+                "test_command": "python3 -c 'raise SystemExit(1)'",
+            },
+        )
+        assert fail_resp.status_code == 200
+        fail_data = fail_resp.json()
+        assert fail_data["success"] is False
+        assert fail_data["stage"] == "rolled_back"
+        assert fail_data["rolled_back"] is True
+
+

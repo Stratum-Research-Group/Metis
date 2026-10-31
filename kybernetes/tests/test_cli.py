@@ -53,6 +53,33 @@ def test_cli_lochos():
     assert res_comp_help.exit_code == 0
     assert "Mark an active task as completed" in res_comp_help.output
 
+    res_pipe_help = runner.invoke(cli, ["lochos", "pipeline", "--help"])
+    assert res_pipe_help.exit_code == 0
+    assert "Run an autonomous end-to-end multi-agent pipeline" in res_pipe_help.output
+
+
+def test_cli_lochos_pipeline_execution(tmp_path):
+    runner = CliRunner()
+    import subprocess
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@metis.local"], cwd=str(tmp_path), check=True)
+    (tmp_path / "seed.txt").write_text("hello\n", encoding="utf-8")
+    subprocess.run(["git", "add", "seed.txt"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "Seed"], cwd=str(tmp_path), check=True)
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(cli, [
+            "lochos", "pipeline",
+            "--mission", "cli-test",
+            "--slice", "CLI.01",
+            "--title", "CLI Automated Pipeline Execution",
+            "--test-command", "python3 -c 'assert 2 + 2 == 4'",
+        ])
+        assert result.exit_code == 0
+        assert "Pipeline SUCCESS" in result.output
+        assert "verified and completed" in result.output
+
 
 def test_cli_pinax_help():
     runner = CliRunner()

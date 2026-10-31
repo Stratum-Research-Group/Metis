@@ -1054,6 +1054,42 @@
 
 ---
 
+### Item 102: Lochos Autonomous Pipeline Orchestrator & Zero-Trust Verification Rollback
+- **Date:** 2026-11-01
+- **Severity:** P1 (Multi-Agent Squad Automation, Checkpoint Transactionality & CI Gates)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `kybernetes` (`LochosWorkflowOrchestrator`, `PipelineStage`, `PipelineResult`, `POST /v1/lochos/pipeline`, `kybernetes lochos pipeline`, `GitMilestoneCheckpointer`)
+- **Reviewed Commit / Baseline:** `afc7bea`
+- **Root Cause & Architectural Need:** While Lochos provided durable SQLite queues, individual seat task claim, and manual baton handoff, it lacked an automated end-to-end execution orchestrator (`LochosWorkflowOrchestrator`) that seamlessly connects task dispatch to coder, Git milestone checkpointing, automated baton transfer with structured continuity briefs to reviewer, independent zero-trust verification gating, and automatic transactional Git rollback upon rejection. Furthermore, `GitMilestoneCheckpointer` previously lacked guards preventing accidental deletion of internal `.metis/` database files during worktree rollbacks.
+- **Implementation Highlights:**
+  1. **Autonomous Workflow Orchestrator ([`kybernetes/kybernetes/lochos/workflow.py`](file:///home/akarta/Projects/Metis/kybernetes/kybernetes/lochos/workflow.py))**:
+     - Implemented `LochosWorkflowOrchestrator`, `PipelineStage`, and `PipelineResult`.
+     - 6-stage lifecycle:
+       1. Baseline Git checkpointing before any mutations (`checkpointer.create_checkpoint(...)`).
+       2. Task dispatch to primary implementer (`coder`).
+       3. Coder execution loop (via `coder_runner` or `coder_action_generator`).
+       4. Post-coding milestone checkpointing (`checkpointer.create_checkpoint(...)`).
+       5. Structured baton transfer with continuity handoff brief (`generate_handoff_brief`).
+       6. Reviewer zero-trust verification gate (`verifier` callable or `test_command`).
+       7. Automatic sign-off completion (`complete_task`) or transactional Git rollback on rejection (`checkpointer.rollback(baseline_cp)` and `fail_task` or `raise_attention`).
+     - Added `PipelineStage.ATTENTION_REQUIRED` with `escalate_attention_on_failure` support.
+     - Enforced valid state machine transitions (`MUTATING` -> `VERIFYING` -> `COMPLETED`/`FAILED` -> `IDLE`).
+  2. **Git Milestone Checkpointer Internal Metadata Guard ([`kybernetes/kybernetes/engine/checkpoint.py`](file:///home/akarta/Projects/Metis/kybernetes/kybernetes/engine/checkpoint.py))**:
+     - Hardened `_get_untracked_files()` and `rollback()` to explicitly ignore `.metis/` and `.git/` directories, preventing deletion of internal SQLite databases and WAL files during code rollbacks.
+  3. **REST API Endpoint ([`kybernetes/kybernetes/server/app.py`](file:///home/akarta/Projects/Metis/kybernetes/kybernetes/server/app.py))**:
+     - Exposed `POST /v1/lochos/pipeline` and alias `POST /api/lochos/pipeline` protected by `require_service_auth` (Zero-Loopback invariant).
+     - Returns serialized `PipelineResult` dictionary with task ID, milestones, brief, and status.
+  4. **CLI Command ([`kybernetes/kybernetes/cli.py`](file:///home/akarta/Projects/Metis/kybernetes/kybernetes/cli.py))**:
+     - Added `kybernetes lochos pipeline` command with `--mission`, `--slice`, `--title`, `--description`, `--coder`, `--reviewer`, `--auto-approve`, `--test-command`, `--no-rollback`, and `--escalate`.
+- **Verification & Acceptance Checks:**
+  1. `kybernetes/tests/test_lochos_workflow.py`: **5 passed** (successful flow, reviewer rejection and rollback, attention escalation, coder failure, test command verifier).
+  2. `kybernetes/tests/test_lochos_api.py`: **3 passed** (endpoint auth check, 400 validation, successful run, alias run, rejection rollback).
+  3. `kybernetes/tests/test_cli.py`: **12 passed** (including `lochos pipeline --help` and Click `CliRunner` pipeline execution).
+  4. Pass rate across Kybernetes: **215 passed** (up from 208).
+  5. Full monorepo suite: **1,196 passed, 1 skipped**.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1090,15 +1126,16 @@
 | **Kleroterion Adaptive Entropy & Epistemic Shadow Branching**| Item 99 | Dianoia + Kleroterion (Adaptive Entropy Feedback, Epistemic Disagreement $J$, Shadow Expansion & Backtracking)| **Integrated & Verified** | 97 Dianoia + 43 Kleroterion tests passing (4 new policy/walk tests) |
 | **Heuresis Scientific Discovery Coordinator & CLI**| Item 100 | Kybernetes + Dokime + Stoma (HeuresisAdapter, CLI search/writeup/crawl/eval, OOV Synthesis)| **Integrated & Verified** | 208 Kybernetes tests passing (9 new adapter/CLI tests) |
 | **Distributed Shampoo & Active Boundary QLoRA**| Item 101 | Paideia (`ShampooOptimizer`, `AttemptRolloutVarianceSampler`, `paideia train`)| **Integrated & Verified** | 65 Paideia tests passing (14 new optimizer/boundary/training tests) |
+| **Lochos Autonomous Pipeline & Rollback**| Item 102 | Kybernetes (`LochosWorkflowOrchestrator`, `/v1/lochos/pipeline`, CLI, Checkpoints)| **Integrated & Verified** | 215 Kybernetes tests passing (7 new workflow/API/CLI tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,189 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,196 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.31s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **208** | 0 | 24.57s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **215** | 0 | 26.19s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 229.84s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 223.48s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
@@ -1111,7 +1148,7 @@
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,189** | **1** | **~9 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,196** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 

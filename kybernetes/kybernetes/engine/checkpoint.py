@@ -49,7 +49,10 @@ class GitMilestoneCheckpointer:
         if res.returncode == 0:
             for line in res.stdout.splitlines():
                 if line.startswith("?? "):
-                    untracked.append(line[3:].strip())
+                    path_str = line[3:].strip()
+                    if path_str.startswith(".metis") or path_str.startswith(".git"):
+                        continue
+                    untracked.append(path_str)
         return untracked
 
     def create_checkpoint(self, description: str) -> MilestoneCheckpoint:
@@ -92,6 +95,8 @@ class GitMilestoneCheckpointer:
         newly_created = current_untracked - baseline_untracked
 
         for rel_path in newly_created:
+            if rel_path.startswith(".metis") or rel_path.startswith(".git"):
+                continue
             target = (self.workspace_root / rel_path).resolve()
             try:
                 target.relative_to(self.workspace_root)

@@ -400,6 +400,72 @@ def lochos_complete_cmd(task_id: str, seat: str, result: Optional[str] = None):
         click.echo(f"Completion error: {e}", err=True)
 
 
+@lochos_group.command("pipeline")
+@click.option("--mission", "-m", required=True, help="Mission identifier (e.g. release-0.6.0)")
+@click.option("--slice", "-s", "slice_id", required=True, help="Slice identifier (e.g. OPR.02)")
+@click.option("--title", "-t", required=True, help="Task title")
+@click.option("--description", "-d", default="", help="Detailed task description")
+@click.option("--coder", default="coder", help="Coder seat ID (default: coder)")
+@click.option("--reviewer", default="reviewer", help="Reviewer seat ID (default: reviewer)")
+@click.option("--auto-approve", "-y", is_flag=True, help="Auto-approve tool actions")
+@click.option("--test-command", default=None, help="Independent test command for reviewer verification gate")
+@click.option("--no-rollback", is_flag=True, help="Disable automatic git rollback on rejection")
+@click.option("--escalate", is_flag=True, help="Escalate to attention_required instead of direct failure on rejection")
+def lochos_pipeline_cmd(
+    mission: str,
+    slice_id: str,
+    title: str,
+    description: str,
+    coder: str,
+    reviewer: str,
+    auto_approve: bool,
+    test_command: Optional[str],
+    no_rollback: bool,
+    escalate: bool,
+):
+    """Run an autonomous end-to-end multi-agent pipeline."""
+    from kybernetes.lochos import LochosSquadManager, LochosWorkflowOrchestrator
+
+    manager = LochosSquadManager()
+    orchestrator = LochosWorkflowOrchestrator(squad_manager=manager)
+
+    click.echo("=" * 72)
+    click.echo(click.style(" Lochos Autonomous Multi-Agent Pipeline", bold=True, fg="cyan"))
+    click.echo(f" Mission:  {mission} [{slice_id}]")
+    click.echo(f" Title:    {title}")
+    click.echo(f" Coder:    {coder}")
+    click.echo(f" Reviewer: {reviewer}")
+    if test_command:
+        click.echo(f" Verifier: {test_command}")
+    click.echo("=" * 72 + "\n")
+
+    res = orchestrator.run_pipeline(
+        mission=mission,
+        slice_id=slice_id,
+        title=title,
+        description=description,
+        coder_seat=coder,
+        reviewer_seat=reviewer,
+        auto_approve=auto_approve,
+        auto_rollback_on_failure=not no_rollback,
+        escalate_attention_on_failure=escalate,
+        test_command=test_command,
+    )
+
+    if res.success:
+        click.echo(click.style(f"\nPipeline SUCCESS: Task [{res.task_id}] verified and completed.", fg="green", bold=True))
+        click.echo(f" Milestones: {', '.join(res.milestones)}")
+        click.echo(f" Baton Owner: {res.baton_owner}")
+    else:
+        stage_val = res.stage.value if hasattr(res.stage, "value") else str(res.stage)
+        click.echo(click.style(f"\nPipeline REJECTED / FAILED: Task [{res.task_id}] (stage: {stage_val}).", fg="red", bold=True))
+        if res.rolled_back:
+            click.echo(click.style(" Automatic Git rollback executed to pre-mutation baseline.", fg="yellow"))
+        if res.error:
+            click.echo(f" Error: {res.error}")
+        sys.exit(1)
+
+
 # =========================================================================
 # Pinax: Tool Catalogue & Large Inventory Subsystem (Section 7)
 # =========================================================================

@@ -9,6 +9,7 @@ from kybernetes.lochos.adapters import (
 from kybernetes.lochos.queue import LochosQueue, WorkItem
 from kybernetes.lochos.spec import EdgeSpec, PodSpec, RigSpec, SeatSpec, create_starter_rig
 from kybernetes.lochos.squad import LochosSquadManager, SeatRuntime
+from kybernetes.lochos.workflow import LochosWorkflowOrchestrator, PipelineResult, PipelineStage
 
 __all__ = [
     "RigSpec",
@@ -20,6 +21,9 @@ __all__ = [
     "WorkItem",
     "LochosSquadManager",
     "SeatRuntime",
+    "LochosWorkflowOrchestrator",
+    "PipelineResult",
+    "PipelineStage",
     "RuntimeAdapter",
     "KybernetesCodingAdapter",
     "TerminalSeatAdapter",

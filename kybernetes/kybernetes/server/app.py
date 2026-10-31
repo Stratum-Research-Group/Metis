@@ -179,6 +179,7 @@ def create_app(
                 "chat_turn": "/v1/chat/turn",
                 "lochos_squad": "/v1/lochos/squad",
                 "lochos_queue": "/v1/lochos/queue",
+                "lochos_pipeline": "/v1/lochos/pipeline",
                 "lochos_attention": "/v1/lochos/attention",
                 "admin_overview": "/v1/admin/overview",
                 "docs": "/docs",
@@ -439,6 +440,45 @@ def create_app(
 
         item = lochos_squad.queue.resolve_attention(task_id=task_id, seat_id=seat_id, resolution=resolution)
         return item.to_dict()
+
+    @app.post("/v1/lochos/pipeline")
+    @app.post("/api/lochos/pipeline")
+    async def run_lochos_pipeline(
+        data: Dict[str, Any],
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
+        """Run an automated multi-seat pipeline (dispatch -> code -> handoff -> verify -> sign-off/rollback)."""
+        mission = data.get("mission")
+        slice_id = data.get("slice_id")
+        title = data.get("title")
+        if not mission or not slice_id or not title:
+            raise HTTPException(status_code=400, detail="mission, slice_id, and title are required")
+
+        description = data.get("description", "")
+        payload = data.get("payload")
+        coder_seat = data.get("coder_seat", "coder")
+        reviewer_seat = data.get("reviewer_seat", "reviewer")
+        auto_approve = bool(data.get("auto_approve", False))
+        auto_rollback_on_failure = bool(data.get("auto_rollback_on_failure", True))
+        escalate_attention_on_failure = bool(data.get("escalate_attention_on_failure", False))
+        test_command = data.get("test_command")
+
+        from kybernetes.lochos.workflow import LochosWorkflowOrchestrator
+        orchestrator = LochosWorkflowOrchestrator(squad_manager=lochos_squad)
+        result = orchestrator.run_pipeline(
+            mission=mission,
+            slice_id=slice_id,
+            title=title,
+            description=description,
+            payload=payload,
+            coder_seat=coder_seat,
+            reviewer_seat=reviewer_seat,
+            auto_approve=auto_approve,
+            auto_rollback_on_failure=auto_rollback_on_failure,
+            escalate_attention_on_failure=escalate_attention_on_failure,
+            test_command=test_command,
+        )
+        return result.to_dict()
 
     @app.websocket("/v1/lochos/ws")
     async def lochos_websocket(websocket: WebSocket) -> None:
