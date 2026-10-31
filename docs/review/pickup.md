@@ -2,9 +2,9 @@
 
 **Last Updated:** 2026-10-31  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `31bd03d`  
+**Current HEAD Commit:** `f1c9686`  
 **Working Tree Status:** Clean; all services active under systemd; 1,140 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), and VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95) fully implemented and verified.
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95), and Pyle WebRTC Device Hub & Remote Control Plane Integration (Item 96) fully implemented and verified.
 
 ---
 
@@ -385,12 +385,14 @@ With all core engine components, security perimeters (Pyle/Phylax), memory subsy
 * `BubblewrapBackend` profile lockdown: default unshared network namespace (`--unshare-net`), read-only root (`--ro-bind / /`), isolated tmpfs (`--tmpfs /tmp`), confined `HOME=<cwd>` and `TMPDIR=/tmp`.
 * Verified with unit tests ensuring socket calls are rejected inside the sandbox envelope unless explicitly permitted (`allow_network=True`).
 
-### Horizon 3: Multi-Device Remote Control Plane (Pyle WebRTC & Remote MSS Void)
+### Horizon 3: Multi-Device Remote Control Plane (Pyle WebRTC & Remote MSS Void) (Completed & Integrated - Item 96)
 * **Objective**: Connect external MSS Void copies or remote companion devices securely across network boundaries.
-* **Architecture**:
-  1. **Remote MSS Void Peer Connection**: External peers authenticate via `KYBERNETES_SERVICE_TOKEN` and `HESTIA_SERVICE_TOKEN` over HTTPS or WireGuard/Tailscale VPN without public port exposure.
-  2. **WebAuthn Biometric Passkey Enrollment**: Use Prosopon's Relying Party to enroll hardware authenticators (TouchID, FaceID, YubiKey) for companion devices.
-  3. **Interactive Remote Approvals**: WebRTC DataChannel alerts prompting 1-tap Approve/Reject for Phylax Tier 2/Tier 3 mutating operations.
+* **Architecture & Verified Implementation**:
+  1. **Remote MSS Void Peer Connection**: External peers authenticate via `KYBERNETES_SERVICE_TOKEN`, `HESTIA_SERVICE_TOKEN`, and `PROSOPON_HOST_OWNER_TOKEN` with automatic disk discovery from `data/.host_owner_token` and `deploy/metis.env`.
+  2. **WebAuthn Biometric Passkey Enrollment**: Relying party in Prosopon (`webauthn.py`) manages hardware authenticators (TouchID, FaceID, YubiKey) for companion devices, mapped directly in the Void IDE Pyle hub.
+  3. **Live Device Synchronization & Single-Use Pairing**: Void Dashboard polls `GET /api/devices` and mints cryptographically secure single-use pairing URLs via `POST /api/devices/pair` (300s TTL).
+  4. **Sub-500ms Instant Teardown & Panic Lockdown**: Immediate WebRTC PeerConnection closure, in-flight agent run cancellation, and access revocation via `POST /api/devices/{id}/revoke` and `POST /api/devices/lockdown`.
+  5. **Live Cryptographic Audit Verification**: Validates the SHA-256 hash-chain integrity of all audit rows directly from the UI (`GET /api/devices/audit`). Verified across 21 Prosopon unit/integration tests and clean 0-error VS Code compile.
 
 
 

@@ -874,6 +874,34 @@
      - `npm --prefix vscode run compile` passed with **0 errors**.
      - Full monorepo pytest test suite (11 packages + experiments + root) passed 100% (**1,140 passed, 3 skipped**).
 
+### Item 96: Pyle WebRTC Device Hub, Live Remote Control Plane & Cryptographic Audit Verification
+- **Status:** Integrated, Hardened & Verified
+- **Severity/Priority:** P1 (Horizon 3 Multi-Device Remote Control Plane & Perimeter Security Integration)
+- **Affected Subsystems:** `vscode` (Void IDE Client, Metis Dashboard, Sovereign Settings, Token Helper), `prosopon` (WebRTC Gateway, SQLite Access Store, Relying Party, Device Endpoints)
+- **Reviewed Commit / Baseline:** `31bd03d6d02d0cfd8042407c08b2d2f7ae8e515e`
+- **Exact File Locations:**
+  - `vscode/src/vs/workbench/contrib/void/browser/metisTokenHelper.ts` (added `METIS_STORAGE_PROSOPON_TOKEN_KEY`, `getMetisProsoponToken`, `getMetisProsoponHeaders`, and disk discovery from `data/.host_owner_token` and `deploy/metis.env`)
+  - `vscode/src/vs/workbench/contrib/void/browser/react/src/void-settings-tsx/MetisDashboard.tsx` (wired live `fetchPyleDevices`, live `POST /api/devices/pair`, single-device `POST /api/devices/{id}/revoke`, lockdown, and live cryptographic audit verification)
+  - `vscode/src/vs/workbench/contrib/void/browser/react/src/void-settings-tsx/MetisSovereignSettings.tsx` (authenticated panic lockdown curl call with Bearer and X-Host-Owner-Token headers)
+  - `deploy/metis.env` (configured `PROSOPON_HOST_OWNER_TOKEN`)
+  - `prosopon/tests/test_pyle_webrtc.py` & `prosopon/tests/test_pyle_devices.py` (21/21 passing tests)
+- **Root Cause & Rationale:**
+  - Horizon 3 (Multi-Device Remote Control Plane) requires external companion devices to pair via WebAuthn FIDO2 authenticators and communicate over encrypted SCTP WebRTC DataChannels (`control`, `stream`, `terminal`).
+  - Previously, `MetisDashboard.tsx` displayed static mockup devices (`companion-iphone-pyle`) and generated synthetic offline pairing tickets without querying the live Prosopon SQLite `access_store`. Device revoking merely mutated local React state, leaving live WebRTC peer connections open and tokens active on the backend.
+  - Furthermore, `executePanicLockdown` in `MetisSovereignSettings.tsx` invoked an unauthenticated curl command to `POST /api/devices/lockdown` which failed under Prosopon's `require_admin_auth` zero-loopback security guard with HTTP 401 Unauthorized.
+- **Remediation & Behavioral Guarantees:**
+  1. **Prosopon Host Authority Auto-Discovery (`metisTokenHelper.ts`):** Extended token discovery to automatically locate and read `data/.host_owner_token` (0600 mode) via `IFileService` or parse `PROSOPON_HOST_OWNER_TOKEN` from `deploy/metis.env`. Persisted to `storageService` and provided `getMetisProsoponHeaders()` with dual `Authorization: Bearer <token>` and `X-Host-Owner-Token` headers.
+  2. **Live Device Synchronization (`MetisDashboard.tsx`):** Implemented `fetchPyleDevices()` querying `http://127.0.0.1:8000/api/devices` with automatic polling every 5,000ms. Dynamically maps active devices (`host_owner`, remote companions), registered passkeys count, transport types, and active statuses.
+  3. **Live Single-Use Pairing Link Minting (`MetisDashboard.tsx`):** Wired "Mint Pairing Ticket" button to `POST http://127.0.0.1:8000/api/devices/pair` with 300s TTL, emitting cryptographically secure single-use pairing URLs (`/?pairing_id=pair_...&secret=...`) verified against the live SQLite `pairing_links` table and audit ledger.
+  4. **Immediate Device Revocation (<500ms Teardown):** Wired the table's "Revoke" button to `POST http://127.0.0.1:8000/api/devices/{id}/revoke`, triggering immediate WebRTC PeerConnection closure, in-flight agent run cancellation, and access revocation recorded in `access_audit`.
+  5. **Panic Lockdown Endpoint Hardening:** Updated `executePanicLockdown` to supply resolved authentication tokens in headers and target `data/access.db`. Wired UI panic buttons to trigger backend lockdown and clear remote sessions.
+  6. **Live Cryptographic Audit Verification:** Wired "Verify Phylax Audit Chain" to `GET http://127.0.0.1:8000/api/devices/audit`, checking the SHA-256 hash-chain integrity of all audit rows and reporting the exact record count and tip hash.
+  7. **Build & Test Verification:**
+     - `npm --prefix vscode run buildreact`: Succeeded in 2.92s with React bundle synced to `vscode/out/`.
+     - `npm --prefix vscode run compile`: Succeeded with **0 errors** in 1.55 min.
+     - `prosopon` Pyle test suite (`test_pyle_webrtc.py` + `test_pyle_devices.py`): **21 passed** in 40.60s (100% green).
+     - Full monorepo pytest test suite (11 packages + experiments + root): **1,140 passed, 3 skipped**.
+
 ---
 
 ## Summary & Verification Matrix
@@ -906,6 +934,7 @@
 | **Phase 2 Real Extractor Empirical Study**| Item 93 | Experiments (Real LLM Extractor Noise, 300 Stories, Bootstrap CIs)| **Audited & Verified** | 27 tests passing + 4,800 evals verified ($99.58\%$ on Arm F, H2' BETTER) |
 | **Arm F Constructive Deliberation Engine**| Item 94 | Kybernetes + Dianoia (Two-Pass Constructive Planning & Routing)| **Integrated & Verified** | 198 Kybernetes tests passing (Pass 1 timeline notes & truncation elimination) |
 | **VS Code Void Token Alignment** | Item 95 | VS Code Void + Kybernetes (Zero-Loopback Token Auto-Discovery & Sync) | **Integrated & Verified** | 0 TS compile errors + React synced + 1,140 monorepo tests passing |
+| **Pyle WebRTC Remote Operations Hub**| Item 96 | VS Code Void + Prosopon (Live Device Registry, Pairing, Revoke & Audit) | **Integrated & Verified** | 0 TS compile errors + React synced + 21 Prosopon tests passing |
 
 ---
 
