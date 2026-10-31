@@ -25,6 +25,7 @@ class TestWalkController(unittest.TestCase):
 
         self.mock_engine = MagicMock()
         self.mock_embedder = MagicMock()
+        self.mock_embedder.model_name = "mock_embedder"
         self.mock_embedder.d_model = 64
         self.mock_embedder.encode_single.return_value = torch.zeros(64)
         self.mock_embedder.encode.return_value = torch.zeros(2, 64)
@@ -551,6 +552,129 @@ class TestWalkController(unittest.TestCase):
                     base_url="http://localhost:8080/v1",
                     api_key="env-service-token-xyz",
                 )
+
+    def test_walk_epistemic_disagreement_backtrack_trigger(self):
+        """Verify high epistemic disagreement (J >= 0.85) triggers BACKTRACK when stack > 1."""
+        # Setup graph with node_1 -> node_2, node_3
+        mock_graph = MagicMock()
+        mock_graph.__contains__.side_effect = lambda k: k in ["node_1", "node_2", "node_3"]
+        mock_graph.successors.side_effect = lambda k: ["node_2", "node_3"] if k == "node_1" else ["node_3"] if k == "node_2" else []
+        mock_graph.number_of_edges.return_value = 3
+        self.mock_engine.wormhole.graph = mock_graph
+        self.mock_engine.wormhole.node_metadata = {
+            "node_1": {"content": "Node 1."},
+            "node_2": {"content": "Node 2."},
+            "node_3": {"content": "Node 3."},
+        }
+        self.mock_engine.wormhole.node_embeddings = {
+            "node_1": torch.zeros(64),
+            "node_2": torch.zeros(64),
+            "node_3": torch.zeros(64),
+        }
+
+        # Mock policy with epistemic disagreement attributes
+        class MockEpistemicPolicy:
+            def __init__(self):
+                self.name = "mock_epistemic"
+                self.step = 0
+                self.last_disagreement = 0.0
+                self.last_marginal_entropy = 1.0
+                self.current_temperature = 1.0
+                self.last_runner_up_action = None
+
+            def select_action(self, obs):
+                self.step += 1
+                if self.step == 1:
+                    self.last_disagreement = 0.10
+                    return "EXPAND node_2"
+                elif self.step == 2:
+                    # Epistemic conflict: high disagreement!
+                    self.last_disagreement = 0.92
+                    return "EXPAND node_3"
+                else:
+                    return "ANSWER"
+
+        pol = MockEpistemicPolicy()
+        mock_client = MagicMock()
+        mock_client.models.list.return_value = [MagicMock(id="qwen2.5-7b-instruct")]
+
+        controller = WalkController(
+            engine=self.mock_engine,
+            embedder=self.mock_embedder,
+            client=mock_client,
+            model_name="qwen2.5-7b-instruct",
+            disagreement_backtrack_threshold=0.85,
+        )
+
+        with patch.object(controller, "_synthesize_answer", return_value="Final Answer"):
+            result = controller.walk(
+                question="What is the connection?",
+                controller_policy=pol,
+            )
+
+        # Step 2 had J = 0.92 >= 0.85, so action was forced to BACKTRACK
+        path_actions = [p["action"] for p in result["path"]]
+        self.assertEqual(path_actions[0], "EXPAND")
+        self.assertEqual(path_actions[1], "BACKTRACK")
+        self.assertEqual(result["path"][1]["disagreement"], 0.92)
+
+    def test_walk_epistemic_disagreement_shadow_branch_expansion(self):
+        """Verify epistemic disagreement (J >= 0.30) directs shadow expansion to runner-up node."""
+        mock_graph = MagicMock()
+        mock_graph.__contains__.side_effect = lambda k: k in ["node_1", "node_2", "node_3"]
+        mock_graph.successors.side_effect = lambda k: ["node_2", "node_3"] if k == "node_1" else []
+        mock_graph.number_of_edges.return_value = 2
+        self.mock_engine.wormhole.graph = mock_graph
+        self.mock_engine.wormhole.node_metadata = {
+            "node_1": {"content": "Node 1."},
+            "node_2": {"content": "Node 2."},
+            "node_3": {"content": "Node 3."},
+        }
+        self.mock_engine.wormhole.node_embeddings = {
+            "node_1": torch.zeros(64),
+            "node_2": torch.zeros(64),
+            "node_3": torch.zeros(64),
+        }
+
+        class MockShadowPolicy:
+            def __init__(self):
+                self.name = "mock_shadow"
+                self.last_disagreement = 0.45
+                self.last_marginal_entropy = 1.25
+                self.current_temperature = 0.95
+                self.last_runner_up_action = "node_3"
+
+            def select_action(self, obs):
+                if obs["current_node_id"] == "node_1":
+                    return "EXPAND node_2"
+                return "ANSWER"
+
+        pol = MockShadowPolicy()
+        mock_client = MagicMock()
+        mock_client.models.list.return_value = [MagicMock(id="qwen2.5-7b-instruct")]
+
+        controller = WalkController(
+            engine=self.mock_engine,
+            embedder=self.mock_embedder,
+            client=mock_client,
+            model_name="qwen2.5-7b-instruct",
+            enable_anadrome_logging=True,
+            max_shadow_expansions=1,
+            disagreement_shadow_threshold=0.30,
+        )
+
+        with patch.object(controller, "_execute_shadow_branch") as mock_shadow, \
+             patch.object(controller, "_synthesize_answer", return_value="Final Answer"):
+            result = controller.walk(
+                question="Test question",
+                controller_policy=pol,
+            )
+
+            # Shadow expansion should be called with branch_node = runner_up ("node_3")
+            mock_shadow.assert_called_once()
+            call_kwargs = mock_shadow.call_args[1]
+            self.assertEqual(call_kwargs["branch_node"], "node_3")
+            self.assertEqual(call_kwargs["controller_policy"], pol)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,29 @@ import hashlib
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+
+try:
+    import numpy as np
+    from kleroterion import (
+        ActionDecision,
+        ActionID,
+        ControllerState,
+        KleroterionConfig,
+        PolicyProfile,
+        PolicyProfileType,
+        RngState,
+        RoutingRequest,
+        SelectionMode,
+    )
+    try:
+        from adapters.dianoia.adapter import DianoiaActionAdapter, DianoiaWalkAction
+    except Exception:
+        from kleroterion.adapters.dianoia.adapter import DianoiaActionAdapter, DianoiaWalkAction
+    HAS_KLEROTERION = True
+except Exception:
+    np = None  # type: ignore
+    HAS_KLEROTERION = False
 
 
 class AnadromePolicy(ABC):
@@ -379,11 +401,215 @@ class BaselineReplayPolicy(AnadromePolicy):
         return self.step_action_map.get(obs_hash, "ANSWER")
 
 
+class KleroterionAdaptivePolicy(AnadromePolicy):
+    """
+    Policy: Kleroterion Adaptive Entropy Feedback & Epistemic Disagreement.
+    Integrates Kleroterion's dimension-scaled masked-softmax proposal engine with:
+      - Antithetic Gaussian feature perturbation proposals (proposal_count >= 2)
+      - Marginal entropy feedback loop (H(pi_bar)) with PID log-temperature adaptation
+      - Jensen-Shannon proposal disagreement tracking:
+            J = H(pi_bar) - (1/K) * sum(H(pi_k))
+        measuring epistemic uncertainty across candidate actions.
+    """
+
+    def __init__(
+        self,
+        name: str = "kleroterion_adaptive",
+        temperature: float = 1.0,
+        adapt_temperature: bool = True,
+        target_entropy_ratio: float = 0.60,
+        controller_gain: float = 0.50,
+        proposal_count: int = 4,
+        entropy_deadband: float = 0.05,
+        seed: int = 42,
+        answer_base_score: float = 0.5,
+        backtrack_base_score: float = 0.3,
+        disagreement_shadow_threshold: float = 0.30,
+        disagreement_backtrack_threshold: float = 0.85,
+    ):
+        if not HAS_KLEROTERION:
+            raise RuntimeError("Kleroterion submodule or dependencies not available.")
+
+        self._name = name
+        self.temperature = max(0.01, float(temperature))
+        self.adapt_temperature = adapt_temperature
+        self.target_entropy_ratio = target_entropy_ratio
+        self.controller_gain = controller_gain
+        self.proposal_count = proposal_count
+        self.entropy_deadband = entropy_deadband
+        self.seed = seed
+        self.answer_base_score = answer_base_score
+        self.backtrack_base_score = backtrack_base_score
+        self.disagreement_shadow_threshold = disagreement_shadow_threshold
+        self.disagreement_backtrack_threshold = disagreement_backtrack_threshold
+
+        # Initialize Kleroterion controller state and RNG
+        self.config = KleroterionConfig(
+            proposal_count=proposal_count,
+            noise_rms_budget=0.10,
+            noise_hard_radius=0.20,
+            temperature_initial=self.temperature,
+            temperature_bounds=(0.05, 10.0),
+            adapt_temperature=adapt_temperature,
+            entropy_target=target_entropy_ratio,
+            entropy_ema_alpha=0.20,
+            controller_gain=controller_gain,
+            entropy_deadband=entropy_deadband,
+            selection_mode=SelectionMode.SAMPLE,
+        )
+        self.config.validate()
+        self.controller_state = ControllerState(log_temperature=math.log(self.temperature))
+        self.rng_state = RngState.from_seed(seed)
+        self.executed_request_ids: Set[str] = set()
+
+        self.last_decision: Optional[ActionDecision] = None
+        self.last_runner_up_action: Optional[str] = None
+        self._step_counter = 0
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return (
+            "Kleroterion adaptive entropy feedback policy with dimension-scaled masked softmax, "
+            f"antithetic proposals (K={self.proposal_count}), and Jensen-Shannon epistemic disagreement tracking."
+        )
+
+    @property
+    def last_disagreement(self) -> float:
+        """Jensen-Shannon epistemic proposal disagreement J = H_marg - H_cond."""
+        return float(self.last_decision.proposal_disagreement) if self.last_decision else 0.0
+
+    @property
+    def last_marginal_entropy(self) -> float:
+        """Marginal distribution entropy H(pi_bar)."""
+        return float(self.last_decision.marginal_entropy) if self.last_decision else 0.0
+
+    @property
+    def last_conditional_entropy(self) -> float:
+        """Expected conditional entropy under perturbations H_cond."""
+        return float(self.last_decision.conditional_entropy) if self.last_decision else 0.0
+
+    @property
+    def current_temperature(self) -> float:
+        """Active sampling temperature from controller state."""
+        return math.exp(self.controller_state.log_temperature)
+
+    def select_action(self, obs: Dict[str, Any]) -> str:
+        eligible_actions = obs.get("eligible_actions", [])
+        if not eligible_actions:
+            return "ANSWER"
+
+        self._step_counter += 1
+        path_prefix = obs.get("path_prefix", [])
+        remaining_budget = obs.get("remaining_budget", 1)
+        obs_hash = obs.get("observation_hash") or hashlib.sha256(str(obs.get("current_node_id")).encode()).hexdigest()[:16]
+
+        # 1. Map eligible actions to DianoiaWalkAction and candidate scores
+        d_actions: List[DianoiaWalkAction] = []
+        action_scores: List[float] = []
+
+        for act in eligible_actions:
+            act_type = act.get("action_type")
+            if act_type == "EXPAND" and act.get("target_node_id"):
+                d_actions.append(DianoiaWalkAction(action_type="EXPAND", target=act["target_node_id"]))
+                raw_score = act.get("score")
+                action_scores.append(float(raw_score) if raw_score is not None else 0.5)
+            elif act_type == "BACKTRACK":
+                if len(path_prefix) > 1:
+                    d_actions.append(DianoiaWalkAction(action_type="BACKTRACK"))
+                    action_scores.append(self.backtrack_base_score)
+            elif act_type == "ANSWER":
+                d_actions.append(DianoiaWalkAction(action_type="ANSWER"))
+                action_scores.append(self.answer_base_score)
+
+        if not d_actions:
+            return "ANSWER"
+
+        # 2. Build 1D policy feature vector
+        scores_arr = np.array(action_scores, dtype=np.float64)
+        policy_features = np.array([
+            float(remaining_budget) / 10.0,
+            float(len(path_prefix)) / 5.0,
+            float(np.max(scores_arr)),
+            float(np.mean(scores_arr)),
+        ], dtype=np.float64)
+
+        # 3. Assemble adapter callbacks
+        def scorer_fn(req: RoutingRequest, x: np.ndarray, actions: List[ActionID]) -> np.ndarray:
+            out = []
+            for a_id in actions:
+                idx = req.actions.index(a_id) if a_id in req.actions else 0
+                base_s = action_scores[idx]
+                coord_idx = idx % len(x)
+                mod = 0.25 * (float(x[coord_idx]) - 0.5)
+                out.append(base_s + mod)
+            return np.array(out, dtype=np.float64)
+
+        def revalidation_fn(action: DianoiaWalkAction, snapshot_id: str) -> Tuple[bool, Optional[str]]:
+            if action.action_type == "EXPAND" and not action.target:
+                return False, "Target empty"
+            return True, None
+
+        adapter = DianoiaActionAdapter(scorer_fn=scorer_fn, revalidation_fn=revalidation_fn)
+
+        req = adapter.build_routing_request(
+            request_id=f"req_{obs_hash}_{self._step_counter}",
+            episode_id=obs.get("episode_id", f"ep_{obs_hash[:8]}"),
+            snapshot_id=obs.get("snapshot_id", "snap_active"),
+            lthcm_revision=obs.get("lthcm_revision", "rev_1"),
+            policy_features=policy_features,
+            valid_actions=d_actions,
+            authoritative_mask=[True] * len(d_actions),
+            policy_profile=PolicyProfile(
+                "dianoia_walk",
+                PolicyProfileType.EXPLORATORY,
+                entropy_target=self.target_entropy_ratio,
+                allow_noise=True,
+                allow_sampling=True,
+                allow_adaptation=self.adapt_temperature,
+            ),
+        )
+
+        # 4. Propose action via Kleroterion core
+        chosen_action, decision = adapter.route_step(req, self.config, self.controller_state, self.rng_state)
+
+        # 5. Commit step and advance controller & RNG states
+        adapter.commit_step(decision, self.executed_request_ids)
+        self.controller_state = decision.controller_state_next
+        self.rng_state = decision.rng_state_next
+        self.last_decision = decision
+
+        # 6. Identify runner-up action for epistemic shadow branching if disagreement is high
+        if len(decision.action_ids) > 1 and len(decision.marginal_probabilities) > 1:
+            sorted_indices = np.argsort(decision.marginal_probabilities)[::-1]
+            top_action = decision.selected_action_id
+            runner_up_idx = sorted_indices[1] if decision.action_ids[sorted_indices[0]] == top_action else sorted_indices[0]
+            runner_up_id = decision.action_ids[runner_up_idx]
+            if runner_up_id.startswith("EXPAND:"):
+                self.last_runner_up_action = runner_up_id[len("EXPAND:"):]
+            else:
+                self.last_runner_up_action = runner_up_id
+        else:
+            self.last_runner_up_action = None
+
+        if chosen_action.action_type == "EXPAND":
+            return f"EXPAND {chosen_action.target}"
+        elif chosen_action.action_type == "BACKTRACK":
+            return "BACKTRACK"
+        else:
+            return "ANSWER"
+
+
 APPROVED_CONTROLLER_POLICIES: Dict[str, Any] = {
     "baseline_llm": None,
     "greedy_similarity": GreedySimilarityPolicy,
     "early_exit_answer": EarlyExitAnswerPolicy,
     "sheaf_contradiction_backtrack": SheafContradictionBacktrackPolicy,
     "stochastic_softmax": HighEntropyStochasticPolicy,
+    "kleroterion_adaptive": KleroterionAdaptivePolicy if HAS_KLEROTERION else None,
+    "kleroterion": KleroterionAdaptivePolicy if HAS_KLEROTERION else None,
 }
 

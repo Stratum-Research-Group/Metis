@@ -18,10 +18,12 @@ from dianoia.anadrome.evaluator import (
     PolicyEvaluationSummary,
 )
 from dianoia.anadrome.policies import (
+    APPROVED_CONTROLLER_POLICIES,
     BaselineReplayPolicy,
     EarlyExitAnswerPolicy,
     GreedySimilarityPolicy,
     HighEntropyStochasticPolicy,
+    KleroterionAdaptivePolicy,
     SheafContradictionBacktrackPolicy,
 )
 
@@ -227,6 +229,70 @@ class TestAnadromePolicies(unittest.TestCase):
             "observation_hash": "conflict_hash_2",
         }
         self.assertEqual(policy(obs_conflict_content), "BACKTRACK")
+
+    def test_kleroterion_adaptive_policy_decisions(self):
+        policy = KleroterionAdaptivePolicy(
+            proposal_count=4,
+            temperature=1.0,
+            adapt_temperature=True,
+            target_entropy_ratio=0.60,
+            controller_gain=0.50,
+            seed=42,
+        )
+        self.assertIn("kleroterion", policy.name)
+        self.assertIn("antithetic proposals", policy.description)
+
+        obs = {
+            "current_node_id": "doc_1",
+            "current_content": "Evidence passage 1",
+            "path_prefix": ["doc_1"],
+            "visited_nodes": ["doc_1"],
+            "remaining_budget": 5,
+            "eligible_actions": [
+                {"action_type": "EXPAND", "target_node_id": "doc_2", "score": 0.85},
+                {"action_type": "EXPAND", "target_node_id": "doc_3", "score": 0.80},
+                {"action_type": "ANSWER"},
+            ],
+            "observation_hash": "kler_hash_1",
+        }
+        action = policy(obs)
+        self.assertIn(action, ["EXPAND doc_2", "EXPAND doc_3", "ANSWER"])
+        self.assertGreater(policy.last_marginal_entropy, 0.0)
+        self.assertGreaterEqual(policy.last_disagreement, 0.0)
+        self.assertGreater(policy.current_temperature, 0.0)
+        self.assertIsNotNone(policy.last_runner_up_action)
+        self.assertIn(policy.last_runner_up_action, ["doc_2", "doc_3", "ANSWER"])
+
+    def test_kleroterion_adaptive_temperature_feedback(self):
+        policy = KleroterionAdaptivePolicy(
+            proposal_count=4,
+            temperature=1.0,
+            adapt_temperature=True,
+            target_entropy_ratio=0.30,
+            controller_gain=0.50,
+            seed=123,
+        )
+        initial_temp = policy.current_temperature
+
+        obs = {
+            "current_node_id": "doc_A",
+            "current_content": "Passage text",
+            "path_prefix": ["doc_A"],
+            "visited_nodes": ["doc_A"],
+            "remaining_budget": 4,
+            "eligible_actions": [
+                {"action_type": "EXPAND", "target_node_id": "doc_B", "score": 0.70},
+                {"action_type": "EXPAND", "target_node_id": "doc_C", "score": 0.68},
+                {"action_type": "EXPAND", "target_node_id": "doc_D", "score": 0.69},
+                {"action_type": "ANSWER"},
+            ],
+            "observation_hash": "kler_hash_adapt",
+        }
+        policy(obs)
+        # Because uniform-like distribution has high entropy compared to 0.30 target,
+        # PID temperature controller should decrease temperature
+        self.assertNotEqual(policy.current_temperature, initial_temp)
+        self.assertLess(policy.current_temperature, initial_temp)
 
 
 class TestAnadromeEvaluatorAndCoverageGate(unittest.TestCase):

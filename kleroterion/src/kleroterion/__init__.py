@@ -46,6 +46,12 @@ from kleroterion.proposals import (
 )
 from kleroterion.weighted import WeightedFeatureVector, compute_weighted_features
 
+try:
+    from adapters.dianoia.adapter import DianoiaActionAdapter, DianoiaWalkAction
+except Exception:
+    DianoiaActionAdapter = None  # type: ignore
+    DianoiaWalkAction = None  # type: ignore
+
 __version__ = "0.1.0"
 
 __all__ = [

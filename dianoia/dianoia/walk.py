@@ -232,6 +232,8 @@ class WalkController:
         index_build_id: str = "lthcm_v1",
         max_shadow_expansions: int = 1,
         controller_policy: Optional[Any] = None,
+        disagreement_shadow_threshold: float = 0.30,
+        disagreement_backtrack_threshold: float = 0.85,
     ):
         self.engine = engine
         self.embedder = embedder
@@ -241,6 +243,8 @@ class WalkController:
         self.top_p = top_p
         self.log_path = log_path
         self.use_stochastic_resonance = use_stochastic_resonance
+        self.disagreement_shadow_threshold = disagreement_shadow_threshold
+        self.disagreement_backtrack_threshold = disagreement_backtrack_threshold
 
         # Controller policy (Anadrome Milestone 3.2: candidate walk policies)
         if isinstance(controller_policy, str) and controller_policy in APPROVED_CONTROLLER_POLICIES:
@@ -630,19 +634,23 @@ class WalkController:
 
     def _get_environment_identity(self) -> EnvironmentIdentity:
         """Construct the immutable environment identity for walk replay."""
+        emb_id = getattr(self.embedder, "model_name", "default_embedder")
+        if not isinstance(emb_id, str):
+            emb_id = str(emb_id)
+        ctrl_id = str(self.active_model) if self.active_model is not None else "default_controller"
         return EnvironmentIdentity(
-            corpus_snapshot_hash=self.corpus_snapshot_hash,
-            index_build_id=self.index_build_id,
-            embedder_id=getattr(self.embedder, "model_name", "default_embedder"),
-            controller_model_id=self.active_model,
-            sampling_params={"temperature": self.temperature, "top_p": self.top_p},
+            corpus_snapshot_hash=str(self.corpus_snapshot_hash),
+            index_build_id=str(self.index_build_id),
+            embedder_id=emb_id,
+            controller_model_id=ctrl_id,
+            sampling_params={"temperature": float(self.temperature), "top_p": float(self.top_p)},
             prompt_template_version="step_v1:ans_v1",
-            answer_generator_config={"max_tokens": 1024, "model": self.active_model},
+            answer_generator_config={"max_tokens": 1024, "model": ctrl_id},
             seeding_config={
-                "top_k": self.top_k,
-                "use_stochastic_resonance": self.use_stochastic_resonance,
+                "top_k": int(self.top_k),
+                "use_stochastic_resonance": bool(self.use_stochastic_resonance),
             },
-            budget_config={"max_steps": self.max_steps},
+            budget_config={"max_steps": int(self.max_steps)},
         )
 
     def _execute_shadow_branch(
@@ -657,6 +665,7 @@ class WalkController:
         env_identity: EnvironmentIdentity,
         as_of: Optional[float] = None,
         access_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        controller_policy: Optional[Any] = None,
     ) -> None:
         """
         Execute an alternative expansion branch up to max_shadow_depth steps (Spec 4.5).
@@ -707,22 +716,49 @@ class WalkController:
                 eligible_actions=eligible_actions,
             )
 
-            step_prompt = STEP_PROMPT_TEMPLATE.format(
-                question=question,
-                current_node_id=current_node_id,
-                current_content=current_content,
-                neighbours_block=self._format_neighbours_block(neighbours),
-                steps_remaining=max_shadow_depth - s_idx,
-                visited_summary=self._format_visited_summary(shadow_visited),
-            )
-
-            try:
-                raw_output = self._call_llm(CONTROLLER_SYSTEM_PROMPT, step_prompt)
+            if controller_policy is not None:
+                obs_dict = {
+                    "current_node_id": current_node_id,
+                    "current_content": current_content,
+                    "path_prefix": list(shadow_stack),
+                    "visited_nodes": [p["node_id"] for p in shadow_visited],
+                    "remaining_budget": max_shadow_depth - s_idx,
+                    "eligible_actions": [a.to_dict() for a in eligible_actions],
+                    "question": question,
+                    "neighbours": neighbours,
+                }
+                try:
+                    policy_act_str = controller_policy.select_action(obs_dict)
+                except Exception:
+                    policy_act_str = "ANSWER"
+                raw_output = f"ACTION: {policy_act_str}\nREASON: Policy {getattr(controller_policy, 'name', 'custom')}"
                 parsed = parse_controller_output(raw_output, valid_ids)
-            except Exception as e:
-                parsed = ParsedAction(action="BACKTRACK", parse_failed=True, raw_output=f"[error: {e}]")
+            else:
+                step_prompt = STEP_PROMPT_TEMPLATE.format(
+                    question=question,
+                    current_node_id=current_node_id,
+                    current_content=current_content,
+                    neighbours_block=self._format_neighbours_block(neighbours),
+                    steps_remaining=max_shadow_depth - s_idx,
+                    visited_summary=self._format_visited_summary(shadow_visited),
+                )
+
+                try:
+                    raw_output = self._call_llm(CONTROLLER_SYSTEM_PROMPT, step_prompt)
+                    parsed = parse_controller_output(raw_output, valid_ids)
+                except Exception as e:
+                    parsed = ParsedAction(action="BACKTRACK", parse_failed=True, raw_output=f"[error: {e}]")
 
             taken_action_str = parsed.action + (f" {parsed.target}" if parsed.target else "")
+
+            shadow_stochastic_draws = {}
+            if controller_policy is not None and hasattr(controller_policy, "last_disagreement"):
+                shadow_stochastic_draws = {
+                    "disagreement": getattr(controller_policy, "last_disagreement", None),
+                    "marginal_entropy": getattr(controller_policy, "last_marginal_entropy", None),
+                    "conditional_entropy": getattr(controller_policy, "last_conditional_entropy", None),
+                    "temperature": getattr(controller_policy, "current_temperature", None),
+                }
 
             shadow_transitions.append(
                 RecordedTransition(
@@ -735,6 +771,7 @@ class WalkController:
                     parse_failed=parsed.parse_failed,
                     next_node_id=parsed.target if parsed.action == "EXPAND" else (shadow_stack[-2] if parsed.action == "BACKTRACK" and len(shadow_stack) > 1 else None),
                     answer_probe=None,
+                    stochastic_draws=shadow_stochastic_draws,
                 )
             )
 
@@ -919,6 +956,21 @@ class WalkController:
                         policy_err,
                     )
                     policy_act_str = "ANSWER"
+
+                # Check for high epistemic disagreement trigger for conflict backtracking
+                last_disagreement = getattr(active_policy, "last_disagreement", 0.0)
+                if (
+                    last_disagreement >= self.disagreement_backtrack_threshold
+                    and len(walk_stack) > 1
+                    and not policy_act_str.startswith("ANSWER")
+                ):
+                    logger.info(
+                        "Epistemic conflict detected (disagreement J=%.3f >= threshold %.3f). Forcing BACKTRACK.",
+                        last_disagreement,
+                        self.disagreement_backtrack_threshold,
+                    )
+                    policy_act_str = "BACKTRACK"
+
                 raw_output = f"ACTION: {policy_act_str}\nREASON: Policy {getattr(active_policy, 'name', 'custom')}"
                 parsed = parse_controller_output(raw_output, valid_ids)
             else:
@@ -977,13 +1029,18 @@ class WalkController:
                 consecutive_parse_failures = 0
 
             # Record this step in live path records
-            path_records.append({
+            step_record = {
                 "node": current_node_id,
                 "action": parsed.action,
                 "raw_output": parsed.raw_output,
                 "reason": parsed.reason,
                 "parse_failed": parsed.parse_failed,
-            })
+            }
+            if active_policy is not None and hasattr(active_policy, "last_disagreement"):
+                step_record["disagreement"] = getattr(active_policy, "last_disagreement", None)
+                step_record["marginal_entropy"] = getattr(active_policy, "last_marginal_entropy", None)
+                step_record["temperature"] = getattr(active_policy, "current_temperature", None)
+            path_records.append(step_record)
 
             # Record decision observation and transition for Anadrome replay tree
             if self.enable_anadrome_logging and env_identity is not None:
@@ -1041,6 +1098,15 @@ class WalkController:
                             logger.debug("Intermediate answer probe skipped: %s", probe_err)
 
                 taken_act = parsed.action + (f" {parsed.target}" if parsed.target else "")
+                stochastic_draws = {}
+                if active_policy is not None and hasattr(active_policy, "last_disagreement"):
+                    stochastic_draws = {
+                        "disagreement": getattr(active_policy, "last_disagreement", None),
+                        "marginal_entropy": getattr(active_policy, "last_marginal_entropy", None),
+                        "conditional_entropy": getattr(active_policy, "last_conditional_entropy", None),
+                        "temperature": getattr(active_policy, "current_temperature", None),
+                        "last_runner_up_action": getattr(active_policy, "last_runner_up_action", None),
+                    }
                 anadrome_transitions.append(
                     RecordedTransition(
                         step_index=step,
@@ -1052,6 +1118,7 @@ class WalkController:
                         parse_failed=parsed.parse_failed,
                         next_node_id=parsed.target if parsed.action == "EXPAND" else (walk_stack[-2] if parsed.action == "BACKTRACK" and len(walk_stack) > 1 else None),
                         answer_probe=answer_probe,
+                        stochastic_draws=stochastic_draws,
                     )
                 )
 
@@ -1063,11 +1130,22 @@ class WalkController:
                     and len(valid_ids) > 1
                 ):
                     alt_targets = [vid for vid in valid_ids if vid != parsed.target]
-                    if alt_targets:
+                    runner_up = getattr(active_policy, "last_runner_up_action", None) if active_policy else None
+                    last_disag = getattr(active_policy, "last_disagreement", 0.0) if active_policy else 0.0
+                    if (
+                        last_disag >= self.disagreement_shadow_threshold
+                        and runner_up
+                        and runner_up in alt_targets
+                    ):
+                        branch_target = runner_up
+                    else:
+                        branch_target = alt_targets[0] if alt_targets else None
+
+                    if branch_target:
                         shadow_expansions_done += 1
                         self._execute_shadow_branch(
                             question=question,
-                            branch_node=alt_targets[0],
+                            branch_node=branch_target,
                             parent_walk_id=active_walk_id,
                             branch_step=step,
                             walk_stack=list(walk_stack),
@@ -1076,6 +1154,7 @@ class WalkController:
                             env_identity=env_identity,
                             as_of=as_of,
                             access_filter=access_filter,
+                            controller_policy=active_policy,
                         )
 
             # Execute the action

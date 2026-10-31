@@ -23,6 +23,7 @@ from dianoia.anadrome.policies import (
     GreedySimilarityPolicy,
     HighEntropyStochasticPolicy,
     SheafContradictionBacktrackPolicy,
+    KleroterionAdaptivePolicy,
 )
 from dianoia.anadrome.probe_cache import AnswerProbeCache
 from dianoia.anadrome.replay import AnadromeReplayEngine, EpisodeReplayResult
@@ -47,6 +48,7 @@ __all__ = [
     "EarlyExitAnswerPolicy",
     "SheafContradictionBacktrackPolicy",
     "BaselineReplayPolicy",
+    "KleroterionAdaptivePolicy",
     "AnadromeEvaluator",
     "PolicyEvaluationSummary",
     "PairedComparisonResult",

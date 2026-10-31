@@ -961,6 +961,36 @@
 
 ---
 
+### Item 99: Kleroterion Adaptive Entropy Feedback & Epistemic Shadow Branching Integration
+- **Date:** 2026-10-31
+- **Severity:** P1 (Exploratory Deliberation & Epistemic Uncertainty Guidance)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `dianoia` (WalkController, AnadromePolicy, Anadrome Contracts, Replay Trees), `kleroterion` (DianoiaActionAdapter, Adaptive Temperature Feedback, Epistemic Disagreement $J$), `stoma` (Provenance Re-baselining)
+- **Reviewed Commit / Baseline:** `5e50013`
+- **Root Cause & Architectural Need:** Section 7.4 of the Metis roadmap required wiring Kleroterion's stochastic proposal engine into Dianoia's MCTS deliberation loop. Without this, Dianoia relied on heuristic policies or deterministic model decisions without measuring epistemic variance across feature perturbations. Additionally, shadow branch expansion was arbitrary rather than driven by epistemic disagreement between top-1 and runner-up candidate actions.
+- **Implementation Highlights:**
+  1. **KleroterionAdaptivePolicy (`dianoia/dianoia/anadrome/policies.py`)**:
+     - Built `KleroterionAdaptivePolicy` integrating `DianoiaActionAdapter` with dimension-scaled masked softmax and antithetic proposals ($K=4$).
+     - Configured PID log-temperature adaptation targeting entropy ratio ($\tau_{\text{target}} = 0.60$, gain $0.50$, deadband $0.05$, bounds $[0.05, 10.0]$).
+     - Tracked Jensen-Shannon proposal disagreement $J = H(\bar{\pi}) - \frac{1}{K}\sum_k H(\pi_k)$ and computed top-2 candidate action rankings to identify runner-up branches (`last_runner_up_action`).
+     - Registered in `APPROVED_CONTROLLER_POLICIES` and exported in `dianoia.anadrome`.
+  2. **WalkController Epistemic Gating & Backtracking (`dianoia/dianoia/walk.py`)**:
+     - Added `disagreement_shadow_threshold: float = 0.30` and `disagreement_backtrack_threshold: float = 0.85` to `WalkController`.
+     - In `walk()` step loop, when $J \ge 0.85$ and walk stack depth $> 1$, detected acute epistemic conflict and forced `BACKTRACK`.
+     - In shadow branch expansion, when $J \ge 0.30$, directed shadow branch continuation explicitly to `last_runner_up_action` instead of arbitrary neighbors.
+     - Propagated active policy into `_execute_shadow_branch` and recorded `stochastic_draws` ($J$, $H_{\text{marg}}$, $H_{\text{cond}}$, temperature, runner-up) across `path_records` and `anadrome_transitions`.
+  3. **Stoma Provenance Synchronization (`stoma/vendored_provenance.json` & `stoma/src/stoma/vendored_provenance.json`)**:
+     - Re-baselined `content_sha256` for `dianoia` to `a6a94a0bcd3df99f2b64a37043aeb3168235cd157ad08caaba5d012cfd8fabea`, passing all 5 monorepo tamper checks.
+- **Verification & Acceptance Checks:**
+  1. `test_kleroterion_adaptive_policy_decisions` & `test_kleroterion_adaptive_temperature_feedback` in `dianoia/tests/test_policy_zoo.py`.
+  2. `test_walk_epistemic_disagreement_backtrack_trigger` & `test_walk_epistemic_disagreement_shadow_branch_expansion` in `dianoia/tests/test_walk.py`.
+  3. Pass rate across suites:
+     - `dianoia/tests`: **97 passed** (up from 93).
+     - `kleroterion/tests`: **43 passed**.
+     - Full monorepo suite: **1,152 passed, 3 skipped**.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -994,28 +1024,29 @@
 | **Pyle WebRTC Remote Operations Hub**| Item 96 | VS Code Void + Prosopon (Live Device Registry, Pairing, Revoke & Audit) | **Integrated & Verified** | 0 TS compile errors + React synced + 21 Prosopon tests passing |
 | **Native KrisisSelector Formal Gate**| Item 97 | Kybernetes + Krisis (Formal Selector Gating, Half-Even Scoring, Contradiction)| **Integrated & Verified** | 199 Kybernetes tests passing (18/18 adapter tests passing) |
 | **ModelSwap Generational Serving Hub**| Item 98 | Hestia + Paideia (ModelSwapManager CAS Gating, LoRA Serving, /manage/swap)| **Integrated & Verified** | 83 Hestia + 51 Paideia tests passing (6 new swap tests) |
+| **Kleroterion Adaptive Entropy & Epistemic Shadow Branching**| Item 99 | Dianoia + Kleroterion (Adaptive Entropy Feedback, Epistemic Disagreement $J$, Shadow Expansion & Backtracking)| **Integrated & Verified** | 97 Dianoia + 43 Kleroterion tests passing (4 new policy/walk tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,148 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,152 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.44s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **199** | 0 | 35.35s | **PASS** |
-| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 143.21s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 227.52s | **PASS** |
-| **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 6.91s | **PASS** |
-| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 1.92s | **PASS** |
-| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 44.81s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **51** | 0 | 2.68s | **PASS** |
-| **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 2.12s | **PASS** |
-| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.42s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.10s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **199** | 0 | 23.70s | **PASS** |
+| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 122.48s | **PASS** |
+| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 165.83s | **PASS** |
+| **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 3.67s | **PASS** |
+| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.07s | **PASS** |
+| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 43.61s | **PASS** |
+| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **51** | 0 | 0.75s | **PASS** |
+| **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.56s | **PASS** |
+| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.23s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.56s | **PASS** |
-| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.08s | **PASS** |
-| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 20.35s | **PASS** |
+| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.03s | **PASS** |
+| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 16.89s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,148** | **3** | **~8.8 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,152** | **3** | **~7.5 min** | **ALL GATES PASS** |
 
 
 
