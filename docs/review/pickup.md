@@ -2,9 +2,9 @@
 
 **Last Updated:** 2026-10-31  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `62995f3`  
+**Current HEAD Commit:** `31bd03d`  
 **Working Tree Status:** Clean; all services active under systemd; 1,140 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented, with Arm F two-pass constructive chronological planning natively integrated into Kybernetes deliberation and routing (Item 94).
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), and VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95) fully implemented and verified.
 
 ---
 
