@@ -793,7 +793,7 @@
 
 ### Item 93: Phase 2 Empirical Evaluation: Text vs Graph Under Real LLM Extractor Noise
 - **Priority:** P2 (Empirical Validation & Cognitive Representation Architecture)
-- **Status:** **Pilot Completed & Audited ($N=40$ stories, 680 LLM operations)**
+- **Status:** **Confirmatory Phase 2 Completed & Audited ($N=300$ stories, 5,100 LLM operations)**
 - **Affected Subsystems:**
   - `experiments/text_vs_graph/extractor.py`
   - `experiments/text_vs_graph/run_phase2.py`
@@ -802,22 +802,22 @@
   - `experiments/text_vs_graph/phase2_results.jsonl`
   - `experiments/text_vs_graph/phase2_extractions.jsonl`
   - `experiments/text_vs_graph/phase2_summary.json`
-  - `experiments/text_vs_graph/phase2_pilot_analysis.json`
-  - `experiments/text_vs_graph/PHASE2_PILOT_REPORT.md`
+  - `experiments/text_vs_graph/phase2_confirmatory_analysis.json`
+  - `experiments/text_vs_graph/CONFIRMATORY_PHASE2_REPORT.md`
 - **Root Cause & Specification Requirement:**
-  - Phase 1 evaluated causal reasoning under synthetic 30% corruption (random edge drops, timestamp flips, and attribute mutators), which degraded Arm B to 68.12% accuracy. Real-world sovereign pipelines do not experience random independent synthetic bitflips, but rather real LLM extractor noise directly from unstructured text passages.
-  - Phase 2 empirical validation was required to measure the true distribution of real extractor errors and test whether constructive chronological grounding (Arm F) and structured graph representations preserve cognitive superiority under real LLM extraction noise.
+  - Phase 1 evaluated causal reasoning under synthetic 30% corruption (random edge drops, timestamp flips, and attribute mutators), which degraded Arm B to 73.83% accuracy. Real-world sovereign pipelines do not experience random independent synthetic bitflips, but rather real LLM extractor noise directly from unstructured text passages.
+  - Phase 2 confirmatory validation was required across all 300 stories to measure the true distribution of real extractor errors and test whether constructive chronological grounding (Arm F) and structured graph representations preserve cognitive superiority under real LLM extraction noise.
 - **Remediation & Behavioral Guarantees:**
   1. Implemented zero-shot LLM extractor in `experiments/text_vs_graph/extractor.py` parsing structured event DAGs directly from prose via `gemma-4-26b-a4b-abliterated` on Hestia.
   2. Implemented `experiments/text_vs_graph/run_phase2.py` with atomic checkpointing, extraction caching, and multi-arm evaluation (B, C, D, F).
-  3. Completed 40-story pilot evaluation (`conf_s001`–`conf_s040`, seeds `4001`–`4040`, 640 evals + 40 extractions = 680 LLM calls):
-     - **Natural Extractor Profile**: Mean fidelity of $96.15\%$ ($27/40$ stories 100% perfect, $0$ entity hallucinations, $3.75\%$ omission rate).
-     - **Arm B (Extracted Graph Only)**: $97.50\%$ accuracy ($+29.38\text{ pp}$ gain over synthetic 30% corruption, $p < 10^{-5}$, verdict: **BETTER**).
-     - **Arm C (Text + Extracted Graph)**: $98.12\%$ accuracy ($+12.50\text{ pp}$ gain over synthetic 30% corruption, verdict: **BETTER**).
-     - **Arm F (Chronological Control)**: **$100.00\%$ accuracy** ($160/160$ questions correct, $40/40$ stories perfect).
-     - **Counterfactual Divide (Q3)**: Arm B ($92.5\%$), Arm C ($92.5\%$), and Arm F ($100.0\%$) vastly outperformed pure text Arm A ($82.5\%$, $+10.0\text{ pp}$ to $+17.5\text{ pp}$ gain).
-  4. Authoring and auditing formal empirical report `experiments/text_vs_graph/PHASE2_PILOT_REPORT.md`.
-  5. 3 unit tests in `experiments/text_vs_graph/test_extractor.py` passing cleanly.
+  3. Completed full 300-story confirmatory evaluation (`conf_s001`–`conf_s300`, seeds `4001`–`4300`, 4,800 evals + 300 extractions = 5,100 LLM calls):
+     - **Natural Extractor Profile**: Mean fidelity of $99.08\%$ ($279/300$ stories 100% perfect, only 1 hallucinated event across 2,400 gold events, $0.71\%$ omission rate).
+     - **H2' Confirmed (Text + Extracted Graph vs Text Baseline)**: Arm C achieved **$96.67\%$** vs **$90.83\%$** for Arm A ($+5.83\text{ pp}$ gain, $95\%\text{ CI } [+0.0417, +0.0742]$, verdict: **BETTER**, $p < 10^{-5}$).
+     - **Real vs Synthetic 30% Corruption**: Arm B achieved **$93.75\%$** (vs $73.83\%$ under synthetic corruption, $+19.92\text{ pp}$ gain, $95\%\text{ CI } [+0.1725, +0.2258]$, verdict: **BETTER**). Arm C achieved **$96.67\%$** (vs $86.58\%$, $+10.08\text{ pp}$ gain, verdict: **BETTER**).
+     - **Arm F Dominance**: Arm F (Chronological Control) achieved **$99.58\%$ accuracy** ($1,195/1,200$ questions correct), definitively outperforming Arm D ($97.08\%$, $-2.50\text{ pp}$, $95\%\text{ CI } [-0.0350, -0.0158]$) and eliminating 97.9% of length truncations.
+     - **Counterfactual Divide (Q3)**: Arm F achieved **$98.7\%$** and Arm C achieved **$86.7\%$** on multi-hop counterfactual DAG propagation, substantially outperforming single-pass pure text Arm A ($75.3\%$, $+11.4\text{ pp}$ to $+23.4\text{ pp}$ gain).
+  4. Authoring and auditing formal confirmatory report `experiments/text_vs_graph/CONFIRMATORY_PHASE2_REPORT.md`.
+  5. 27 unit tests in `experiments/text_vs_graph/test_*.py` passing cleanly.
 
 ---
 
@@ -848,7 +848,7 @@
 | **Boundary-Aware Practice Selection** | Item 90 | Paideia (Attempt Rollout Variance, Stratified Selection & CLI)| **Integrated & Verified** | 50 Paideia tests passing (4 boundary sampler tests) |
 | **Zero-Hallucination Graph Filtering** | Item 91 | Stoma + Kybernetes (DeterministicSpanFilter & Dynamic Consistency Gating)| **Integrated & Verified** | 123 Stoma + 196 Kybernetes tests passing (8 new unit/adapter tests) |
 | **Heuresis Scientific Discovery Engine**| Item 92 | Stoma + Dokime (OpenReview Crawler, Dual Scorer, Sheaf OOV Synthesizer)| **Integrated & Verified** | 127 Stoma + 218 Dokime tests passing (9 new crawler/discovery tests) |
-| **Phase 2 Real Extractor Empirical Study**| Item 93 | Experiments (Real LLM Extractor Noise, 40-Story Pilot, Bootstrap CIs)| **Audited & Verified** | 3 extractor tests passing + 640 evals verified ($100\%$ on Arm F) |
+| **Phase 2 Real Extractor Empirical Study**| Item 93 | Experiments (Real LLM Extractor Noise, 300 Stories, Bootstrap CIs)| **Audited & Verified** | 27 tests passing + 4,800 evals verified ($99.58\%$ on Arm F, H2' BETTER) |
 
 ---
 

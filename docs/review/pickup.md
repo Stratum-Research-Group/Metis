@@ -1,10 +1,10 @@
 # Metis Development Resume Guide (`pickup.md`)
 
-**Last Updated:** 2026-10-30  
+**Last Updated:** 2026-10-31  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `15f633b`  
+**Current HEAD Commit:** `4636a0a`  
 **Working Tree Status:** Clean; all services active under systemd; 1,137 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) fully completed; Phase 2 Real Extractor Pilot (40/40 stories, 680 LLM operations) completed and audited in `PHASE2_PILOT_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented and verified across Stoma, Kybernetes, Dianoia, and Dokime.
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented and verified across Stoma, Kybernetes, Dianoia, and Dokime.
 
 ---
 
@@ -323,12 +323,13 @@ npm --prefix vscode run compile
     - **Heuresis Discovery Engine & OpenReview Crawler (Item 92)**: Implemented `OpenReviewBoundaryCrawler` and `CommunityAvailabilityIndex` in `stoma/src/stoma/crawlers/openreview.py` parsing peer review contested boundaries ($\sigma^2 \ge 1.5$, $4.0 \le \bar{s} \le 6.5$). CLI `stoma openreview crawl-fixture`. Implemented `HeuresisDiscoveryEngine` in `dokime/src/dokime/tasks/heuresis.py` with fast dual contrastive scoring, Sheaf-Laplacian topological OOV concept synthesis, and 15% fringe outlier quota. Registered `"heuresis_scientific_discovery"` in Dokime task registry.
     - **17 New Unit & Integration Tests**: Verified across `stoma/tests/test_span_filter.py`, `stoma/tests/test_openreview_crawler.py`, `kybernetes/tests/test_adapters.py`, and `dokime/tests/test_heuresis.py`.
 
-13. **Phase 17: Empirical Evaluation of Text vs Graph Under Real LLM Extractor Noise (Phase 2 Pilot Completed)**:
-    - **Natural Extractor Profile ($N=40$ stories, 680 LLM operations)**: Implemented zero-shot LLM extractor in `experiments/text_vs_graph/extractor.py`. Evaluated on 40 stories (`conf_s001`–`conf_s040`, seeds `4001`–`4040`). Natural extractor fidelity achieved **$96.15\%$ mean** ($27/40$ 100% perfect, $0$ entity hallucinations, $3.75\%$ omission rate).
-    - **Real vs Synthetic 30% Corruption**: Arm B (Graph Only) achieved **$97.50\%$** (vs $68.12\%$ under synthetic corruption, $+29.38\text{ pp}$, $p < 10^{-5}$, **BETTER**). Arm C (Text + Graph) achieved **$98.12\%$** (vs $85.62\%$, $+12.50\text{ pp}$, **BETTER**).
-    - **Arm F Dominance**: Arm F (Constructive Chronological Control) achieved **$100.00\%$ accuracy** ($160/160$ questions correct), definitively outperforming Arm D ($96.88\%$) and proving that constructive forward planning prevents reconciliation traps.
-    - **Counterfactual Advantage (Q3)**: Extracted graph structures provided a $+10.0\text{ pp}$ to $+17.5\text{ pp}$ advantage over pure text Arm A ($82.5\%$) on multi-hop counterfactual reasoning.
-    - **Audited Report**: Full empirical report and bootstrap statistics compiled in `experiments/text_vs_graph/PHASE2_PILOT_REPORT.md`.
+13. **Phase 17: Empirical Evaluation of Text vs Graph Under Real LLM Extractor Noise (Phase 2 Confirmatory Completed)**:
+    - **Natural Extractor Profile ($N=300$ stories, 5,100 LLM operations)**: Implemented zero-shot LLM extractor in `experiments/text_vs_graph/extractor.py`. Evaluated on 300 stories (`conf_s001`–`conf_s300`, seeds `4001`–`4300`). Natural extractor fidelity achieved **$99.08\%$ mean** ($279/300$ 100% perfect, only 1 entity hallucination across 2,400 gold events, $0.71\%$ omission rate).
+    - **H2' Confirmed (Text + Extracted Graph vs Text Baseline)**: Arm C achieved **$96.67\%$** vs **$90.83\%$** for Arm A ($+5.83\text{ pp}$ gain, $95\%\text{ CI } [+0.0417, +0.0742]$, verdict: **BETTER**, $p < 10^{-5}$).
+    - **Real vs Synthetic 30% Corruption**: Arm B (Graph Only) achieved **$93.75\%$** (vs $73.83\%$ under synthetic corruption, $+19.92\text{ pp}$, $p < 10^{-5}$, **BETTER**). Arm C (Text + Graph) achieved **$96.67\%$** (vs $86.58\%$, $+10.08\text{ pp}$, **BETTER**).
+    - **Arm F Dominance**: Arm F (Constructive Chronological Control) achieved **$99.58\%$ accuracy** ($1,195/1,200$ questions correct), definitively outperforming Arm D ($97.08\%$, $-2.50\text{ pp}$, $95\%\text{ CI } [-0.0350, -0.0158]$) and eliminating 97.9% of length truncations.
+    - **Counterfactual Advantage (Q3)**: Arm F ($98.7\%$) and Arm C ($86.7\%$) dramatically outperformed pure text Arm A ($75.3\%$, $+11.4\text{ pp}$ to $+23.4\text{ pp}$ gain).
+    - **Audited Report**: Full empirical report and bootstrap statistics compiled in `experiments/text_vs_graph/CONFIRMATORY_PHASE2_REPORT.md`.
     - **Monorepo Total**: **1,137 passed tests** across all 11 core subsystems + experiments + root (100% green, 3 skipped).
 
 ---

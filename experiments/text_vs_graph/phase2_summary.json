@@ -1,19 +1,19 @@
 {
-  "num_stories": 60,
-  "total_evals": 960,
-  "overall_accuracy": 0.976,
+  "num_stories": 300,
+  "total_evals": 4800,
+  "overall_accuracy": 0.9677,
   "arm_accuracies": {
-    "B": 0.9583,
-    "C": 0.9792,
+    "B": 0.9375,
+    "C": 0.9667,
     "D": 0.9708,
     "F": 0.9958
   },
   "qtype_accuracies": {
-    "Q1": 1.0,
-    "Q2": 0.9917,
-    "Q3": 0.9125,
-    "Q4": 1.0
+    "Q1": 0.9992,
+    "Q2": 0.9958,
+    "Q3": 0.8775,
+    "Q4": 0.9983
   },
-  "avg_extraction_fidelity": 0.999,
-  "total_seconds": 1514.52
+  "avg_extraction_fidelity": 0.9917,
+  "total_seconds": 8890.53
 }

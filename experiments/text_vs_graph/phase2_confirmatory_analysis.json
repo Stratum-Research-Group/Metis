@@ -1,0 +1,102 @@
+{
+  "num_stories": 300,
+  "total_evals": 4800,
+  "extraction_metrics": {
+    "mean_fidelity": 0.9908319999999999,
+    "min_fidelity": 0.125,
+    "max_fidelity": 1.0,
+    "perfect_extractions_pct": 0.93,
+    "total_missing_events": 17,
+    "total_hallucinated_events": 1,
+    "total_timestamp_mismatches": 12,
+    "total_duration_mismatches": 0
+  },
+  "overall_accuracy": {
+    "Arm_A_baseline": 0.9083333333333333,
+    "Arm_B_extracted": 0.9375,
+    "Arm_C_text_plus_extracted": 0.9666666666666667,
+    "Arm_D_reconcile": 0.9708333333333333,
+    "Arm_F_matched_control": 0.9958333333333333
+  },
+  "statistical_tests": [
+    {
+      "hypothesis": "H1' (Arm B Extracted vs Arm A Baseline)",
+      "diff": 0.029166666666666667,
+      "ci_lower": 0.01,
+      "ci_upper": 0.04833333333333333,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "H2' (Arm C Text+Extracted vs Arm A Baseline)",
+      "diff": 0.058333333333333334,
+      "ci_lower": 0.041666666666666664,
+      "ci_upper": 0.07416666666666667,
+      "verdict": "better"
+    },
+    {
+      "hypothesis": "H3' (Arm C Text+Extracted vs Arm B Extracted)",
+      "diff": 0.029166666666666667,
+      "ci_lower": 0.013333333333333334,
+      "ci_upper": 0.045,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "H4' (Arm D Reconcile vs Arm F Matched Control)",
+      "diff": -0.025,
+      "ci_lower": -0.035,
+      "ci_upper": -0.015833333333333335,
+      "verdict": "inconclusive"
+    },
+    {
+      "hypothesis": "Synthetic vs Real: Arm B (Real Ext) vs Arm B (Synth 30%)",
+      "diff": 0.19916666666666666,
+      "ci_lower": 0.1725,
+      "ci_upper": 0.22583333333333333,
+      "verdict": "better"
+    },
+    {
+      "hypothesis": "Synthetic vs Real: Arm C (Real Ext) vs Arm C (Synth 30%)",
+      "diff": 0.10083333333333333,
+      "ci_lower": 0.085,
+      "ci_upper": 0.11666666666666667,
+      "verdict": "better"
+    },
+    {
+      "hypothesis": "Synthetic vs Real: Arm D (Real Ext) vs Arm D (Synth 30%)",
+      "diff": 0.0375,
+      "ci_lower": 0.023333333333333334,
+      "ci_upper": 0.0525,
+      "verdict": "inconclusive"
+    }
+  ],
+  "question_type_breakdown": {
+    "Q1": {
+      "A": 0.9866666666666667,
+      "B": 0.9966666666666667,
+      "C": 1.0,
+      "D": 1.0,
+      "F": 1.0
+    },
+    "Q2": {
+      "A": 0.9166666666666666,
+      "B": 0.9866666666666667,
+      "C": 1.0,
+      "D": 1.0,
+      "F": 0.9966666666666667
+    },
+    "Q3": {
+      "A": 0.7533333333333333,
+      "B": 0.7733333333333333,
+      "C": 0.8666666666666667,
+      "D": 0.8833333333333333,
+      "F": 0.9866666666666667
+    },
+    "Q4": {
+      "A": 0.9766666666666667,
+      "B": 0.9933333333333333,
+      "C": 1.0,
+      "D": 1.0,
+      "F": 1.0
+    }
+  }
+}
