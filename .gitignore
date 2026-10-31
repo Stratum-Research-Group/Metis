@@ -70,6 +70,7 @@ passages.jsonl
 .admin_snapshots/
 paideia/runs/
 dokime/runs/
+runs/
 harness/references/
 lthcm-sigreg-diagnostic-*.txt
 .phylax/
