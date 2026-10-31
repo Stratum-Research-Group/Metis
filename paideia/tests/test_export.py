@@ -149,3 +149,38 @@ def test_privacy_sanitization():
     assert features["has_both"] is True
     assert features["token_count"] > 0
     assert "question_hash" in features
+
+
+def test_export_and_hestia_registry_roundtrip(tmp_path):
+    """Verify that export_hestia_adapter_registry emits a manifest compatible with Hestia."""
+    adapter_dir = tmp_path / "roundtrip_adapter"
+    adapter_dir.mkdir(parents=True, exist_ok=True)
+    (adapter_dir / "manifest.json").write_text('{"status": "SUCCESS", "is_simulated": false}')
+    _create_mock_safetensors(adapter_dir / "adapter_model.safetensors")
+
+    entry = export_hestia_adapter_registry(
+        adapter_id="roundtrip-lora-v1",
+        adapter_dir=adapter_dir,
+        base_model_name="test-base-model",
+        base_model_digest="sha256:roundtrip_base_digest",
+        tokenizer_digest="sha256:roundtrip_tok_digest",
+        template_digest="sha256:roundtrip_tmpl_digest",
+        task="question_router",
+        training_data_fingerprint="roundtrip_train_fp",
+        evaluation_run_id="run-roundtrip-101",
+        resource_footprint={"peak_vram_mb": 4500},
+    )
+
+    manifest_path = adapter_dir / "hestia_registry_entry.json"
+    assert manifest_path.exists()
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    from paideia.contracts.hestia_schema import HestiaAdapterRegistryEntry
+    validated = HestiaAdapterRegistryEntry.model_validate(data)
+    assert validated.adapter_id == "roundtrip-lora-v1"
+    assert validated.base_model_name == "test-base-model"
+    assert len(validated.adapter_digest) == 64
+    assert validated.resource_footprint == {"peak_vram_mb": 4500}
+    assert (adapter_dir / "adapter_model.safetensors").exists()
+
+

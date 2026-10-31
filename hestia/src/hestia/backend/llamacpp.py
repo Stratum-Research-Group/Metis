@@ -147,6 +147,13 @@ class LlamaCppBackend(Backend):
         if model.spec_type:
             args.extend(["--spec-type", str(model.spec_type)])
 
+        # LoRA adapter options
+        if model.lora_adapter_path:
+            if model.lora_scale is not None:
+                args.extend(["--lora-scaled", str(model.lora_adapter_path), str(model.lora_scale)])
+            else:
+                args.extend(["--lora", str(model.lora_adapter_path)])
+
         return args
 
     async def start(self, model: ModelEntry, port: int) -> BackendProcess:
@@ -162,6 +169,12 @@ class LlamaCppBackend(Backend):
                 model.name,
                 f"Speculative draft model weights not found at '{model.draft_model_path}'. "
                 "Please configure a valid draft GGUF path in models.yaml.",
+            )
+        if model.lora_adapter_path and not Path(model.lora_adapter_path).is_file():
+            raise BackendStartError(
+                model.name,
+                f"LoRA adapter weights not found at '{model.lora_adapter_path}'. "
+                "Please configure a valid LoRA path.",
             )
         if not self._binary.is_file():
             raise BackendStartError(

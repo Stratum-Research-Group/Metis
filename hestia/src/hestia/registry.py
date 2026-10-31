@@ -63,6 +63,8 @@ class ModelEntry:
     draft_model_path: Path | None = None
     draft_max: int | None = None
     spec_type: str | None = None
+    lora_adapter_path: Path | None = None
+    lora_scale: float | None = None
 
     # Runtime state — not persisted
     state: ModelState = field(default=ModelState.UNLOADED, repr=False)
@@ -84,6 +86,8 @@ class ModelEntry:
             draft_model_path=Path(raw["draft_model_path"]) if raw.get("draft_model_path") else None,
             draft_max=int(raw["draft_max"]) if raw.get("draft_max") is not None else None,
             spec_type=raw.get("spec_type"),
+            lora_adapter_path=Path(raw["lora_adapter_path"]) if raw.get("lora_adapter_path") else None,
+            lora_scale=float(raw["lora_scale"]) if raw.get("lora_scale") is not None else None,
         )
 
 
@@ -109,6 +113,47 @@ class ModelRegistry:
     def get(self, name: str) -> ModelEntry | None:
         """Get a model by name, or None if not registered."""
         return self._models.get(name)
+
+    def register_paideia_entry(
+        self,
+        entry_data: dict[str, Any],
+        adapter_path: Path | str | None = None,
+        base_model_name: str | None = None,
+        vram_overhead_mb: int = 500,
+    ) -> ModelEntry:
+        """Register a model entry derived from a Paideia hestia_registry_entry.json manifest."""
+        adapter_id = entry_data["adapter_id"]
+        base_name = base_model_name or entry_data.get("base_model_name", "")
+        # Resolve base model in registry
+        base_model = self.get(base_name)
+        if base_model is None:
+            # Fall back to matching prefix or substring
+            for m in self._models.values():
+                if m.name in base_name or base_name in m.name:
+                    base_model = m
+                    break
+        if base_model is None:
+            raise ValueError(f"Base model '{base_name}' not found in registry for adapter '{adapter_id}'")
+
+        lora_p = Path(adapter_path) if adapter_path else None
+        new_entry = ModelEntry(
+            name=adapter_id,
+            model_type=base_model.model_type,
+            gguf_path=base_model.gguf_path,
+            quantization=base_model.quantization,
+            context_size=base_model.context_size,
+            vram_estimate_mb=base_model.vram_estimate_mb + vram_overhead_mb,
+            gpu_target=base_model.gpu_target,
+            sampling=base_model.sampling,
+            artifact_digest=entry_data.get("adapter_digest"),
+            draft_model_path=base_model.draft_model_path,
+            draft_max=base_model.draft_max,
+            spec_type=base_model.spec_type,
+            lora_adapter_path=lora_p,
+            lora_scale=1.0,
+        )
+        self.register(new_entry)
+        return new_entry
 
     def list_all(self) -> list[ModelEntry]:
         """Return all registered models."""

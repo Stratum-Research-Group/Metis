@@ -395,7 +395,9 @@ class ModelSwapManager:
             await self.wait_for_stream_drain(active.generation, timeout=drain_timeout)
             logger.info("Stopping incumbent process for slot %s", rec.slot)
             try:
-                stop_process_fn(active.effective_runtime_instance)
+                res = stop_process_fn(active.effective_runtime_instance)
+                if asyncio.iscoroutine(res):
+                    await res
             except Exception as e:
                 logger.error("Error stopping incumbent process: %s", e)
 
@@ -403,7 +405,11 @@ class ModelSwapManager:
         candidate = self.bundles[rec.candidate_bundle_id]
         success, runtime_instance = False, {}
         try:
-            success, runtime_instance = start_process_fn(candidate)
+            res = start_process_fn(candidate)
+            if asyncio.iscoroutine(res):
+                success, runtime_instance = await res
+            else:
+                success, runtime_instance = res
         except Exception as e:
             logger.error("Exception starting candidate process: %s", e)
             success = False
@@ -418,7 +424,11 @@ class ModelSwapManager:
                 # Attempt incumbent recovery
                 if active and rec.prior_bundle_id and rec.prior_bundle_id in self.bundles:
                     prior = self.bundles[rec.prior_bundle_id]
-                    prior_ok, prior_instance = start_process_fn(prior)
+                    res = start_process_fn(prior)
+                    if asyncio.iscoroutine(res):
+                        prior_ok, prior_instance = await res
+                    else:
+                        prior_ok, prior_instance = res
                     if prior_ok:
                         logger.info("Incumbent successfully recovered for slot %s", rec.slot)
                         active.effective_runtime_instance = prior_instance
@@ -480,7 +490,7 @@ class ModelSwapManager:
             rec = self.changes.get(change_id)
             if not rec:
                 raise SwapError(f"Change '{change_id}' not found.")
-            if rec.state != SwapState.ACTIVE_PENDING:
+            if rec.state not in (SwapState.ACTIVE_PENDING, SwapState.COMMITTED):
                 raise InvalidStateTransitionError(f"Cannot rollback from state {rec.state}")
 
             active = self.active_records.get(rec.slot)
@@ -499,13 +509,19 @@ class ModelSwapManager:
 
         # Stop active process
         try:
-            stop_process_fn(active.effective_runtime_instance)
+            res = stop_process_fn(active.effective_runtime_instance)
+            if asyncio.iscoroutine(res):
+                await res
         except Exception as e:
             logger.error("Error stopping process during rollback: %s", e)
 
         # Restore prior bundle
         prior_bundle = self.bundles[rec.prior_bundle_id]
-        ok, runtime_instance = restore_process_fn(prior_bundle)
+        res = restore_process_fn(prior_bundle)
+        if asyncio.iscoroutine(res):
+            ok, runtime_instance = await res
+        else:
+            ok, runtime_instance = res
 
         async with self._lock:
             if not ok:

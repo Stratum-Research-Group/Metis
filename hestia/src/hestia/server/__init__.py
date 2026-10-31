@@ -5,11 +5,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from hestia.backend import BackendProcess, BackendStartError
 from hestia.device_lock import GpuDeviceLease, acquire_device_lease
 from hestia.registry import ModelEntry, ModelState
+from hestia.server.swap import (
+    ActiveRecord,
+    ChangeRecord,
+    ModelBundle,
+    ModelSwapManager,
+    StagingMode,
+    SwapState,
+)
 from hestia.vram import get_free_vram_mb, get_total_vram_mb
 
 if TYPE_CHECKING:
@@ -76,9 +85,23 @@ class ServerManager:
         # Global admission lock for atomic VRAM fit checks, evictions, and startups
         self._admission_lock: asyncio.Lock = asyncio.Lock()
 
+        # ModelSwapManager for crash-safe generational swaps
+        swap_state_dir = Path(getattr(config, "swap_state_dir", "data/hestia_swap"))
+        self._swap_manager = ModelSwapManager(state_dir=swap_state_dir)
+
         # Background task handles
         self._idle_checker_task: asyncio.Task[None] | None = None
         self._health_checker_task: asyncio.Task[None] | None = None
+
+    @property
+    def swap_manager(self) -> ModelSwapManager:
+        """Return the crash-safe ModelSwapManager instance."""
+        return self._swap_manager
+
+    def is_loaded(self, model_name: str) -> bool:
+        """Check if a model is currently loaded and running."""
+        model = self._registry.get(model_name)
+        return model is not None and model.state == ModelState.LOADED and model_name in self._processes
 
     # ── Lifecycle ──────────────────────────────────────────────
 
@@ -160,15 +183,23 @@ class ServerManager:
     # ── In-flight tracking ────────────────────────────────────
 
     def request_started(self, model_name: str) -> None:
-        """Mark a request as in-flight for a model."""
+        """Mark a request as in-flight for a model and acquire generational lease."""
         self._inflight[model_name] = self._inflight.get(model_name, 0) + 1
         self._touch(model_name)
+        for active in self._swap_manager.active_records.values():
+            bundle = self._swap_manager.bundles.get(active.bundle_id)
+            if bundle and bundle.model_name == model_name:
+                self._swap_manager.acquire_stream_lease(active.generation)
 
     def request_finished(self, model_name: str) -> None:
-        """Mark a request as completed for a model."""
+        """Mark a request as completed for a model and release generational lease."""
         count = self._inflight.get(model_name, 0)
         self._inflight[model_name] = max(0, count - 1)
         self._touch(model_name)
+        for active in self._swap_manager.active_records.values():
+            bundle = self._swap_manager.bundles.get(active.bundle_id)
+            if bundle and bundle.model_name == model_name:
+                self._swap_manager.release_stream_lease(active.generation)
 
     def has_inflight(self, model_name: str) -> bool:
         """Check if a model has in-flight requests."""
@@ -209,6 +240,142 @@ class ServerManager:
         sem = self._model_semaphores.get(model_name)
         if sem:
             sem.release()
+
+    # ── Model Swap & Adapter Lifecycle ────────────────────────
+
+    def register_paideia_bundle(
+        self,
+        entry_data: dict[str, Any],
+        adapter_path: Path | str | None = None,
+        base_model_name: str | None = None,
+    ) -> tuple[ModelBundle, ModelEntry]:
+        """Register a Paideia exported adapter into both ModelRegistry and ModelSwapManager."""
+        entry = self._registry.register_paideia_entry(
+            entry_data=entry_data,
+            adapter_path=adapter_path,
+            base_model_name=base_model_name,
+        )
+        bundle = ModelBundle(
+            bundle_id=entry_data["adapter_id"],
+            model_name=entry.name,
+            asset_hashes={
+                "adapter": entry_data.get("adapter_digest", ""),
+                "base_model": entry_data.get("base_model_digest", ""),
+                "tokenizer": entry_data.get("tokenizer_digest", ""),
+                "template": entry_data.get("template_digest", ""),
+            },
+            runtime_build_id=entry_data.get("compatible_backend", "llamacpp"),
+            verified_recovery_instructions=entry_data.get("rollback_target") or "",
+            compatibility_constraints={
+                "task": entry_data.get("task", ""),
+                "training_fingerprint": entry_data.get("training_data_fingerprint", ""),
+            },
+        )
+        self._swap_manager.register_bundle(bundle)
+        return bundle, entry
+
+    async def swap_model(
+        self,
+        slot: str,
+        candidate_bundle_id: str,
+        expected_generation: int,
+        idempotency_key: str,
+        authorization_reference: str = "",
+        staging_mode: StagingMode = StagingMode.MODE_B_MAINTENANCE,
+        auto_commit: bool = True,
+        drain_timeout: float = 10.0,
+    ) -> ChangeRecord:
+        """Perform a crash-safe model swap coordinated by ModelSwapManager."""
+        # 1. Prepare
+        rec = await self._swap_manager.prepare_change(
+            slot=slot,
+            candidate_bundle_id=candidate_bundle_id,
+            expected_generation=expected_generation,
+            idempotency_key=idempotency_key,
+            authorization_reference=authorization_reference,
+            staging_mode=staging_mode,
+        )
+
+        # 2. Validate
+        def validate_candidate(b: ModelBundle) -> bool:
+            model = self._registry.get(b.model_name)
+            if model is None:
+                return False
+            if not Path(model.gguf_path).is_file():
+                return False
+            if model.lora_adapter_path and not Path(model.lora_adapter_path).is_file():
+                return False
+            return True
+
+        rec = await self._swap_manager.validate_change(rec.change_id, validation_fn=validate_candidate)
+        if rec.state == SwapState.REJECTED:
+            return rec
+
+        # 3. Stage
+        rec = await self._swap_manager.stage_change(rec.change_id)
+
+        # 4. Activate
+        async def start_fn(bundle: ModelBundle) -> tuple[bool, dict[str, Any]]:
+            try:
+                proc = await self.ensure_loaded(bundle.model_name, track_inflight=False)
+                return True, {"model_name": bundle.model_name, "port": proc.port, "pid": proc.pid}
+            except Exception as e:
+                logger.error("Failed to load candidate bundle %s (%s): %s", bundle.bundle_id, bundle.model_name, e)
+                return False, {}
+
+        async def stop_fn(instance: dict[str, Any]) -> None:
+            m_name = instance.get("model_name")
+            if m_name and self.is_loaded(m_name):
+                try:
+                    await self._unload_model(m_name)
+                except Exception as e:
+                    logger.error("Failed to unload incumbent %s: %s", m_name, e)
+
+        rec = await self._swap_manager.activate_change(
+            rec.change_id,
+            start_process_fn=start_fn,
+            stop_process_fn=stop_fn,
+            drain_timeout=drain_timeout,
+        )
+
+        # 5. Commit if requested and ACTIVE_PENDING
+        if auto_commit and rec.state == SwapState.ACTIVE_PENDING:
+            active = self._swap_manager.active_records.get(slot)
+            if active:
+                rec = await self._swap_manager.commit_change(rec.change_id, expected_generation=active.generation)
+
+        return rec
+
+    async def rollback_model(
+        self,
+        change_id: str,
+        expected_generation: int,
+        reason: str = "Rollback requested",
+    ) -> ChangeRecord:
+        """Rollback an ACTIVE_PENDING model swap to prior bundle."""
+        async def restore_fn(bundle: ModelBundle) -> tuple[bool, dict[str, Any]]:
+            try:
+                proc = await self.ensure_loaded(bundle.model_name, track_inflight=False)
+                return True, {"model_name": bundle.model_name, "port": proc.port, "pid": proc.pid}
+            except Exception as e:
+                logger.error("Failed to restore prior bundle %s (%s): %s", bundle.bundle_id, bundle.model_name, e)
+                return False, {}
+
+        async def stop_fn(instance: dict[str, Any]) -> None:
+            m_name = instance.get("model_name")
+            if m_name and self.is_loaded(m_name):
+                try:
+                    await self._unload_model(m_name)
+                except Exception as e:
+                    logger.error("Failed to unload candidate during rollback %s: %s", m_name, e)
+
+        return await self._swap_manager.rollback_change(
+            change_id=change_id,
+            expected_generation=expected_generation,
+            restore_process_fn=restore_fn,
+            stop_process_fn=stop_fn,
+            reason=reason,
+        )
 
     # ── Internal ──────────────────────────────────────────────
 

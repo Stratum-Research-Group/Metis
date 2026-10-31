@@ -927,6 +927,40 @@
 
 ---
 
+### Item 98: Paideia Adapter Export & Hestia ModelSwapManager Generational Serving Integration
+- **Date:** 2026-10-31
+- **Severity:** P1 (Serving Lifecycle & Hot-Swap Architecture)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `hestia` (ServerManager, ModelSwapManager, LlamaCppBackend, REST Endpoints, ModelRegistry), `paideia` (Adapter Export, Hestia Registry Manifest)
+- **Reviewed Commit / Baseline:** `92ece29`
+- **Exact File Locations:**
+  - `hestia/src/hestia/server/swap.py` (enabled coroutine execution for `start_process_fn`, `stop_process_fn`, and `restore_process_fn`; permitted rollbacks for `COMMITTED` states)
+  - `hestia/src/hestia/registry.py` (added `lora_adapter_path` and `lora_scale` to `ModelEntry`; added `register_paideia_entry()` to dynamically derive LoRA models from `hestia_registry_entry.json`)
+  - `hestia/src/hestia/backend/llamacpp.py` (wired `--lora` and `--lora-scaled` flag generation in `build_launch_args`; added weight existence checks in `start()`)
+  - `hestia/src/hestia/server/__init__.py` (integrated `ModelSwapManager` into `ServerManager`; instrumented stream lease pinning on `request_started` and `request_finished`; added `swap_model()`, `rollback_model()`, and `register_paideia_bundle()`)
+  - `hestia/src/hestia/api/schemas.py` (added Pydantic models `ModelSwapRequest`, `ModelRollbackRequest`, `RegisterBundleRequest`)
+  - `hestia/src/hestia/api/app.py` (exposed `GET /manage/swap`, `POST /manage/swap`, `POST /manage/rollback`, `POST /manage/bundles`)
+  - `hestia/tests/test_swap_api.py` (6 new comprehensive unit and integration tests covering flag derivation, Paideia manifest ingestion, CAS generation guards, stream lease drain, and end-to-end hot swaps)
+  - `paideia/tests/test_export.py` (added `test_export_and_hestia_registry_roundtrip` verifying contract compliance)
+- **Root Cause & Rationale:**
+  - Paideia exported content-addressed `hestia_registry_entry.json` adapter manifests, and Hestia implemented crash-safe state machine `ModelSwapManager`, but the components were disconnected:
+    1. `ServerManager` did not instantiate or coordinate `ModelSwapManager`.
+    2. `LlamaCppBackend` lacked `--lora` CLI flag derivation.
+    3. No HTTP endpoints existed for orchestrating model swaps, bundle registration, or rollback.
+    4. Active inference streams were not pinned to model generations, risking mid-turn backend termination during maintenance swaps.
+- **Remediation & Behavioral Guarantees:**
+  1. **Generational Stream Pinning:** Inference requests mark leases via `manager.request_started()` and `request_finished()`, allowing `wait_for_stream_drain()` to gracefully drain in-flight streams before incumbent teardown.
+  2. **CAS ABA Prevention:** Monotonic generations strictly checked on `prepare_change`, `activate_change`, and `commit_change`; stale generation submissions reject with HTTP 409 Conflict.
+  3. **Rollback Resilience:** Automatic incumbent recovery on candidate startup failure; explicit `POST /manage/rollback` cleanly restores prior bundle and advances generation to eliminate ABA hazards.
+  4. **Dynamic LoRA Serving:** `LlamaCppBackend` transparently derives `--lora <path>` and `--lora-scaled <path> <scale>` arguments when starting models configured with Paideia fine-tuned adapters.
+  5. **Test Verification:**
+     - `hestia/tests/test_swap_api.py`: **6 passed** in 0.36s.
+     - `hestia/tests/`: **83 passed, 1 skipped** (up from 77).
+     - `paideia/tests/`: **51 passed** (up from 50).
+     - Full monorepo suite: **1,148 passed, 3 skipped**.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -959,10 +993,11 @@
 | **VS Code Void Token Alignment** | Item 95 | VS Code Void + Kybernetes (Zero-Loopback Token Auto-Discovery & Sync) | **Integrated & Verified** | 0 TS compile errors + React synced + 1,140 monorepo tests passing |
 | **Pyle WebRTC Remote Operations Hub**| Item 96 | VS Code Void + Prosopon (Live Device Registry, Pairing, Revoke & Audit) | **Integrated & Verified** | 0 TS compile errors + React synced + 21 Prosopon tests passing |
 | **Native KrisisSelector Formal Gate**| Item 97 | Kybernetes + Krisis (Formal Selector Gating, Half-Even Scoring, Contradiction)| **Integrated & Verified** | 199 Kybernetes tests passing (18/18 adapter tests passing) |
+| **ModelSwap Generational Serving Hub**| Item 98 | Hestia + Paideia (ModelSwapManager CAS Gating, LoRA Serving, /manage/swap)| **Integrated & Verified** | 83 Hestia + 51 Paideia tests passing (6 new swap tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,141 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,148 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -971,16 +1006,16 @@
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 143.21s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 227.52s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 6.91s | **PASS** |
-| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **77** | 1 | 1.54s | **PASS** |
+| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 1.92s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 44.81s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **50** | 0 | 2.68s | **PASS** |
+| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **51** | 0 | 2.68s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 2.12s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.42s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.56s | **PASS** |
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.08s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 20.35s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,141** | **3** | **~8.8 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,148** | **3** | **~8.8 min** | **ALL GATES PASS** |
 
 
 

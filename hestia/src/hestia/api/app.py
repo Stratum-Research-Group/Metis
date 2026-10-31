@@ -25,6 +25,9 @@ from hestia.api.schemas import (
     ManageModelRequest,
     ModelListResponse,
     ModelObject,
+    ModelRollbackRequest,
+    ModelSwapRequest,
+    RegisterBundleRequest,
 )
 from hestia.backend import BackendStartError
 from hestia.backend.llamacpp import LlamaCppBackend
@@ -40,6 +43,15 @@ from hestia.server import (
     QueueTimeoutError,
     ServerManager,
     ServerOverloadedError,
+)
+from hestia.server.swap import (
+    InvalidStateTransitionError,
+    ModelBundle,
+    RecoveryExhaustedError,
+    StagingMode,
+    StaleGenerationError,
+    SwapError,
+    SwapState,
 )
 from hestia.vram import get_free_vram_mb, get_gpu_name, get_total_vram_mb
 
@@ -539,6 +551,129 @@ def _build_router():
             raise HTTPException(status_code=404, detail=str(exc))
 
         return JSONResponse({"status": "unloaded", "model": model_name})
+
+    @router.get("/manage/swap")
+    async def manage_swap_status(request: Request) -> JSONResponse:
+        """Get state of all slots, active records, and recent change history."""
+        require_hestia_auth(request)
+        manager = _get_manager()
+        swap_mgr = manager.swap_manager
+        return JSONResponse({
+            "active_records": {k: v.to_dict() for k, v in swap_mgr.active_records.items()},
+            "changes": {k: v.to_dict() for k, v in swap_mgr.changes.items()},
+            "bundles": {k: v.to_dict() for k, v in swap_mgr.bundles.items()},
+        })
+
+    @router.post("/manage/bundles")
+    async def manage_register_bundle(request: Request) -> JSONResponse:
+        """Register a ModelBundle or ingest a Paideia hestia_registry_entry.json manifest."""
+        require_hestia_auth(request)
+        manager = _get_manager()
+        body = await request.json()
+        try:
+            req_data = RegisterBundleRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        if req_data.paideia_entry:
+            try:
+                bundle, entry = manager.register_paideia_bundle(
+                    entry_data=req_data.paideia_entry,
+                    adapter_path=req_data.adapter_path,
+                    base_model_name=req_data.base_model_name,
+                )
+                return JSONResponse({
+                    "status": "registered",
+                    "bundle": bundle.to_dict(),
+                    "model": entry.name,
+                })
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Failed to register Paideia entry: {exc}") from exc
+
+        if not req_data.bundle_id or not req_data.model_name:
+            raise HTTPException(status_code=400, detail="'bundle_id' and 'model_name' required when registering direct bundle")
+
+        bundle = ModelBundle(
+            bundle_id=req_data.bundle_id,
+            model_name=req_data.model_name,
+        )
+        manager.swap_manager.register_bundle(bundle)
+        return JSONResponse({"status": "registered", "bundle": bundle.to_dict()})
+
+    @router.post("/manage/swap")
+    async def manage_swap(request: Request) -> JSONResponse:
+        """Initiate and execute a crash-safe model swap."""
+        require_hestia_auth(request)
+        manager = _get_manager()
+        body = await request.json()
+        try:
+            req_data = ModelSwapRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            mode = StagingMode(req_data.staging_mode)
+        except Exception:
+            mode = StagingMode.MODE_B_MAINTENANCE
+
+        try:
+            rec = await manager.swap_model(
+                slot=req_data.slot,
+                candidate_bundle_id=req_data.candidate_bundle_id,
+                expected_generation=req_data.expected_generation,
+                idempotency_key=req_data.idempotency_key,
+                authorization_reference=req_data.authorization_reference,
+                staging_mode=mode,
+                auto_commit=req_data.auto_commit,
+                drain_timeout=req_data.drain_timeout,
+            )
+        except StaleGenerationError as exc:
+            raise HTTPException(status_code=409, detail=f"CAS Conflict: {exc}") from exc
+        except RecoveryExhaustedError as exc:
+            raise HTTPException(status_code=500, detail=f"Recovery Exhausted: {exc}") from exc
+        except (InvalidStateTransitionError, SwapError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Model swap failed: {exc}") from exc
+
+        active_rec = manager.swap_manager.active_records.get(req_data.slot)
+        return JSONResponse({
+            "status": "swapped" if rec.state in (SwapState.COMMITTED, SwapState.ACTIVE_PENDING) else rec.state.value.lower(),
+            "change": rec.to_dict(),
+            "active": active_rec.to_dict() if active_rec else None,
+        })
+
+    @router.post("/manage/rollback")
+    async def manage_rollback(request: Request) -> JSONResponse:
+        """Rollback an active or active-pending change to the previous bundle."""
+        require_hestia_auth(request)
+        manager = _get_manager()
+        body = await request.json()
+        try:
+            req_data = ModelRollbackRequest.model_validate(body)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            rec = await manager.rollback_model(
+                change_id=req_data.change_id,
+                expected_generation=req_data.expected_generation,
+                reason=req_data.reason,
+            )
+        except StaleGenerationError as exc:
+            raise HTTPException(status_code=409, detail=f"CAS Conflict: {exc}") from exc
+        except RecoveryExhaustedError as exc:
+            raise HTTPException(status_code=500, detail=f"Recovery Exhausted: {exc}") from exc
+        except (InvalidStateTransitionError, SwapError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Rollback failed: {exc}") from exc
+
+        return JSONResponse({
+            "status": "rolled_back",
+            "change": rec.to_dict(),
+            "active": manager.swap_manager.active_records.get(rec.slot).to_dict() if rec.slot in manager.swap_manager.active_records else None,
+        })
 
     async def _safe_request_finished(mgr: ServerManager, m_name: str) -> None:
         res = mgr.request_finished(m_name)
