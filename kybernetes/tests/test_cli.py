@@ -49,6 +49,10 @@ def test_cli_lochos():
     res_q = runner.invoke(cli, ["lochos", "queue"])
     assert res_q.exit_code == 0
 
+    res_comp_help = runner.invoke(cli, ["lochos", "complete", "--help"])
+    assert res_comp_help.exit_code == 0
+    assert "Mark an active task as completed" in res_comp_help.output
+
 
 def test_cli_pinax_help():
     runner = CliRunner()

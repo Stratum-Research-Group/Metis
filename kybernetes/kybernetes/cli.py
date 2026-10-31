@@ -382,6 +382,24 @@ def lochos_run_cmd(seat: str, auto_approve: bool, max_steps: int):
         sys.exit(1)
 
 
+@lochos_group.command("complete")
+@click.option("--task-id", prompt="Task ID", help="Task ID to complete")
+@click.option("--seat", prompt="Seat address/id", help="Seat ID holding baton")
+@click.option("--result", default=None, help="Optional result message")
+def lochos_complete_cmd(task_id: str, seat: str, result: Optional[str] = None):
+    """Mark an active task as completed."""
+    from kybernetes.lochos import LochosSquadManager
+    manager = LochosSquadManager()
+    s = manager.get_seat(seat)
+    seat_addr = s.full_address if s else seat
+    res_dict = {"message": result} if result else {"status": "ok"}
+    try:
+        item = manager.queue.complete_task(task_id=task_id, seat_id=seat_addr, result=res_dict)
+        click.echo(f"Task [{item.task_id}] marked as COMPLETED by {seat_addr}.")
+    except Exception as e:
+        click.echo(f"Completion error: {e}", err=True)
+
+
 # =========================================================================
 # Pinax: Tool Catalogue & Large Inventory Subsystem (Section 7)
 # =========================================================================
