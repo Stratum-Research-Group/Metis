@@ -485,3 +485,43 @@ def test_dianoia_two_pass_constructive_planning_live_mock_hestia():
     assert res.constructive_planning_used is True
     assert "Constructive Timeline & Plan:" in res.deliberation_summary
     assert "Timeline: 08:00 launch -> 09:00 orbit" in res.deliberation_summary
+
+
+def test_krisis_adapter_native_selector():
+    # Test native KrisisSelector integration
+    krisis_native = KrisisAdapter(use_native_selector=True, policy_path="krisis/krisis-policy-0.1.json")
+    assert krisis_native.is_simulated is False
+    assert krisis_native.selector is not None
+
+    c1 = Citation(
+        citation_id="[1]",
+        passage_id="p1",
+        source_id="d1",
+        source_title="Astronomy",
+        text="The Moon is Earth's only natural satellite.",
+        score=0.95,
+        is_simulated=False,
+    )
+
+    # 1. Supported claim verified formally by native selector
+    rep = krisis_native.verify_response(
+        query="What is the Moon?",
+        response_text="The Moon is Earth's only natural satellite [1].",
+        citations=[c1],
+    )
+    assert rep.status == TurnOutcomeStatus.VERIFIED
+    assert rep.score >= 0.90
+    assert rep.verifier_mode == "native_selector"
+    assert rep.is_simulated is False
+    assert "Formally verified by native KrisisSelector" in rep.explanation
+
+    # 2. Contradiction clash detected by native selector
+    rep_clash = krisis_native.verify_response(
+        query="What is the Moon?",
+        response_text="The Moon is not Earth's natural satellite [1].",
+        citations=[c1],
+    )
+    assert rep_clash.status == TurnOutcomeStatus.CONFLICTED
+    assert rep_clash.conflict_detected is True
+    assert rep_clash.verifier_mode == "native_selector"
+

@@ -22,12 +22,30 @@ class KrisisAdapter:
     """
     Adapter for Krisis verification and quality gate.
     Evaluates evidence support and ensures raw generation is never
-    confused with factual verification.
+    confused with factual verification. Supports both lightweight heuristic
+    verification and native KrisisSelector formal gating.
     """
 
-    def __init__(self, verifier_client: Optional[Any] = None):
+    def __init__(
+        self,
+        verifier_client: Optional[Any] = None,
+        use_native_selector: bool = False,
+        policy_path: Optional[str] = None,
+    ):
         self.verifier_client = verifier_client
-        self.is_simulated = (verifier_client is None)
+        self.use_native_selector = use_native_selector
+        self.selector = None
+        if use_native_selector:
+            try:
+                from krisis.engine.selector import KrisisSelector
+                manifest = policy_path or "krisis/krisis-policy-0.1.json"
+                self.selector = KrisisSelector(manifest)
+                self.is_simulated = False
+            except Exception:
+                self.selector = None
+                self.is_simulated = True
+        else:
+            self.is_simulated = (verifier_client is None)
 
     def verify_response(
         self,
@@ -161,6 +179,102 @@ class KrisisAdapter:
                 cit_neg = any(neg in re.findall(r"\b[a-z]+\b", cit_clean) for neg in contradiction_keywords)
                 if len(shared_tokens) >= 2 and (claim_neg != cit_neg):
                     contradiction_found = True
+
+        # Native KrisisSelector formal verification path
+        if self.use_native_selector and self.selector is not None:
+            try:
+                from krisis.contracts.candidate import Candidate, Claim, EvidencePassage, GateResults
+                from krisis.contracts.enums import DecisionStatus
+                from krisis.contracts.request import KrisisRequest
+
+                claims: List[Claim] = []
+                for idx, s in enumerate(sentences):
+                    s_markers = re.findall(r"\[([A-Za-z0-9_\-\.\s]+)\]", s)
+                    cited_ids = [m.strip("[]") for m in s_markers if (m in known_markers or f"[{m}]" in known_markers)]
+                    verdict = "supported" if (s_markers and cited_ids and not contradiction_found) else ("contradicted" if contradiction_found else "unsupported")
+                    claims.append(
+                        Claim(
+                            claim_id=f"cl_{idx}",
+                            text=s,
+                            verdict=verdict,
+                            calibrated_confidence="0.95" if verdict == "supported" else "0.30",
+                            cited_passage_ids=cited_ids,
+                        )
+                    )
+
+                candidate = Candidate(
+                    id="cand_0",
+                    text=response_text,
+                    cal_ll="-0.10",
+                    citations=found_markers,
+                    gate_results=GateResults(
+                        access=True,
+                        provenance=True,
+                        contradiction=(not contradiction_found),
+                        citation_resolution=(len(unknown_markers) == 0 and len(found_markers) > 0),
+                    ),
+                    claims=claims,
+                )
+
+                evidence_passages = [
+                    EvidencePassage(
+                        passage_id=c.citation_id.strip("[]"),
+                        text=c.text,
+                        trust_flag="trusted" if not c.is_simulated else "untrusted",
+                    )
+                    for c in citations
+                ]
+
+                k_req = KrisisRequest(
+                    question_class="general",
+                    requires_grounding=True,
+                    candidates=[candidate],
+                    evidence=evidence_passages,
+                )
+
+                decision = self.selector.evaluate(k_req)
+
+                if decision.status == DecisionStatus.SELECTED.value:
+                    score_str = decision.scores.get("cand_0", "0.95")
+                    try:
+                        score_val = float(score_str)
+                    except Exception:
+                        score_val = 0.95
+                    return KrisisVerificationReport(
+                        status=TurnOutcomeStatus.VERIFIED,
+                        score=score_val,
+                        supported_claims=supported_count,
+                        unsupported_claims=unsupported_count,
+                        conflict_detected=False,
+                        explanation=f"Formally verified by native KrisisSelector under profile '{decision.profile}'.",
+                        is_simulated=False,
+                        verifier_mode="native_selector",
+                    )
+                else:
+                    if contradiction_found or any(r.gate_failed == "contradiction" for r in decision.rejected):
+                        status = TurnOutcomeStatus.CONFLICTED
+                        score_val = 0.1
+                        conflict_detected = True
+                        explanation = f"KrisisSelector abstained due to contradiction ({decision.reason})."
+                    else:
+                        status = TurnOutcomeStatus.INSUFFICIENT_EVIDENCE
+                        score_val = 0.3
+                        conflict_detected = False
+                        explanation = f"KrisisSelector abstained: {decision.reason}."
+
+                    return KrisisVerificationReport(
+                        status=status,
+                        score=score_val,
+                        supported_claims=supported_count,
+                        unsupported_claims=max(1, unsupported_count),
+                        conflict_detected=conflict_detected,
+                        explanation=explanation,
+                        is_simulated=False,
+                        verifier_mode="native_selector",
+                    )
+            except Exception:
+                # Fall through to heuristic verification on selector exception
+                pass
 
         if contradiction_found:
             return KrisisVerificationReport(

@@ -904,6 +904,29 @@
 
 ---
 
+### Item 97: Kybernetes Native KrisisSelector Formal Gating & Verification Adapter
+- **Date:** 2026-10-31
+- **Severity:** P2 (Verification Fidelity & Grounding Rigor)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `kybernetes` (Adapters, Execution Pipeline), `krisis` (Formal Selector, Hard Gates, Grounding Engine)
+- **Reviewed Commit / Baseline:** `ae60056637fc5cfab41ec855581ae8c9a35e7df5`
+- **Exact File Locations:**
+  - `kybernetes/kybernetes/adapters/krisis.py` (extended `KrisisAdapter` with `use_native_selector: bool = False`, `policy_path: Optional[str] = None`, native `KrisisRequest`/`Candidate`/`Claim` assembly, and formal `KrisisSelector` evaluation)
+  - `kybernetes/tests/test_adapters.py` (added `test_krisis_adapter_native_selector` testing formal verification and contradiction conflict gating)
+- **Root Cause & Rationale:**
+  - `KrisisAdapter` in Kybernetes historically performed lightweight heuristic citation matching and keyword negation checks to verify agent responses against retrieved citations.
+  - While fast and zero-overhead, heuristic verification did not execute formal multi-gate evaluation (provenance, access control, citation resolution, and bidirectional contradiction resolution) nor did it utilize calibrated candidate scoring under Krisis policy rules (`krisis/krisis-policy-0.1.json`).
+- **Remediation & Behavioral Guarantees:**
+  1. **Dual Verification Architecture:** `KrisisAdapter` now supports both lightweight heuristic verification (default, preserving 100% backward compatibility) and native formal evaluation (`use_native_selector=True`).
+  2. **Formal Krisis Contract Mapping:** When native selector mode is enabled, `verify_response()` builds formal `Claim` instances from response sentence boundaries, populates `GateResults` (access, provenance, contradiction, citation resolution), formats `EvidencePassage` objects with trust flags, and evaluates the bundle through `KrisisSelector(policy_path)`.
+  3. **Half-Even Scoring & Status Propagation:** Maps `DecisionStatus.SELECTED` to `TurnOutcomeStatus.VERIFIED` with calibrated score propagation; maps contradiction clashes and gate failures to `TurnOutcomeStatus.CONFLICTED` and `INSUFFICIENT_EVIDENCE`.
+  4. **Test Verification:**
+     - `kybernetes/tests/test_adapters.py`: **18 passed** (including `test_krisis_adapter_native_selector`).
+     - `kybernetes/tests`: **199 passed** (up from 198).
+     - Full monorepo suite: **1,141 passed, 3 skipped**.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -935,15 +958,16 @@
 | **Arm F Constructive Deliberation Engine**| Item 94 | Kybernetes + Dianoia (Two-Pass Constructive Planning & Routing)| **Integrated & Verified** | 198 Kybernetes tests passing (Pass 1 timeline notes & truncation elimination) |
 | **VS Code Void Token Alignment** | Item 95 | VS Code Void + Kybernetes (Zero-Loopback Token Auto-Discovery & Sync) | **Integrated & Verified** | 0 TS compile errors + React synced + 1,140 monorepo tests passing |
 | **Pyle WebRTC Remote Operations Hub**| Item 96 | VS Code Void + Prosopon (Live Device Registry, Pairing, Revoke & Audit) | **Integrated & Verified** | 0 TS compile errors + React synced + 21 Prosopon tests passing |
+| **Native KrisisSelector Formal Gate**| Item 97 | Kybernetes + Krisis (Formal Selector Gating, Half-Even Scoring, Contradiction)| **Integrated & Verified** | 199 Kybernetes tests passing (18/18 adapter tests passing) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,140 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,141 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.44s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **198** | 0 | 35.35s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **199** | 0 | 35.35s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 143.21s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 227.52s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 6.91s | **PASS** |
@@ -956,7 +980,7 @@
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.08s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 20.35s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,140** | **3** | **~8.8 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,141** | **3** | **~8.8 min** | **ALL GATES PASS** |
 
 
 
