@@ -42,6 +42,7 @@ def test_route_deliberation_multi_hop(router):
     deliberate_stage = next(s for s in plan.stages if s.stage == StageName.DELIBERATE)
     assert deliberate_stage.params.get("graph_consistency_floor") == 0.95
     assert deliberate_stage.params.get("fallback_to_pure_text_on_inconsistency") is True
+    assert deliberate_stage.params.get("two_pass_constructive_planning") is True
 
 
 def test_route_tool_calculator(router):

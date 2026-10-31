@@ -81,13 +81,14 @@ class PlanRouter:
             stages.append(
                 StagePlan(
                     stage=StageName.DELIBERATE,
-                    description="Conduct bounded thought-graph walk via Dianoia with zero-edge fallback and consistency gating.",
+                    description="Conduct bounded thought-graph walk via Dianoia with zero-edge fallback, consistency gating, and constructive chronological planning.",
                     timeout_ms=10000,
                     required_capabilities=["deliberate"],
                     enabled=True,
                     params={
                         "graph_consistency_floor": 0.95,
                         "fallback_to_pure_text_on_inconsistency": True,
+                        "two_pass_constructive_planning": True,
                     },
                 )
             )

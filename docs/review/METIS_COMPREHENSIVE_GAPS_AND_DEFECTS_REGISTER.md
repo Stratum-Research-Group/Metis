@@ -821,6 +821,28 @@
 
 ---
 
+### Item 94: Core Engine Arm F Two-Pass Constructive Chronological Deliberation Engine
+- **Priority:** P1 (Reasoning Efficiency & Token Runway Truncation Elimination)
+- **Status:** **Implemented & Fully Verified**
+- **Affected Subsystems:**
+  - `kybernetes/kybernetes/adapters/dianoia.py`
+  - `kybernetes/kybernetes/routing/router.py`
+  - `kybernetes/kybernetes/engine/pipeline.py`
+  - `kybernetes/tests/test_adapters.py`
+  - `kybernetes/tests/test_routing.py`
+- **Root Cause & Specification Requirement:**
+  - In Confirmatory Phase 2 evaluation ($N=300$), single-pass multi-hop reasoning over unstructured narrative prose suffered severe length truncations at the 512-token ceiling (Arm A 75.3% on Q3; 94 global truncations). Furthermore, prompting models to search for discrepancies (Arm D) triggered false-contradiction hallucinations and scratchpad bloat.
+  - Arm F's two-pass constructive discipline achieved **$99.58\%$ overall accuracy** and **$98.7\%$ on Q3**, reducing length truncations by 95% (only 2 truncations across 1,200 runs).
+  - To productionize this finding into the sovereign runtime, `StageName.DELIBERATE` and `ExecutionPipeline` required native two-pass constructive chronological planning support.
+- **Remediation & Behavioral Guarantees:**
+  1. Extended `DianoiaDeliberationResult` with `constructive_planning_used: bool = False`.
+  2. Extended `DianoiaAdapter.deliberate()` with `two_pass_constructive_planning: bool = False` and `hestia_client: Optional[Any] = None`. When enabled, Pass 1 constructs chronological timeline notes (either via live Hestia inference or structured sequence aggregation) and sets `constructive_planning_used = True`.
+  3. Updated `kybernetes.routing.router` so `StageName.DELIBERATE` enables `two_pass_constructive_planning: True` by default on multi-hop routes.
+  4. Updated `ExecutionPipeline` to wire `two_pass_constructive_planning` and pass `self.hestia` to `deliberate()`, recording `constructive_planning` in stage outcome metrics.
+  5. Added unit tests in `kybernetes/tests/test_adapters.py` (`test_dianoia_two_pass_constructive_planning_simulated` and `test_dianoia_two_pass_constructive_planning_live_mock_hestia`) and verified routing in `kybernetes/tests/test_routing.py`. All 198 Kybernetes tests pass cleanly.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -849,15 +871,16 @@
 | **Zero-Hallucination Graph Filtering** | Item 91 | Stoma + Kybernetes (DeterministicSpanFilter & Dynamic Consistency Gating)| **Integrated & Verified** | 123 Stoma + 196 Kybernetes tests passing (8 new unit/adapter tests) |
 | **Heuresis Scientific Discovery Engine**| Item 92 | Stoma + Dokime (OpenReview Crawler, Dual Scorer, Sheaf OOV Synthesizer)| **Integrated & Verified** | 127 Stoma + 218 Dokime tests passing (9 new crawler/discovery tests) |
 | **Phase 2 Real Extractor Empirical Study**| Item 93 | Experiments (Real LLM Extractor Noise, 300 Stories, Bootstrap CIs)| **Audited & Verified** | 27 tests passing + 4,800 evals verified ($99.58\%$ on Arm F, H2' BETTER) |
+| **Arm F Constructive Deliberation Engine**| Item 94 | Kybernetes + Dianoia (Two-Pass Constructive Planning & Routing)| **Integrated & Verified** | 198 Kybernetes tests passing (Pass 1 timeline notes & truncation elimination) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,137 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,140 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.44s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **196** | 0 | 29.84s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **198** | 0 | 35.35s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 143.21s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 227.52s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **93** | 0 | 6.91s | **PASS** |
@@ -867,10 +890,10 @@
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 2.12s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.42s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.56s | **PASS** |
-| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **26** | 0 | 0.08s | **PASS** |
+| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.08s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 20.35s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,137** | **3** | **~8.8 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,140** | **3** | **~8.8 min** | **ALL GATES PASS** |
 
 
 

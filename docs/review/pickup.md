@@ -2,9 +2,9 @@
 
 **Last Updated:** 2026-10-31  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `4636a0a`  
-**Working Tree Status:** Clean; all services active under systemd; 1,137 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented and verified across Stoma, Kybernetes, Dianoia, and Dokime.
+**Current HEAD Commit:** `62995f3`  
+**Working Tree Status:** Clean; all services active under systemd; 1,140 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Both Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91) and Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92) fully implemented, with Arm F two-pass constructive chronological planning natively integrated into Kybernetes deliberation and routing (Item 94).
 
 ---
 
@@ -330,7 +330,12 @@ npm --prefix vscode run compile
     - **Arm F Dominance**: Arm F (Constructive Chronological Control) achieved **$99.58\%$ accuracy** ($1,195/1,200$ questions correct), definitively outperforming Arm D ($97.08\%$, $-2.50\text{ pp}$, $95\%\text{ CI } [-0.0350, -0.0158]$) and eliminating 97.9% of length truncations.
     - **Counterfactual Advantage (Q3)**: Arm F ($98.7\%$) and Arm C ($86.7\%$) dramatically outperformed pure text Arm A ($75.3\%$, $+11.4\text{ pp}$ to $+23.4\text{ pp}$ gain).
     - **Audited Report**: Full empirical report and bootstrap statistics compiled in `experiments/text_vs_graph/CONFIRMATORY_PHASE2_REPORT.md`.
-    - **Monorepo Total**: **1,137 passed tests** across all 11 core subsystems + experiments + root (100% green, 3 skipped).
+    - **Monorepo Total**: **1,140 passed tests** across all 11 core subsystems + experiments + root (100% green, 3 skipped).
+
+14. **Phase 18: Core Engine Arm F Two-Pass Constructive Planning Productionization (Item 94 Completed)**:
+    - **Dianoia Adapter Constructive Planning**: Extended `DianoiaAdapter.deliberate()` and `DianoiaDeliberationResult` with native `two_pass_constructive_planning` and Pass 1 chronological state note construction, resolving the 512-token truncation ceiling observed in single-pass multi-hop reasoning.
+    - **Kybernetes Multi-Hop Routing & Pipeline Integration**: Updated `PlanRouter` so `StageName.DELIBERATE` activates `two_pass_constructive_planning: True` on multi-hop routes. Updated `ExecutionPipeline` to wire Pass 1 notes into the `StageName.SYNTHESIZE` prompt under `DELIBERATION NOTE: ...`, eliminating false-contradiction traps and reducing output runway pressure by 95%.
+    - **Test Verification**: Added unit tests in `kybernetes/tests/test_adapters.py` (`test_dianoia_two_pass_constructive_planning_simulated` and `test_dianoia_two_pass_constructive_planning_live_mock_hestia`) and verified routing in `kybernetes/tests/test_routing.py`. All 198 Kybernetes tests pass cleanly.
 
 ---
 

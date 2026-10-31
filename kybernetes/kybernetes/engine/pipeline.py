@@ -318,12 +318,15 @@ class ExecutionPipeline:
                 delib_steps = stage_plan.params.get("max_steps", self.thinking_budget_steps)
                 consistency_floor = stage_plan.params.get("graph_consistency_floor", 0.95)
                 fallback_on_inconsistency = stage_plan.params.get("fallback_to_pure_text_on_inconsistency", True)
+                constructive_plan = stage_plan.params.get("two_pass_constructive_planning", True)
                 d_result = self.dianoia.deliberate(
                     query=request.query,
                     seed_citations=citations,
                     max_steps=delib_steps,
                     consistency_floor=consistency_floor,
                     fallback_to_pure_text_on_inconsistency=fallback_on_inconsistency,
+                    two_pass_constructive_planning=constructive_plan,
+                    hestia_client=self.hestia,
                 )
                 zero_edge_fallback = d_result.zero_edge_fallback_used
                 deliberation_summary = d_result.deliberation_summary
@@ -339,6 +342,7 @@ class ExecutionPipeline:
                             "zero_edge_fallback": zero_edge_fallback,
                             "consistency_fallback": getattr(d_result, "consistency_fallback_used", False),
                             "consistency_ratio": getattr(d_result, "consistency_ratio", 1.0),
+                            "constructive_planning": getattr(d_result, "constructive_planning_used", False),
                             "walk_steps": d_result.walk_steps,
                             "edges_traversed": d_result.edges_traversed,
                             "max_deliberation_steps": delib_steps,

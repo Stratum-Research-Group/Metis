@@ -434,3 +434,54 @@ def test_phylax_adapter_live_policy_evaluation():
     import pytest
     with pytest.raises(FileNotFoundError):
         PhylaxAdapter(policy_path="/nonexistent/policy.yaml")
+
+
+def test_dianoia_two_pass_constructive_planning_simulated():
+    dianoia = DianoiaAdapter()
+    citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="Event E1 at hour 8.", score=0.9),
+        Citation(citation_id="[2]", passage_id="p2", source_id="d2", source_title="D2", text="Event E2 at hour 10.", score=0.8),
+    ]
+    res = dianoia.deliberate(
+        query="What happened between E1 and E2?",
+        seed_citations=citations,
+        two_pass_constructive_planning=True,
+    )
+    assert res.constructive_planning_used is True
+    assert "Constructive Plan:" in res.deliberation_summary
+    assert "Sequenced facts chronologically" in res.deliberation_summary
+
+
+def test_dianoia_two_pass_constructive_planning_live_mock_hestia():
+    class MockWalkController:
+        def walk(self, question, controller_policy=None):
+            return {
+                "path": ["node_1", "node_2"],
+                "visited_passages": [
+                    {"doc_id": "p1", "title": "D1", "text": "Launch at 08:00.", "score": 0.95},
+                    {"doc_id": "p2", "title": "D2", "text": "Orbit at 09:00.", "score": 0.92},
+                ],
+                "steps_used": 2,
+                "answer": "Traversed launch to orbit.",
+                "conflicted": False,
+            }
+
+    class MockHestiaClient:
+        def generate(self, prompt, max_tokens=250):
+            return "Timeline: 08:00 launch -> 09:00 orbit. Dependencies verified."
+
+    dianoia = DianoiaAdapter(walk_controller=MockWalkController())
+    assert dianoia.is_simulated is False
+
+    citations = [
+        Citation(citation_id="[1]", passage_id="p1", source_id="d1", source_title="D1", text="Launch at 08:00.", score=0.95)
+    ]
+    res = dianoia.deliberate(
+        query="Trace launch timeline",
+        seed_citations=citations,
+        two_pass_constructive_planning=True,
+        hestia_client=MockHestiaClient(),
+    )
+    assert res.constructive_planning_used is True
+    assert "Constructive Timeline & Plan:" in res.deliberation_summary
+    assert "Timeline: 08:00 launch -> 09:00 orbit" in res.deliberation_summary

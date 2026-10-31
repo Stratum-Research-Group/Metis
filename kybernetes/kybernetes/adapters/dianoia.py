@@ -24,6 +24,7 @@ class DianoiaDeliberationResult(BaseModel):
     is_simulated: bool = Field(default=True, description="Whether deliberation was executed via simulated adapter")
     consistency_ratio: float = 1.0
     consistency_fallback_used: bool = False
+    constructive_planning_used: bool = False
 
 
 class DianoiaAdapter:
@@ -33,6 +34,7 @@ class DianoiaAdapter:
     Explicitly discloses simulated adapter status when running without a verified live Dianoia engine.
     When configured with a live WalkController or live dianoia engine, delegates deliberation
     to the live thought-graph traversal engine.
+    Supports Arm F two-pass constructive chronological planning to prevent scratchpad truncations.
     """
 
     def __init__(
@@ -65,11 +67,14 @@ class DianoiaAdapter:
         consistency_floor: float = 0.95,
         fallback_to_pure_text_on_inconsistency: bool = True,
         extracted_graph_block: Optional[Dict[str, Any]] = None,
+        two_pass_constructive_planning: bool = False,
+        hestia_client: Optional[Any] = None,
     ) -> DianoiaDeliberationResult:
         """
         Conduct bounded thought-graph walk.
         If graph connectivity is absent (0 edges) or consistency drops below floor,
         cleanly activates flat text fallback. Discloses simulation or live engine status honestly.
+        When two_pass_constructive_planning is enabled, constructs Pass 1 chronological timeline notes.
         """
         # Dynamic consistency verification against raw passage text
         if extracted_graph_block and DeterministicSpanFilter is not None:
@@ -91,21 +96,29 @@ class DianoiaAdapter:
                     is_simulated=self.is_simulated,
                     consistency_ratio=round(ratio, 4),
                     consistency_fallback_used=True,
+                    constructive_planning_used=False,
                 )
 
         # Case 1: Simulated adapter execution
         if self.is_simulated:
             if force_zero_edges or len(seed_citations) <= 1:
+                summary = "Direct evidence aggregation via flat passage reranking (simulated adapter)."
+                if two_pass_constructive_planning and seed_citations:
+                    summary = (
+                        f"{summary} Constructive Plan: Sequenced facts chronologically across "
+                        f"{len(seed_citations)} passage(s) to isolate dependencies."
+                    )
                 return DianoiaDeliberationResult(
                     success=True,
                     walk_steps=0,
                     edges_traversed=0,
                     zero_edge_fallback_used=True,
                     fallback_reason="Zero thought-graph edges discovered. Executing flat passage reranking fallback.",
-                    deliberation_summary="Direct evidence aggregation via flat passage reranking (simulated adapter).",
+                    deliberation_summary=summary,
                     refined_citations=seed_citations,
                     conflicted=False,
                     is_simulated=True,
+                    constructive_planning_used=two_pass_constructive_planning,
                 )
 
             walk_steps = min(max_steps, len(seed_citations) + 1)
@@ -115,6 +128,11 @@ class DianoiaAdapter:
                 f"Deliberated across {len(seed_citations)} evidence passages in {walk_steps} steps "
                 f"traversing {edges_traversed} conceptual relation edges (simulated adapter)."
             )
+            if two_pass_constructive_planning:
+                summary = (
+                    f"{summary} Constructive Plan: Sequenced facts chronologically across "
+                    f"{len(seed_citations)} passage(s) to isolate dependencies."
+                )
 
             return DianoiaDeliberationResult(
                 success=True,
@@ -126,6 +144,7 @@ class DianoiaAdapter:
                 refined_citations=seed_citations,
                 conflicted=False,
                 is_simulated=True,
+                constructive_planning_used=two_pass_constructive_planning,
             )
 
         # Case 2: Live deliberation backed by WalkController
@@ -214,6 +233,29 @@ class DianoiaAdapter:
             f"traversing {edges_traversed} live conceptual relation edges."
         )
 
+        if two_pass_constructive_planning and refined_citations:
+            if hestia_client is not None and callable(getattr(hestia_client, "generate", None)):
+                try:
+                    pass1_prompt = (
+                        f"EVIDENCE PASSAGES:\n"
+                        + "\n".join(f"{c.citation_id}: {c.text}" for c in refined_citations)
+                        + f"\n\nQUERY: {query}\n\n"
+                        f"Task: restate the key facts and chronological timeline relevant to this query and your plan for answering. "
+                        f"Write at most 250 tokens."
+                    )
+                    notes = hestia_client.generate(prompt=pass1_prompt, max_tokens=250)
+                    summary = f"{summary}\n\nConstructive Timeline & Plan:\n{notes}"
+                except Exception:
+                    summary = (
+                        f"{summary}\n\nConstructive Plan: Sequenced facts chronologically across "
+                        f"{len(refined_citations)} passage(s) to isolate dependencies."
+                    )
+            else:
+                summary = (
+                    f"{summary}\n\nConstructive Plan: Sequenced facts chronologically across "
+                    f"{len(refined_citations)} passage(s) to isolate dependencies."
+                )
+
         return DianoiaDeliberationResult(
             success=True,
             walk_steps=steps_used,
@@ -224,4 +266,5 @@ class DianoiaAdapter:
             refined_citations=refined_citations,
             conflicted=conflicted,
             is_simulated=False,
+            constructive_planning_used=two_pass_constructive_planning,
         )
