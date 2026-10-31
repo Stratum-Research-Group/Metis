@@ -48,6 +48,14 @@ wait_for_url() {
 
 cd "${ROOT_DIR}"
 
+if [ -f "${ROOT_DIR}/deploy/metis.env" ]; then
+    echo "[Metis] Loading environment configuration from deploy/metis.env..."
+    set -a
+    # shellcheck disable=SC1091
+    source "${ROOT_DIR}/deploy/metis.env"
+    set +a
+fi
+
 MOCK_MODE=false
 for arg in "$@"; do
     case "$arg" in

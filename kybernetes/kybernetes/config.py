@@ -7,6 +7,31 @@ from pydantic import BaseModel, Field
 import yaml
 
 
+def _resolve_metis_env(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Helper to resolve configuration keys from environment or deploy/metis.env file."""
+    if key in os.environ and os.environ[key]:
+        return os.environ[key].strip()
+    candidates = [
+        Path.cwd() / "deploy" / "metis.env",
+        Path(__file__).resolve().parents[2] / "deploy" / "metis.env",
+        Path.home() / ".config" / "metis" / "metis.env",
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            try:
+                for line in cand.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        if k.strip() == key:
+                            val = v.strip().strip("'\"")
+                            if val:
+                                return val
+            except Exception:
+                continue
+    return default
+
+
 class KybernetesConfig(BaseModel):
     """
     Configuration model for Kybernetes orchestrator server.
@@ -81,10 +106,10 @@ class KybernetesConfig(BaseModel):
         return None
 
     def resolve_service_token(self) -> Optional[str]:
-        """Resolve effective service token from value or environment."""
+        """Resolve effective service token from value, environment, or deploy/metis.env."""
         if self.service_token:
             return self.service_token
-        return os.environ.get("KYBERNETES_SERVICE_TOKEN")
+        return _resolve_metis_env("KYBERNETES_SERVICE_TOKEN")
 
 
 def load_config(config_path: Optional[str] = None) -> KybernetesConfig:

@@ -843,6 +843,39 @@
 
 ---
 
+### Item 95: VS Code Void IDE Service Token Alignment & Auto-Discovery under Zero-Loopback Security Model
+- **Status:** Integrated, Hardened & Verified
+- **Severity/Priority:** P1 (Essential Local Integration & Zero-Loopback Security Alignment)
+- **Affected Subsystems:** `vscode` (Void IDE Client, Statusbar, Metis Views, Metis Dashboard, Sovereign Settings), `kybernetes` (Config & Token Resolution), `scripts/run_stack.sh`
+- **Reviewed Commit / Baseline:** `015dd744b4e974ecfc52e2673b32de5a331733bf`
+- **Exact File Locations:**
+  - `vscode/src/vs/workbench/contrib/void/browser/metisTokenHelper.ts` (new dedicated centralized token discovery helper)
+  - `vscode/src/vs/workbench/contrib/void/browser/metisDashboardPane.ts`
+  - `vscode/src/vs/workbench/contrib/void/browser/metisViews.ts`
+  - `vscode/src/vs/workbench/contrib/void/browser/react/src/void-settings-tsx/MetisDashboard.tsx`
+  - `vscode/src/vs/workbench/contrib/void/browser/react/src/void-settings-tsx/MetisSovereignSettings.tsx`
+  - `kybernetes/kybernetes/config.py`
+  - `scripts/run_stack.sh`
+- **Root Cause & Rationale:**
+  - Under the Metis Zero-Loopback security invariant (`docs/MSS.md` Section 3.5 & Finding F-04), loopback (`127.0.0.1` / `::1`) exemptions are completely eliminated across Prosopon and Kybernetes. All HTTP REST control routes and WebSocket endpoints require valid cryptographic bearer service tokens matching `deploy/metis.env`.
+  - However, the VS Code Void IDE client hardcoded `'Authorization': 'Bearer metis-sovereign'` across `metisDashboardPane.ts`, `metisViews.ts`, and `MetisDashboard.tsx`.
+  - When communicating with Kybernetes (`http://127.0.0.1:8081/v1/lochos/squad`, `/queue`, `/attention`, `/transfer`, `/dispatch`, `/attention/resolve`), requests returned 401 Unauthorized, causing the UI to fall back to static/mocked data and blocking real-time agent squad coordination.
+  - Furthermore, `scripts/run_stack.sh` generated random ephemeral tokens if `KYBERNETES_SERVICE_TOKEN` was unset in the caller environment instead of loading `deploy/metis.env`, causing token drift between manual stack launches and systemd user services.
+- **Remediation & Behavioral Guarantees:**
+  1. **Centralized Token Discovery Helper (`metisTokenHelper.ts`):** Created `resolveMetisTokensAsync()`, `getMetisKybernetesToken()`, `getMetisHestiaToken()`, and `getMetisAuthHeaders()`. Automatically discovers `KYBERNETES_SERVICE_TOKEN` and `HESTIA_SERVICE_TOKEN` by reading `deploy/metis.env` via `IFileService`, caches them in memory, and synchronizes with `IStorageService` and `IVoidSettingsService`.
+  2. **Statusbar & Startup Integration (`metisDashboardPane.ts`):** Injected `IFileService`, `IWorkspaceContextService`, and `IVoidSettingsService` into `MetisStatusbarItem`. Triggered token resolution on startup and updated telemetry/attention polling and prompt actions with dynamic headers.
+  3. **Sidebar Metis Views (`metisViews.ts`):** Replaced all hardcoded `'Bearer metis-sovereign'` occurrences in `_pollTokens`, `_resolveToken`, `_pollLochos`, `_resolveAttention`, `_transferBaton`, `_pollQueue`, `_resolvePhylaxToken`, `_pollAttention`, and chat completion calls with `getMetisAuthHeaders()` and `getMetisHestiaToken()`.
+  4. **Metis Dashboard React UI (`MetisDashboard.tsx`):** Wired `useEffect` token resolution on mount and dynamically injected `getMetisAuthHeaders(storageService, voidSettingsService)` into `fetchLochosData`, `handleDispatchLochosTask`, `handleTransferBaton`, and `handleResolveAttention`.
+  5. **Metis Sovereign Settings (`MetisSovereignSettings.tsx`):** Defaulted service tokens to resolved credentials (`getMetisKybernetesToken(storageService)` / `getMetisHestiaToken(storageService)`), allowing seamless inspection and customized overrides.
+  6. **Kybernetes Engine Configuration (`kybernetes/kybernetes/config.py`):** Added `_resolve_metis_env()` to automatically resolve `KYBERNETES_SERVICE_TOKEN` from `deploy/metis.env` or `~/.config/metis/metis.env` when unset in environment variables.
+  7. **Stack Launcher Hardening (`scripts/run_stack.sh`):** Added automatic sourcing of `deploy/metis.env` on startup prior to generating fallback tokens, ensuring environment parity across systemd user units and manual terminal execution.
+  8. **Build & Test Verification:**
+     - `npm --prefix vscode run buildreact` passed and synced bundle in 3.4s (`✅ Synced react bundle to vscode out successfully!`).
+     - `npm --prefix vscode run compile` passed with **0 errors**.
+     - Full monorepo pytest test suite (11 packages + experiments + root) passed 100% (**1,140 passed, 3 skipped**).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -872,6 +905,7 @@
 | **Heuresis Scientific Discovery Engine**| Item 92 | Stoma + Dokime (OpenReview Crawler, Dual Scorer, Sheaf OOV Synthesizer)| **Integrated & Verified** | 127 Stoma + 218 Dokime tests passing (9 new crawler/discovery tests) |
 | **Phase 2 Real Extractor Empirical Study**| Item 93 | Experiments (Real LLM Extractor Noise, 300 Stories, Bootstrap CIs)| **Audited & Verified** | 27 tests passing + 4,800 evals verified ($99.58\%$ on Arm F, H2' BETTER) |
 | **Arm F Constructive Deliberation Engine**| Item 94 | Kybernetes + Dianoia (Two-Pass Constructive Planning & Routing)| **Integrated & Verified** | 198 Kybernetes tests passing (Pass 1 timeline notes & truncation elimination) |
+| **VS Code Void Token Alignment** | Item 95 | VS Code Void + Kybernetes (Zero-Loopback Token Auto-Discovery & Sync) | **Integrated & Verified** | 0 TS compile errors + React synced + 1,140 monorepo tests passing |
 
 ---
 
