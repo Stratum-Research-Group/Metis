@@ -991,6 +991,34 @@
 
 ---
 
+### Item 100: Heuresis Autonomous Scientific Discovery Coordinator & CLI
+- **Date:** 2026-10-31
+- **Severity:** P1 (Scientific Discovery & Autonomous Exploration Engine)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `kybernetes` (HeuresisAdapter, CLI `kybernetes heuresis`, Subcommands: search, writeup, crawl, eval), `dokime` (HeuresisDiscoveryTask, HeuresisDiscoveryEngine), `stoma` (OpenReviewBoundaryCrawler, CommunityAvailabilityIndex)
+- **Reviewed Commit / Baseline:** `09c4cd1`
+- **Root Cause & Architectural Need:** While Item 92 implemented the core combinatorial discovery engine in `dokime` and the peer-review boundary crawler in `stoma`, Metis lacked an orchestrator adapter and top-level sovereign CLI command to coordinate end-to-end scientific idea generation, proposal writeup, boundary objection indexing, and forward-in-time benchmark gating.
+- **Implementation Highlights:**
+  1. **`HeuresisAdapter` ([`kybernetes/kybernetes/adapters/heuresis.py`](file:///home/akarta/Projects/Metis/kybernetes/kybernetes/adapters/heuresis.py))**:
+     - Coordinates `HeuresisDiscoveryEngine`, `OpenReviewBoundaryCrawler`, and `HeuresisDiscoveryTask`.
+     - Supports combinatorial concept space search over discrete concept atoms with fast $z(S_{\text{coh}}) - \beta \cdot z(S_{\text{avail}})$ objective, 15% fringe outlier preservation, and Sheaf Laplacian OOV concept synthesis.
+     - Implements structured proposal formatting with Title, Core Research Question, Falsifiable Hypothesis, Failure Criterion, Empirical Methodology, and Concept Provenance.
+     - Implements `crawl_and_index_forums` parsing OpenReview forum payloads and registering contested boundary pairs into `CommunityAvailabilityIndex`.
+     - Implements `evaluate_forward_in_time` driving Dokime's temporal discovery validation task.
+  2. **`kybernetes heuresis` CLI Subsystem ([`kybernetes/kybernetes/cli.py`](file:///home/akarta/Projects/Metis/kybernetes/kybernetes/cli.py#L554-L688))**:
+     - `kybernetes heuresis search`: runs combinatorial discovery search with `--top-k`, `--beta`, `--fringe-quota`, `--json-out`, `--out-file`.
+     - `kybernetes heuresis writeup`: generates formal research proposals with `--atoms`, `--top-k`, `--beta`, `--out-file`.
+     - `kybernetes heuresis crawl`: extracts boundary friction from OpenReview forums with `--input-file`, `--json-out`.
+     - `kybernetes heuresis eval`: executes forward-in-time evaluation with `--top-k`, `--beta`, `--json-out`.
+  3. **Documentation Alignment ([`docs/MSS.md`](file:///home/akarta/Projects/Metis/docs/MSS.md#L103))**:
+     - Documented `kybernetes heuresis` subcommands in Section 3.2.
+- **Verification & Acceptance Checks:**
+  1. `kybernetes/tests/test_heuresis_cli.py`: **9 passed** in 3.37s covering adapter search, writeup, crawling, forward eval, and all 4 CLI commands.
+  2. `kybernetes/tests`: **208 passed** (up from 199).
+  3. Full monorepo suite: **1,161 passed, 3 skipped**.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1025,15 +1053,16 @@
 | **Native KrisisSelector Formal Gate**| Item 97 | Kybernetes + Krisis (Formal Selector Gating, Half-Even Scoring, Contradiction)| **Integrated & Verified** | 199 Kybernetes tests passing (18/18 adapter tests passing) |
 | **ModelSwap Generational Serving Hub**| Item 98 | Hestia + Paideia (ModelSwapManager CAS Gating, LoRA Serving, /manage/swap)| **Integrated & Verified** | 83 Hestia + 51 Paideia tests passing (6 new swap tests) |
 | **Kleroterion Adaptive Entropy & Epistemic Shadow Branching**| Item 99 | Dianoia + Kleroterion (Adaptive Entropy Feedback, Epistemic Disagreement $J$, Shadow Expansion & Backtracking)| **Integrated & Verified** | 97 Dianoia + 43 Kleroterion tests passing (4 new policy/walk tests) |
+| **Heuresis Scientific Discovery Coordinator & CLI**| Item 100 | Kybernetes + Dokime + Stoma (HeuresisAdapter, CLI search/writeup/crawl/eval, OOV Synthesis)| **Integrated & Verified** | 208 Kybernetes tests passing (9 new adapter/CLI tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,152 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,161 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.10s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **199** | 0 | 23.70s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **208** | 0 | 23.81s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 122.48s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 165.83s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 3.67s | **PASS** |
@@ -1046,7 +1075,7 @@
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.03s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 16.89s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,152** | **3** | **~7.5 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,161** | **3** | **~7.5 min** | **ALL GATES PASS** |
 
 
 

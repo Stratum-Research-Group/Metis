@@ -549,6 +549,141 @@ def pinax_evaluate_cmd(tool_name: str, args: tuple[str, ...], json_out: bool):
     click.echo(f"  - Overrides Triggered: {len(res.get('matched_overrides', []))}\n")
 
 
+# --- Heuresis Autonomous Scientific Discovery CLI ---
+
+@cli.group("heuresis")
+def heuresis_group():
+    """Heuresis: Combinatorial Concept Space Discovery & Scientific Hypothesis Generator."""
+    pass
+
+
+@heuresis_group.command("search")
+@click.option("--top-k", default=5, type=int, help="Number of candidate hypotheses to discover.")
+@click.option("--beta", default=1.25, type=float, help="Trade-off weight penalizing high community availability.")
+@click.option("--fringe-quota", default=0.15, type=float, help="Fraction of candidates requiring a fringe/outlier atom.")
+@click.option("--json-out", is_flag=True, help="Output candidates as JSON.")
+@click.option("--out-file", default=None, help="Save candidates to JSONL file.")
+def heuresis_search_cmd(top_k: int, beta: float, fringe_quota: float, json_out: bool, out_file: Optional[str]):
+    """Run fast combinatorial search for high-coherence, low-availability concept triples."""
+    import json
+    from kybernetes.adapters.heuresis import HeuresisAdapter
+
+    adapter = HeuresisAdapter()
+    candidates = adapter.search_candidates(top_k=top_k, beta=beta, fringe_quota=fringe_quota)
+
+    if out_file:
+        with open(out_file, "w", encoding="utf-8") as f:
+            for c in candidates:
+                f.write(json.dumps(c) + "\n")
+        click.echo(f"Saved {len(candidates)} candidates to {out_file}")
+
+    if json_out:
+        click.echo(json.dumps(candidates, indent=2))
+        return
+
+    click.echo(f"\n[Heuresis Discovery Search: Top-{len(candidates)} Candidates (beta={beta}, fringe_quota={fringe_quota:.0%})]")
+    for c in candidates:
+        atoms_str = " + ".join(c["atoms"])
+        oov_flag = f" [OOV Synthesized: {c['oov_primitive']}]" if c["is_oov_synthesized"] else ""
+        fringe_flag = " [Fringe Unit]" if c["has_fringe_unit"] else ""
+        click.echo(f"  #{c['rank']:02d} | Score: {c['discovery_score']:+.4f} | S_coh: {c['coherence_score']:.4f} | S_avail: {c['availability_score']:.4f}{oov_flag}{fringe_flag}")
+        click.echo(f"       Atoms: {atoms_str}")
+        if c["is_oov_synthesized"]:
+            click.echo(f"       Topological Obstruction Energy: {c['obstruction_energy']:.4f}")
+    click.echo("")
+
+
+@heuresis_group.command("writeup")
+@click.option("--atoms", default=None, help="Comma-separated concept atom names. If omitted, uses top search candidate.")
+@click.option("--top-k", default=1, type=int, help="Number of proposals to write up.")
+@click.option("--beta", default=1.25, type=float, help="Beta penalty for community availability.")
+@click.option("--out-file", default=None, help="Path to save proposal markdown.")
+def heuresis_writeup_cmd(atoms: Optional[str], top_k: int, beta: float, out_file: Optional[str]):
+    """Synthesize formal, falsifiable research proposals from concept atoms."""
+    from kybernetes.adapters.heuresis import HeuresisAdapter
+
+    adapter = HeuresisAdapter()
+
+    if atoms:
+        atom_list = [a.strip() for a in atoms.split(",") if a.strip()]
+        cand_obj = adapter.engine.score_combination(atom_list)
+        candidates = [{
+            "rank": 1,
+            "atoms": list(cand_obj.atoms),
+            "coherence_score": round(cand_obj.coherence_score, 4),
+            "availability_score": round(cand_obj.availability_score, 4),
+            "discovery_score": round(cand_obj.discovery_score, 4),
+            "is_oov_synthesized": cand_obj.is_oov_synthesized,
+            "oov_primitive": cand_obj.oov_primitive,
+            "obstruction_energy": round(cand_obj.obstruction_energy, 4),
+            "has_fringe_unit": cand_obj.has_fringe_unit,
+        }]
+    else:
+        candidates = adapter.search_candidates(top_k=top_k, beta=beta)
+
+    proposals = []
+    for c in candidates:
+        rec = adapter.writeup_proposal(c)
+        proposals.append(rec)
+        click.echo(f"\n{'='*70}\n{rec.writeup_text}\n{'='*70}\n")
+
+    if out_file and proposals:
+        with open(out_file, "w", encoding="utf-8") as f:
+            for p in proposals:
+                f.write(p.writeup_text + "\n\n---\n\n")
+        click.echo(f"Saved {len(proposals)} proposal(s) to {out_file}")
+
+
+@heuresis_group.command("crawl")
+@click.option("--input-file", required=True, type=click.Path(exists=True), help="Path to JSON file containing OpenReview forum dicts.")
+@click.option("--json-out", is_flag=True, help="Output crawl summary as JSON.")
+def heuresis_crawl_cmd(input_file: str, json_out: bool):
+    """Parse peer-review forums, extract contested boundary objections, and update availability index."""
+    import json
+    from kybernetes.adapters.heuresis import HeuresisAdapter
+
+    with open(input_file, "r", encoding="utf-8") as f:
+        forums = json.load(f)
+        if isinstance(forums, dict):
+            forums = forums.get("forums", [forums])
+
+    adapter = HeuresisAdapter()
+    summary = adapter.crawl_and_index_forums(forums)
+
+    if json_out:
+        click.echo(json.dumps(summary, indent=2))
+        return
+
+    click.echo(f"\n[Heuresis Peer-Review Boundary Crawler: {input_file}]")
+    click.echo(f"  - Forums Parsed:              {summary['forums_parsed']}")
+    click.echo(f"  - Contested Boundary Forums:  {summary['contested_forums']}")
+    click.echo(f"  - Objections Extracted:       {summary['objections_extracted']}")
+    click.echo(f"  - Total Tracked Concept Pairs:{summary['availability_tracked_pairs']}\n")
+
+
+@heuresis_group.command("eval")
+@click.option("--top-k", default=10, type=int, help="Evaluation candidate pool size.")
+@click.option("--beta", default=1.25, type=float, help="Beta penalty for community availability.")
+@click.option("--json-out", is_flag=True, help="Output evaluation results as JSON.")
+def heuresis_eval_cmd(top_k: int, beta: float, json_out: bool):
+    """Run Dokime forward-in-time discovery gate evaluation."""
+    import json
+    from kybernetes.adapters.heuresis import HeuresisAdapter
+
+    adapter = HeuresisAdapter()
+    res = adapter.evaluate_forward_in_time(top_k=top_k, beta=beta)
+
+    if json_out:
+        click.echo(json.dumps(res, indent=2))
+        return
+
+    click.echo(f"\n[Dokime Heuresis Forward-in-Time Evaluation (beta={beta})]")
+    click.echo(f"  - Total Historical Test Queries: {res['total_queries']}")
+    click.echo(f"  - Temporal Combinations Recovered: {res['hits']}")
+    click.echo(f"  - Recovery Rate:                  {res['recovery_rate']:.2%}")
+    click.echo(f"  - Forward Recovery Gate:          {'PASS' if res['recovery_rate'] >= 0.50 else 'FAIL'}\n")
+
+
 if __name__ == "__main__":
     cli()
 

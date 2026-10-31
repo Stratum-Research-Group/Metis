@@ -100,6 +100,7 @@ Beyond the coding agent, `kybernetes` provides full service control commands:
 | `kybernetes serve` | `--host TEXT` (default `127.0.0.1`)<br/>`--port INT` (default `8081`)<br/>`--db-path PATH` (default `kybernetes_budget.db`)<br/>`--memory-root PATH`<br/>`--config PATH`<br/>`--admin-token TEXT`<br/>`--service-token TEXT` | Start the FastAPI SSE orchestrator server and `/v1/admin` control plane. |
 | `kybernetes lochos` | `ps`, `queue`, `dispatch`, `transfer`, `resolve`, `run` | Manage multi-agent squad seats and durable work queue (see Section 7). |
 | `kybernetes pinax` | `scan`, `lookup`, `docs`, `detail`, `evaluate` | Tool inventory discovery, FTS5 lookups, and risk evaluation (see Section 8). |
+| `kybernetes heuresis` | `search`, `writeup`, `crawl`, `eval` | Combinatorial concept space discovery, OOV synthesis, and peer-review boundary crawling. |
 
 ### 3.3 Environment Variables
 
