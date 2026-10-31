@@ -294,3 +294,233 @@ def save_case_attempts(records: Sequence[CaseAttemptRecord], path: Path) -> None
     else:
         with open(path, "w", encoding="utf-8") as f:
             json.dump([r.model_dump() for r in records], f, indent=2)
+
+
+class AttemptRolloutVarianceSampler:
+    r"""Unified boundary sampler ingesting rollout evaluations, Krisis abstention logs, and Dokime runs.
+    
+    Implements variance estimation over repeated attempts ($N \ge 2$), stratifying
+    tasks into boundary frontier, easy retention checks, and hard diagnostic cases.
+    """
+
+    def __init__(
+        self,
+        records: Optional[Sequence[Union[CaseAttemptRecord, Dict[str, Any]]]] = None,
+        min_variance: float = 1e-4,
+    ):
+        self.records: List[CaseAttemptRecord] = []
+        self.min_variance = min_variance
+        self.last_report: Optional[BoundarySelectionReport] = None
+        self.last_selected_cases: List[str] = []
+
+        if records:
+            self.ingest_rollouts(records)
+
+    def ingest_rollouts(
+        self,
+        records: Sequence[Union[CaseAttemptRecord, Dict[str, Any]]],
+    ) -> int:
+        """Ingest typed or dict-based CaseAttemptRecord instances."""
+        added = 0
+        for r in records:
+            if isinstance(r, CaseAttemptRecord):
+                self.records.append(r)
+            elif isinstance(r, dict):
+                self.records.append(CaseAttemptRecord.model_validate(r))
+            else:
+                raise TypeError(f"Unsupported rollout record type: {type(r)}")
+            added += 1
+        return added
+
+    def ingest_krisis_records(
+        self,
+        records: Sequence[Union[Any, Dict[str, Any]]],
+    ) -> int:
+        """Ingest KrisisActiveRecord instances from Krisis or Dokime selective evaluations.
+        
+        Maps rejection intensity U(x) into an attempt performance score:
+            score = max(0.0, min(1.0, 1.0 - rejection_score))
+        Assigns attempt indices per query_id so repeated samples across runs/seeds form rollout sets.
+        """
+        # Track attempt counts per query_id
+        counts: Dict[str, int] = {}
+        for r in self.records:
+            counts[r.case_id] = max(counts.get(r.case_id, -1), r.attempt_index) + 1
+
+        added = 0
+        for item in records:
+            if isinstance(item, dict):
+                query_id = str(item.get("query_id", item.get("case_id", f"krisis_{len(self.records)}")))
+                rejection = float(item.get("rejection_score", 0.0))
+                status = item.get("decision_status", "abstained")
+                reason = item.get("decision_reason", None)
+                meta = item.get("metadata", {})
+            else:
+                query_id = getattr(item, "query_id", getattr(item, "case_id", f"krisis_{len(self.records)}"))
+                rejection = float(getattr(item, "rejection_score", 0.0))
+                status = getattr(item, "decision_status", "abstained")
+                reason = getattr(item, "decision_reason", None)
+                meta = getattr(item, "metadata", {}) or {}
+
+            attempt_idx = counts.get(query_id, 0)
+            counts[query_id] = attempt_idx + 1
+
+            score = 1.0 - rejection if status != "selected" else 1.0
+            score = max(0.0, min(1.0, score))
+
+            failure_label = reason or status if score < 1.0 else None
+            is_grounded = rejection < 0.5 and status != "contradiction_detected"
+
+            attempt = CaseAttemptRecord(
+                case_id=query_id,
+                attempt_index=attempt_idx,
+                seed=meta.get("seed", 42 + attempt_idx),
+                score=round(score, 4),
+                evidence_grounded=is_grounded,
+                failure_label=failure_label,
+                model_and_config=meta.get("model", "krisis:active_selective"),
+                metadata=meta,
+            )
+            self.records.append(attempt)
+            added += 1
+
+        return added
+
+    def ingest_dokime_eval_run(
+        self,
+        source: Union[Path, str, Dict[str, Any], List[Dict[str, Any]]],
+    ) -> int:
+        """Ingest Dokime benchmark run report or query evaluation logs.
+        
+        Accepts:
+          - Path or string pointing to a JSON/JSONL report or log file
+          - Dictionary representing a Dokime report (e.g. ExecutableGraphRolloutReport)
+          - List of attempt or query evaluation dictionaries
+        """
+        if isinstance(source, (Path, str)):
+            p = Path(source)
+            if not p.exists():
+                raise FileNotFoundError(f"Dokime evaluation file not found at: {p}")
+            text = p.read_text(encoding="utf-8").strip()
+            if not text:
+                return 0
+            if text.startswith("{"):
+                data = json.loads(text)
+                return self.ingest_dokime_eval_run(data)
+            elif text.startswith("["):
+                data = json.loads(text)
+                return self.ingest_dokime_eval_run(data)
+            else:
+                # JSONL
+                records_json = [json.loads(line) for line in text.splitlines() if line.strip()]
+                return self.ingest_dokime_eval_run(records_json)
+
+        if isinstance(source, dict):
+            # Check for standard attempt_records field
+            if "attempt_records" in source and isinstance(source["attempt_records"], list):
+                return self.ingest_rollouts(source["attempt_records"])
+            # Check for krisis_records or active_records
+            if "active_records" in source and isinstance(source["active_records"], list):
+                return self.ingest_krisis_records(source["active_records"])
+            # Check for query evaluations list
+            if "results" in source and isinstance(source["results"], list):
+                return self.ingest_dokime_eval_run(source["results"])
+            if "queries" in source and isinstance(source["queries"], list):
+                return self.ingest_dokime_eval_run(source["queries"])
+            # Fallback: single attempt record
+            if "case_id" in source or "query_id" in source:
+                return self.ingest_rollouts([source])
+            return 0
+
+        if isinstance(source, list):
+            if not source:
+                return 0
+            first = source[0]
+            if isinstance(first, dict):
+                if "rejection_score" in first or "decision_status" in first:
+                    return self.ingest_krisis_records(source)
+                return self.ingest_rollouts(source)
+            elif isinstance(first, CaseAttemptRecord):
+                return self.ingest_rollouts(source)
+            else:
+                return self.ingest_krisis_records(source)
+
+        return 0
+
+    def compute_stats(self) -> Dict[str, CaseAttemptStats]:
+        """Compute variance and category statistics across all ingested attempts."""
+        return compute_attempt_stats_by_case(self.records, min_variance=self.min_variance)
+
+    def sample(
+        self,
+        config: Optional[BoundarySelectionConfig] = None,
+    ) -> Tuple[List[str], BoundarySelectionReport]:
+        """Run boundary-aware practice batch selection."""
+        stats = self.compute_stats()
+        selected, report = select_boundary_practice_batch(stats, config=config)
+        self.last_selected_cases = selected
+        self.last_report = report
+        return selected, report
+
+    def sample_uniform(
+        self,
+        budget: int = 20,
+        seed: int = 42,
+    ) -> Tuple[List[str], BoundarySelectionReport]:
+        """Run uniform random baseline selection for matched comparative evaluation."""
+        stats = self.compute_stats()
+        selected, report = select_uniform_practice_batch(stats, budget=budget, seed=seed)
+        self.last_selected_cases = selected
+        self.last_report = report
+        return selected, report
+
+    def filter_dataset(
+        self,
+        items: Sequence[Any],
+        key_fn: Optional[Any] = None,
+        selected_ids: Optional[Sequence[str]] = None,
+    ) -> List[Any]:
+        """Filter a collection of dataset items to only include selected cases."""
+        allowed_ids = set(selected_ids if selected_ids is not None else self.last_selected_cases)
+        if not allowed_ids:
+            return []
+
+        def default_key(item: Any) -> str:
+            if isinstance(item, dict):
+                return str(item.get("id", item.get("case_id", item.get("query_id", ""))))
+            return str(getattr(item, "id", getattr(item, "case_id", getattr(item, "query_id", ""))))
+
+        extractor = key_fn or default_key
+        return [item for item in items if extractor(item) in allowed_ids]
+
+    def export_practice_dataset(
+        self,
+        items: Sequence[Any],
+        path: Path,
+        key_fn: Optional[Any] = None,
+        selected_ids: Optional[Sequence[str]] = None,
+    ) -> None:
+        """Export the boundary-filtered practice items to JSON or JSONL format."""
+        filtered = self.filter_dataset(items, key_fn=key_fn, selected_ids=selected_ids)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.suffix == ".jsonl":
+            with open(path, "w", encoding="utf-8") as f:
+                for item in filtered:
+                    if hasattr(item, "model_dump_json"):
+                        f.write(item.model_dump_json() + "\n")
+                    elif isinstance(item, dict):
+                        f.write(json.dumps(item) + "\n")
+                    else:
+                        f.write(json.dumps(str(item)) + "\n")
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                serializable = []
+                for item in filtered:
+                    if hasattr(item, "model_dump"):
+                        serializable.append(item.model_dump())
+                    elif isinstance(item, dict):
+                        serializable.append(item)
+                    else:
+                        serializable.append(str(item))
+                json.dump(serializable, f, indent=2)
+

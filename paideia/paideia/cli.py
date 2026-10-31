@@ -105,17 +105,22 @@ def sample_boundary(
     """Select boundary-aware practice batch from repeated rollout attempts (EoG Item 2)."""
     from paideia.contracts.boundary_schema import BoundarySelectionConfig
     from paideia.data.boundary_sampler import (
-        compute_attempt_stats_by_case,
+        AttemptRolloutVarianceSampler,
         load_case_attempts,
-        select_boundary_practice_batch,
-        select_uniform_practice_batch,
     )
 
-    records = load_case_attempts(input_path)
-    stats = compute_attempt_stats_by_case(records, min_variance=min_variance)
+    sampler = AttemptRolloutVarianceSampler(min_variance=min_variance)
+    try:
+        count = sampler.ingest_dokime_eval_run(input_path)
+        if count == 0:
+            records = load_case_attempts(input_path)
+            sampler.ingest_rollouts(records)
+    except Exception:
+        records = load_case_attempts(input_path)
+        sampler.ingest_rollouts(records)
 
     if baseline_uniform:
-        selected, report = select_uniform_practice_batch(stats, budget=budget, seed=seed)
+        selected, report = sampler.sample_uniform(budget=budget, seed=seed)
     else:
         cfg = BoundarySelectionConfig(
             budget=budget,
@@ -125,7 +130,7 @@ def sample_boundary(
             min_variance=min_variance,
             seed=seed,
         )
-        selected, report = select_boundary_practice_batch(stats, cfg)
+        selected, report = sampler.sample(cfg)
 
     click.echo("\n=== Paideia Boundary Practice Selection Audit ===")
     click.echo(report.model_dump_json(indent=2))
@@ -138,6 +143,85 @@ def sample_boundary(
                 "selected_cases": selected,
             }, f, indent=2)
         click.echo(f"\nSaved {len(selected)} practice cases and audit report to: {output}")
+
+
+@cli.command("train")
+@click.option("--data", "-d", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=False, help="Path to training dataset JSON/JSONL")
+@click.option("--output-dir", "-o", default="./runs/latest_adapter", help="Directory to save checkpoint and manifest")
+@click.option("--task", type=click.Choice(["router", "walk_policy"]), default="router", help="Target policy task")
+@click.option("--optimizer", type=click.Choice(["adamw", "shampoo"]), default="adamw", help="Optimizer: adamw or second-order matrix shampoo")
+@click.option("--epochs", default=3, help="Training epochs")
+@click.option("--batch-size", default=2, help="Batch size")
+@click.option("--lr", default=2e-4, help="Learning rate")
+@click.option("--rank", default=16, help="LoRA rank")
+@click.option("--simulate/--no-simulate", default=True, help="Run marker-only simulation or real training")
+@click.option("--seed", default=42, help="RNG seed")
+def train(data, output_dir, task, optimizer, epochs, batch_size, lr, rank, simulate, seed):
+    """Train or fine-tune policy LoRA adapters with AdamW or Distributed Shampoo."""
+    from paideia.data.splitter import DatasetSplits
+    from paideia.training.config import TrainingConfig
+    from paideia.training.runner import QLoRATrainingRunner
+
+    train_items = []
+    if data:
+        if task == "router":
+            records, _ = load_router_dataset(data)
+            train_items = records
+        else:
+            samples, _ = load_walk_dataset(data)
+            train_items = samples
+
+    splits = DatasetSplits(train=train_items, dev=[], test=[])
+    cfg = TrainingConfig(
+        output_dir=output_dir,
+        task=task,
+        optimizer=optimizer,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr=lr,
+        rank=rank,
+        allow_simulated=simulate,
+        seed=seed,
+    )
+
+    runner = QLoRATrainingRunner(cfg, splits)
+    click.echo(f"\nStarting Paideia QLoRA Training Run...")
+    click.echo(f"  Task: {task}")
+    click.echo(f"  Optimizer: {optimizer}")
+    click.echo(f"  Mode: {'SIMULATION' if simulate else 'REAL TRAINING'}")
+    click.echo(f"  Train Samples: {len(train_items)}")
+    click.echo(f"  Output Dir: {output_dir}")
+
+    manifest = runner.run()
+    click.echo("\n=== Training Manifest Summary ===")
+    click.echo(f"Run ID: {manifest.run_id}")
+    click.echo(f"Status: {manifest.status}")
+    click.echo(f"Duration: {manifest.duration_seconds:.2f}s")
+    click.echo(f"Adapter Digest: {manifest.adapter_digest}")
+    if manifest.metrics:
+        click.echo("Metrics:")
+        for k, v in manifest.metrics.items():
+            click.echo(f"  {k}: {v}")
+    if manifest.failure_reason:
+        click.echo(f"Failure Reason: {manifest.failure_reason}")
+
+
+@cli.command("benchmark-shampoo")
+@click.option("--steps", default=40, help="Number of benchmark optimization steps")
+@click.option("--dim-out", default=16, help="Output matrix dimension")
+@click.option("--dim-in", default=32, help="Input matrix dimension")
+@click.option("--seed", default=42, help="RNG seed")
+def benchmark_shampoo(steps: int, dim_out: int, dim_in: int, seed: int):
+    """Benchmark second-order matrix Shampoo against AdamW on ill-conditioned problem."""
+    from paideia.training.optimizer import benchmark_shampoo_vs_adamw
+
+    click.echo(f"\nRunning Shampoo vs AdamW second-order preconditioner benchmark ({steps} steps)...")
+    res = benchmark_shampoo_vs_adamw(dim_out=dim_out, dim_in=dim_in, num_steps=steps, seed=seed)
+    click.echo("\n=== Benchmark Results ===")
+    click.echo(f"Steps: {res['num_steps']}")
+    click.echo(f"AdamW Final Loss:    {res['adamw_final_loss']:.6f} (initial: {res['adamw_initial_loss']:.6f})")
+    click.echo(f"Shampoo Final Loss:  {res['shampoo_final_loss']:.6f} (initial: {res['shampoo_initial_loss']:.6f})")
+    click.echo(f"Shampoo Relative Gain: {res['shampoo_relative_gain_percent']:+.2f}%")
 
 
 @cli.command()

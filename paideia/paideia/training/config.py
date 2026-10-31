@@ -38,6 +38,31 @@ class TrainingConfig(BaseModel):
         default="auto",
         description="Backend: auto selects unsloth if compatible and installed, else standard peft",
     )
+    optimizer: Literal["adamw", "shampoo", "sgd"] = Field(
+        default="adamw",
+        description="Optimizer type: standard adamw or second-order matrix preconditioned shampoo",
+    )
+    shampoo_precondition_freq: int = Field(
+        default=10,
+        ge=1,
+        description="Frequency of computing matrix inverse fourth roots in Shampoo",
+    )
+    shampoo_beta2: float = Field(
+        default=0.99,
+        ge=0.5,
+        lt=1.0,
+        description="Covariance accumulator decay factor in Shampoo",
+    )
+    shampoo_epsilon: float = Field(
+        default=1e-4,
+        gt=0.0,
+        description="Tikhonov regularization floor for covariance matrix in Shampoo",
+    )
+    weight_decay: float = Field(
+        default=1e-4,
+        ge=0.0,
+        description="Decoupled weight decay coefficient",
+    )
     allow_simulated: bool = Field(
         default=True,
         description="Whether marker-only simulated checkpointing is permitted. If False, raises TrainingUnavailableError.",

@@ -12,6 +12,13 @@ from paideia.training.runner import (
     TrainingPreflightError,
     compute_dir_sha256,
 )
+from paideia.training.optimizer import (
+    AdamWOptimizer,
+    ShampooConfig,
+    ShampooOptimizer,
+    benchmark_shampoo_vs_adamw,
+    matrix_inverse_fourth_root,
+)
 
 from paideia.training.grpo import (
     CandidateCompletion,
@@ -30,6 +37,11 @@ __all__ = [
     "QLoRATrainingRunner",
     "TrainingPreflightError",
     "compute_dir_sha256",
+    "ShampooOptimizer",
+    "ShampooConfig",
+    "AdamWOptimizer",
+    "matrix_inverse_fourth_root",
+    "benchmark_shampoo_vs_adamw",
     "GRPOConfig",
     "GRPORewardEngine",
     "DianoiaStateReconstructor",

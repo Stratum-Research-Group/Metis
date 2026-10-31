@@ -22,6 +22,7 @@ from paideia.data.aspest_sampler import (
     save_krisis_active_records,
 )
 from paideia.data.boundary_sampler import (
+    AttemptRolloutVarianceSampler,
     compute_attempt_stats_by_case,
     compute_case_stats,
     load_case_attempts,
@@ -44,6 +45,7 @@ __all__ = [
     "derive_question_family_key",
     "DatasetCard",
     "ASPESTSampler",
+    "AttemptRolloutVarianceSampler",
     "compute_distance",
     "load_krisis_active_records",
     "save_krisis_active_records",

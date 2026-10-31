@@ -2,9 +2,9 @@
 
 **Last Updated:** 2026-10-31  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `09c4cd1`  
-**Working Tree Status:** Clean; all services active under systemd; 1,161 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 3 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95), Pyle WebRTC Device Hub & Remote Control Plane Integration (Item 96), Native KrisisSelector Formal Gating & Grounding Adapter (Item 97), Paideia Adapter Export & Hestia ModelSwapManager Generational Serving Integration (Item 98), Kleroterion Adaptive Entropy Feedback & Epistemic Shadow Branching Integration (Item 99), and Heuresis Autonomous Scientific Discovery Coordinator & CLI (Item 100) fully implemented and verified.
+**Current HEAD Commit:** `f69608f`  
+**Working Tree Status:** Clean; all services active under systemd; 1,189 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 1 skipped).  
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95), Pyle WebRTC Device Hub & Remote Control Plane Integration (Item 96), Native KrisisSelector Formal Gating & Grounding Adapter (Item 97), Paideia Adapter Export & Hestia ModelSwapManager Generational Serving Integration (Item 98), Kleroterion Adaptive Entropy Feedback & Epistemic Shadow Branching Integration (Item 99), Heuresis Autonomous Scientific Discovery Coordinator & CLI (Item 100), and Distributed Shampoo Second-Order Optimizer & Active Boundary QLoRA Training Pipeline (Item 101) fully implemented and verified.
 
 ---
 
@@ -44,7 +44,7 @@ PYTHONPATH=. ./.venv/bin/python experiments/text_vs_graph/run_confirmatory.py
 # 8. Run Prosopon WebRTC & access store test suite (73 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests -q
 
-# 9. Run Paideia active training pipeline test suite (50 tests)
+# 9. Run Paideia active training pipeline test suite (65 tests)
 ./paideia/.venv/bin/pytest paideia/tests -q
 
 # 10. Run Kleroterion stochastic policy test suite (43 tests)
@@ -62,7 +62,7 @@ PYTHONPATH=. ./.venv/bin/python experiments/text_vs_graph/run_confirmatory.py
 # 14. Compile VS Code Void IDE client (0 errors)
 npm --prefix vscode run compile
 
-# Monorepo Total: 1,110 tests passing across all 11 subsystems + root (100% green, 1 skipped)
+# Monorepo Total: 1,189 tests passing across all 11 subsystems + root (100% green, 1 skipped)
 ```
 
 ---

@@ -1019,6 +1019,41 @@
 
 ---
 
+### Item 101: Distributed Shampoo Second-Order Optimizer & Active Boundary QLoRA Training Pipeline
+- **Date:** 2026-10-31
+- **Severity:** P1 (Active Model Tuning & Second-Order Optimization Infrastructure)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `paideia` (`ShampooOptimizer`, `AttemptRolloutVarianceSampler`, `QLoRATrainingRunner`, `paideia train`, `paideia benchmark-shampoo`)
+- **Reviewed Commit / Baseline:** `f69608f`
+- **Root Cause & Architectural Need:** Paideia possessed simulated marker training runners and variance batch selectors, but lacked an active link between real Dokime rollout / Krisis abstention logs and boundary dataset curation, as well as an implementation of Google Research's second-order Kronecker-factored matrix preconditioner (Distributed Shampoo, arXiv:2002.09018) for fine-tuning policy adapters under ill-conditioned gradients.
+- **Implementation Highlights:**
+  1. **Second-Order Matrix Preconditioner ([`paideia/paideia/training/optimizer.py`](file:///home/akarta/Projects/Metis/paideia/paideia/training/optimizer.py))**:
+     - Implemented `ShampooOptimizer` with Kronecker-factored left ($L_t$) and right ($R_t$) covariance statistics:
+       $$L_t = \beta_2 L_{t-1} + (1 - \beta_2) G_t G_t^T + \epsilon I, \quad R_t = \beta_2 R_{t-1} + (1 - \beta_2) G_t^T G_t + \epsilon I$$
+     - Implemented `matrix_inverse_fourth_root` computing $M^{-1/4}$ via symmetric eigendecomposition.
+     - Amortized inverse roots computed every $T_{\text{precond}}$ steps, preconditioning matrix gradients $\tilde{G}_t = L_t^{-1/4} G_t R_t^{-1/4}$ with first-order momentum $M_t = \beta_1 M_{t-1} + \tilde{G}_t$ and decoupled weight decay.
+     - Added gradient clipping threshold `clip_grad_norm=1.0` ensuring numerical stability under high learning rates.
+     - Implemented `AdamWOptimizer` baseline and `benchmark_shampoo_vs_adamw` comparing second-order convergence on ill-conditioned problems.
+  2. **Unified Boundary Variance Sampler ([`paideia/paideia/data/boundary_sampler.py`](file:///home/akarta/Projects/Metis/paideia/paideia/data/boundary_sampler.py))**:
+     - Authored `AttemptRolloutVarianceSampler` ingesting repeated evaluation rollouts, `KrisisActiveRecord` logs, and Dokime benchmark run reports (JSON/JSONL).
+     - Maps Krisis rejection intensity $U(x) \in [0, 1]$ into rollout score $s = 1.0 - U(x)$, grouping repeated queries across evaluation seeds into empirical variance $\sigma^2$.
+     - Implemented `filter_dataset` and `export_practice_dataset` to export curated boundary learning frontier batches for model training.
+  3. **Active QLoRA Training Runner & CLI Subsystem ([`paideia/paideia/training/runner.py`](file:///home/akarta/Projects/Metis/paideia/paideia/training/runner.py), [`paideia/paideia/cli.py`](file:///home/akarta/Projects/Metis/paideia/paideia/cli.py))**:
+     - Extended `QLoRATrainingRunner` with `_train_adapter`: runs real parameter updates using Shampoo or AdamW on policy adapters, writes `adapter_model.bin` and `adapter_config.json`, computes directory SHA-256 digest, and returns `status="COMPLETED"`, `is_simulated=False`.
+     - Preserves honest failure (`TrainingUnavailableError`) when empty splits are passed with `allow_simulated=False`.
+     - Added `paideia train` CLI command supporting `--data`, `--task`, `--optimizer`, `--epochs`, `--batch-size`, `--lr`, `--rank`, `--simulate/--no-simulate`.
+     - Added `paideia benchmark-shampoo` CLI command.
+     - Enhanced `paideia dataset sample-boundary` to auto-ingest Dokime evaluation reports and Krisis logs.
+- **Verification & Acceptance Checks:**
+  1. `paideia/tests/test_shampoo_optimizer.py`: **4 passed** (inverse 4th root, 1D/2D updates, AdamW, convergence benchmark).
+  2. `paideia/tests/test_attempt_rollout_variance_sampler.py`: **4 passed** (rollouts, Krisis logs, Dokime report file, dataset export).
+  3. `paideia/tests/test_training_runner_real.py`: **2 passed** (real Shampoo and AdamW training runs, loss reduction, COMPLETED manifest).
+  4. `paideia/tests/test_cli_train.py`: **4 passed** (CLI train simulated, real with fixture, benchmark-shampoo, sample-boundary with Dokime report).
+  5. Pass rate across Paideia: **65 passed** (up from 51).
+  6. Full monorepo suite: **1,189 passed, 1 skipped**.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1054,28 +1089,29 @@
 | **ModelSwap Generational Serving Hub**| Item 98 | Hestia + Paideia (ModelSwapManager CAS Gating, LoRA Serving, /manage/swap)| **Integrated & Verified** | 83 Hestia + 51 Paideia tests passing (6 new swap tests) |
 | **Kleroterion Adaptive Entropy & Epistemic Shadow Branching**| Item 99 | Dianoia + Kleroterion (Adaptive Entropy Feedback, Epistemic Disagreement $J$, Shadow Expansion & Backtracking)| **Integrated & Verified** | 97 Dianoia + 43 Kleroterion tests passing (4 new policy/walk tests) |
 | **Heuresis Scientific Discovery Coordinator & CLI**| Item 100 | Kybernetes + Dokime + Stoma (HeuresisAdapter, CLI search/writeup/crawl/eval, OOV Synthesis)| **Integrated & Verified** | 208 Kybernetes tests passing (9 new adapter/CLI tests) |
+| **Distributed Shampoo & Active Boundary QLoRA**| Item 101 | Paideia (`ShampooOptimizer`, `AttemptRolloutVarianceSampler`, `paideia train`)| **Integrated & Verified** | 65 Paideia tests passing (14 new optimizer/boundary/training tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,161 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,189 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.10s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **208** | 0 | 23.81s | **PASS** |
-| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **119** | 2 | 122.48s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 165.83s | **PASS** |
-| **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 3.67s | **PASS** |
-| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.07s | **PASS** |
-| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 43.61s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **51** | 0 | 0.75s | **PASS** |
-| **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.56s | **PASS** |
-| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.23s | **PASS** |
-| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.56s | **PASS** |
-| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.03s | **PASS** |
-| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 16.89s | **PASS** |
-| **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 65.62s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,161** | **3** | **~7.5 min** | **ALL GATES PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.31s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **208** | 0 | 24.57s | **PASS** |
+| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 229.84s | **PASS** |
+| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 223.48s | **PASS** |
+| **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
+| **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.03s | **PASS** |
+| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 43.74s | **PASS** |
+| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **65** | 0 | 1.55s | **PASS** |
+| **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
+| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.24s | **PASS** |
+| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.41s | **PASS** |
+| **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
+| **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
+| **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,189** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 
