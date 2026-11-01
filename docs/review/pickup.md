@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-11-01  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `4a3001b`  
+**Current HEAD Commit:** `8f524cc`  
 **Working Tree Status:** Clean; all services active under systemd; 1,200 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 1 skipped).  
 **Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95), Pyle WebRTC Device Hub & Remote Control Plane Integration (Item 96), Native KrisisSelector Formal Gating & Grounding Adapter (Item 97), Paideia Adapter Export & Hestia ModelSwapManager Generational Serving Integration (Item 98), Kleroterion Adaptive Entropy Feedback & Epistemic Shadow Branching Integration (Item 99), Heuresis Autonomous Scientific Discovery Coordinator & CLI (Item 100), Distributed Shampoo Second-Order Optimizer & Active Boundary QLoRA Training Pipeline (Item 101), Lochos Autonomous Pipeline Orchestrator & Zero-Trust Verification Rollback (Item 102), and Krisis Policy Calibration, Admin TOML Serialization & Voice Binary Path Resolution (Item 103) fully implemented and verified.
 
