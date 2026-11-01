@@ -97,11 +97,21 @@ class QLoRATrainingRunner:
         self.output_dir = Path(config.output_dir) / self.run_id
         self.manifest_path = self.output_dir / "manifest.json"
 
-    def preflight_check(self, required_free_vram_mb: float = 12000.0) -> Dict[str, Any]:
+    def preflight_check(self, required_free_vram_mb: Optional[float] = None) -> Dict[str, Any]:
         """
         Verify VRAM admission, lock coordination, and backend availability.
         Refuses execution if preconditions are violated.
         """
+        if required_free_vram_mb is None:
+            cfg_val = getattr(self.config, "required_free_vram_mb", None)
+            env_val = os.environ.get("METIS_TRAINING_MIN_VRAM_MB")
+            if env_val:
+                required_free_vram_mb = float(env_val)
+            elif cfg_val is not None:
+                required_free_vram_mb = float(cfg_val)
+            else:
+                required_free_vram_mb = 8000.0
+
         hardware = inspect_hardware()
 
         # If on GPU and not in simulated mode, check VRAM and acquire GPU lock

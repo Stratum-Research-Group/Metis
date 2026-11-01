@@ -488,6 +488,12 @@ paideia dataset validate-walk ~/.dianoia/walks.jsonl
 
 # Run baseline ladder (Majority -> Regex -> Lexical -> Embedding) on frozen splits
 paideia baseline /path/to/router_data.jsonl --task best_route --seed 42
+
+# Train policy LoRA adapter with distributed matrix-preconditioned Shampoo
+paideia train --data /path/to/dataset.jsonl --output-dir ./runs/qlora --optimizer shampoo --epochs 3
+
+# Run autonomous continuous policy retraining loop (Krisis -> Shampoo QLoRA -> Dokime -> Hestia hot-swap)
+paideia loop --log-file ~/.metis/krisis_active.jsonl --output-dir ./runs/continuous --optimizer shampoo --hestia-url http://127.0.0.1:8080 --once
 ```
 
 ### 11.7 `krisis` — Candidate Answer Selector & Verification Gate

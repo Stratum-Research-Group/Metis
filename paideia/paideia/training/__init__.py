@@ -28,6 +28,12 @@ from paideia.training.grpo import (
     GroupEvaluation,
 )
 
+from paideia.training.loop import (
+    ContinuousPolicyRetrainingCoordinator,
+    RetrainingCoordinatorConfig,
+    RetrainingCycleResult,
+)
+
 __all__ = [
     "TrainingConfig",
     "HardwareProfile",
@@ -47,4 +53,7 @@ __all__ = [
     "DianoiaStateReconstructor",
     "CandidateCompletion",
     "GroupEvaluation",
+    "ContinuousPolicyRetrainingCoordinator",
+    "RetrainingCoordinatorConfig",
+    "RetrainingCycleResult",
 ]

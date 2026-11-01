@@ -67,3 +67,7 @@ class TrainingConfig(BaseModel):
         default=True,
         description="Whether marker-only simulated checkpointing is permitted. If False, raises TrainingUnavailableError.",
     )
+    required_free_vram_mb: Optional[float] = Field(
+        default=None,
+        description="Minimum free VRAM in MB required during preflight (defaults to 8000 MB or METIS_TRAINING_MIN_VRAM_MB)",
+    )

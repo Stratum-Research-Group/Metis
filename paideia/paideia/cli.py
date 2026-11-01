@@ -276,5 +276,94 @@ def verify_run(manifest: Path):
     click.echo("\nManifest verified successfully.")
 
 
+@cli.command("loop")
+@click.option("--log-file", "-l", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True, help="Path to Krisis active prediction / Dokime attempt JSON or JSONL logs")
+@click.option("--output-dir", "-o", default="./runs/continuous", help="Base output directory for runs and checkpoints")
+@click.option("--base-model", "-m", default="qwen2.5-14b-instruct", help="Base model identifier")
+@click.option("--task", type=click.Choice(["router", "walk_policy"]), default="router", help="Target policy task")
+@click.option("--min-samples", "-n", default=10, help="Minimum new boundary/attempt records required to trigger retraining")
+@click.option("--optimizer", type=click.Choice(["shampoo", "adamw"]), default="shampoo", help="Optimizer choice: shampoo or adamw")
+@click.option("--epochs", default=3, help="Training epochs per cycle")
+@click.option("--lr", default=1e-3, help="Optimizer learning rate")
+@click.option("--rank", default=16, help="LoRA rank")
+@click.option("--hestia-url", default=None, help="Hestia HTTP base URL (e.g. http://127.0.0.1:8080)")
+@click.option("--slot", default="primary", help="Hestia serving slot target for model hot-swap")
+@click.option("--auto-swap/--no-auto-swap", default=True, help="Automatically trigger Hestia CAS hot-swap upon promotion")
+@click.option("--simulate/--no-simulate", default=False, help="Run marker-only simulation or real training")
+@click.option("--once", is_flag=True, default=False, help="Run a single retraining check and exit")
+@click.option("--interval", default=60.0, help="Polling interval in seconds for continuous mode")
+def loop(
+    log_file: Path,
+    output_dir: str,
+    base_model: str,
+    task: str,
+    min_samples: int,
+    optimizer: str,
+    epochs: int,
+    lr: float,
+    rank: int,
+    hestia_url: Optional[str],
+    slot: str,
+    auto_swap: bool,
+    simulate: bool,
+    once: bool,
+    interval: float,
+):
+    """Run autonomous continuous policy retraining loop (Krisis -> Shampoo QLoRA -> Dokime -> Hestia)."""
+    from paideia.training.loop import (
+        ContinuousPolicyRetrainingCoordinator,
+        RetrainingCoordinatorConfig,
+    )
+
+    cfg = RetrainingCoordinatorConfig(
+        log_file=log_file,
+        output_dir=Path(output_dir),
+        base_model=base_model,
+        task=task,
+        min_samples=min_samples,
+        optimizer=optimizer,
+        epochs=epochs,
+        lr=lr,
+        rank=rank,
+        hestia_url=hestia_url,
+        slot=slot,
+        auto_swap=auto_swap,
+        allow_simulated=simulate,
+    )
+
+    coordinator = ContinuousPolicyRetrainingCoordinator(cfg)
+
+    click.echo("\n=== Paideia Continuous Policy Retraining Loop ===")
+    click.echo(f"  Log File:     {log_file}")
+    click.echo(f"  Output Dir:   {output_dir}")
+    click.echo(f"  Base Model:   {base_model}")
+    click.echo(f"  Task:         {task}")
+    click.echo(f"  Optimizer:    {optimizer}")
+    click.echo(f"  Min Samples:  {min_samples}")
+    click.echo(f"  Mode:         {'SIMULATION' if simulate else 'REAL TRAINING'}")
+    click.echo(f"  Auto Swap:    {auto_swap} ({hestia_url or 'local'})")
+
+    if once:
+        click.echo("\nExecuting single retraining cycle...")
+        result = coordinator.run_cycle()
+        click.echo(f"\nCycle Result [{result.cycle_id}]: {result.status}")
+        click.echo(f"  Samples Ingested: {result.samples_ingested}")
+        click.echo(f"  Samples Selected: {result.samples_selected}")
+        if result.adapter_id:
+            click.echo(f"  Adapter ID:       {result.adapter_id}")
+        if result.adapter_digest:
+            click.echo(f"  Adapter Digest:   {result.adapter_digest}")
+        if result.hestia_swap_status:
+            click.echo(f"  Hestia Swap:      {result.hestia_swap_status.get('status')}")
+        if result.error:
+            click.echo(f"  Error:            {result.error}")
+    else:
+        click.echo(f"\nStarting continuous loop polling every {interval:.1f}s (Ctrl+C to stop)...")
+        try:
+            coordinator.run_loop(interval_seconds=interval)
+        except KeyboardInterrupt:
+            click.echo("\nCoordinator loop stopped by user.")
+
+
 if __name__ == "__main__":
     cli()

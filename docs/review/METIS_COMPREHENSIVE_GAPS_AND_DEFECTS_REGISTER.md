@@ -1112,6 +1112,37 @@
 
 ---
 
+### Item 104: Autonomous Closed-Loop Self-Improving Policy Pipeline (`ContinuousPolicyRetrainingCoordinator` & `paideia loop`)
+- **Category:** Continuous Policy Retraining & Serving Lifecycle (Paideia $\leftrightarrow$ Hestia Closed Loop)
+- **Priority:** P1 (Continuous Self-Improvement & Autonomous Hot-Swap Lifecycle)
+- **Status:** **Implemented & Fully Verified**
+- **Affected Subsystems:**
+  - `paideia/paideia/training/loop.py`
+  - `paideia/paideia/training/__init__.py`
+  - `paideia/paideia/training/runner.py`
+  - `paideia/paideia/training/config.py`
+  - `paideia/paideia/cli.py`
+  - `paideia/tests/test_continuous_loop.py`
+- **Root Cause & Rationale:**
+  - Prior to Item 104, Paideia had offline training (`paideia train`), boundary sampling (`paideia dataset sample-boundary`), and adapter export (`export_hestia_adapter_registry`), while Hestia had generation-checked CAS hot-swapping (`POST /manage/swap`).
+  - However, there was no autonomous daemon or coordinator linking Krisis active selective prediction logs / Dokime evaluation failures $\to$ boundary variance sampling $\to$ distributed Shampoo QLoRA fine-tuning $\to$ paired Dokime promotion evaluation $\to$ Hestia generational CAS hot-swap.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `ContinuousPolicyRetrainingCoordinator`, `RetrainingCoordinatorConfig`, and `RetrainingCycleResult` in `paideia/paideia/training/loop.py`.
+  2. Implemented automated 6-stage closed-loop lifecycle:
+     - Stage 1: Incremental log ingestion tracking line offsets in `coordinator_state.json`. Skips when unreviewed cases $< \text{min\_samples}$ to avoid compute waste.
+     - Stage 2: Boundary frontier curation via `AttemptRolloutVarianceSampler.sample(...)` stratifying high-variance boundary cases, retention checks, and hard diagnostic cases.
+     - Stage 3: Real LoRA fine-tuning via `QLoRATrainingRunner` with second-order matrix Shampoo or AdamW. Configurable preflight VRAM admissions floor (`required_free_vram_mb`) with workstation baseline auto-calibration.
+     - Stage 4: Dokime release promotion gatekeeper (`evaluate_promotion`) computing paired bootstrap 95% confidence intervals and paired permutation null-hypothesis tests. Persists standardized `DokimeRunBundle`.
+     - Stage 5: Production adapter export with cryptographic hash tree validation via `export_hestia_adapter_registry(...)`.
+     - Stage 6: Generation-checked CAS hot-swap into Hestia serving (`/manage/swap` and `/manage/bundles`) supporting both in-process `ServerManager` and external HTTP APIs with bearer token authentication. Increments active serving generation without server downtime.
+  3. Added `paideia loop` CLI command in `paideia/paideia/cli.py` supporting `--log-file`, `--output-dir`, `--base-model`, `--min-samples`, `--optimizer`, `--hestia-url`, `--slot`, `--once`, and `--interval`.
+  4. Added 7 unit and integration tests in `paideia/tests/test_continuous_loop.py` verifying insufficient sample skipping, end-to-end Shampoo training + Dokime promotion + Hestia export, rejection on regression, log offset incremental parsing, duck-typed CAS swap, HTTP REST swap, and Click CLI `--once` execution.
+- **Verification & Acceptance Checks:**
+  1. `paideia/tests`: **72 passed** (up from 65).
+  2. Monorepo total: **1,207 passed, 1 skipped** (100% green).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1150,6 +1181,7 @@
 | **Distributed Shampoo & Active Boundary QLoRA**| Item 101 | Paideia (`ShampooOptimizer`, `AttemptRolloutVarianceSampler`, `paideia train`)| **Integrated & Verified** | 65 Paideia tests passing (14 new optimizer/boundary/training tests) |
 | **Lochos Autonomous Pipeline & Rollback**| Item 102 | Kybernetes (`LochosWorkflowOrchestrator`, `/v1/lochos/pipeline`, CLI, Checkpoints)| **Integrated & Verified** | 215 Kybernetes tests passing (7 new workflow/API/CLI tests) |
 | **Krisis Calibration & Admin TOML Serialization**| Item 103 | Krisis + Kybernetes + Prosopon (`_dump_toml`, policy calibration, voice paths)| **Integrated & Verified** | 40 Krisis + 216 Kybernetes + 76 Prosopon tests passing |
+| **Continuous Retraining & Hot-Swap Loop**| Item 104 | Paideia + Hestia (`ContinuousPolicyRetrainingCoordinator`, `paideia loop`, CAS swap)| **Integrated & Verified** | 72 Paideia tests passing (7 new continuous loop tests) |
 
 ---
 
@@ -1164,14 +1196,14 @@
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.03s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **76** | 0 | 43.61s | **PASS** |
-| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **65** | 0 | 1.55s | **PASS** |
+| **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **72** | 0 | 2.18s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.22s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.41s | **PASS** |
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,200** | **1** | **~9 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,207** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 
