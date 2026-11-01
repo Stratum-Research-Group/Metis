@@ -8,40 +8,33 @@
 
 ---
 
-## 1. Quick Health Check & Experiment Resume (Run After Reboot)
+## 1. Quick Health Check & Test Suite Execution (Run After Reboot)
 
 To verify all services and environments are operational after system reboot:
 
 ```bash
-# 1. Check systemd ambient background services
+# 1. Check all 5 systemd ambient background services
 systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma-watcher metis-paideia-retrainer
 
-# 2. Resume Confirmatory Phase 1 Run (Picks up at Story 102/300)
-PYTHONPATH=. ./.venv/bin/python experiments/text_vs_graph/run_confirmatory.py
-
-# 3. Quick test suites sanity check (optional)
-./.venv/bin/pytest kybernetes/tests dokime/tests -q
-```
-
-# 2. Run Kybernetes orchestrator & tools test suite (193 tests)
-./.venv/bin/pytest kybernetes/tests -q
-
-# 3. Run Dokime evaluation & release gate test suite (213 tests)
+# 2. Run Dokime evaluation & release gate test suite (218 tests)
 ./.venv/bin/pytest dokime/tests -q
+
+# 3. Run Kybernetes orchestrator & tools test suite (216 tests)
+./.venv/bin/pytest kybernetes/tests -q
 
 # 4. Run LTHCM Poincaré memory engine test suite (133 tests)
 ./LTHCM/.venv/bin/pytest LTHCM/tests -q
 
-# 5. Run Stoma ingestion & structured OCR test suite (118 tests)
-./stoma/.venv/bin/pytest stoma/tests -q
+# 5. Run Stoma ingestion & structured OCR test suite (127 tests)
+CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q
 
-# 6. Run Dianoia MCTS deliberation test suite (93 tests)
+# 6. Run Dianoia MCTS deliberation test suite (97 tests)
 ./.venv/bin/pytest dianoia/tests -q
 
-# 7. Run Hestia speculative cascades & serving test suite (77 tests, 1 skipped)
+# 7. Run Hestia speculative cascades & serving test suite (83 tests, 1 skipped)
 ./hestia/.venv/bin/pytest hestia/tests -q
 
-# 8. Run Prosopon WebRTC & access store test suite (73 tests)
+# 8. Run Prosopon WebRTC & access store test suite (76 tests)
 ./prosopon/.venv/bin/pytest prosopon/tests -q
 
 # 9. Run Paideia active training pipeline test suite (72 tests)
@@ -56,10 +49,13 @@ PYTHONPATH=. ./.venv/bin/python experiments/text_vs_graph/run_confirmatory.py
 # 12. Run Phylax capability security gateway test suite (36 tests)
 ./.venv/bin/pytest phylax/tests -q
 
-# 13. Run Root integration test suite (39 tests)
+# 13. Run Experiments text vs graph empirical test suite (27 tests)
+./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q
+
+# 14. Run Root integration test suite (39 tests)
 ./.venv/bin/pytest tests -q
 
-# 14. Compile VS Code Void IDE client (0 errors)
+# 15. Compile VS Code Void IDE client (0 errors)
 npm --prefix vscode run compile
 
 # Monorepo Total: 1,207 tests passing across all 11 subsystems + root (100% green, 1 skipped)
