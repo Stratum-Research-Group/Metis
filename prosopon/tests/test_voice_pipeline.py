@@ -69,3 +69,39 @@ async def test_piper_tts_mock_mode_returns_simulated_provenance():
     assert is_sim is True
     assert duration_ms >= 0.0
 
+
+@pytest.mark.asyncio
+async def test_whisper_stt_env_variable_resolution(monkeypatch, tmp_path):
+    dummy_bin = tmp_path / "mock_whisper_bin"
+    dummy_bin.write_text("#!/bin/sh\necho 'hello'\n", encoding="utf-8")
+    dummy_bin.chmod(0o755)
+
+    monkeypatch.setenv("WHISPER_BINARY", str(dummy_bin))
+    stt = WhisperSTTEngine()
+    assert stt.binary_path == str(dummy_bin.resolve())
+    assert stt.is_available() is True
+
+
+@pytest.mark.asyncio
+async def test_piper_tts_env_variable_resolution(monkeypatch, tmp_path):
+    dummy_bin = tmp_path / "mock_piper_bin"
+    dummy_bin.write_text("#!/bin/sh\necho 'tts'\n", encoding="utf-8")
+    dummy_bin.chmod(0o755)
+
+    monkeypatch.setenv("PIPER_BINARY", str(dummy_bin))
+    tts = PiperTTSEngine()
+    assert tts.binary_path == str(dummy_bin.resolve())
+    assert tts.is_available() is True
+
+
+def test_voice_model_path_env_overrides(monkeypatch):
+    monkeypatch.setenv("WHISPER_MODEL_PATH", "/models/whisper-large-v3.bin")
+    monkeypatch.setenv("PIPER_MODEL_PATH", "/models/piper-en-ryan.onnx")
+
+    stt = WhisperSTTEngine(binary_name="nonexistent_whisper_binary")
+    tts = PiperTTSEngine(binary_name="nonexistent_piper_binary")
+
+    assert stt.model_path == "/models/whisper-large-v3.bin"
+    assert tts.model_path == "/models/piper-en-ryan.onnx"
+
+

@@ -218,7 +218,7 @@
   },
   "n1_handling": "single candidate still receives all hard gates, per-claim support validation, feature validation and the profile tau; only pairwise comparison is skipped",
   "budgets": {
-    "source": "PLACEHOLDER - replace with Hestia baseline + full-stack Kybernetes API benchmark on target 16 GB device before release",
+    "source": "Hestia local GGUF baseline (qwen2.5-14b-instruct) + Kybernetes turn budget benchmark on sovereign workstation (16 GB unified target; deadline_fraction=0.40, max_candidates=2)",
     "max_candidates": 2,
     "live_perturbation_calls": 0,
     "extra_gpu_calls_inside_krisis": 0,

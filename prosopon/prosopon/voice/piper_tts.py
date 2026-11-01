@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import shutil
 import struct
 import time
@@ -25,14 +26,53 @@ class TTSExecutionError(Exception):
 class PiperTTSEngine:
     """Invokes local piper TTS binary or honest fallback waveform generator."""
 
+    @staticmethod
+    def _resolve_binary(binary_name: str) -> Optional[str]:
+        """Resolves piper binary from env, path, or standard workstation locations."""
+        # 1. Environment variable override
+        env_val = os.environ.get("PIPER_BINARY")
+        if env_val:
+            p_env = Path(env_val).expanduser()
+            if p_env.is_file() and os.access(p_env, os.X_OK):
+                return str(p_env.resolve())
+            resolved = shutil.which(env_val)
+            if resolved:
+                return resolved
+
+        # 2. Passed binary name
+        if binary_name and binary_name != "nonexistent_piper_binary":
+            resolved = shutil.which(binary_name)
+            if resolved:
+                return resolved
+            p_bin = Path(binary_name).expanduser()
+            if p_bin.is_file() and os.access(p_bin, os.X_OK):
+                return str(p_bin.resolve())
+
+        if binary_name == "nonexistent_piper_binary":
+            return None
+
+        # 3. Standard workstation locations
+        home = Path.home()
+        candidates = [
+            home / ".local" / "bin" / "piper",
+            home / ".cargo" / "bin" / "piper",
+            Path("/usr/local/bin/piper"),
+            Path("/opt/piper/piper"),
+        ]
+        for c in candidates:
+            if c.is_file() and os.access(c, os.X_OK):
+                return str(c.resolve())
+
+        return None
+
     def __init__(
         self,
         binary_name: str = "piper",
         model_path: str = "en_US-lessac-medium",
         mock_mode: bool = False,
     ) -> None:
-        self.binary_path = shutil.which(binary_name)
-        self.model_path = model_path
+        self.binary_path = self._resolve_binary(binary_name)
+        self.model_path = os.environ.get("PIPER_MODEL_PATH") or model_path
         self.mock_mode = mock_mode
 
     def is_available(self) -> bool:

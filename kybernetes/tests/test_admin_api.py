@@ -739,3 +739,39 @@ async def test_admin_snapshot_durability_and_permissions(tmp_path, monkeypatch):
     assert "http://127.0.0.1:8080/v1" in restored_text
 
 
+def test_toml_changeset_serialization_roundtrip():
+    """Verify that ChangeSetManager correctly serializes TOML configurations without raising NotImplementedError."""
+    import tomllib
+    from kybernetes.admin.changesets import ChangeSetManager
+    mgr = ChangeSetManager()
+    data = {
+        "title": "Dokime Suite Configuration",
+        "seed": 42,
+        "temperature": 0.0,
+        "enabled": True,
+        "models": ["llama-3.1-8b-instruct", "qwen2.5-14b-instruct"],
+        "limits": {
+            "max_tokens": 512,
+            "timeout_seconds": 30.0,
+        },
+        "tasks": [
+            {"id": "arc", "metric": "acc"},
+            {"id": "ifeval", "metric": "strict_acc"},
+        ],
+    }
+
+    toml_out = mgr.serialize_config("dokime", data)
+    assert isinstance(toml_out, str)
+    assert 'title = "Dokime Suite Configuration"' in toml_out
+    assert "seed = 42" in toml_out
+
+    # Round-trip verify with standard library tomllib
+    parsed = tomllib.loads(toml_out)
+    assert parsed["title"] == data["title"]
+    assert parsed["seed"] == data["seed"]
+    assert parsed["models"] == data["models"]
+    assert parsed["limits"] == data["limits"]
+    assert parsed["tasks"] == data["tasks"]
+
+
+

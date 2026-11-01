@@ -281,6 +281,72 @@ class ChangeSetManager:
         config_hash = compute_dict_hash(clean_dict)
         return parsed, raw_text, config_hash
 
+    @staticmethod
+    def _dump_toml(data: Dict[str, Any], prefix: str = "") -> str:
+        """Serialize dictionary into standard TOML string (pure Python, zero dependencies)."""
+        def _format_toml_value(val: Any) -> str:
+            if isinstance(val, bool):
+                return "true" if val else "false"
+            elif isinstance(val, int):
+                return str(val)
+            elif isinstance(val, float):
+                import math
+                if math.isnan(val):
+                    return "nan"
+                elif math.isinf(val):
+                    return "inf" if val > 0 else "-inf"
+                return str(val)
+            elif isinstance(val, str):
+                return json.dumps(val)
+            elif isinstance(val, list):
+                if val and all(isinstance(x, dict) for x in val):
+                    return "[" + ", ".join(_format_toml_inline_table(x) for x in val) + "]"
+                return "[" + ", ".join(_format_toml_value(x) for x in val) + "]"
+            elif isinstance(val, dict):
+                return _format_toml_inline_table(val)
+            else:
+                return json.dumps(str(val))
+
+        def _format_toml_inline_table(d: Dict[str, Any]) -> str:
+            return "{" + ", ".join(f"{k} = {_format_toml_value(v)}" for k, v in d.items()) + "}"
+
+        lines: List[str] = []
+        scalars: Dict[str, Any] = {}
+        nested_tables: Dict[str, Any] = {}
+        array_tables: Dict[str, Any] = {}
+
+        for k, v in data.items():
+            if isinstance(v, dict):
+                nested_tables[k] = v
+            elif isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                array_tables[k] = v
+            else:
+                scalars[k] = v
+
+        for k, v in scalars.items():
+            lines.append(f"{k} = {_format_toml_value(v)}")
+
+        for k, v in nested_tables.items():
+            sec_name = f"{prefix}.{k}" if prefix else k
+            if lines:
+                lines.append("")
+            lines.append(f"[{sec_name}]")
+            sub_text = ChangeSetManager._dump_toml(v, prefix=sec_name)
+            if sub_text.strip():
+                lines.append(sub_text.strip())
+
+        for k, v in array_tables.items():
+            sec_name = f"{prefix}.{k}" if prefix else k
+            for item in v:
+                if lines:
+                    lines.append("")
+                lines.append(f"[[{sec_name}]]")
+                sub_text = ChangeSetManager._dump_toml(item, prefix=sec_name)
+                if sub_text.strip():
+                    lines.append(sub_text.strip())
+
+        return "\n".join(lines).strip() + "\n"
+
     def serialize_config(self, module_id: str, data: Dict[str, Any]) -> str:
         """Serialize configuration dictionary into module's native file format."""
         descriptor = MODULE_REGISTRY[module_id]
@@ -290,7 +356,7 @@ class ChangeSetManager:
         elif fmt == "json":
             return json.dumps(data, indent=2) + "\n"
         elif fmt == "toml":
-            raise NotImplementedError("Writing TOML configurations is not supported in v1")
+            return self._dump_toml(data)
         else:
             raise ValueError(f"Unsupported configuration format '{fmt}' for serialization")
 

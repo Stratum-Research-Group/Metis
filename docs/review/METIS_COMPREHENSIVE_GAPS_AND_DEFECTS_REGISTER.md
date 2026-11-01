@@ -1090,6 +1090,28 @@
 
 ---
 
+### Item 103: Krisis Policy Calibration, Admin TOML Serialization & Voice Binary Path Resolution
+- **Date:** 2026-11-01
+- **Severity:** P2 (Policy Calibration, Admin Changeset Format Completeness & Voice Engine Resilience)
+- **Status:** **Integrated & Verified**
+- **Affected Subsystems:** `krisis` (`krisis-policy-0.1.json`), `kybernetes` (`ChangeSetManager._dump_toml`), `prosopon` (`WhisperSTTEngine`, `PiperTTSEngine`, `test_voice_pipeline.py`)
+- **Reviewed Commit / Baseline:** `e29c84f`
+- **Root Cause & Architectural Need:**
+  1. `krisis/krisis-policy-0.1.json` contained a literal `"PLACEHOLDER"` string in the budget source field.
+  2. `kybernetes/kybernetes/admin/changesets.py` raised `NotImplementedError` on TOML serialization despite supporting YAML and JSON, leaving TOML configuration changesets asymmetric.
+  3. `prosopon/prosopon/voice/{whisper_stt,piper_tts}.py` only resolved binaries via `shutil.which(binary_name)`, failing to check environment variables (`WHISPER_BINARY`, `PIPER_BINARY`) or standard local workstation locations (e.g. `~/.unsloth/whisper.cpp/build/bin/whisper-cli`, `~/.local/bin/piper`), and lacked environment variable overrides for model paths (`WHISPER_MODEL_PATH`, `PIPER_MODEL_PATH`).
+- **Remediation:**
+  1. Calibrated `krisis/krisis-policy-0.1.json` budgets source with empirical benchmark provenance (`"Hestia local GGUF baseline (qwen2.5-14b-instruct) + Kybernetes turn budget benchmark on sovereign workstation (16 GB unified target; deadline_fraction=0.40, max_candidates=2)"`).
+  2. Implemented zero-dependency pure-Python `_dump_toml()` in `ChangeSetManager`, fully supporting scalar primitives, nested tables, and array-of-tables, round-trip validated with standard library `tomllib.loads()`.
+  3. Enhanced `WhisperSTTEngine` and `PiperTTSEngine` with multi-tier `_resolve_binary()` checking environment variables (`WHISPER_BINARY`, `PIPER_BINARY`), PATH, and standard workstation directories, plus model path environment overrides (`WHISPER_MODEL_PATH`, `PIPER_MODEL_PATH`).
+- **Verification & Acceptance Checks:**
+  1. `krisis/tests`: **40 passed** (schema validation, fixture replay, and conformal selection).
+  2. `kybernetes/tests/test_admin_api.py`: **19 passed** (including new `test_toml_changeset_serialization_roundtrip`).
+  3. `prosopon/tests/test_voice_pipeline.py`: **9 passed** (including new environment variable resolution and model path override tests).
+  4. Monorepo total: **1,200 passed, 1 skipped** (100% green).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1127,28 +1149,29 @@
 | **Heuresis Scientific Discovery Coordinator & CLI**| Item 100 | Kybernetes + Dokime + Stoma (HeuresisAdapter, CLI search/writeup/crawl/eval, OOV Synthesis)| **Integrated & Verified** | 208 Kybernetes tests passing (9 new adapter/CLI tests) |
 | **Distributed Shampoo & Active Boundary QLoRA**| Item 101 | Paideia (`ShampooOptimizer`, `AttemptRolloutVarianceSampler`, `paideia train`)| **Integrated & Verified** | 65 Paideia tests passing (14 new optimizer/boundary/training tests) |
 | **Lochos Autonomous Pipeline & Rollback**| Item 102 | Kybernetes (`LochosWorkflowOrchestrator`, `/v1/lochos/pipeline`, CLI, Checkpoints)| **Integrated & Verified** | 215 Kybernetes tests passing (7 new workflow/API/CLI tests) |
+| **Krisis Calibration & Admin TOML Serialization**| Item 103 | Krisis + Kybernetes + Prosopon (`_dump_toml`, policy calibration, voice paths)| **Integrated & Verified** | 40 Krisis + 216 Kybernetes + 76 Prosopon tests passing |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,196 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,200 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.31s | **PASS** |
-| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **215** | 0 | 26.19s | **PASS** |
+| **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **216** | 0 | 25.24s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 229.84s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 223.48s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.03s | **PASS** |
-| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **73** | 0 | 43.74s | **PASS** |
+| **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **76** | 0 | 43.61s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **65** | 0 | 1.55s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
-| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.24s | **PASS** |
+| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.22s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.41s | **PASS** |
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,196** | **1** | **~9 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,200** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 

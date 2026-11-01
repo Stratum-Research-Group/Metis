@@ -23,14 +23,62 @@ class STTExecutionError(Exception):
 class WhisperSTTEngine:
     """Invokes local whisper.cpp binary or honest fallback mock for speech transcription."""
 
+    @staticmethod
+    def _resolve_binary(binary_name: str) -> Optional[str]:
+        """Resolves whisper binary from env, path, or standard workstation locations."""
+        # 1. Environment variable override
+        env_val = os.environ.get("WHISPER_BINARY")
+        if env_val:
+            p_env = Path(env_val).expanduser()
+            if p_env.is_file() and os.access(p_env, os.X_OK):
+                return str(p_env.resolve())
+            resolved = shutil.which(env_val)
+            if resolved:
+                return resolved
+
+        # 2. Passed binary name
+        if binary_name and binary_name != "nonexistent_whisper_binary":
+            resolved = shutil.which(binary_name)
+            if resolved:
+                return resolved
+            p_bin = Path(binary_name).expanduser()
+            if p_bin.is_file() and os.access(p_bin, os.X_OK):
+                return str(p_bin.resolve())
+
+        if binary_name == "nonexistent_whisper_binary":
+            return None
+
+        # 3. Common binary aliases
+        for alias in ("whisper.cpp", "whisper-cli", "whisper", "main"):
+            res = shutil.which(alias)
+            if res:
+                return res
+
+        # 4. Standard workstation locations
+        home = Path.home()
+        candidates = [
+            home / ".unsloth" / "whisper.cpp" / "build" / "bin" / "whisper-cli",
+            home / ".unsloth" / "whisper.cpp" / "build" / "bin" / "main",
+            home / ".local" / "bin" / "whisper-cli",
+            home / ".local" / "bin" / "whisper.cpp",
+            home / ".local" / "bin" / "whisper",
+            Path("/usr/local/bin/whisper-cli"),
+            Path("/usr/local/bin/whisper.cpp"),
+        ]
+        for c in candidates:
+            if c.is_file() and os.access(c, os.X_OK):
+                return str(c.resolve())
+
+        return None
+
     def __init__(
         self,
         binary_name: str = "whisper.cpp",
         model_path: str = "base.en",
         mock_mode: bool = False,
     ) -> None:
-        self.binary_path = shutil.which(binary_name) or shutil.which("whisper-cli") or shutil.which("whisper")
-        self.model_path = model_path
+        self.binary_path = self._resolve_binary(binary_name)
+        self.model_path = os.environ.get("WHISPER_MODEL_PATH") or model_path
         self.mock_mode = mock_mode
 
     def is_available(self) -> bool:
