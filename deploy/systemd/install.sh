@@ -13,7 +13,7 @@ echo "=== Installing Metis Systemd User Services ==="
 mkdir -p "${SYSTEMD_USER_DIR}"
 
 # Copy service unit files
-for s in metis-hestia.service metis-kybernetes.service metis-prosopon.service metis-stoma-watcher.service; do
+for s in metis-hestia.service metis-kybernetes.service metis-prosopon.service metis-stoma-watcher.service metis-paideia-retrainer.service; do
     echo "Installing ${s} -> ${SYSTEMD_USER_DIR}/${s}"
     cp "${SCRIPT_DIR}/${s}" "${SYSTEMD_USER_DIR}/${s}"
 done
@@ -31,10 +31,10 @@ systemctl --user daemon-reload
 echo ""
 echo "Installation complete!"
 echo "To enable and start the complete Metis stack:"
-echo "  systemctl --user enable --now metis-hestia metis-kybernetes metis-prosopon"
+echo "  systemctl --user enable --now metis-hestia metis-kybernetes metis-prosopon metis-stoma-watcher metis-paideia-retrainer"
 echo ""
 echo "To check service status:"
-echo "  systemctl --user status metis-prosopon"
+echo "  systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma-watcher metis-paideia-retrainer"
 echo ""
 echo "To view live unified logs:"
-echo "  journalctl --user -f -u metis-hestia -u metis-kybernetes -u metis-prosopon"
+echo "  journalctl --user -f -u metis-hestia -u metis-kybernetes -u metis-prosopon -u metis-paideia-retrainer"

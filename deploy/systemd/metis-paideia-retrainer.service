@@ -1,0 +1,24 @@
+[Unit]
+Description=Metis Paideia Continuous Policy Retraining Daemon
+After=network.target metis-hestia.service metis-kybernetes.service
+Requires=metis-hestia.service
+Documentation=https://gitlab.com/akarta-315h/metis
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/Metis
+ExecStart=%h/Projects/Metis/paideia/.venv/bin/paideia loop --log-file %h/.metis/krisis_active.jsonl --output-dir %h/Projects/Metis/paideia/runs/continuous --base-model qwen2.5-14b-instruct --task router --min-samples 10 --optimizer shampoo --hestia-url http://127.0.0.1:8080 --slot primary --interval 120.0
+Restart=on-failure
+RestartSec=15s
+
+# Process security hardening
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+Environment=PYTHONUNBUFFERED=1
+Environment=METIS_TRAINING_MIN_VRAM_MB=8000
+EnvironmentFile=-%h/Projects/Metis/deploy/metis.env
+
+[Install]
+WantedBy=default.target
