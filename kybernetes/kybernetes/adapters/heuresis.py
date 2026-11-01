@@ -15,18 +15,31 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field
 
-from dokime.tasks.heuresis import (
-    CANONICAL_CONCEPT_ATOMS,
-    ConceptAtom,
-    DiscoveryCandidate,
-    HeuresisDiscoveryEngine,
-    HeuresisDiscoveryTask,
-)
-from stoma.crawlers.openreview import (
-    CommunityAvailabilityIndex,
-    OpenReviewBoundaryCrawler,
-    PeerReviewForumRecord,
-)
+try:
+    from dokime.tasks.heuresis import (
+        CANONICAL_CONCEPT_ATOMS,
+        ConceptAtom,
+        DiscoveryCandidate,
+        HeuresisDiscoveryEngine,
+        HeuresisDiscoveryTask,
+    )
+except ImportError:
+    CANONICAL_CONCEPT_ATOMS = ()  # type: ignore
+    ConceptAtom = Any  # type: ignore
+    DiscoveryCandidate = Any  # type: ignore
+    HeuresisDiscoveryEngine = Any  # type: ignore
+    HeuresisDiscoveryTask = Any  # type: ignore
+
+try:
+    from stoma.crawlers.openreview import (
+        CommunityAvailabilityIndex,
+        OpenReviewBoundaryCrawler,
+        PeerReviewForumRecord,
+    )
+except ImportError:
+    CommunityAvailabilityIndex = Any  # type: ignore
+    OpenReviewBoundaryCrawler = Any  # type: ignore
+    PeerReviewForumRecord = Any  # type: ignore
 
 logger = logging.getLogger(__name__)
 
