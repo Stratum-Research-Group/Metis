@@ -174,9 +174,11 @@ For in-depth hardware setup, environment variables, driver configurations, and d
 
 ## 7. Architecture Specifications & Integration Roadmap
 
+- [**docs/ARCHITECTURE_AND_INTERCONNECT.md**](docs/ARCHITECTURE_AND_INTERCONNECT.md): Canonical reference manual detailing all 11 modules, CLI commands, cross-subsystem contracts, and dataflow topologies.
+- [**docs/MSS.md**](docs/MSS.md): Metis Sovereign Stack (MSS) operational manual for autonomous coding agents, Lochos multi-agent squads, and Pinax tool catalogue.
 - [**docs/STACK_BUILD_CONTRACT.md**](docs/STACK_BUILD_CONTRACT.md): Foundational build contract and component responsibilities.
-- [**docs/stack-integration.md**](docs/stack-integration.md): Ecosystem integration roadmap, test matrices, and dependency graphs.
 - [**docs/HARDWARE_AND_CUDA_GUIDE.md**](docs/HARDWARE_AND_CUDA_GUIDE.md): Hardware allocation and multi-GPU partitioning guide.
+- [**docs/review/pickup.md**](docs/review/pickup.md): Resumption guide, ambient systemd daemon management, and verified test totals.
 
 ---
 
