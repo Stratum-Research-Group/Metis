@@ -441,6 +441,27 @@ def create_app(
         item = lochos_squad.queue.resolve_attention(task_id=task_id, seat_id=seat_id, resolution=resolution)
         return item.to_dict()
 
+    @app.post("/v1/lochos/complete")
+    @app.post("/api/lochos/complete")
+    async def complete_lochos_task(
+        data: Dict[str, Any],
+        _: bool = Depends(require_service_auth),
+    ) -> Dict[str, Any]:
+        """Mark an active task as completed in the Lochos squad queue."""
+        task_id = data.get("task_id")
+        seat_id = data.get("seat_id")
+        result = data.get("result") or {"status": "ok"}
+        if not task_id or not seat_id:
+            raise HTTPException(status_code=400, detail="task_id and seat_id are required")
+
+        s = lochos_squad.get_seat(seat_id)
+        seat_addr = s.full_address if s else seat_id
+        try:
+            item = lochos_squad.queue.complete_task(task_id=task_id, seat_id=seat_addr, result=result)
+            return item.to_dict()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
     @app.post("/v1/lochos/pipeline")
     @app.post("/api/lochos/pipeline")
     async def run_lochos_pipeline(

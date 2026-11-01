@@ -463,6 +463,25 @@ class MockKybernetesClient:
             "resolved": True,
         }
 
+    async def run_lochos_pipeline(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "task_id": "mock-pipeline-task-001",
+            "success": True,
+            "stage": "completed",
+            "baton_owner": payload.get("reviewer_seat", "reviewer"),
+            "milestones": ["baseline_checkpoint", "coding_complete", "verification_passed"],
+            "rolled_back": False,
+            "verification_passed": True,
+            "details": {"mission": payload.get("mission")},
+        }
+
+    async def complete_lochos_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "task_id": payload.get("task_id", "mock-task"),
+            "status": "completed",
+            "result": payload.get("result", {"status": "ok"}),
+        }
+
     # --- Pinax Tool Catalogue Mock Methods ---
     async def get_pinax_tools(
         self,

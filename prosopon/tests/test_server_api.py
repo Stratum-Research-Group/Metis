@@ -282,6 +282,43 @@ async def test_lochos_squad_endpoints(app_instance, auth_headers):
         assert q_resp.status_code == 200
         assert isinstance(q_resp.json(), list)
 
+        # 3. Test Lochos pipeline run
+        pipe_resp = await client.post(
+            "/api/lochos/pipeline",
+            headers=auth_headers,
+            json={
+                "mission": "release-0.6.0",
+                "slice_id": "OPR.01",
+                "title": "Prosopon Pipeline Test",
+            },
+        )
+        assert pipe_resp.status_code == 200
+        pipe_data = pipe_resp.json()
+        assert pipe_data["success"] is True
+        assert pipe_data["stage"] == "completed"
+
+        # 4. Test Lochos complete
+        comp_resp = await client.post(
+            "/api/lochos/complete",
+            headers=auth_headers,
+            json={
+                "task_id": "mock-task-123",
+                "seat_id": "reviewer",
+                "result": {"status": "ok"},
+            },
+        )
+        assert comp_resp.status_code == 200
+        assert comp_resp.json()["status"] == "completed"
+
+        # 5. Test Lochos attention resolve alias
+        attn_resp = await client.post(
+            "/api/lochos/attention/resolve",
+            headers=auth_headers,
+            json={"task_id": "mock-task-123", "seat_id": "reviewer"},
+        )
+        assert attn_resp.status_code == 200
+        assert attn_resp.json()["resolved"] is True
+
 
 def test_lochos_websocket_bridge(app_instance):
     """Test live Lochos squad WebSocket streaming bridge with auth enforcement."""

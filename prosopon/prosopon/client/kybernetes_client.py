@@ -394,6 +394,22 @@ class KybernetesClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def run_lochos_pipeline(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Trigger an end-to-end automated multi-seat Lochos execution pipeline."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(f"{self.base_url}/lochos/pipeline", json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def complete_lochos_task(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Sign off on completion of a verified Lochos task."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(f"{self.base_url}/lochos/complete", json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
     # --- Pinax Tool Catalogue Client Methods ---
     async def get_pinax_tools(
         self,

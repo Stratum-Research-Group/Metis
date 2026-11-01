@@ -1561,6 +1561,7 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=f"Lochos dispatch error: {exc}")
 
     @app.post("/api/lochos/resolve-attention")
+    @app.post("/api/lochos/attention/resolve")
     async def lochos_resolve_attention(
         payload: Dict[str, Any],
         _: bool = Depends(require_admin_auth),
@@ -1570,6 +1571,28 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
             return await kybernetes.resolve_lochos_attention(payload)
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Lochos resolve error: {exc}")
+
+    @app.post("/api/lochos/pipeline")
+    async def lochos_pipeline(
+        payload: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Trigger an autonomous multi-seat Lochos pipeline run."""
+        try:
+            return await kybernetes.run_lochos_pipeline(payload)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Lochos pipeline error: {exc}")
+
+    @app.post("/api/lochos/complete")
+    async def lochos_complete(
+        payload: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Sign off and complete an active Lochos task."""
+        try:
+            return await kybernetes.complete_lochos_task(payload)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Lochos complete error: {exc}")
 
     @app.websocket("/api/lochos/ws")
     async def lochos_ws_endpoint(websocket: WebSocket) -> None:

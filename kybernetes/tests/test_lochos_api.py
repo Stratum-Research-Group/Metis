@@ -134,6 +134,21 @@ async def test_lochos_squad_api_endpoints(tmp_path):
         assert transfer_brief["destination_seat"]["id"] == "reviewer"
         assert transfer_brief["handoff_note"] == "Check this"
 
+        # 9. Complete task endpoint
+        resp = await client.post(
+            "/v1/lochos/complete",
+            headers=headers,
+            json={
+                "task_id": task_id,
+                "seat_id": "reviewer@api-test-squad",
+                "result": {"status": "ok", "verdict": "verified"},
+            },
+        )
+        assert resp.status_code == 200
+        completed_task = resp.json()
+        assert completed_task["status"] == "completed"
+        assert completed_task["result"]["verdict"] == "verified"
+
 
 def test_lochos_websocket_streaming(tmp_path):
     from starlette.testclient import TestClient

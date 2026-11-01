@@ -1143,6 +1143,33 @@
 
 ---
 
+### Item 105: Lochos Multi-Agent Pipeline & Task Completion Control Plane in Prosopon & Kybernetes
+- **Category:** Multi-Agent Orchestration & Control Plane Integration (Kybernetes $\leftrightarrow$ Prosopon BFF)
+- **Priority:** P1 (Squad Workflow Control Plane Alignment)
+- **Status:** **Implemented & Fully Verified**
+- **Affected Subsystems:**
+  - `kybernetes/kybernetes/server/app.py`
+  - `kybernetes/tests/test_lochos_api.py`
+  - `prosopon/prosopon/client/kybernetes_client.py`
+  - `prosopon/prosopon/client/mock_kybernetes.py`
+  - `prosopon/prosopon/server.py`
+  - `prosopon/tests/test_server_api.py`
+- **Root Cause & Rationale:**
+  - While Item 102 implemented `LochosWorkflowOrchestrator` and exposed `/v1/lochos/pipeline` in Kybernetes, the task completion endpoint (`/v1/lochos/complete`) was missing from `kybernetes/server/app.py`.
+  - Furthermore, Prosopon's backend-for-frontend (`prosopon/server.py`) and HTTP client (`KybernetesClient`) lacked proxy endpoints for `/api/lochos/pipeline` and `/api/lochos/complete`, preventing the Prosopon Web Workbench and VS Code Void IDE client from triggering autonomous pipelines or signing off on verified task completions via the BFF control plane.
+- **Remediation & Behavioral Guarantees:**
+  1. Implemented `POST /v1/lochos/complete` and alias `POST /api/lochos/complete` in `kybernetes/server/app.py` with `require_service_auth` verification and seat resolution.
+  2. Implemented `run_lochos_pipeline` and `complete_lochos_task` in `prosopon.client.kybernetes_client.KybernetesClient` and `MockKybernetesClient`.
+  3. Implemented `POST /api/lochos/pipeline`, `POST /api/lochos/complete`, and alias `POST /api/lochos/attention/resolve` in `prosopon.server` protected by `require_admin_auth`.
+  4. Added complete task endpoint verification in `kybernetes/tests/test_lochos_api.py` (all 3 tests passing).
+  5. Added pipeline, complete, and attention resolve tests in `prosopon/tests/test_server_api.py` (all 17 tests passing).
+- **Verification & Acceptance Checks:**
+  1. `kybernetes/tests`: **216 passed** (100% green).
+  2. `prosopon/tests`: **76 passed** (100% green).
+  3. Monorepo total: **1,207 passed, 1 skipped** (100% green).
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1182,6 +1209,7 @@
 | **Lochos Autonomous Pipeline & Rollback**| Item 102 | Kybernetes (`LochosWorkflowOrchestrator`, `/v1/lochos/pipeline`, CLI, Checkpoints)| **Integrated & Verified** | 215 Kybernetes tests passing (7 new workflow/API/CLI tests) |
 | **Krisis Calibration & Admin TOML Serialization**| Item 103 | Krisis + Kybernetes + Prosopon (`_dump_toml`, policy calibration, voice paths)| **Integrated & Verified** | 40 Krisis + 216 Kybernetes + 76 Prosopon tests passing |
 | **Continuous Retraining & Hot-Swap Loop**| Item 104 | Paideia + Hestia (`ContinuousPolicyRetrainingCoordinator`, `paideia loop`, CAS swap)| **Integrated & Verified** | 72 Paideia tests passing (7 new continuous loop tests) |
+| **Lochos BFF Control Plane & Sign-Off**| Item 105 | Kybernetes + Prosopon (`/lochos/complete`, `/lochos/pipeline`, BFF proxy)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon tests passing |
 
 ---
 
