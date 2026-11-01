@@ -1201,6 +1201,31 @@
 
 ---
 
+### 107. Canonical Architecture, Module Catalog & Interconnect Specification
+- **Category:** System Architecture, Documentation & Cross-Subsystem Interconnect Specification
+- **Status:** **Integrated & Verified**
+- **Impacted Files:**
+  - `docs/ARCHITECTURE_AND_INTERCONNECT.md`
+  - `README.md`
+  - `docs/REVIEW_INDEX.md`
+- **Root Cause & Rationale:**
+  - Prior to Item 107, monorepo documentation was fragmented across domain-specific user guides (`docs/MSS.md` for Sovereign Coding Agent, Lochos, and Pinax) and historical audit registers.
+  - Developers and operators lacked a single canonical root document in `docs/` describing all 11 modules, their Python virtualenvs, entrypoints, full CLI commands/flags, systemd daemons, topological interconnect contracts, mathematical representations, and security invariants.
+- **Remediation & Behavioral Guarantees:**
+  1. Authored `docs/ARCHITECTURE_AND_INTERCONNECT.md` (Specification ID `METIS-DOCS-ARCH-001`):
+     - Section 1: Monorepo System Overview & Topology (port allocation table 8080/8081/8000, 5 systemd ambient daemons, security perimeters).
+     - Section 2: Complete Subsystem Catalog across all 11 modules (Hestia, Kybernetes, Prosopon, Paideia, Stoma, LTHCM, Dianoia, Kleroterion, Krisis, Phylax, Dokime), documenting roles, environments, key entrypoints, and full CLI usage and flags.
+     - Section 3: Subsystem Interconnect Topology & Dataflow (Mermaid sequence & flow diagrams, directional contracts $S \to L \to K \to D \to Kl \to H \to Kr \to Ph \to P \to Dok$).
+     - Section 4: Mathematical Representations & Invariants (Hyperbolic Poincaré distance, conformal risk $\hat{q}$, Gittins index, Gated Consistency $C(G)$, Shampoo preconditioning).
+     - Section 5: Operational & Deployment Runbooks (daemon control, logs, healthchecks, test sweeps, troubleshooting).
+  2. Cross-linked from `README.md` and `docs/REVIEW_INDEX.md`.
+- **Verification & Acceptance Checks:**
+  1. Structural validation of `docs/ARCHITECTURE_AND_INTERCONNECT.md`.
+  2. Documentation links verified.
+  3. All systemd unit status and CLI invocation patterns verified against running daemons.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1242,6 +1267,7 @@
 | **Continuous Retraining & Hot-Swap Loop**| Item 104 | Paideia + Hestia (`ContinuousPolicyRetrainingCoordinator`, `paideia loop`, CAS swap)| **Integrated & Verified** | 72 Paideia tests passing (7 new continuous loop tests) |
 | **Lochos BFF Control Plane & Sign-Off**| Item 105 | Kybernetes + Prosopon (`/lochos/complete`, `/lochos/pipeline`, BFF proxy)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon tests passing |
 | **Lochos Baton Transfer & Void Controls**| Item 106 | Kybernetes + Prosopon + Void (`/api/lochos/transfer`, dynamic queue, GUI pipeline)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon + 0 TS compile errors |
+| **Canonical Architecture & Interconnect Guide**| Item 107 | Docs (`docs/ARCHITECTURE_AND_INTERCONNECT.md`, 11 modules, CLI, dataflows)| **Integrated & Verified** | Specification `METIS-DOCS-ARCH-001` (1,000+ lines, verified) |
 
 ---
 
