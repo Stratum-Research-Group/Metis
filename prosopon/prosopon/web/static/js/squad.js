@@ -5,6 +5,7 @@
 
 const MetisSquad = {
   activeSeatId: "coder",
+  queueTasks: [],
   rigData: {
     name: "metis-sovereign-squad",
     summary: "Autonomous engineering squad with specialized build and review seats",
@@ -159,8 +160,90 @@ const MetisSquad = {
           this.updateFromSquadState(live);
         }
       }
+      if (window.API && window.API.getLochosQueue) {
+        const queue = await window.API.getLochosQueue();
+        if (Array.isArray(queue)) {
+          this.queueTasks = queue;
+          this.render();
+        }
+      }
     } catch {
       // Local offline fallback retains starter state
+    }
+  },
+
+  async completeTask(taskId, currentOwner) {
+    const seatId = currentOwner ? currentOwner.split("@")[0] : this.activeSeatId;
+    if (!window.confirm(`Sign off and mark task #${taskId} complete by seat ${seatId}?`)) return;
+    try {
+      if (window.API && window.API.completeLochosTask) {
+        await window.API.completeLochosTask({ task_id: taskId, seat_id: seatId, resolution: "completed" });
+        alert(`Task #${taskId} marked completed!`);
+        await this.fetchLiveSquad();
+      }
+    } catch (err) {
+      alert(`Complete failed: ${err.message || err}`);
+    }
+  },
+
+  openPipelineModal() {
+    const prompt = window.prompt("Enter autonomous pipeline prompt/goal:", "Audit and implement test suite verification");
+    if (!prompt || !prompt.trim()) return;
+    const mission = window.prompt("Enter mission tag (optional):", "sovereign-mission") || "sovereign-mission";
+    const sliceId = window.prompt("Enter slice ID (optional):", "001") || "001";
+    this.runPipeline({ prompt: prompt.trim(), mission: mission.trim(), slice_id: sliceId.trim() });
+  },
+
+  async runPipeline(payload) {
+    try {
+      if (window.API && window.API.runLochosPipeline) {
+        const res = await window.API.runLochosPipeline(payload);
+        alert(`Autonomous pipeline initiated: Task #${res.task_id || 'dispatched'}`);
+        await this.fetchLiveSquad();
+      }
+    } catch (err) {
+      alert(`Pipeline launch failed: ${err.message || err}`);
+    }
+  },
+
+  openDispatchModal() {
+    const title = window.prompt("Enter task title:", "New mission task");
+    if (!title || !title.trim()) return;
+    const targetSeat = window.prompt("Target seat (coder, reviewer, architect, tester):", "coder") || "coder";
+    const mission = window.prompt("Mission name:", "release-0.5.8") || "release-0.5.8";
+    const sliceId = window.prompt("Slice ID:", "001") || "001";
+    this.dispatchTask({ title: title.trim(), target_seat: targetSeat.trim(), mission: mission.trim(), slice_id: sliceId.trim() });
+  },
+
+  async dispatchTask(payload) {
+    try {
+      if (window.API && window.API.dispatchLochos) {
+        const res = await window.API.dispatchLochos(payload);
+        alert(`Task #${res.task_id || 'dispatched'} assigned to ${res.assigned_to || payload.target_seat}`);
+        await this.fetchLiveSquad();
+      }
+    } catch (err) {
+      alert(`Dispatch failed: ${err.message || err}`);
+    }
+  },
+
+  openTransferModal(taskId, currentOwner) {
+    const fromSeat = currentOwner ? currentOwner.split("@")[0] : this.activeSeatId;
+    const toSeat = window.prompt(`Transfer baton for #${taskId} from ${fromSeat} to seat:`, "reviewer");
+    if (!toSeat || !toSeat.trim()) return;
+    const note = window.prompt("Transfer handoff note (optional):", "Passing work for independent verification");
+    this.transferBaton({ task_id: taskId, from_seat: fromSeat, to_seat: toSeat.trim(), note: note ? note.trim() : undefined });
+  },
+
+  async transferBaton(payload) {
+    try {
+      if (window.API && window.API.transferLochosBaton) {
+        await window.API.transferLochosBaton(payload);
+        alert(`Baton #${payload.task_id} transferred to ${payload.to_seat}!`);
+        await this.fetchLiveSquad();
+      }
+    } catch (err) {
+      alert(`Transfer failed: ${err.message || err}`);
     }
   },
 
@@ -319,6 +402,10 @@ const MetisSquad = {
               <h3>Lochos Work Queue</h3>
               <p class="text-secondary">Transactional SQLite (.metis/lochos.sqlite)</p>
             </div>
+            <div style="display: flex; gap: 0.4rem; align-items: center;">
+              <button class="btn primary-btn btn-sm" onclick="MetisSquad.openPipelineModal()">Run Pipeline</button>
+              <button class="btn secondary-btn btn-sm" onclick="MetisSquad.openDispatchModal()">+ Dispatch</button>
+            </div>
           </div>
 
           <div class="queue-section">
@@ -349,15 +436,39 @@ const MetisSquad = {
           </div>
 
           <div class="queue-section" style="margin-top: 1.5rem;">
-            <h4>Baton Queue Status</h4>
-            <div class="queue-item-card">
-              <div class="queue-card-top">
-                <span class="badge badge-info">IN PROGRESS</span>
-                <span class="font-mono">#task-09f18a</span>
-              </div>
-              <div class="queue-card-title">Implement Pi 4-Tool Core Contract and Sandboxing</div>
-              <div class="queue-card-owner">Owner: coder@${this.rigData.name}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4>Baton Queue Status (${this.queueTasks.length})</h4>
+              <button class="btn secondary-btn btn-sm" onclick="MetisSquad.fetchLiveSquad()" style="padding: 2px 6px; font-size: 10px;">↻ Refresh</button>
             </div>
+            ${this.queueTasks.length === 0 ? `
+              <div class="queue-item-card">
+                <div class="text-secondary" style="font-size: 0.8rem; text-align: center; padding: 0.5rem 0;">No active tasks in queue. Click "+ Dispatch" or "Run Pipeline".</div>
+              </div>
+            ` : this.queueTasks.map((task) => `
+              <div class="queue-item-card" style="margin-bottom: 0.6rem;">
+                <div class="queue-card-top">
+                  <span class="badge ${task.status === 'in_progress' ? 'badge-info' : task.status === 'completed' ? 'badge-success' : task.status === 'blocked' ? 'badge-danger' : 'badge-secondary'}">
+                    ${(task.status || 'PENDING').toUpperCase()}
+                  </span>
+                  <span class="font-mono">#${task.task_id}</span>
+                </div>
+                <div class="queue-card-title">${task.title}</div>
+                <div class="queue-card-owner">
+                  <span>Owner: ${task.baton_owner || 'Unassigned'}</span>
+                  ${task.mission ? ` • <span class="font-mono">${task.mission}</span>` : ''}
+                </div>
+                ${task.status === 'in_progress' ? `
+                  <div style="margin-top: 0.5rem; display: flex; gap: 0.4rem;">
+                    <button class="btn primary-btn btn-sm" onclick="MetisSquad.completeTask('${task.task_id}', '${task.baton_owner}')">
+                      ✓ Complete
+                    </button>
+                    <button class="btn secondary-btn btn-sm" onclick="MetisSquad.openTransferModal('${task.task_id}', '${task.baton_owner}')">
+                      Transfer
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            `).join("")}
           </div>
         </div>
       </div>

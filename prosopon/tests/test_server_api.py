@@ -319,6 +319,22 @@ async def test_lochos_squad_endpoints(app_instance, auth_headers):
         assert attn_resp.status_code == 200
         assert attn_resp.json()["resolved"] is True
 
+        # 6. Test Lochos transfer
+        transfer_resp = await client.post(
+            "/api/lochos/transfer",
+            headers=auth_headers,
+            json={
+                "task_id": "mock-task-123",
+                "from_seat": "coder",
+                "to_seat": "reviewer",
+                "note": "Independent code audit",
+            },
+        )
+        assert transfer_resp.status_code == 200
+        transfer_data = transfer_resp.json()
+        assert transfer_data["status"] == "transferred"
+        assert transfer_data["baton_owner"] == "reviewer"
+
 
 def test_lochos_websocket_bridge(app_instance):
     """Test live Lochos squad WebSocket streaming bridge with auth enforcement."""

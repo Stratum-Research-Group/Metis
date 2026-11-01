@@ -260,6 +260,27 @@ const API = {
     });
   },
 
+  async transferLochosBaton(payload) {
+    return this.request("/api/lochos/transfer", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async runLochosPipeline(payload) {
+    return this.request("/api/lochos/pipeline", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async completeLochosTask(payload) {
+    return this.request("/api/lochos/complete", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   /* Workbench Real-Time API */
   async getWorkbenchTree() {
     return this.request("/api/workbench/tree");

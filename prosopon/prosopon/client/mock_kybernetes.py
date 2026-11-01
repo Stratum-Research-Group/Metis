@@ -456,6 +456,14 @@ class MockKybernetesClient:
             "assigned_to": payload.get("target_seat", "coder"),
         }
 
+    async def transfer_lochos_baton(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "task_id": payload.get("task_id", "mock-task"),
+            "status": "transferred",
+            "baton_owner": payload.get("to_seat", "reviewer"),
+            "note": payload.get("note", ""),
+        }
+
     async def resolve_lochos_attention(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "task_id": payload.get("task_id", "mock-task"),

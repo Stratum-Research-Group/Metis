@@ -1560,6 +1560,17 @@ def create_app(config: Optional[ProsoponConfig] = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Lochos dispatch error: {exc}")
 
+    @app.post("/api/lochos/transfer")
+    async def lochos_transfer(
+        payload: Dict[str, Any],
+        _: bool = Depends(require_admin_auth),
+    ) -> Dict[str, Any]:
+        """Transfer work baton from one seat to another."""
+        try:
+            return await kybernetes.transfer_lochos_baton(payload)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Lochos transfer error: {exc}")
+
     @app.post("/api/lochos/resolve-attention")
     @app.post("/api/lochos/attention/resolve")
     async def lochos_resolve_attention(

@@ -1168,6 +1168,37 @@
   2. `prosopon/tests`: **76 passed** (100% green).
   3. Monorepo total: **1,207 passed, 1 skipped** (100% green).
 
+### 106. Lochos Baton Transfer, Dynamic Queue Monitoring & Void IDE Pipeline Controls
+- **Category:** Multi-Agent Coordination & Unified IDE Control Plane
+- **Status:** **Integrated & Verified**
+- **Impacted Files:**
+  - `kybernetes/kybernetes/server/app.py`
+  - `prosopon/prosopon/client/kybernetes_client.py`
+  - `prosopon/prosopon/client/mock_kybernetes.py`
+  - `prosopon/prosopon/server.py`
+  - `prosopon/prosopon/web/static/js/api.js`
+  - `prosopon/prosopon/web/static/js/squad.js`
+  - `prosopon/tests/test_server_api.py`
+  - `vscode/src/vs/workbench/contrib/void/browser/react/src/void-settings-tsx/MetisDashboard.tsx`
+- **Root Cause & Rationale:**
+  - Prior to Item 106, while Kybernetes implemented `/v1/lochos/transfer`, Prosopon lacked the `/api/lochos/transfer` proxy endpoint and `transfer_lochos_baton` client methods.
+  - In Prosopon's Web Workbench (`squad.js`), the Lochos work queue displayed a static placeholder task instead of fetching live tasks from the transactional `.metis/lochos.sqlite` database via `window.API.getLochosQueue()`.
+  - In the VS Code Void IDE client (`MetisDashboard.tsx`), users could not trigger autonomous squad pipelines (`/v1/lochos/pipeline`) or sign off on completed tasks (`/v1/lochos/complete`) directly from the GUI.
+- **Remediation & Behavioral Guarantees:**
+  1. Added `@app.post("/api/lochos/transfer")` route alias in `kybernetes/kybernetes/server/app.py`.
+  2. Implemented `transfer_lochos_baton` in `KybernetesClient` and `MockKybernetesClient`.
+  3. Implemented `POST /api/lochos/transfer` in `prosopon/prosopon/server.py` protected by `require_admin_auth`.
+  4. Added `transferLochosBaton`, `runLochosPipeline`, and `completeLochosTask` in Prosopon frontend `api.js`.
+  5. Updated `squad.js` to dynamically fetch live tasks via `getLochosQueue()`, render active queue items, and provide UI handlers for "Run Pipeline", "+ Dispatch", "✓ Complete", and "Transfer".
+  6. Added `handleCompleteLochosTask`, `handleRunLochosPipeline`, and the "Launch Autonomous Lochos Pipeline" modal to `MetisDashboard.tsx` in VS Code Void IDE client; rebuilt React bundle.
+  7. Added `/api/lochos/transfer` verification in `prosopon/tests/test_server_api.py` (all 17 tests passing).
+- **Verification & Acceptance Checks:**
+  1. `prosopon/tests`: **76 passed** (100% green).
+  2. `kybernetes/tests`: **216 passed** (100% green).
+  3. `paideia/tests`: **72 passed** (100% green).
+  4. VS Code React build & TS compilation: **0 compile errors** (99.3s).
+  5. Monorepo total: **1,207 passed, 1 skipped** (100% green).
+
 ---
 
 ## Summary & Verification Matrix
@@ -1210,6 +1241,7 @@
 | **Krisis Calibration & Admin TOML Serialization**| Item 103 | Krisis + Kybernetes + Prosopon (`_dump_toml`, policy calibration, voice paths)| **Integrated & Verified** | 40 Krisis + 216 Kybernetes + 76 Prosopon tests passing |
 | **Continuous Retraining & Hot-Swap Loop**| Item 104 | Paideia + Hestia (`ContinuousPolicyRetrainingCoordinator`, `paideia loop`, CAS swap)| **Integrated & Verified** | 72 Paideia tests passing (7 new continuous loop tests) |
 | **Lochos BFF Control Plane & Sign-Off**| Item 105 | Kybernetes + Prosopon (`/lochos/complete`, `/lochos/pipeline`, BFF proxy)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon tests passing |
+| **Lochos Baton Transfer & Void Controls**| Item 106 | Kybernetes + Prosopon + Void (`/api/lochos/transfer`, dynamic queue, GUI pipeline)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon + 0 TS compile errors |
 
 ---
 

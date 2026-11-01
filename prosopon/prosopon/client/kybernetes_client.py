@@ -386,6 +386,14 @@ class KybernetesClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def transfer_lochos_baton(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Transfer work baton from one seat to another."""
+        headers = self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(f"{self.base_url}/lochos/transfer", json=payload, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
     async def get_lochos_attention(self) -> List[Dict[str, Any]]:
         """Retrieve cross-seat attention reconciliation requests."""
         headers = self._headers()

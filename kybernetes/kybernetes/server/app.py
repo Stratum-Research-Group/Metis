@@ -374,6 +374,7 @@ def create_app(
         return item.to_dict()
 
     @app.post("/v1/lochos/transfer")
+    @app.post("/api/lochos/transfer")
     async def transfer_lochos_baton(
         data: Dict[str, Any],
         _: bool = Depends(require_service_auth),
