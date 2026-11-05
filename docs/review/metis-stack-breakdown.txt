@@ -1,0 +1,85 @@
+METIS STACK BREAKDOWN
+As of Oct 4, 2026. Source: Nick's memory notes (last updated Sep 26 to Oct 2). Status is as last recorded, not a fresh repo check. "Built" means a repo exists and reviews were run, not that it has run end to end on hardware.
+
+TAGLINE: LTHCM remembers, Dianoia thinks.
+Metis = the whole local "Claude-style" assistant stack Nick is building around LTHCM. Every component is its own GitLab repo under akarta-315h, with an Ancient Greek name for what it does. Rule: LTHCM, Dianoia, Hestia etc. are pinned READ-ONLY git submodules in later repos. Never copied, forked or modified.
+First builds target the RTX 5060 Ti 16GB only. The V100 hardware status needs a fresh check; later correspondence describes cooling experience with it.
+
+------------------------------------------------------------
+LAYER 1: MEMORY
+------------------------------------------------------------
+LTHCM (Long-Term High-Capacity Topological Memory)
+- Role: memory/retrieval layer in front of an LLM, an alternative to flat-cosine RAG. An indexing and verification layer, not a model.
+- How: ~15 modules (density-matrix superposition memory, causal light-cone filter, sheaf-based contradiction detection, wormhole graph of cross-document links, stochastic-resonance query layer, and others). Pure Python + PyTorch. Edges are mined from document text, no gold labels. Entry point: LTHCMEngine.retrieve_and_verify.
+- Status: exists, in paper validation (arXiv paper in progress).
+- Evidence (reproduced on Nick's PC and independent reruns): MuSiQue +13.4pp over flat RAG (.408 vs .274). 2Wiki is directional but not significant vs flat. HotpotQA: the reranker does most of the work, the graph helps a little on bridge questions and hurts comparison questions. SciFact: graph adds nothing. Contradiction detection does NOT beat plain NLI. Poincare vs Euclidean on WordNet is a small loss.
+- Open: README overclaim wording fix, wiring the NLI cross-encoder into the main engine, a few reproducibility residuals. Whether these were applied: not observed.
+- Honest reading: multi-hop retrieval is the claim that survives. Nothing here is a memory-ageing or pruning mechanism.
+
+------------------------------------------------------------
+LAYER 2: REASONING AND DECISIONS
+------------------------------------------------------------
+Dianoia (reasoning layer, "the thinker")
+- Role: a small local LLM (8B-class, 4-bit GGUF via llama.cpp) walks LTHCM's graph. At each node it chooses EXPAND, BACKTRACK or ANSWER. It then re-runs the NLI contradiction check on the draft answer and re-walks on conflict.
+- Interfaces: LTHCM (read-only submodule; seeds retrieval from stochastic_resonance.resonate_retrieval, falls back to superposition.retrieve). Walk logs are saved as future training data. No learner in v1.
+- Status: built, five review rounds to a clean sweep (commit da7ce83). Not yet run on real hardware with Hestia, as far as recorded.
+
+Kleroterion (the SDM, stochastic decision module; named for the Athenian lot machine)
+- Role: stochastic ACTION selection. Samples among eligible actions with controlled randomness (masked softmax, seeded reproducibility, optional entropy feedback, diagnostics) instead of always taking the top score.
+- Interfaces: Dianoia is the first consumer. Dianoia supplies eligible actions, logits and its causal/contradiction/provenance checks, which stay authoritative. Kleroterion can never bypass them. Clean adapter API for state, scorer, constraints.
+- Status: repo exists (a reviewer checked it Sep 30). Scope settled Sep 29 after Nick overruled advice to fold it into Dianoia.
+- Evidence boundary: NO retrieval gain proven. Needs an implementation plus comparative eval (named objective, frozen snapshots, stochastic-resonance baseline, ablations, contradiction rate, latency). Not in the paper.
+- Pending in its v2 spec: per-decision (not aggregate) randomness for the entropy controller, a dimension-aware noise budget, an eligibility invariant.
+
+Krisis (selection layer)
+- Role: deterministic ANSWER/passage selection with abstention. v0 can ship as a deterministic eligibility filter with abstain and no learned features.
+- Key contract points: model likelihood is a calibrated feature, not a universal prior. Consistency and correctness are scored separately. A claim-level support verifier is the critical path (Dianoia's "no contradiction" is not the same as support). The verifier fails closed. Generator and verifier must be independent. 16GB GPU is a recorded risk.
+- Ownership split: Kybernetes generates candidates, Kleroterion picks actions, Krisis picks answers, Dokime owns perturbations, Paideia owns training.
+- Status: spec v4 plus JSON policy schema and fixtures, five review rounds adopted. The policy/fixture review found nine defects, Nick had them fixed. Contract not frozen as of Sep 30. No code recorded.
+
+------------------------------------------------------------
+LAYER 3: INFRASTRUCTURE
+------------------------------------------------------------
+Hestia (model serving)
+- Role: one inference server hosting local models for the rest of the stack. llama.cpp backend now, vLLM later.
+- Features: model registry (models.yaml / hestia.yaml), per-model ports, lazy load, per-card VRAM tracking, SSE streaming, an embeddings endpoint for LTHCM, crash-restart policy. Single GPU in v1 (5060 Ti), gpu_target kept for the V100.
+- Status: built, six review rounds to a clean sweep (edd1bcf, 40 tests). Has not served a real GGUF yet (as of Sep 27). Suggested next step: register a GGUF and serve a streamed chat request.
+
+Stoma (ingestion pipeline)
+- Role: feeds LTHCM from PDFs, docs, comics, audio, repos, chat exports.
+- Held to: one commit/rollback boundary (no dangling pointer after fsync), bounded-memory streaming with a measured RSS test, fail-closed extraction (no empty/partial source committed), origin verification that fails when it can't verify.
+- Interfaces: Hestia, Dokime, Dianoia as submodules.
+- Status: in review. Round 4 (168e2f95, Sep 27) was NOT clean: one core failure (fsync after pointer swap can leave a dangling pointer) plus partials. A round-4 fix prompt was handed over. Later state: not recorded, so treat as unknown.
+
+Dokime (evaluation harness)
+- Role: Nick's LTHCM benchmark discipline generalised. Measures every model, prompt and pipeline change with real numbers and confidence intervals.
+- Features: TOML run config, matrix runs, one run_id per results JSONL, model-scoped compare, checksum-verified results. Talks to models through Hestia.
+- Status: built, review round 6 (4d473928, 72 tests), one medium issue open: default Hestia URL vs Hestia's pinned port. Later state not recorded.
+
+------------------------------------------------------------
+LAYER 4: NOT BUILT YET (prompts written only)
+------------------------------------------------------------
+Paideia - training harness (unsloth QLoRA; learned router, walk policy). Would train on Dianoia's saved walk logs. Prompt only.
+Phylax - guardrails / policy layer. Prompt only.
+Kybernetes - orchestrator, the assistant itself. Owns candidate generation. Nick's build order puts it 8th. Proposed Oct 1 (not confirmed built or adopted): an outer loop (observe = Stoma, orient = LTHCM retrieval, decide = Dianoia/Krisis/Kleroterion, learn from prediction error, measure in Dokime). Prompt only.
+Prosopon - interface (chat UI, later whisper.cpp + piper voice). Build order 9th. Prompt only.
+Model-debugging toolkit (TransformerLens, CircuitsVis etc.) - text file only. Instinct suggested the name "Dioptra"; Nick has not confirmed it.
+
+Outside the stack on purpose: Oikonomos (token/budget estimator for other people) and Aisthesis (video restoration).
+
+------------------------------------------------------------
+HOW THEY CONNECT
+------------------------------------------------------------
+Stoma ingests -> LTHCM stores and retrieves -> Dianoia walks the graph (Kleroterion picks the walk actions) -> Krisis picks the final answer or abstains -> Kybernetes orchestrates -> Prosopon is the face. Hestia serves every model. Dokime measures everything. Paideia trains. Phylax guards.
+Build order so far: Dianoia, Hestia, Dokime, then Stoma. Krisis and Kleroterion are in spec/early repo stage.
+
+------------------------------------------------------------
+FANIE'S NOSLEEP MEMORY PROBLEM: WHERE IT MAPS
+------------------------------------------------------------
+What he said (Oct 2): nosleep has strategy trees plus two memory systems. His problem is large-scale memory rot where statistical pruning fails. Repo to go public around now. I have not seen the repo, so this is from his description only.
+"Rot" is not defined yet. It could mean (a) useful memories get deleted or aged out, (b) links or facts go stale or contradict newer ones, or (c) retrieval gets worse as the store grows. Each lands in a different place:
+- (a) Retention/pruning policy: this would be LTHCM's side (storage and indexing) plus Stoma (what gets written). Nothing in the recorded LTHCM design is an ageing or pruning policy.
+- (b) Staleness/contradiction: closest are LTHCM's sheaf/NLI contradiction check and Dianoia's re-check on the draft answer. But the benchmark shows contradiction detection doesn't beat plain NLI, so this is weak ground.
+- (c) Retrieval degrading with scale: LTHCM's graph retrieval and reranking, measured with Dokime. The one solid result is multi-hop gain on MuSiQue.
+- Which branches to explore in his strategy trees: this is the only point of overlap with Kleroterion (sample instead of always taking the top branch). Whether it helps is untested.
+Not established: whether Metis solves his rot problem. No component is a memory-ageing mechanism, and Kleroterion is explicitly not one. Next useful step is reading nosleep once public and pinning down what "rot" means there.

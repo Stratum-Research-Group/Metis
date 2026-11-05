@@ -1,0 +1,220 @@
+BEND x DOKIME: A LAW-DRIVEN CODING EVALUATION TRACK
+plus NEW PROJECT POSSIBILITIES, EXPANDED
+3 November 2026
+
+Status: exploratory proposal, based on the Bend repository review
+(github.com/bendlang/bend at commit e9d269b, Bend 2, CLI 2.0.39, reviewed
+2 November 2026). Nothing here is a demonstrated integration and no code has
+been written. Names for any new project are tentative until you accept one.
+
+This file has two independent parts. Part 1 is a proposed Dokime track.
+Part 2 is a separate menu of possible new builds; none of them is part of
+Dokime, and none depends on Part 1.
+
+One of three files: bend-eunomia-policy-laws.txt,
+bend-wcsp-incident-rules.txt, bend-dokime-eval-track-and-new-projects.txt
+(this one).
+
+
+PART 1: DOKIME LAW-DRIVEN EVALUATION TRACK
+
+1. THE IDEA
+
+A new Dokime task type where the benchmark answer is judged against stated
+laws, not example tests:
+
+- A task pack is a specification plus a LAWS.bend file of hidden checks.
+- The model under evaluation writes an implementation.
+- Bend's checker is the judge: code that breaks a law is rejected, however
+  many example tests it passes.
+- Dokime runs it as a matrix like any other track: TOML run config, arrays of
+  models and task packs, one run_id, one results JSONL, checksums verified,
+  model-scoped compare.
+
+This measures the failure mode you actually care about: code that looks right
+and passes examples but violates the contract.
+
+2. WHAT TO MEASURE
+
+- Valid-proof rate: how often a model's submission satisfies every law.
+- Wrong-implementation rejection rate: seed known-wrong implementations
+  (always-allow, off-by-one boundary, drops a field) and confirm the track
+  rejects each. A track that accepts wrong code is measuring nothing.
+- Weakened-law resistance: deliberately weaken a law set, confirm the seeded
+  wrong implementations start passing. This audits the laws themselves, which
+  is the whole game. Bend's own parallel-sort demo proves only leaf sums, so
+  an identity implementation passes it; the insertion-sort demo (sortedness
+  plus occurrence counts) is the standard to hold task packs to.
+- Runtime parity and resource use: does the checked implementation also run
+  correctly, and at what cost.
+
+3. GROUNDED TASK SEEDS
+
+The Bend repo's own eval corpus includes credit protocols, audit undo,
+cursors, queues and glob matching, so a starter set of law-driven tasks exists
+in the wild rather than being invented here. The HTTP-fetch demo laws are a
+useful teaching case in the other direction: their own comments admit a
+function that strips a leading blank line can satisfy them, which is exactly
+what weakened-law resistance testing is for.
+
+4. CONTROLS THE HARNESS MUST ENFORCE
+
+- The gate is "bend FILE.bend --check-only" (or --verdict for the kernel
+  recheck), never the plain command. The review reproduced the plain command
+  exiting 0 on a deliberately false law when the file defines a main.
+  --verdict requires Lean 4.34.0 or a built BENDTT kernel, which was absent in
+  the review environment, so the formal build is not yet independently
+  certified.
+- The model under evaluation may only edit implementation files, never LAWS
+  or the gate. The Bend guide's "the AI does not touch it" is a convention;
+  enforce it in the harness with file permissions.
+- Keep unsafe code outside the proof import boundary. Two shipped demos fail
+  the whole-book verdict for exactly this layout reason.
+- Record which laws each seeded wrong implementation passes. That per-law
+  score is how task-pack quality improves over time.
+
+5. FIT WITH EXISTING DOKIME
+
+This is a new track beside the current benchmark runs, not a replacement and
+not the deferred whole-stack evaluation submodule. It is smaller and can start
+independently. Nothing about it changes how existing tracks run.
+
+6. WHAT PASSING DOES NOT MEAN
+
+A submission that satisfies every law has satisfied the laws you wrote, no
+more. Specification gaps remain: the review's own acceptance criterion is
+that a meaningful contract must survive deliberately wrong implementations
+before you trust it. And because F32 operations are axiomatic in the checker,
+floating-point results are conditional on those axioms and their
+correspondence to native float behavior is unverified. Keep this track to
+structural, logical and integer contracts rather than floating-point model
+math.
+
+
+PART 2: NEW PROJECT POSSIBILITIES, EXPANDED
+(an independent menu, separate from Dokime and from the other two files)
+
+These are the four new-build areas from the chat answer, expanded so you can
+get a feel for what building one would actually look like. All four share the
+same shape: a small pure state machine or decision function, laws stated up
+front, a checker that rejects wrong implementations. None is an accepted
+project; treat this as a menu.
+
+A. RESOURCE ALLOCATOR
+
+What it is: hands out finite things to requests. Seats, time slots, GPU
+hours, budget lines, connection pool entries.
+
+Example laws:
+- Total allocated never exceeds capacity, at every step, not just on average.
+- No resource is held by two owners at once.
+- A released resource becomes allocatable again (no leak-by-omission).
+- The books balance: sum of allocations minus sum of releases equals current
+  holdings.
+
+Why it suits Bend: the allocator core is a pure transition function over a
+small state, and these are safety laws, which is exactly what a checker
+enforces. The repo's eval corpus already includes audit-undo and credit
+patterns to crib from.
+
+The feel: the core is a few hundred lines. The interesting work is tightening
+the laws until a "leaks one unit per release" or "double-books under
+contention" implementation fails. That law-tightening skill transfers to
+every other project in this file.
+
+B. PROTOCOL STATE MACHINE
+
+What it is: the rules for legal message sequences in a handshake or session:
+who may send what, in which state, and what each message changes.
+
+Example laws:
+- Every reachable trace is a legal sequence; there is no path to an undefined
+  state.
+- A message arriving in the wrong state is rejected, never silently applied.
+- A completed session always passes through the mandatory stages (no skipping
+  authentication, for instance).
+
+Why it suits Bend: state machines are the cleanest possible specification
+target, and the repo's eval corpus includes credit protocols and a rollback
+netcode demo, so the pattern is grounded. Start with safety laws (nothing bad
+happens); liveness (the protocol always finishes) is harder and can wait.
+
+The feel: you write the states, the transitions and the laws; wrong
+implementations are things like "accepts a confirm before a request". A
+small, satisfying build with immediate reuse value anywhere two components
+talk.
+
+C. ACCOUNTING ENGINE
+
+What it is: double-entry posting, balances, a tamper-evident ledger.
+
+Example laws:
+- Per transaction, debits equal credits. Conservation of value.
+- A balance stays inside its stated bounds (for example never negative)
+  unless the account type explicitly allows otherwise, and no posting
+  overflows the integer range.
+- Posting the same idempotency key twice posts once.
+- The ledger's hash chain verifies in order; given a trusted anchor,
+  reordering or rewriting a covered entry breaks verification.
+
+Why it suits Bend: accounting cores are integers, and Bend's Nat/U32
+arithmetic is the part of its numerics that is not axiomatic, so conservation
+and bounds properties sit in the checkable fragment. Money-as-cents avoids
+the floating-point gap. The honest boundary: the provable part is the integer
+core, not the whole engine. Hash-chain tamper-evidence rests on collision
+resistance and a trusted anchor, which the checker does not prove; signed
+balances, overflow policy, idempotency storage and durability are separate
+design concerns outside the model.
+
+The feel: small core, strong laws, obvious wrong implementations to test
+against (skips the balance check, posts duplicates). The ledger construction
+law connects naturally to Eunomia's audit-chain idea, so the two inform each
+other.
+
+D. DETERMINISTIC SIMULATION RULES
+
+What it is: a simulation whose rules are fixed and replayable: same initial
+state plus same event log must give the same final state.
+
+Example laws:
+- Replay equivalence: running the same log twice yields identical state.
+- Conservation: entities, tokens or energy change only through named rules;
+  nothing appears or vanishes without a rule firing.
+- Legal-state closure: no entity ever enters a state outside the defined set.
+
+Why it suits Bend: the review explicitly names "a deterministic simulation
+with explicit invariants" as a good future experiment, and one runtime over
+CPU and GPU is genuinely relevant here, unlike in the three project fits.
+
+The feel: the most fun of the four and the easiest to make visual. Also the
+one where the GPU lane might eventually matter. If you ever test that, do it
+properly: forced GPU mode (+RTS --gpu on so a dead GPU fails loudly instead
+of falling back to CPU), checksum parity between CPU and GPU runs, and
+separate compile, warm-up and steady-state timings. The review ran no GPU
+measurements, and your RTX 5060 Ti / V100 setup is a reason to test, not
+proof of compatibility. One GPU per program is a stated limit; this is not
+multi-GPU infrastructure.
+
+SMALLER STARTERS, IF YOU WANT SOMETHING TINY FIRST
+
+- A small verified parser: the law is a round trip, parse(print(x)) == x, for
+  a format you control. Also named by the review as a good future experiment.
+- Oikonomos budget arithmetic: totals never negative, per-step costs sum to
+  the total. Very small, immediately useful. (An existing project, listed
+  here only because the experiment is tiny.)
+
+
+3. HOW I WOULD SEQUENCE ALL OF THIS
+
+1. WCSP dedup/merge experiment first: smallest stakes, cleanest laws.
+2. Dokime law-driven track second: it turns the law-writing skill into a
+   measuring instrument.
+3. Eunomia policy model once the proof gate is trusted.
+4. New builds only after one of the above has survived wrong-implementation
+   testing on real hardware.
+
+That order is the review's own closing advice applied to your projects: close
+the proof-command gap, prove one meaningful contract, attack it with wrong
+implementations, recheck with the kernel, compare on actual hardware. A
+successful demo or a green proof check is not production readiness, and Bend
+is not a shortcut to faster AI inference.

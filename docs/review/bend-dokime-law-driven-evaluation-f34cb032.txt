@@ -1,0 +1,144 @@
+DOKIME: A LAW-DRIVEN CODING EVALUATION TRACK
+Standalone Dokime proposal | 3 November 2026
+
+1. THE IDEA
+
+Add one isolated track that evaluates whether a model can implement a stated
+contract AND supply proofs of its laws. Keep it separate from existing runs
+and from the four new-project proposals. No integration or measured benefit
+is claimed; no code has been written for this proposal.
+
+The practical question is whether apparently correct generated code meets
+meaningful requirements, rather than only the examples it happened to see.
+Passing laws is only as strong as those laws and the checking boundary.
+
+2. WHAT A CANDIDATE ACTUALLY SUBMITS
+
+A task pack contains prose requirements, fixed interfaces, approved LAWS.bend,
+trusted specification helpers, examples and build/check instructions. Expose
+the approved laws READ-ONLY. The candidate writes implementation and proof
+artifacts, not the laws, judge, trusted helpers or reference implementation.
+
+Bend does not automatically prove arbitrary candidate code. This is a
+proof-carrying coding task: the candidate must construct proof terms and close
+every obligation. If a separate code-only experiment is wanted, host-supplied
+proof templates may support narrowly designed tasks, but that is a different
+track and must not be mislabeled automatic verification.
+
+This corrects the earlier combined file's hidden-law framing. Hidden runtime
+checks can test behavior independently; a proof-authoring track needs the
+contract available to the proof author. Do not conflate those two mechanisms.
+
+3. WHAT TO MEASURE
+
+Report separate outcomes, not one misleading pass number:
+
+- Valid-proof completion: all obligations closed, with explicit checker
+  success. Report kernel-rechecked completion separately.
+- Wrong-implementation rejection: every seeded mutant is rejected by its
+  intended law or independent behavioral check.
+- Specification strength: document which law rejects which mutant. In a
+  separate controlled audit, weaken selected laws and record which bad
+  implementations become admissible. Never weaken the official scored pack.
+- Runtime correctness: executable outputs against an independent reference,
+  including boundary cases and hidden behavioral fixtures.
+- Cost: model tokens, wall time, tool calls, proof-check time and execution
+  time, with attempt budgets and reasons for failure reported separately.
+
+A proof failure may mean the model could not construct a proof, not that its
+implementation is wrong. A behavioral failure is different. Report compile,
+parse, open-obligation, unsafe-dependency, timeout, kernel-mismatch and runtime
+failure categories without collapsing missing toolchains into model errors.
+
+4. STARTER PACKS GROUNDED IN THE REVIEW
+
+The reviewed Bend corpus includes credit protocols, audit undo, cursors,
+queues and glob matching [1]. Use these as patterns, not assume every shipped
+law is a complete benchmark. A small initial pack could cover queue order,
+request retries, bounded credit transfer and cursor movement.
+
+Every task needs a progress/exact-behavior law so do-nothing or reject-all
+cannot pass on safety properties alone. The review's parallel-sort example
+only preserves leaf sums: identity can satisfy that without sorting. Its
+insertion-sort example includes sortedness and occurrence counts, a better
+contract model. HTTP-fetch laws explicitly acknowledge a weak implementation
+that can satisfy them. Use those as specification-audit lessons [1,3].
+
+5. JUDGE AND ISOLATION CONTRACT
+
+Use bend PROOF.bend --check-only as the explicit checker gate; require
+--verdict for the separately reported kernel lane. Never treat a plain run's
+exit 0 as proof success. At reviewed commit e9d269b, a file with main could
+return 0 despite an unsafe fake proof. The reviewed kernel invocation required
+missing Lean 4.34.0 or a built BENDTT kernel, so that lane remains unvalidated
+until the environment actually passes it [1].
+
+Freeze compiler commit, task-pack and judge hashes. Use a controlled entry
+file and import closure, reject incomplete obligations and unsafe/foreign
+proof dependencies, and test that candidate-added main cannot bypass judging.
+Protect the read-only pack and resolve imports only inside the permitted
+workspace. Independently audit alias/name shadowing and trusted-helper
+boundaries. Permission protection by itself is not a sandbox.
+
+Run untrusted submissions with no network or secrets, bounded CPU/memory,
+file access, output and time. Capture exact commands, stdout/stderr and exit
+status. A native executable is untrusted even if its source proof passed.
+Keep unsafe IO outside proof imports; two shipped demos failed the reviewed
+whole-book gate because their import layout included unsafe machinery [1].
+
+6. FREEZE THE EXPERIMENT BEFORE SPENDING COMPUTE
+
+Set model list, prompts, visible examples, tool access, maximum tokens per
+attempt, total per-task budget, maximum repair attempts, output schema,
+timeouts and scoring rules before running. Log finish reasons and whether
+answers were truncated. Preserve implementation/proof artifacts and all judge
+results per attempt. Distinguish first-attempt success from success after
+repairs; do not quietly count multiple tries as one.
+
+Use one run ID and immutable configuration, with model/task/seed/version
+fields in result records. TOML configs, checksums, JSONL and comparison output
+are proposed integration targets from the earlier Dokime brief, not assertions
+that this new task type already supports them. Confirm the current extension
+interfaces before implementation and preserve all existing track behavior.
+
+7. SMALL VALIDATION, THEN FULL RUN
+
+Before any model sweep, freeze a small pack with a known-correct implementation
+and hand-seeded wrong implementations. Require:
+
+- correct reference passes all selected checker, kernel and runtime lanes;
+- all deliberate defects are rejected with an expected reason;
+- do-nothing/reject-all and main-dispatch bypass probes fail;
+- specification/judge hashes cannot be changed by a submission;
+- missing toolchain and resource-limit cases are classified correctly;
+- repeat evaluation of the same artifacts yields the same verdicts.
+
+If the kernel/native lane is unavailable, label that pilot checker-only or
+otherwise partial. Do not call it a full verified-runtime benchmark. Fix the
+pack/harness before the full frozen matrix; do not move requirements between
+models or after seeing their scores.
+
+8. WHAT A PASS DOES NOT MEAN
+
+It means the submitted source satisfies the stated laws through the recorded
+checking lane, plus whatever independent runtime cases passed. It does not
+mean no missing requirements, universal compiler correctness or verified OS,
+network/database behavior. Keep initial tasks structural and integer-based;
+the review found F32 axioms and no validated native correspondence. Proof,
+behavior and cost are separate axes, not interchangeable claims.
+
+9. SOURCES AND STATUS
+
+Prior Bend review: 2 November 2026, commit
+e9d269b588f4ed39166dca87a0acb4d5a9be4f9f, CLI 2.0.39.
+[1] Source review and bounded executions:
+https://github.com/bendlang/bend
+Relevant paths: bend2/main.ts, bend2/safe.ts, demos/pure_par_sort/LAWS.bend,
+demos/proof_insertion_sort/, demos/io_http_fetch/LAWS.bend, evals/.
+[2] Type/proof, runtime and trust-boundary explanation:
+https://bend2.dev/notes/what-is-bend2/
+[3] Explicit proof-authoring workflow and examples of weak laws:
+https://bend2.dev/notes/ai-agents-bend/
+Explanatory sources read 3 November 2026. This is not a new HEAD audit.
+Native execution, GPU parity and independent kernel build were open gates
+in the original review, not completed by writing this proposal.
