@@ -254,7 +254,7 @@ def main():
 **Date:** {time.strftime('%Y-%m-%d')}  
 **Pinned Model:** `{model}` (local Hestia @ `http://127.0.0.1:8080/v1`)  
 **Hardware:** NVIDIA GeForce RTX 5060 Ti 16GB  
-**Protocol Specification:** [`experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt`](file:///home/akarta/Projects/Metis/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt)  
+**Protocol Specification:** [`docs/review/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt`](file:///home/akarta/Projects/Metis/docs/review/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt)  
 **Frozen Parameters:** [`experiments/text_vs_graph/frozen_manifest.json`](file:///home/akarta/Projects/Metis/experiments/text_vs_graph/frozen_manifest.json) (Margin $\\delta = {delta:.2f}$)  
 **Confirmatory Sample:** {total_stories} stories = {total_stories*4} questions (seeds `4001`–`{4000+total_stories}`)  
 **Total Calls:** {total_llm_calls} ({total_evals} evaluations) across Arms A, B, C, D, F @ Levels 0% & 30%  

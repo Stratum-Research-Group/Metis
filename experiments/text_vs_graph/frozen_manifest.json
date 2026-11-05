@@ -1,6 +1,6 @@
 {
   "frozen_at": "2026-10-30T08:04:00+02:00",
-  "source_spec": "experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt",
+  "source_spec": "docs/review/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt",
   "status": "FROZEN_FOR_CONFIRMATORY_RUN",
   "model": "gemma-4-26b-a4b-abliterated",
   "serving_endpoint": "http://127.0.0.1:8080/v1/chat/completions",

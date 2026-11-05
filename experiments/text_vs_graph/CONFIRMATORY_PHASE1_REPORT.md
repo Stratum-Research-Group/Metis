@@ -3,7 +3,7 @@
 **Date:** 2026-10-30  
 **Pinned Model:** `gemma-4-26b-a4b-abliterated` (local Hestia @ `http://127.0.0.1:8080/v1`, Q3_K_M GGUF)  
 **Hardware:** Single local NVIDIA GeForce RTX 5060 Ti 16GB (peak VRAM: 13.5 GB, zero GPU paging)  
-**Protocol Specification:** [`experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt`](file:///home/akarta/Projects/Metis/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt)  
+**Protocol Specification:** [`docs/review/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt`](file:///home/akarta/Projects/Metis/docs/review/experiment_text_vs_graph_vs_both_test_plan-68128c6f.txt)  
 **Frozen Parameters:** [`experiments/text_vs_graph/frozen_manifest.json`](file:///home/akarta/Projects/Metis/experiments/text_vs_graph/frozen_manifest.json) (Frozen 2026-10-30 08:04:00, Margin $\delta = 0.03$)  
 **Independent Raw-Row Audit:** [`experiments/text_vs_graph/text-vs-graph-raw-results-audit-2026-10-30-v2-6117d429.txt`](file:///home/akarta/Projects/Metis/experiments/text_vs_graph/text-vs-graph-raw-results-audit-2026-10-30-v2-6117d429.txt) (Verified: 0 missing cells, 0 label mismatches, 100% arithmetic agreement)  
 **Dataset Scale:** 300 stories = 1,200 questions (seeds `4001`–`4300`, completely disjoint from pilot)  
