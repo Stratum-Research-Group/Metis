@@ -1,0 +1,162 @@
+METIS PI FLEET VIA MSS VOID: MODIFICATION SPEC (v3)
+====================================================
+Date:        2026-11-04 (SAST), revised after consistency/safety review
+Requested:   Nick, WhatsApp 2026-11-04 22:27 - "the number of pi should not be a thing,
+             should one should be able to add pi's to metis in to mss void"
+Scope:       Design for enrolling and managing any number of Raspberry Pis in Metis,
+             administered from MSS Void. Plan only - no code, deployment or purchases.
+Companion:   infinity-metis-integration-spec-c1a7b05-v3-e2a1a65c.txt
+
+SOURCE STATUS
+-------------
+VERIFIED:    Metis @ 88d9166045e4020ca380d05fdd9474ec85ffe1da,
+             Infinity @ c1a7b05ef7f22774250218a623d6f2d692928a80.
+BLOCKED:     MSS Void (gitlab.com/akarta-315h/metis-vscode) is private; no read
+             access as of 2026-11-04. All MSS Void items are [PROPOSED], and the
+             UI-integration parts of this spec remain BLOCKED on MSS Void source
+             review (the companion bridge spec does not share this blocker).
+
+1. WHAT EXISTS TODAY, WITH ITS ACTUAL SEMANTICS (verified in source)
+--------------------------------------------------------------------
+Prosopon device framework (prosopon/prosopon/):
+  - Pairing: single-use pairing links (cli.py:187 "Generate a single-use pairing
+    link"; server.py:418-443 POST /api/devices/pair, admin-auth) carrying label,
+    preset, scopes, validity_seconds; expiry recorded.
+  - Presets are viewer|companion|operator|owner (cli.py:180) and map to scopes
+    via get_scopes_for_preset (server.py:42). These presets describe UI/companion
+    devices (phones, browsers). There is NO worker-node preset or scope set:
+    nothing verified here grants a machine credential suited to a Pi worker.
+    The fleet therefore needs a PROPOSED worker enrollment path (section 4),
+    not a reuse claim on the existing pairing.
+  - Device management: list incl. revoked (server.py:410), per-device active
+    runs (server.py:444), revoke (server.py:457), lockdown (server.py:503).
+Kybernetes Lochos: declarative squad/seat schema (kybernetes/kybernetes/lochos/
+  spec.py - SeatSpec, permission_policy strict|audit_only|full_bypass) and
+  endpoints /v1/lochos/squad|queue|dispatch (server/app.py:337-352).
+Infinity: daemon remotes (crates/infinity-daemon/src/remote.rs) and External
+  RAP servers by URL (rap_servers.rs:69-72) - Pi nodes need no Infinity source
+  changes. Confirmed gaps needing hardening before deployment are listed in the
+  companion spec's Track B (WS auth, sandbox bind, webhook signature, durable
+  effects, bounded retries, MCP); they gate real fleet use the same way.
+Metis services: 127.0.0.1 + Bearer service tokens by default
+  (deploy/metis.env.example; hestia app.py:93-105; kybernetes app.py:150-168).
+
+2. NODE MODEL (count-independent by construction)
+-------------------------------------------------
+A fleet is a registry TABLE; there is no "three" anywhere. Adding node #10 is
+the same operation as #2.
+  node_id        stable random id assigned at enrollment, never reused
+  label          human name
+  hardware       PROBED at enrollment: model, RAM, OS, arch, storage free.
+                 Nothing about Pi hardware is assumed anywhere in this design;
+                 build targets and roles derive from probe results.
+  address        tunnel IP or hostname (transport decision D3, companion spec)
+  roles          per-node selection from section 3 - proposed options, each
+                 chosen by Nick per node, never inferred
+  credential     per-node credential fingerprint (the credential itself is
+                 never stored server-side in recoverable form)
+  status         enrolled / active / drained / revoked + last heartbeat
+Capacity honesty: no maximum node count is claimed. Limits include the rig
+gateway's throughput, registry storage, Kybernetes/Hestia worker and admission
+queues (QueueTimeoutError under overload, hestia app.py:310) and LAN bandwidth.
+Real limits come from the bounded tests in section 6; no single test produces
+a "fleet ceiling" number.
+
+3. NODE ROLES (proposals; Nick selects per node at enrollment)
+--------------------------------------------------------------
+  R1 rap-toolset-host : Pi runs a RAP server exposing Pi-local tools (files,
+     sensors, GPIO, camera) to Infinity agents. [Mechanism VERIFIED.]
+  R2 daemon-satellite : Pi runs its own Infinity daemon; agents hibernate as
+     stored conversation data between turns while the daemon process stays
+     resident; model calls go to the rig via the gateway (P3) with the node's
+     own credential. [Mechanism VERIFIED; footprint must be measured per
+     hardware.]
+  R3 sensor-ingest    : Pi forwards observations into Stoma ingestion jobs.
+     [Stoma exists; submission route UNCONFIRMED - stop gate before build.]
+  R4 (future, gated) light-inference: only after measured thermal/latency tests
+     on the actual probed hardware. Not assumed anywhere; also not banned -
+     it stays a gated option.
+
+4. ENROLLMENT FLOW (the "add a Pi" operation) [PROPOSED worker path]
+--------------------------------------------------------------------
+  E1. MSS Void Manage Devices: "Enroll node" [PROPOSED UI] calls a new
+      worker-enrollment endpoint [PROPOSED - existing pairing presets do not
+      cover worker scopes, section 1] that mints a single-use, expiring
+      bootstrap secret with requested node scopes.
+  E2. Bootstrap secret is displayed once [PROPOSED] and transferred to the Pi
+      over a channel that never puts it in process argv or shell history:
+      enroll reads it from stdin or a 0600 file, never a command-line flag.
+  E3. metis-node enroll [PROPOSED agent] exchanges the single-use secret for a
+      per-node credential, probes and reports hardware, pulls its role config,
+      installs a systemd unit. The exchange happens against the rig gateway.
+  E4. Node enters the registry as enrolled; first heartbeat -> active.
+  E5. Revocation/lockdown semantics [PROPOSED for worker credentials, building
+      on VERIFIED device revoke/lockdown endpoints]: the gateway rejects the
+      node credential immediately on revocation. In-flight work policy is
+      explicit: in-flight completions may finish but their results are held at
+      the gateway and audited, not delivered onward; long waits are cancelled
+      via the bounded-cancellation path (Track B, H5).
+Security rules:
+  S1. Pis NEVER receive HESTIA_SERVICE_TOKEN or KYBERNETES_SERVICE_TOKEN. The
+      rig-side gateway holds service tokens; nodes authenticate with per-node
+      credentials scoped to their roles (Phylax policies keyed by node_id).
+  S2. Default-deny scopes per node; a compromised Pi is revoked cleanly.
+  S3. All node traffic over the chosen transport (decision D3); nothing binds
+      0.0.0.0 on the LAN. Companion spec Track B gates real deployment.
+  S4. Node-bound callback channels use the invocation-scoped expiring
+      credential + per-event ids/sequence contract (companion spec A4);
+      receiver-side support needs the Track B patch or an authenticating
+      proxy - it cannot come from the toolset alone.
+
+5. NEW/PROPOSED PIECES
+----------------------
+  P1. metis-node-agent [PROPOSED]: enroll (stdin/0600-file secret), heartbeat,
+      role runners, config pull. Storage rule: volatile state (caches, temp)
+      may live in tmpfs; durable state (work spool, audit log, registry
+      check-ins) is written to persistent storage or shipped to the rig at
+      defined sync points - tmpfs must never silently discard work or history.
+      SD-card wear is reduced by log rate limits and spool batching, not by
+      dropping durability.
+  P2. Node registry [PROPOSED home: Kybernetes admin module or small service]:
+      CRUD + heartbeat + audit into the Phylax hash-chain audit.
+  P3. Node gateway [PROPOSED]: rig-side authenticated front to Hestia/
+      Kybernetes/Stoma; holds service tokens; enforces per-node scopes;
+      allowlisted destinations only (SSRF protection); holds in-flight results
+      on revocation per E5.
+  P4. MSS Void Manage Devices extension [PROPOSED]: node list with status/
+      role/last heartbeat, enroll flow (E1-E2), role editor, revoke/lockdown,
+      runs view. MSS Void source is private and unreviewed - interface
+      proposals, not patches against known code; BLOCKED on source review.
+  P5. Lochos bridge [PROPOSED]: seats may name a node_id as execution location
+      (new node-affinity field on VERIFIED SeatSpec).
+
+6. TEST GATES (bounded; builder executes under authorization, else reports
+   blocked - not handed to Nick as manual work)
+----------------------------------------------------------------------
+  F1. Enroll 1 node end-to-end (E1-E4); heartbeat; registry shows it.
+  F2. Enroll a 2nd node with zero config/code change (count-independence in
+      practice).
+  F3. Scope isolation: an R1-only node cannot call metis.ask; a revoked node's
+      credential fails immediately; its in-flight result is held per E5.
+  F4. Fault test, safe form first: SIMULATED disconnect and process kill on a
+      satellite mid-ask - at-least-once delivery with dedup on controlled
+      paths, no duplicated applied effects, unknown outcomes flagged for
+      reconciliation (companion spec section 1 semantics). A destructive
+      power-pull test is a SEPARATE operation requiring Nick's explicit
+      approval and verified backups first; it is never run by default.
+  F5. Bounded load: a FIXED small N of nodes (e.g. 3) run concurrent asks with
+      CPU/RAM/network monitors and pre-set abort thresholds; record observed
+      queue/timeout behavior at that N. No escalating-until-failure runs on the
+      home rig, and no fleet ceiling is claimed from it.
+  F6. Secret hygiene: no service token and no bootstrap secret in any node
+      image, shell history, or process list (grep the card image).
+  F7. Secret transport: verify enroll with an argv-passed secret FAILS (refused)
+      and stdin/file succeeds.
+
+7. OPEN DECISIONS FOR NICK
+--------------------------
+  P1. Actual fleet hardware (models/RAM/OS) - probes will report it, but role
+      and build-target planning wants the list.
+  P2. Transport (shared with companion spec D3).
+  P3. Registry home: Kybernetes admin vs standalone service.
+  P4. Role selection per current Pi.

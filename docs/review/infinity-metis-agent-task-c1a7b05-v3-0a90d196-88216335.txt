@@ -1,0 +1,119 @@
+CODING-AGENT TASK: INFINITY-TO-METIS, ALL PHASES (v3)
+======================================================
+Date:     2026-11-04 (SAST), revised after consistency/safety review
+For:      a coding agent (Hermes Agent or equivalent builder)
+Specs:    infinity-metis-integration-spec-c1a7b05-v3-e2a1a65c.txt (integration) and metis-pi-fleet-mss-void-spec-88d9166-v3-d7d4c1e5.txt (Pi fleet) - read both first.
+          On conflict, the specs win; if pinned source contradicts both, STOP
+          and report.
+Coverage: Nick asked for the agent task for the whole work. This one file
+          covers Phase 0 (hardening), Phase 1 (bridge) and Phase 2 (fleet +
+          remaining tools). Phases are gated (below); completing an earlier
+          phase is NOT completion of this task - each later phase is either
+          executed after its gate clears or reported BLOCKED with the exact
+          missing item. No skipped scope is disguised as done.
+
+PINNED SOURCES (verify before starting; report mismatch and stop)
+  Infinity: https://github.com/hydro-project/infinity @ c1a7b05ef7f22774250218a623d6f2d692928a80
+  Metis:    https://gitlab.com/akarta-315h/metis @ 88d9166045e4020ca380d05fdd9474ec85ffe1da
+  MSS Void: gitlab.com/akarta-315h/metis-vscode - private. UI-integration work
+            (Phase 2, P4) is BLOCKED until source access exists; report blocked,
+            do not guess its code.
+
+RULES (all phases)
+  1. Submodule guard (Nick's recorded standing requirement, 2026-09-26 stack
+     architecture decision): add needed Metis components as pinned, read-only
+     git submodules; never modify, copy, or push their contents.
+  2. New bridge/fleet code lives in a new sibling directory
+     (infinity-metis-bridge), not inside the Infinity checkout. Infinity source
+     changes happen ONLY as Phase 0 hardening items (minimal, test-covered,
+     reported per item). If anything outside H1-H6 seems to require an Infinity
+     change, STOP and report instead of patching.
+  3. No pushes, publishes, or releases. Local build and tests only.
+  4. No secrets in repo, tests, fixtures, logs, argv, or shell history.
+     Tokens come from env (HESTIA_URL, HESTIA_SERVICE_TOKEN, KYBERNETES_URL,
+     KYBERNETES_SERVICE_TOKEN); fixtures use obviously fake tokens.
+  5. Mock/fixture tests only until a target-environment run is authorized.
+     When a gate requires the target environment and authorization/access is
+     absent, report that gate BLOCKED with the exact item needed - never hand
+     it to Nick as manual homework.
+  6. Error classification exactly per spec T3 (401 fatal / queue-timeout
+     retryable-with-backoff / connect-refused fatal).
+  7. Keep dependencies small: reqwest + tokio + serde + async-trait level;
+     serve HTTP with axum or hyper directly - no larger application frameworks.
+     Match the plain-ASCII style of the existing spec files for docs.
+  8. Nothing in this task pre-empts Nick's open decisions (spec sections 8 /
+     fleet section 7). Config snippets are examples labeled as pending his
+     answers, never instructions to set defaults he has not chosen.
+  9. Delivery semantics: at-least-once + dedup on controlled paths; target
+     idempotency or explicit UNKNOWN-outcome reconciliation for external
+     effects. Never implement or claim exactly-once external effects.
+ 10. Unsupported content/capabilities FAIL EXPLICITLY (clear error, exact
+     advertised capability set) - no silent placeholders, discards, or
+     downgrades anywhere.
+
+PHASE 0 - HARDENING (spec Track B, H1-H6)
+  Gate: Nick's go-ahead for modifying his Infinity checkout/branch.
+  Work: H1 daemon WebSocket auth + Origin checks; H2 sandbox-local off
+  0.0.0.0 + authenticated local channel; H3 webhook fail-closed on missing
+  signature when a secret is configured; H4 durable inbox/outbox +
+  idempotency on every effect/ingest path (per RULE 9 semantics); H5 bounded
+  retries + cancellation; H6 MCP parsing/lifecycle completion. Also the
+  receiver side of the spec A4 callback contract (authenticated receiver,
+  event-id dedup, sequence-gap detection, finalize/revoke lifecycle) - this
+  receiver support is a Phase 0 patch or an authenticating proxy; it cannot
+  come from the toolset alone.
+  Each item: minimal patch, its own tests, its own REPORT.txt section.
+  Until Phase 0 lands, everything built here is "watched single-user demo".
+
+PHASE 1 - BRIDGE (spec Track A)
+  Gate: none beyond these rules (local, mock-only).
+  D1. infinity-provider-hestia crate (spec A1):
+      - ModelProvider impl; list_models maps context_window from the VERIFIED
+        context_size field of /v1/models; a model lacking it fails loudly.
+      - Unix-socket serving via infinity_provider_protocol::remote::
+        serve_provider; prints socket path on stdout at startup.
+      - Unit tests: spec T1-T3 (note T1's explicit-failure requirement).
+  D2. rap-metis-toolset server (spec A2 + A4), Phase 1 scope = metis.ask only:
+      - /.well-known/rap-toolset manifest + invoke endpoint per rap-protocol.
+      - STOP GATE first: verify TurnEvent schema and stream route against
+        pinned Kybernetes source; on mismatch, stop and report.
+      - approval_request maps to RAP user-choice callback; never auto-resolve.
+      - Async contract: immediate return; events and final result over the
+        invocation-scoped callback channel (spec A4: expiring credential,
+        unique event ids, monotonic sequence, finalize/revoke). Bridge emits
+        the contract; receiver-side enforcement records its Phase 0
+        dependency. Bounded wait with cancellation (same dependency).
+      - Loopback bind, own bearer token, server-side Kybernetes token.
+      - Integration tests vs recorded fixtures: spec T4, T7; T6 fault shape
+        with SIMULATED disconnect/process-kill only (at-least-once + dedup,
+        no duplicated applied effects, unknown outcomes flagged).
+  D3. Wiring docs: example ~/.infinity/providers.json and .infinity/rap.json
+      snippets, labeled as examples pending decision D1; token handling per
+      RULE 4.
+
+PHASE 2 - FLEET + REMAINING TOOLS (fleet spec; companion spec A3)
+  Gates, ALL required before any Phase 2 code:
+    G-a. Nick's decisions D1-D4 (companion spec) and P1-P4 (fleet spec).
+    G-b. STOP GATES cleared: memory_search route+scope model and Stoma ingest
+         route+auth confirmed against pinned Metis source (companion spec A3).
+    G-c. Phase 0 landed (H1-H6) for anything beyond a watched demo.
+    G-d. MSS Void source access for P4 UI work; otherwise report P4 BLOCKED.
+  Work (only after gates): metis.memory_search and metis.ingest tools per
+  their A3 contracts; node gateway (P3), node registry (P2), metis-node-agent
+  (P1, incl. stdin/0600-file enrollment and the tmpfs/durability rules),
+  Lochos node affinity (P5); and the MSS Void Manage Devices UI work (P4)
+  itself, source-grounded against the actual metis-vscode code once access
+  exists (gate G-d) - no blind patching of an unseen codebase. Fleet test
+  gates F1-F7, with F4's destructive power-pull variant ONLY under separate
+  explicit approval + verified backups.
+
+REPORTING
+  REPORT.txt per phase: what was built; test counts and results; every place
+  pinned source disagreed with the specs; gate status for the next phase;
+  BLOCKED items with the exact missing item (authorization, decision, access).
+
+ACCEPTANCE (per phase)
+  - cargo test / suite green for that phase; clippy clean or justified inline.
+  - REPORT.txt specific and complete; gates honestly marked.
+  - Any ambiguity: follow the specs; if pinned source contradicts both, STOP
+    and report - do not guess.

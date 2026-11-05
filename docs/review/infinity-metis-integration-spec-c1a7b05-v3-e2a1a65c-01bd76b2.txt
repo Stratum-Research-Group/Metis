@@ -1,0 +1,279 @@
+INFINITY -> METIS INTEGRATION: MODIFICATION SPEC (v3)
+======================================================
+Date:        2026-11-04 (SAST), revised after consistency/safety review
+Requested:   Nick, WhatsApp 2026-11-04 22:26 - "i want a txt to use this code and modify it to speak to metis"
+Scope:       Modification plan only. No code changes, deployments, pushes or purchases are made or authorized here.
+Companions:  - infinity-metis-agent-task-c1a7b05-v3-0a90d196.txt   (coding-agent task prompt, covers all phases)
+             - metis-pi-fleet-mss-void-spec-88d9166-v3-d7d4c1e5.txt   (adding Pis to Metis via MSS Void, any count)
+
+SOURCES REVIEWED (current when checked)
+---------------------------------------
+Infinity:  https://github.com/hydro-project/infinity @ c1a7b05ef7f22774250218a623d6f2d692928a80 (2026-11-03)
+           Separate full review delivered: infinity-review-c1a7b05-26984a5c.txt
+Metis:     https://gitlab.com/akarta-315h/metis @ 88d9166045e4020ca380d05fdd9474ec85ffe1da (2026-10-29)
+MSS Void:  gitlab.com/akarta-315h/metis-vscode is private; no read access.
+           The bridge (this spec) does not depend on MSS Void. The fleet/UI
+           companion spec IS blocked on MSS Void source review - stated there.
+Note: Metis test counts ("1,110 passing") appear in its own commit message; they are
+upstream-reported, not executed during this review.
+
+1. TWO TRACKS, AND AN HONEST DEPLOYMENT GATE
+--------------------------------------------
+TRACK A - BRIDGE (extension-only): new code alongside Infinity that makes it
+  speak to Metis. No Infinity source changes. This is what Nick asked for.
+TRACK B - HARDENING (modifies or compensates Infinity): fixes for the defects
+  the c1a7b05 review found, required before any deployment beyond a watched
+  single-user demo on one machine.
+
+The bridge is useful without Track B for local experimentation. It is NOT
+deployment-ready without it: loopback binding and SSH tunnels reduce network
+exposure, but they do not fix a browser on the same machine driving the
+unauthenticated daemon WebSocket, a local malicious process calling sandbox
+tool endpoints, or work silently lost/duplicated or retried without bound in
+the persistence/replay paths. Track B items are in section 4; each is either a
+minimal patch to Infinity (local branch, reported, test-covered) or a
+demonstrably complete compensation. "Deployment" anywhere in these specs means
+Track B landed and its gates passed.
+
+Delivery semantics, stated once and used everywhere below: durable outbox +
+idempotency gives AT-LEAST-ONCE delivery plus dedup on paths we control. It
+does not make arbitrary external effects exactly-once. External effects need a
+target that is idempotent, or explicit reconciliation of UNKNOWN outcomes
+(crash between "effect sent" and "result recorded" = unknown, surfaced for
+reconciliation, never silently retried or silently dropped).
+
+2. VERIFIED INTERFACES (checked in source at the revisions above)
+-----------------------------------------------------------------
+Infinity side:
+  - ModelProvider trait: crates/infinity-provider-protocol/src/lib.rs:68
+      list_models() -> Vec<ModelEntry>; invoke_model(model_id, CompletionRequest) -> ModelStream
+    ModelEntry fields: model_id, display_name, context_window, max_output_tokens,
+    supports_image_input (lib.rs:42).
+  - Provider registration: daemon reads ~/.infinity/providers.json
+    (crates/infinity-daemon/src/config.rs:11-14); each entry is a command serving
+    the provider over a Unix socket (models.rs; remote.rs implements both sides
+    as newline-delimited JSON). Install: `infinity provider install <id>
+    --path <dir>` (docs/docs/infinity-code/model-providers.md).
+  - RAP protocol: crates/rap-protocol/src/lib.rs. Toolset manifest at
+    /.well-known/rap-toolset (rap-client/src/toolset_loader.rs:1); invocations
+    carry a callback_url (RapInvocation, lib.rs:45-51); results/subscription
+    events POST back (RapCallback, lib.rs:199; RapUserChoice+response_url,
+    lib.rs:153-162).
+  - CONFIRMED GAPS at this HEAD (corroborate the review): sandbox-local's server
+    binds 0.0.0.0 (crates/sandbox-local/src/server.rs:25); no Origin/auth check
+    present in crates/infinity-daemon/src/ws_handler.rs; no authentication in
+    rap-client/src/callback_server.rs or notifier.rs. These are why Track B exists.
+  - RAP server config: .infinity/rap.json per project plus user config
+    (config.rs:8,28-35); External { url } points at any pre-existing RAP server
+    (rap_servers.rs:69-72). Daemon remotes exist (remote.rs, load_remotes_config).
+
+Metis side:
+  - Hestia (port 8080, binds 127.0.0.1 by default): OpenAI-compatible
+      POST /v1/chat/completions (hestia/src/hestia/api/app.py:256)
+      GET  /v1/models, /v1/models/{name}   (app.py:216,236)
+      POST /v1/embeddings                  (app.py:431)
+      POST /v1/cascade/completions         (app.py:376)
+      GET  /health; POST /manage/load, /manage/unload
+    VERIFIED: /v1/models returns a context_size field per model (app.py:216-234)
+    - the provider reads context_window from there, no guessing.
+    Auth: Bearer HESTIA_SERVICE_TOKEN (app.py:93-105); unset token = insecure
+    dev mode, never acceptable beyond loopback dev. VRAM admission queue raises
+    QueueTimeoutError under overload (app.py:310,468) - map to retryable.
+  - Kybernetes (port 8081, binds 127.0.0.1 by default):
+      POST /v1/chat/turn and /v1/chat/stream (server/app.py:258-259)
+      SSE reconnect endpoints (app.py:273-274)
+      POST /v1/approvals/{approval_id}/resolve (app.py:300)
+      Auth: Bearer token, constant-time compare; METIS_INSECURE_DEV=1 bypass
+      (server/app.py:150-168), never set outside dev.
+    Turn stream events per Metis README: stage_start, stage_end, content_delta,
+    approval_request, trace_complete, error.
+  - Ports/tokens template: deploy/metis.env.example.
+
+3. TRACK A - THE BRIDGE (what "speak to Metis" concretely means)
+----------------------------------------------------------------
+Two separate things must not be conflated:
+  MODEL PATH - where an Infinity agent's own LLM completions come from.
+  TOOL PATH  - Metis capabilities an Infinity agent can invoke as tools.
+
+A1. infinity-provider-hestia (new crate; model path, Phase 1)
+    - list_models: GET {HESTIA_URL}/v1/models with Bearer token; map each entry,
+      context_window <- context_size [VERIFIED present]; if a model lacks
+      context_size, fail loudly for that model - never invent a number.
+    - invoke_model: POST /v1/chat/completions, stream=true; CompletionRequest ->
+      OpenAI chat format; SSE chunks -> StreamChunk (chunk-shape guidance:
+      infinity-provider-rig/src/convert.rs:319).
+    - Unsupported content/capability handling: request shapes Hestia cannot
+      honor (image content when supports_image_input=false, tool-call shapes
+      the mapping does not support, unsupported parameters) FAIL EXPLICITLY
+      with a clear error. No silent placeholder, no silent discard, no silent
+      downgrade. Capabilities are advertised in ModelEntry exactly as supported.
+    - Error classes: 401 fatal; QueueTimeout/503 retryable-with-backoff;
+      connect-refused fatal with "Metis not running" clarity.
+    - Config from env at process start: HESTIA_URL, HESTIA_SERVICE_TOKEN.
+      Never logged, never in providers.json.
+    - Runs on the rig only in Phase 1. Pi/satellite model access routes through
+      the gateway (fleet spec P3) with per-node credentials; the shared service
+      token never leaves the rig.
+    - Default-model question (providers.json ordering) is Nick's decision D1;
+      list Hestia first only if D1 is answered "direct".
+
+A2. metis.ask tool (tool path, Phase 1) - the full-turn tool
+    - One RAP toolset server (rig-side) exposing exactly one tool initially:
+      metis.ask. It calls Kybernetes POST /v1/chat/turn [VERIFIED route], so a
+      call goes through the 7-stage pipeline (Dianoia, Krisis, Phylax gating).
+      That is deliberately the full pipeline as a TOOL; it is separate from the
+      model-path decision in D1, which concerns where the calling agent's own
+      completions are generated.
+    - Streaming semantics: subscribe to the turn's SSE stream; map TurnEvents:
+        content_delta    -> tool progress/result content
+        approval_request -> RAP user-choice callback (RapUserChoice,
+                            response_url); NEVER auto-resolve an approval.
+                            The human answer goes back through
+                            /v1/approvals/{id}/resolve [VERIFIED route].
+        trace_complete   -> final result incl. citations
+        error            -> tool error, classified
+      STOP GATE: before implementation, verify the exact TurnEvent schema and
+      stream route against the pinned Kybernetes source. If the schema or
+      semantics differ from the above, stop and report - do not guess.
+    - Async contract: return at once, deliver events and the final result via
+      the invocation's callback channel (A4), so the calling agent hibernates
+      during slow turns. Bound every wait with a timeout and a cancellation
+      path (depends on Track B H5 for runtime support; bridge records the
+      dependency).
+    - Auth/scopes: the toolset holds the Kybernetes token server-side and
+      requires its own bearer token from callers. A turn can reach Phylax-gated
+      actions; approval requests pass through unchanged (above).
+
+A3. Phase 2 tools - boundary contracts only, NOT built in Phase 1
+    metis.memory_search and metis.ingest stay unbuilt until each STOP GATE
+    clears:
+      - memory_search: read-only retrieval. Contract in: query string, k, epoch
+        bounds. Out: ranked passages with provenance ids. Auth: a memory-read
+        scope distinct from chat. STOP GATE: the exact Kybernetes/LTHCM route
+        and its authorization semantics are unconfirmed in pinned source;
+        confirm route + scope model first, else report blocked.
+      - metis.ingest: submit a Stoma ingestion job. Contract in: document
+        reference + metadata; out: job id; completion delivered via callback.
+        Auth: ingestion is a WRITE into memory - its own scope and a Phylax
+        policy; never bundled with read tools. STOP GATE: confirm the Stoma
+        submission route and its auth in pinned source first.
+    SSRF protection for all tools: the toolset calls only configured,
+    allowlisted destinations (HESTIA_URL/KYBERNETES_URL from server-side
+    config). It never follows URLs taken from invocation arguments.
+
+A4. Callback channel security (one invocation = many events)
+    One invocation emits a STREAM of callbacks: progress events, zero or more
+    approval requests, retries of any of these, and one final result. So the
+    credential is NOT single-use-per-callback:
+      - The daemon side issues one invocation-scoped, EXPIRING callback
+        credential embedded in the callback_url.
+      - Every callback event carries a unique event id and a monotonic
+        sequence number within the invocation (binding).
+      - The receiver authenticates the credential on every event, dedups by
+        event id (idempotent acceptance of retries), and detects gaps by
+        sequence.
+      - Lifecycle: the final result event finalizes the invocation. The
+        receiver then keeps a bounded, authenticated dedup receipt (tombstone)
+        for a documented replay horizon: retries of already-accepted event ids
+        are acknowledged WITHOUT reapplying effects (covers ACKs lost after
+        acceptance), new events for the finalized invocation are rejected, and
+        the receipt expires at the horizon's end.
+      - Destination trust: the invocation-supplied callback_url alone is NOT
+        trusted. The callback destination is registered/enrolled for the
+        caller at session or invocation setup; the toolset sends only to that
+        registered endpoint, follows no redirects, pins the DNS resolution
+        made at registration, and rejects the send if a later resolution
+        differs (DNS-rebinding defense).
+      - Events carry only the event ids/sequences the toolset can prove for
+        the invocation it is serving.
+    DEPENDENCY, stated plainly: the daemon's callback receiver has no
+    authentication at this HEAD [VERIFIED], so the receiver side of this
+    contract requires a Track B patch or an authenticating proxy in front of
+    the receiver. It CANNOT be implemented solely inside the external toolset.
+
+4. TRACK B - HARDENING (required before deployment; each = patch or verified
+   compensation, minimal and test-covered, reported per item)
+---------------------------------------------------------------------------
+  H1. Daemon WebSocket: add authentication and Origin checking [gap confirmed
+      at this HEAD]. Loopback does not fix a hostile page in the user's own
+      browser reaching 127.0.0.1.
+  H2. Sandbox-local: stop binding 0.0.0.0 unauthenticated
+      [crates/sandbox-local/src/server.rs:25 confirmed]; loopback bind plus an
+      authenticated local channel.
+  H3. GitHub webhook: fail closed when the signature header is missing,
+      whenever a secret is configured (review reproduced acceptance at this HEAD).
+  H4. Durable effects: every path causing an effect or ingestion (tool
+      results, callbacks, subscription events, migrations) gets a durable
+      inbox/outbox with idempotency keys - AT-LEAST-ONCE delivery plus dedup on
+      controlled paths [review: swallowed/non-atomic writes, fail-open dedup and
+      child replay]. For effects on systems we do not control: require target
+      idempotency, or record UNKNOWN outcomes for explicit reconciliation.
+      No exactly-once promise is made or implied.
+  H5. Bounded retries: fix the retry budget reset on partial streams; add
+      cancellation for every long wait [review finding].
+  H6. MCP bridge: complete notification/response parsing and lifecycle handling
+      [review finding].
+  Until H1-H6 (or demonstrated complete compensations) land, all deployment
+  language in this spec and its companions means "watched single-user demo".
+
+5. METIS CAVEATS THAT AFFECT THIS INTEGRATION
+---------------------------------------------
+  - The 2026-11-03 repo review (@ 88d9166) found shipped entry points still use
+    simulated reasoning and heuristic selection in places. metis.ask outputs
+    must be labeled by which stages were live; verify before relying on them.
+  - Hestia serving a real GGUF end-to-end is an acceptance gate, not a given.
+
+6. RASPBERRY PI PLACEMENT (proposed options; fleet spec is the companion)
+-------------------------------------------------------------------------
+  - Proposed placement, PENDING Nick's per-node role selection (fleet spec
+    section 3): Pis may run Infinity satellites and/or Pi-local RAP toolsets;
+    the rig runs Metis. Roles are chosen per node, not asserted here.
+  - No Pi inference is ASSUMED anywhere in this design (an absence of
+    assumption, not a ban - R4 in the fleet spec is the gated future option).
+  - Runtime compatibility is a VALIDATION STEP, not a mandate: enrollment
+    probes each Pi's model/RAM/OS/arch; the build target is chosen from probe
+    results (e.g. aarch64 vs armv7), not assumed.
+  - Hibernation means a waiting agent is stored data, not a suspended process;
+    the daemon and runtime still run resident on the Pi. Real memory footprint
+    must be measured on the actual hardware. The 75k-agents-on-a-Pi headline
+    measured idle synthetic agents, not inference or live tool workloads.
+
+7. TEST GATES
+-------------
+  Local (builder runs these, mock/fixture only):
+  T1. Unit: request mapping incl. system messages and tool calls; image or
+      tool-call shapes beyond advertised capability FAIL EXPLICITLY (no silent
+      placeholder/discard).
+  T2. Unit: SSE chunk mapping incl. mid-stream error and truncation.
+  T3. Unit: error classification (401 fatal / queue-timeout retryable /
+      connect-refused fatal).
+  T4. Integration vs mock Hestia and mock Kybernetes: list_models with
+      context_size, streamed completion, metis.ask happy path incl. an
+      approval_request surfaced as a user-choice callback.
+  T7. Negative: wrong token -> clear 401, no retry storm; backend down ->
+      single clear error; partial stream -> bounded retries (verifies against
+      the H5 defect path).
+  Target environment (builder executes bounded versions under authorization;
+  if authorization or access is missing, report BLOCKED with the exact item
+  needed - these are not homework handed to Nick):
+  T5. Hestia serving the registered GGUF; Infinity session on provider hestia
+      answers with visible streaming.
+  T6. metis.ask end-to-end with citations. Fault injection by SIMULATED
+      disconnect / process kill only: events re-deliver at-least-once and
+      dedup accepts retries; the final result lands once in the conversation
+      after dedup; no unknown outcome is left unflagged. (Destructive
+      power-pull tests belong to the fleet spec and need separate explicit
+      approval and backups.)
+  T8. A Phylax-gated action via metis.ask produces approval_request and
+      executes only after resolve.
+
+8. OPEN DECISIONS FOR NICK (recommendations given; nothing pre-decided)
+-----------------------------------------------------------------------
+  D1. Model path: Infinity agents call Hestia directly (recommended; matches
+      the provider trait, lowest latency) vs all completions via Kybernetes
+      (adds policy/audit around every completion at latency cost).
+  D2. Phase 2 tool set and their scopes (memory read scope, ingest write scope).
+  D3. Transport rig<->Pis: WireGuard (recommended) vs LAN + per-node mTLS vs
+      SSH tunnels. Decides listener binding.
+  D4. Pi inference, ever: no assumption made; revisit only with measured
+      thermals.

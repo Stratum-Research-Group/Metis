@@ -1,0 +1,132 @@
+INFINITY -> METIS: APPLYING "YOU DON'T NEED LONG CONTEXT" (arXiv 2611.05306)
+=============================================================================
+Date:      2026-11-05 (SAST)
+Requested: Nick, WhatsApp 2026-11-05 - "so txt for this" (the practical
+           application discussion of the long-context paper for the
+           Infinity-to-Metis agent layer)
+Scope:     Application note only. No code changes, experiments, deployments or
+           purchases are made or authorized here. This is not a new experiment
+           protocol and it does not decide any architecture.
+Companions: - Full paper review: you-dont-need-long-context-review-2611.05306-*.txt
+            - Integration spec (2026-11-04): infinity-metis-integration-spec-c1a7b05-v3-*.txt
+Paper:     https://arxiv.org/pdf/2611.05306 (Belcak et al., NVIDIA, 2026-11-03)
+
+1. THE IDEA WORTH TAKING
+------------------------
+The paper's usable core is a pattern for keeping long-running agents going
+without repeatedly feeding them their entire history:
+
+  a) Keep the full history and source material AVAILABLE, outside the prompt
+     (files, artifacts, logs).
+  b) Carry a compact WORKING NOTE between context resets: the paper's best
+     recap was not a narrative summary but a brief for future work - verbatim
+     task, objective, established facts, applied changes, verification done,
+     dead ends, remaining plan, pointers to artifacts (its Appendices A and G).
+  c) RETRIEVE the original detail on demand with search/read tools over the
+     stored material (their agents used grep/sed/head-style reads with a
+     bounded read window and a "read only what you need" instruction).
+
+Of the three parts, selective reading has the clearest demonstrated benefit
+(big accuracy gains on retrieval-shaped long-input tasks, and the large
+nominal cost drops came mostly from reading less, not from compaction).
+Compaction quality is what makes the handoff work; context-window size is a
+per-model variable, not a constant to copy.
+
+2. WHY THIS FITS INFINITY -> METIS (and where it fits)
+------------------------------------------------------
+Grounding: Infinity was reviewed @ c1a7b05 (2026-11-03) and Metis @ 88d9166
+(2026-10-29 / full review 2026-11-03). I have not rechecked either repo now,
+so code details below are as of those pinned reviews.
+
+- Infinity already has compaction machinery (the c1a7b05 review covers its
+  compaction, persistence/replay paths and the security gaps around them).
+  So this paper is input to IMPROVE AND TEST that machinery, not a reason to
+  add another memory system. No new architecture is proposed here.
+- This complements LTHCM; it does not replace it. LTHCM remains the long-term
+  memory. The working note is short-lived operating state for an active agent
+  run: what the agent is doing now, what is decided, what is next. LTHCM
+  remains where durable knowledge and provenance live.
+- Concretely (PROPOSED, not built):
+  - Recap template: adopt the paper's handoff-note shape for Infinity's
+    compaction step (task verbatim, intent/next steps, established facts with
+    their sources, applied changes, verification status, dead ends, remaining
+    plan, artifact pointers). This is a prompt/template change, not a model
+    change.
+  - Selective reading: keep conversation history, tool outputs and ingested
+    docs retrievable (files / LTHCM passages) and let agents pull detail on
+    demand instead of accumulating full history in the live context.
+  - Context threshold: read the served model's real context_window from
+    Hestia's /v1/models context_size field (verified present in the Metis
+    source at 88d9166) instead of hardcoding a number - but treat the
+    compaction threshold as a separate, measured choice (section 3).
+
+3. WHAT NOT TO COPY BLINDLY
+---------------------------
+- Do not adopt tight context limits (16K/12K) by default. In the paper's
+  open-weight appendix, ALL five tested local models lost SWE-bench Verified
+  accuracy at 16K/12K, and one collapsed from 53.0% to 3.6% (Qwen 3 Coder
+  Next). At 48K/40K results were mostly neutral. None of those models were
+  post-trained for compaction. Which threshold Metis's actual serving model
+  tolerates is an open, per-model question - test the real model before
+  choosing a limit. (The paper ran one run per cell, so treat single numbers
+  as indicative, not precise.)
+- Do not expect automatic cost savings. The headline savings figures come
+  from a hypothetical pricing model where providers charge by context window.
+  Under the paper's own nominal flat-rate price columns (rates it lists, not
+  verified against any live pricing), long-horizon compaction often cost the
+  same or MORE; the clear nominal savings were on long-input tasks, from
+  selective reading. For a local stack the relevant benefit is different:
+  latency and memory grow with context for full-attention models (the paper's
+  local Fig 2; hybrid linear-attention models were much flatter), so bounding
+  live context helps responsiveness, not an API bill.
+- Do not treat the title literally. The evidence supports "short live context
+  plus good handoffs and selective reading held accuracy on these 13
+  benchmarks for two closed frontier models". Whether all holistic or dense
+  cross-reference tasks can be solved this way is not established, and the
+  SSSM idea in the paper is a proposal, not a tested system.
+
+4. SAFEGUARDS (these matter for Metis specifically)
+---------------------------------------------------
+Two failure modes to design against if this pattern is applied:
+
+  a) Recap losing authority or evidence. A compacted note can silently drop
+     WHO approved WHAT and WHERE a fact came from. The working note should
+     carry provenance pointers (artifact ids, source references, decision and
+     approval references), and anything Phylax-gated must keep its approval
+     trail intact across a compaction. An approval is never auto-resolved;
+     the integration spec already requires approval requests to pass through
+     to the human unchanged (spec A2), and that must survive compaction.
+  b) Retrieval bypassing permissions. Selective reading must go through the
+     same scopes as everything else: per the integration spec (A3), memory
+     read is its own scope distinct from chat, ingestion is a WRITE with its
+     own scope and Phylax policy, and tools call only configured allowlisted
+     destinations. "Read only what you need" must never become "read anything
+     reachable". Phase 2 tools (memory_search, ingest) remain gated on their
+     STOP conditions in the spec.
+
+Also unchanged from the integration spec: Infinity's Track B hardening items
+(H1-H6: daemon WebSocket auth, sandbox bind, webhook fail-closed, durable
+idempotent effects, bounded retries, MCP bridge) remain the gate before any
+deployment language applies. Compaction interacts with persistence/replay, so
+H4/H5 are directly relevant to making handoffs reliable.
+
+5. OPEN QUESTIONS FOR NICK (not pre-decided)
+--------------------------------------------
+- Which model actually serves Metis agent turns (ties to decision D1 in the
+  integration spec: Hestia direct vs all completions via Kybernetes). The
+  compaction threshold cannot be chosen before this is settled.
+- Where the working note lives (Infinity-side run state vs a Metis-visible
+  artifact). Either is workable; the safeguard requirements in section 4
+  apply in both cases.
+- Whether selective reading should use LTHCM retrieval or plain file/search
+  tooling first. Plain files are the simpler starting point and match what
+  the paper actually tested.
+
+6. BOTTOM LINE
+--------------
+Useful engineering input for the Infinity-to-Metis agent layer: adopt the
+selective-reading pattern and the handoff-note template, keep LTHCM as the
+memory layer, keep approvals and scopes intact across compaction, and measure
+the real serving model before fixing any context limit. It is not a new
+memory architecture, not a replacement for LTHCM, and not an automatic
+cost-saving upgrade.
