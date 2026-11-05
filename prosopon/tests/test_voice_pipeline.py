@@ -16,7 +16,10 @@ async def test_transcoder_empty_input_rejected():
 
 @pytest.mark.asyncio
 async def test_transcoder_valid_audio():
-    import io, struct, wave
+    import io, shutil, struct, wave
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg is required for audio transcoding test but was not found on PATH")
+
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
         wf.setnchannels(1)
