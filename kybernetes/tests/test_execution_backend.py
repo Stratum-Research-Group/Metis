@@ -71,52 +71,66 @@ def test_sandboxed_bash_tmp_ephemeral_isolation(tmp_path: Path):
 
 def test_bubblewrap_network_isolation(tmp_path: Path):
     """Verify bubblewrap isolates the network namespace by default unless explicitly granted."""
+    import socket
+    import sys
+
     bwrap = BubblewrapBackend()
     if not bwrap.is_available():
         pytest.skip("Bubblewrap (bwrap) not available in this test environment")
 
-    # 1. By default, network is unshared: socket connect fails
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+
+    path_env = f"{Path(sys.executable).parent}:/usr/local/bin:/usr/bin:/bin"
     script = (
-        "python3 -c \""
+        f"{sys.executable} -c \""
         "import socket, sys; "
         "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); "
         "s.settimeout(1.0); "
-        "s.connect(('127.0.0.1', 8080)); "
+        f"s.connect(('127.0.0.1', {port})); "
         "print('CONNECTED')\""
     )
-    res_isolated = bwrap.execute(
-        script,
-        cwd=tmp_path,
-        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)},
-        allow_network=False,
-    )
-    # Network is unshared, connection refused / unreachable
-    assert res_isolated.exit_code != 0
-    assert "CONNECTED" not in res_isolated.stdout
+    try:
+        # 1. By default, network is unshared: socket connect fails
+        res_isolated = bwrap.execute(
+            script,
+            cwd=tmp_path,
+            env={"PATH": path_env, "HOME": str(tmp_path)},
+            allow_network=False,
+        )
+        # Network is unshared, connection refused / unreachable
+        assert res_isolated.exit_code != 0
+        assert "CONNECTED" not in res_isolated.stdout
 
-    # 2. When allow_network=True, if host service (Hestia on 8080) is listening, connection succeeds
-    res_allowed = bwrap.execute(
-        script,
-        cwd=tmp_path,
-        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)},
-        allow_network=True,
-    )
-    # Hestia is running on port 8080 on the host
-    assert res_allowed.exit_code == 0
-    assert "CONNECTED" in res_allowed.stdout
+        # 2. When allow_network=True, connection to ephemeral host listener succeeds
+        res_allowed = bwrap.execute(
+            script,
+            cwd=tmp_path,
+            env={"PATH": path_env, "HOME": str(tmp_path)},
+            allow_network=True,
+        )
+        assert res_allowed.exit_code == 0
+        assert "CONNECTED" in res_allowed.stdout
+    finally:
+        srv.close()
 
 
 def test_bubblewrap_confinement_env(tmp_path: Path):
     """Verify bubblewrap enforces HOME pointing into workspace and isolated TMPDIR."""
+    import sys
+
     bwrap = BubblewrapBackend()
     if not bwrap.is_available():
         pytest.skip("Bubblewrap (bwrap) not available in this test environment")
 
-    script = "python3 -c \"import os; print(f'HOME={os.environ.get(\\\"HOME\\\")} TMPDIR={os.environ.get(\\\"TMPDIR\\\")}')\""
+    path_env = f"{Path(sys.executable).parent}:/usr/local/bin:/usr/bin:/bin"
+    script = f"{sys.executable} -c \"import os; print(f'HOME={{os.environ.get(\\\"HOME\\\")}} TMPDIR={{os.environ.get(\\\"TMPDIR\\\")}}')\""
     res = bwrap.execute(
         script,
         cwd=tmp_path,
-        env={"PATH": "/usr/bin:/bin"},
+        env={"PATH": path_env},
     )
     assert res.exit_code == 0
     assert f"HOME={str(tmp_path)}" in res.stdout
