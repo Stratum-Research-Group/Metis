@@ -11,7 +11,7 @@
         "lthcm/__init__.py",
         "pyproject.toml"
       ],
-      "content_sha256": "2985bf1b819197ce15a63b9d2ee6fd59292ca8395fea0dc67aaf38f3d302f5af"
+      "content_sha256": "4dc3942b01a1b0b2a2a7af8402bec5b97665a87730e4e603b6dc24d6daa505c3"
     },
     "dianoia": {
       "target_subdirs": [
