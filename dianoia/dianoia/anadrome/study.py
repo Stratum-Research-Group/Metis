@@ -456,8 +456,8 @@ class AnadromeLiveStudy:
     def _create_mock_embedder(self):
         embedder = MagicMock()
         embedder.model_name = "bge-m3"
-        embedder.encode_single.return_value = torch.zeros(64)
-        embedder.encode.return_value = torch.zeros(4, 64)
+        embedder.encode_single.return_value = torch.zeros(64) if torch is not None else [0.0] * 64
+        embedder.encode.return_value = torch.zeros(4, 64) if torch is not None else [[0.0] * 64] * 4
         return embedder
 
     def run_arm_query(
@@ -467,7 +467,8 @@ class AnadromeLiveStudy:
         seed: int,
     ) -> ArmResult:
         """Execute a single query under a given policy and seed."""
-        torch.manual_seed(seed)
+        if torch is not None:
+            torch.manual_seed(seed)
         engine = self._create_mock_engine()
         embedder = self._create_mock_embedder()
         client = build_deterministic_mock_client()

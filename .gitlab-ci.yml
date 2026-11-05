@@ -4,7 +4,7 @@ stages:
 
 variables:
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
-  PYTHONPATH: ".:dianoia:paideia:stoma/src:LTHCM:dokime/src:kleroterion/src:hestia/src:kybernetes:prosopon:phylax:krisis"
+  PYTHONPATH: ".:dianoia:paideia:stoma/src:LTHCM:dokime/src:kleroterion/src:kleroterion:hestia/src:kybernetes:prosopon:phylax:krisis"
 
 cache:
   key: "$CI_COMMIT_REF_SLUG"

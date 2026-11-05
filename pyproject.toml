@@ -70,6 +70,7 @@ norecursedirs = [
 ]
 pythonpath = [
     "kleroterion/src",
+    "kleroterion",
     "dokime/src",
     "hestia/src",
     "stoma/src",

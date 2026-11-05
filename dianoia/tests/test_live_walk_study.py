@@ -16,6 +16,12 @@ class TestAnadromeLiveStudy(unittest.TestCase):
     """Test harness and evaluation criteria for Anadrome Milestone 3.2."""
 
     def setUp(self):
+        try:
+            import torch
+            if torch is None:
+                self.skipTest("torch not installed")
+        except ImportError:
+            self.skipTest("torch not installed")
         self.study = AnadromeLiveStudy(seeds=[42])
 
     def test_frozen_dataset_and_graph_integrity(self):
