@@ -9,6 +9,12 @@ from phylax.engine.context import (
 )
 from phylax.engine.evaluator import PolicyEvaluator, compute_argument_digest
 from phylax.engine.manager import PolicyManager
+from phylax.engine.mood_fuzzer import (
+    MoodAuditReport,
+    MoodVariant,
+    SyntacticMood,
+    SyntacticMoodFuzzer,
+)
 
 __all__ = [
     "canonicalize_path",
@@ -21,4 +27,8 @@ __all__ = [
     "PolicyEvaluator",
     "compute_argument_digest",
     "PolicyManager",
+    "SyntacticMood",
+    "MoodVariant",
+    "MoodAuditReport",
+    "SyntacticMoodFuzzer",
 ]

@@ -44,6 +44,8 @@ class Chunker:
         overlap_tokens: int = 30,
         redactor: Optional[Any] = None,
         filter_boilerplate: bool = False,
+        normalize_tables: bool = False,
+        table_normalization_mode: str = "replace",
     ):
         self.embedder = embedder
         # Effective max tokens accounts for special tokens overhead
@@ -52,6 +54,8 @@ class Chunker:
         self.overlap_tokens = min(overlap_tokens, self.target_tokens // 4)
         self.redactor = redactor
         self.filter_boilerplate = filter_boilerplate
+        self.normalize_tables = normalize_tables
+        self.table_normalization_mode = table_normalization_mode
 
     def chunk_raw_passages_stream(
         self,
@@ -83,6 +87,12 @@ class Chunker:
             text = raw.content.strip()
             if not text:
                 continue
+
+            if self.normalize_tables:
+                from stoma.table_normalizer import normalize_markdown_tables
+                text = normalize_markdown_tables(text, mode=self.table_normalization_mode).strip()
+                if not text:
+                    continue
 
             if self.filter_boilerplate:
                 from stoma.redaction import ContentAssessment

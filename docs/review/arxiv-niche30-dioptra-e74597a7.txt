@@ -1,0 +1,17 @@
+DIOPTRA - NICHE PICK FROM THE 3-MONTH SCREEN (1 of the top 30)
+
+1. MI-MIDI: Mechanistic Interpretability of Text-to-MIDI Generation Models
+https://arxiv.org/abs/2608.06638
+Mech-interp turned on SYMBOLIC music models (the field concentrates on audio): linear
+probing, logit/tuned lenses, activation patching and steering on two contrasting
+text-to-MIDI systems. Author-reported: musical structure is linearly decodable in both,
+but forms completely differently per architecture - one refines gradually across depth,
+the other works in its inherited textual basis before a sharp late rotation.
+Practical reach: a compact reference pipeline for Dioptra's evidence-record design -
+probe, lens, patch, steer on the SAME phenomenon, logging which method saw what. Their
+two-orientation steering control (separating directional control from distributional side
+effects) is a caveat any Dioptra steering feature needs. The two-architecture contrast is
+also the right template for Dioptra comparison reports: the interesting output is where
+and how differently structure forms.
+Honest limit: findings are author-reported on two public models; it is a methods
+reference, not a validated result about your models.

@@ -1,0 +1,30 @@
+HESTIA - NICHE PICKS FROM THE 3-MONTH SCREEN (2 of the top 30)
+
+1. Random Attention: Rethinking KV Cache Eviction for Efficient Reasoning
+https://arxiv.org/abs/2609.03430
+A negative result that matters: keep the prompt intact, then evict KV entries UNIFORMLY AT
+RANDOM per head - no importance scoring pass. In their tested setting (four models, six
+long-reasoning tasks, ~4x compression), random eviction matched the strongest scorer on
+AVERAGE accuracy and served 32-43% higher throughput in their vLLM measurement at 32k
+generations. Their mechanism finding: the prompt is the fragile part; the reasoning trace
+protects itself through redundancy.
+Practical reach: if Hestia ever implements KV eviction for long reasoning sessions,
+"protect the prefix, evict the trace randomly" is a cheap baseline to start from (no
+scoring pass, though still not zero overhead), and their results say a smarter policy has
+to beat random per task, not just on average - which their tables show is harder than the
+literature implies. Code released.
+Honest limit: scoped to long chain-of-thought workloads and their tested models; per-task
+gaps remained on code reasoning with long prompts; says nothing about KV quantization.
+
+2. Unlocking Lossless Speedups in LLMs via Discrete Diffusion ("Uno")
+https://arxiv.org/abs/2609.04010  [LEAD - abstract-level read only]
+Claims lossless AR-model acceleration by adding lightweight diffusion weights that draw
+several tokens in parallel - no separate draft model (unlike speculative decoding) and no
+quality sacrifice (their claim), up to 3x at the largest batch size.
+Practical reach: a third serving-speed lane worth knowing about for a 16 GB card, where a
+speculative draft model competes with the main model for VRAM. No second model helps, but
+the added diffusion weights still cost memory of their own, so whether a given model plus
+Uno fits the card is an open check, not a given.
+Honest limit: abstract-level only - the "lossless" and "3x" claims need the experiments
+section. Requires training diffusion weights on top of a base model, so not a drop-in for
+an existing GGUF.

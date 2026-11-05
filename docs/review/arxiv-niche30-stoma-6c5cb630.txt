@@ -1,0 +1,35 @@
+STOMA - NICHE PICKS FROM THE 3-MONTH SCREEN (2 of the top 30)
+
+1. Document Retrieval-Aware Chunking (D-RAC)
+https://arxiv.org/abs/2609.24220
+Normalize office-style inputs (DOCX, PPTX, XLSX, scans, native PDF) to PDF first, then
+convert pages to retrieval-optimized Markdown (tables become self-contained prose) and
+chunk. The bet is that many formats have a deterministic PDF rendering - though rendering
+can lose information (a spreadsheet's off-screen sheets, embedded media), so what survives
+normalization has to be checked per format. Their numbers, on their corpus: processing
+completed in 72 minutes with no failed documents, and 95.7% fewer chunking-stage output
+tokens than agentic chunking with frontier LLMs.
+Practical reach: one deterministic rendering target instead of N format-specific parsers
+fits Stoma's fail-closed bar - normalization failures become detectable at the rendering
+boundary, before parsing. The table-to-prose normalization is a specific chunking choice
+to evaluate against LTHCM retrieval quality rather than assume.
+Honest limit: the zero-failure figure is their corpus and their pipeline, not a universal
+property. Camera photos (a Stoma input) are not documents with a faithful PDF rendering,
+so this covers part of the input space. Cost figures are their enterprise-API context.
+
+2. Jina-OCR-v1: Efficient Document Parsing with Speculative Decoding and Dense Verifiable
+   Rewards
+https://arxiv.org/abs/2609.03181
+Document parsing aimed at low-budget serving: compressed vision encoder + 3B MoE decoder
+(~570M active parameters per token), a speculative decoding head keeping decoding
+lossless, post-trained with DENSE VERIFIABLE REWARDS - deterministic
+formula/table/structure checks with partial credit. Author-reported: 91.14 OmniDocBench,
+2.57 pages/s, the highest throughput in their comparison, measured on an NVIDIA L4.
+Practical reach: a candidate parsing component for Stoma's document path with published
+throughput in a datacenter-lite setup. Note that ~570M ACTIVE parameters per token says
+nothing by itself about resident memory (the full 3B MoE plus encoder must fit) or about
+throughput on your card - local fit and speed need checking before adoption. The
+dense-verifiable-rewards pattern (deterministic structural checks, partial credit) is
+also Dokime/Paideia material for a parsing-quality eval track.
+Honest limit: manufacturer-reported numbers in their setup; weights availability and
+license not verified.

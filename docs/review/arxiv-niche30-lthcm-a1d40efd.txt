@@ -1,0 +1,29 @@
+LTHCM - NICHE PICKS FROM THE 3-MONTH SCREEN (2 of the top 30)
+Unusual papers with practical reach for a long-term memory substrate. Uses are judgment;
+results are the papers' own.
+
+1. Caching for the Future: Scrub Jay Episodic Memory Principles for Agent Memory Systems
+https://arxiv.org/abs/2608.04746  [ALREADY SENT IN CHAT]
+Memory store where each memory gets a perishability estimate and type-conditioned decay,
+borrowed from how scrub jays cache food: "meeting room today" rots fast, "Nick's
+profession" does not.
+Practical reach: a memory system that knows when its own knowledge has gone stale, instead
+of treating every stored fact as equally permanent. For LTHCM the portable piece is the
+decay field and the held-out-time-interval eval idea, not the architecture.
+Honest limit: the review found its headline generalization metric (GenGap) is internally
+inconsistent - the rendered formula and the prose interpretation disagree in sign - so no
+performance numbers from it should be quoted. The evaluated version also substitutes
+heuristics for three of its blueprint's trained components.
+
+2. Beyond the Timeline: Augmenting Long-Video Memory with Grounded Entity Biographies (GEB)
+https://arxiv.org/abs/2609.38155  [LEAD - abstract-level read only]
+Long-video memory that groups observations of the SAME physical entity across clips into
+retrievable "biographies", so a question follows one entity through events instead of
+matching descriptions. Reports 72.0% on EgoLifeQA (+4.4 over best published), author-reported.
+Practical reach: the transferable concept is identity-linked consolidation - tying
+repeated mentions of the same entity into one retrievable thread. If LTHCM's design has
+no entity-identity layer (current repo state not checked for this list), a
+biography-style entity thread would be a plausible addition over documents and chat
+exports, not only video.
+Honest limit: built and tested on egocentric video; whether text-domain entity linking
+gains anything similar is unverified. Abstract-level read; numbers not verified.

@@ -1,0 +1,74 @@
+PAIDEIA - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026
+Why this: paideia is Metis's training harness (unsloth QLoRA; proposed home for GRPO and
+the dianoia walk-policy training). Project state per the full Metis review at 88d9166,
+3 Nov: real training raises TrainingUnavailableError and the default path is explicitly
+marked SIMULATED - it does not silently report real training completed. Historical state,
+not re-verified for this review. One window paper is a direct methods fit for
+self-improvement post-training, with an applied variant worth knowing about.
+
+====================================================================
+1. Latent On-Policy Self-Distillation (LOPD)
+arXiv:2608.13040 (13 Aug 2026), Zhang, Lyu, Sun, Yu, Zhao, Ren, Yan - NUS / BUPT / SJTU
+Coverage: PDF downloaded and read (abstract, method overview, main-results tables and
+prose); training-detail level at claim level.
+
+WHAT IT IS / SHOWED
+On-policy self-distillation (OPSD) uses a privileged self-teacher to give dense supervision
+on the student's own trajectories, but existing methods need designer-specified privileged
+artifacts (answers, feedback, skills). LOPD makes the privileged context LEARNABLE: a
+composer transforms retrieved experience into compact continuous tokens; because that
+context is differentiable, the same training process improves both student and composer. At
+inference only the student is deployed.
+Author-reported results: best aggregate in all ten backbone-benchmark comparisons across
+three model backbones and seven benchmarks (tool use: EnvScaler, BFCL-v3, ACEBench; code:
+LiveCodeBench, EvalPlus). On EnvScaler with Qwen3-4B, LOPD 63.7 vs strongest competing
+method GRPO 61.8 (their Table 1). Code: Qwen3-4B LiveCodeBench/EvalPlus aggregates
+48.78/81.36; OLMo3-7B 50.98/78.41 (+2.69/+0.55 over the strongest alternatives). With
+Qwen3-8B, LOPD exceeds OPSD/SDFT/Skill-SD by 14.4/10.2/6.2 points on the tool-use
+aggregate. They also report matching or beating GRPO and Skill-SD while using less than
+30% of their ROLLOUT BUDGET - that is rollout count in their training setup, not total
+training compute or memory; it says nothing about whether the method fits a 16GB card.
+Their own honesty note: adding privileged information does not ALWAYS improve on the
+vanilla model - no hand-crafted context is universally optimal; that is their motivation
+for learning the context instead.
+
+WHAT IT MEANS FOR PAIDEIA (my judgment)
+- Self-distillation with a learnable teacher context is a credible middle path for the
+  walk-policy/router training paideia is meant to own: denser supervision than pure GRPO
+  without hand-built privileged labels. Note the comparison is against RLVR/OPSD/GRPO-style
+  baselines on their seven benchmarks - nothing here validates it for graph-walk policies
+  specifically, and the rollout-budget saving does not translate into a feasibility claim
+  for the home rig.
+- Code: official repo verified resolving - https://github.com/bingreeky/LOPD (Python,
+  created 13 Aug 2026). The paper also advertises Hugging Face checkpoints
+  (Qwen3-8B-LOPD, Olmo3-7B-LOPD) but I could not resolve the HF org, so checkpoint
+  availability is unverified.
+- Sequencing note tied to the 3 Nov review state: this is a methods lead for when paideia's
+  training path actually trains (real training currently raises TrainingUnavailableError
+  with the default explicitly marked SIMULATED) - the prerequisite is a working training
+  backend, not a better objective.
+
+====================================================================
+2. K-OPSD: Verifiable On-Policy Self-Distillation for Post-Training VLMs on AEC Drawings
+   (brief, applied variant)
+arXiv:2609.34082 (28 Sep 2026), Bai, Chionna, Singh KC, Amol, Tinnemeyer - AWS
+Coverage: PDF downloaded and read (abstract and method summary only); results not reviewed.
+
+LEAD ONLY - abstract/method-level: OPSD with VERIFIABLE supervision - the teacher is built
+from the model's own best-of-N generations, certified by a process-level verifier; failed
+prompts are rescued by resampling under a hint that exposes the verified answer. Domain is
+architecture/engineering/construction drawing understanding, so the method transfer is the
+point, not the domain: the "verifier-certified self-teacher + hint-rescue" pattern is a
+concrete answer to where privileged context comes from when you have a checker but no
+labels - the situation paideia's GRPO/self-distillation path would be in if it can get
+verifiable rewards from dianoia/krisis.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- Test-Time Self-Evolving GUI Visual Grounding (2608.11191): test-time self-evolution loop
+  for GUI agents; full text downloaded and skimmed - the setting (GUI grounding adaptation
+  at inference) is far enough from paideia's training-harness role that it stays a lead,
+  not a pick.
+
+Sources: https://arxiv.org/abs/2608.13040 , https://arxiv.org/abs/2609.34082 ,
+https://github.com/bingreeky/LOPD

@@ -1,0 +1,17 @@
+PHYLAX - NICHE PICK FROM THE 3-MONTH SCREEN (1 of the top 30)
+
+1. Mood Matters: How Syntactic Sensitivity Undermines Safety Alignment
+https://arxiv.org/abs/2608.05409
+Documents SYNTACTIC VULNERABILITY: models fail to refuse harmful requests phrased in
+non-imperative syntactic forms. Across 16 instruct models from 8 families, the worst-case
+reformulation raised attack success over the imperative form by +15 to +71 points - and
+the gap GREW with model size. A syntax-diversified SFT mix cut worst-case attack success
+from 85% to 8% on one base model, but declarative forms gained nothing - a partial,
+form-dependent fix.
+Practical reach: an evaluation discipline for any model-in-the-loop refusal phylax ever
+relies on: test across syntactic forms, not just imperative phrasings; expect the worst
+case to be far worse than the standard form; and do not assume a bigger model refuses
+more reliably - their size trend went the other way.
+Honest limit: the evidence is about model REFUSAL behavior in their 16 open/instruct
+models with their LLM-judge methodology. It is not a measurement of any phylax component,
+and the mitigation is one SFT setting on one base model.

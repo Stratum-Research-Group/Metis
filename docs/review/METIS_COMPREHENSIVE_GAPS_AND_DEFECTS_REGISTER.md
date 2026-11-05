@@ -1314,30 +1314,33 @@
 | **Lochos BFF Control Plane & Sign-Off**| Item 105 | Kybernetes + Prosopon (`/lochos/complete`, `/lochos/pipeline`, BFF proxy)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon tests passing |
 | **Lochos Baton Transfer & Void Controls**| Item 106 | Kybernetes + Prosopon + Void (`/api/lochos/transfer`, dynamic queue, GUI pipeline)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon + 0 TS compile errors |
 | **Canonical Architecture & Interconnect Guide**| Item 107 | Docs (`docs/ARCHITECTURE_AND_INTERCONNECT.md`, 11 modules, CLI, dataflows)| **Integrated & Verified** | Specification `METIS-DOCS-ARCH-001` (1,000+ lines, verified) |
-| **Dual-Criterion Faithfulness/Factuality Gating**| Item 108 | Dokime + Krisis (`labeling_criterion`, claim verdict/reason disambiguation)| **Integrated & Verified** | 218 Dokime + 43 Krisis tests passing |
+| **Dual-Criterion Faithfulness/Factuality Gating**| Item 108 | Dokime + Krisis (`labeling_criterion`, claim verdict/reason disambiguation)| **Integrated & Verified** | 219 Dokime + 43 Krisis tests passing |
 | **Type-Conditioned Memory Perishability**| Item 109 | LTHCM (`enable_perishability_decay`, $\pi$/$\tau$ ScrubJay decay)| **Integrated & Verified** | 134 LTHCM tests passing (exponential temporal decay verified) |
+| **Syntactic Sensitivity Mood Fuzzer** | Item 110 | Phylax (`SyntacticMoodFuzzer`, 5-mood variance audit, arXiv:2608.05409)| **Integrated & Verified** | 40 Phylax tests passing (4 new invariance/vulnerability tests) |
+| **Table-to-Prose Retrieval Normalization**| Item 111 | Stoma (`TableProseNormalizer`, `normalize_markdown_tables`, arXiv:2609.24220)| **Integrated & Verified** | 131 Stoma tests passing (4 new extraction/chunker tests) |
+| **Causal Deliberation Step Audit** | Item 112 | Dokime (`CausalDeliberationAuditor`, step counterfactuals, arXiv:2610.21182)| **Integrated & Verified** | 223 Dokime tests passing (4 new causal/ritual tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,204 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,223 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.72s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **223** | 0 | 9.56s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **216** | 0 | 25.24s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **134** | 0 | 230.58s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 223.48s | **PASS** |
+| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **131** | 0 | 225.10s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.03s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **76** | 0 | 43.61s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **72** | 0 | 2.18s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **43** | 0 | 0.24s | **PASS** |
-| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.41s | **PASS** |
+| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **40** | 0 | 1.43s | **PASS** |
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,211** | **1** | **~9 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,223** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 

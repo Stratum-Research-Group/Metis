@@ -1,0 +1,92 @@
+STOMA - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026
+Why these: Stoma's documented input scope (per the project record; repo not re-inspected
+for this review) is heterogeneous material - PDFs, docs, scans, photos, repos, chat
+exports - ingested into LTHCM under a fail-closed, bounded-memory bar. The window gave one ingestion
+ARCHITECTURE pattern worth considering, one published-weights parsing model with
+low-budget-GPU ambitions, and one paper covering the camera-captured case Stoma's scope
+includes.
+
+====================================================================
+1. Document Retrieval-Aware Chunking (D-RAC)
+arXiv:2609.24220 (21 Sep 2026), Allu, Sivaprakash, Singh, Manocha - Yellow.ai
+Coverage: PDF downloaded and read (abstract, pipeline, headline results).
+
+WHAT IT IS / SHOWED
+The authors' pipeline normalizes selected input formats (DOCX, PPTX, XLSX, scanned images,
+native PDF) to PDF first, then converts rendered pages to retrieval-optimized Markdown
+(tables become self-contained prose statements, heading hierarchy preserved), then chunks.
+Their headline run: a 236-document, 795-page benchmark corpus processed in 72 minutes with
+zero conversion or chunking errors, producing 1,748 retrieval-ready chunks; vs agentic
+chunking with frontier LLMs, 95.7% fewer chunking-stage output tokens, 77.8% cost cut under
+GPT-4.1 pricing (85.6% under Gemini 2.5 Pro). Caveats: the corpus is their benchmark's
+size and format mix - do not generalize the zero-errors figure beyond it; cost figures are
+their enterprise-API context, not your local stack.
+
+WHAT IT MEANS FOR STOMA (my judgment)
+- The normalize-to-PDF-first pattern is a candidate idea, with honest limits: PDF rendering
+  is NOT faithful or deterministic for every format - spreadsheets, formulas, hidden
+  content, and font-dependent layout can lose content silently, without any error for a
+  fail-closed check to catch. So normalization alone does not give Stoma fail-closed
+  extraction; if this pattern is considered, content preservation after rendering and
+  render-time resource bounds need their own evaluation against Stoma's bar.
+- The table-to-prose normalization is a specific, testable chunking choice to evaluate
+  against LTHCM retrieval quality rather than assume.
+
+====================================================================
+2. Jina-OCR-v1: Efficient Document Parsing with Speculative Decoding and Dense Verifiable
+   Rewards
+arXiv:2609.03181 (2 Sep 2026), Baron Garcia et al. - Jina AI (Elastic)
+Coverage: PDF downloaded and read (abstract, architecture, training).
+
+WHAT IT IS / SHOWED
+End-to-end document parsing built to serve on low-budget GPUs: DeepSeek-OCR's compressed
+vision encoder + 3B MoE decoder (~570M ACTIVE params per token - decode compute, not weight
+memory; the full MoE is ~3B), a FastMTP speculative decoding head sharing one draft block
+recursively (K=3), greedy verification keeping decoding lossless. Post-trained with GRPO
+under DENSE VERIFIABLE REWARDS - deterministic formula/table/structure checks with partial
+credit. Author-reported: 91.14 on OmniDocBench v1.6 and 83.4 on olmOCRBench; 2.57 pages/s,
+the highest page throughput in THEIR comparison; on an NVIDIA L4, FastMTP doubles decoding
+speed over greedy AR decoding (their measurement). Weights are published on Hugging Face
+(official page, verified to resolve: https://huggingface.co/jinaai/jina-ocr-v1 ).
+
+WHAT IT MEANS FOR STOMA (my judgment)
+- A candidate parsing component with published weights and published throughput numbers.
+  Whether it fits and runs well on your hardware is unverified - their numbers are on an
+  L4, a different GPU from yours with different capabilities; no hardware-class guarantee
+  is implied. Dense-verifiable-rewards training (deterministic structural checks, partial
+  credit) is also Dokime/Paideia material if a parsing-quality eval track ever appears.
+- Treat throughput and benchmark scores as manufacturer-reported until reproduced.
+
+====================================================================
+3. TeleOCR: Navigating Document Parsing Across Digital and Camera-Captured Documents
+arXiv:2608.12898 (v3, 10 Sep 2026), Cai et al. - China Telecom AI
+Coverage: PDF downloaded and read (abstract, approach, headline scores).
+
+WHAT IT IS / SHOWED
+A unified parsing VLM addressing the two Stoma-relevant regimes in one model:
+deformation-aware learning for camera-captured documents (geometric distortion otherwise
+cascades through layout analysis) and adaptive sampling for complex high-resolution
+layouts. Their overall scores: 96.87 OmniDocBench v1.6, 88.53 Wild-OmniDocBench, 78.41
+PureDocBench - claimed SOTA across both end-to-end and decoupled approaches.
+
+WHAT IT MEANS FOR STOMA (my judgment)
+- The camera-captured case is in Stoma's documented ingestion scope (photos of pages,
+  whiteboards); TeleOCR's deformation-aware training is the reference for why phone photos
+  are a different problem from scans. For orientation only: TeleOCR's author-reported 96.87
+  and Jina-OCR-v1's author-reported 91.14 are both on OmniDocBench v1.6 but come from
+  separate papers with separate setups - not a controlled head-to-head - and TeleOCR's
+  serving footprint is not reported in what I read (a China Telecom press release describes
+  it as a 1.2B model). So: no quality-vs-footprint ranking, just two author-reported scores
+  on a shared benchmark. Code/weights pages verified to resolve:
+  https://github.com/caipeng328/TeleOCR and https://huggingface.co/XingChen-AGI/TeleOCR .
+- Whether either model fits Stoma's streaming/fail-closed constraints is unverified.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- Layout-Guided Masking for GROBID (2609.26381): incremental gains in scientific-PDF
+  ingestion on one tool; lower-priority fit, screened at abstract level.
+- Stockmark-Nemotron JapanDocReader: Japanese-document specialization, out of Stoma's
+  current scope; screened at abstract level.
+
+Sources: https://arxiv.org/abs/2609.24220 , https://arxiv.org/abs/2609.03181 ,
+https://arxiv.org/abs/2608.12898

@@ -1,0 +1,43 @@
+DIANOIA - NICHE PICKS FROM THE 3-MONTH SCREEN (3 of the top 30)
+Unusual papers bearing on iterative deliberation: does deeper iteration keep helping, and
+is the intermediate computation doing real work.
+
+1. Port-Hamiltonian Latent Deliberation
+https://arxiv.org/abs/2609.37351  [ALREADY SENT IN CHAT]
+Claims recurrent reasoning in continuous latent space collapses past ~16 steps (their
+"deliberation drift cliff", 22-62% drops on their logic benchmarks) and that constraining
+the dynamics to an energy-conserving form stayed stable at 32 steps, in their own setup.
+Practical reach: the warning poses an experiment worth running for Dianoia's walk - does
+answer quality keep improving with more expansion steps, or is there a depth where
+re-walking starts amplifying errors? A walk-depth-vs-quality curve would settle whether
+Dianoia has its own drift cliff. If it does, their stability-constraint approach is one
+candidate remedy to look at.
+Honest limit: single-author preprint, no peer review, no code seen, numbers from their own
+setup - a plausible failure-mode warning, not an established result. Dianoia's walk is
+symbolic, not latent recurrence, so the exact failure mode they describe does not apply
+directly.
+
+2. BDH-CQ: In-Context Learning with Recurrent Latent Reasoning
+https://arxiv.org/abs/2608.09888
+A 150M-parameter model that does iterative reasoning in latent space: 29.5% pass@2 on
+ARC-AGI-1 at a computed $0.0007 per task - a cost-efficiency point nothing on the
+leaderboard matched at that cost when checked (4 Aug 2026). The unusually honest part:
+controlled interventions separating "can't execute" from "can't extrapolate".
+Practical reach: evidence that tiny iterative latent compute can do non-trivial abstract
+reasoning at trivial cost - a candidate fast "intuition pass" before Dianoia's verbalized
+walk. The support-intervention design (does a demonstration at the failing complexity
+rescue the failure?) is a clean template for classifying Dianoia's own walk failures.
+Honest limit: the reproduction audit was run by co-authors; latent reasoning gives no
+inspectable trace, and Dianoia's contract depends on inspectable steps. Speed layer at
+most, never a walk replacement.
+
+3. Does Latent Chain-of-Thought Actually Reason? A Unifying Taxonomy
+https://arxiv.org/abs/2610.21182
+Across 21 model-task configurations, shows high accuracy plus decodable intermediate
+answers does NOT prove a latent chain did the reasoning: some chains are placeholders -
+deleting them hurts, but replacing their content changes nothing.
+Practical reach: the deletion/replacement test is directly reusable on Dianoia's walk
+logs. If corrupting a walk step's content never changes the final answer, the walk is
+ritual, not reasoning. That is the audit Dianoia's training-data contract needs.
+Honest limit: their taxonomy is for latent chains; adapting the test to symbolic walks is
+our design work, not their result.

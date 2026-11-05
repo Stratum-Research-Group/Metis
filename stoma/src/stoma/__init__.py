@@ -45,6 +45,11 @@ from stoma.safe_extract import (
 )
 
 from stoma.filters import DeterministicSpanFilter
+from stoma.table_normalizer import (
+    ParsedTable,
+    TableProseNormalizer,
+    normalize_markdown_tables,
+)
 from stoma.crawlers.openreview import (
     CommunityAvailabilityIndex,
     OpenReviewBoundaryCrawler,
@@ -102,6 +107,9 @@ __all__ = [
     "IncompatibleSpaceError",
     "InvalidVectorPayloadError",
     "DeterministicSpanFilter",
+    "ParsedTable",
+    "TableProseNormalizer",
+    "normalize_markdown_tables",
     "OpenReviewBoundaryCrawler",
     "OpenReviewCrawlerConfig",
     "PeerReviewForumRecord",

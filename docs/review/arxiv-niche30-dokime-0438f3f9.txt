@@ -1,0 +1,16 @@
+DOKIME - NICHE PICKS FROM THE 3-MONTH SCREEN (1 of the top 30)
+
+1. The Labeling Problem in Hallucination Detection Benchmarks
+https://arxiv.org/abs/2610.08026
+Shows automated hallucination labelers conflate reference FAITHFULNESS with factual
+CORRECTNESS - the gap being true claims the reference does not contain, which
+faithfulness-strict labelers flag as errors. Judge-vs-human kappa spans 0.021-0.740
+across judges/prompts (human ceiling 0.808); stating the criterion explicitly in the
+prompt improves agreement for most judge-generator pairs (bootstrap CIs exclude zero).
+Code released, with a 900-pair human audit set.
+Practical reach: any LLM-labeled Dokime track must record the labeling CRITERION in the
+run config next to the prompt - "is this hallucinated?" is not a metric until the
+criterion is pinned. Their paired McNemar test on identical items is the right way to
+compare prompt versions, and the small human-labeled reference slice per track is the
+pattern to copy.
+Honest limit: open-domain short-answer QA, answer-level labels; one human reference set.

@@ -1,0 +1,19 @@
+PAIDEIA - NICHE PICK FROM THE 3-MONTH SCREEN (1 of the top 30)
+
+1. Latent On-Policy Self-Distillation (LOPD)
+https://arxiv.org/abs/2608.13040
+On-policy self-distillation normally needs designer-specified privileged artifacts
+(answers, feedback, skills). LOPD makes the privileged context LEARNABLE: a composer
+transforms retrieved experience into compact continuous tokens, trained jointly with the
+student; only the student ships. Author-reported: best aggregate in all ten
+backbone-benchmark comparisons, and matches/beats GRPO-style methods using under 30% of
+their rollout budget. Code verified resolving: https://github.com/bingreeky/LOPD
+Practical reach: a credible middle path for walk-policy/router training - denser
+supervision than pure GRPO without hand-built privileged labels. The learnable-context
+idea also answers "where does the teacher come from when you have a checker but no
+labels" - the situation if paideia gets verifiable rewards from dianoia/krisis.
+Honest limit: rollout-budget saving is rollout count in their setup, not a feasibility
+claim for the home rig; nothing validates it for graph-walk policies specifically. And
+per the 3 Nov review, paideia's real training path currently raises
+TrainingUnavailableError - the prerequisite is a working training backend, not a better
+objective.
