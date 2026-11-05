@@ -104,6 +104,12 @@ class TestSymbolonBenchmarkTask(unittest.TestCase):
 class TestSymbolonRetrievalBenchmarkSuite(unittest.TestCase):
     """Test suite for the 4-arm comparative benchmark execution and reporting."""
 
+    def setUp(self):
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("torch is not installed; skipping Symbolon retrieval benchmark")
+
     def test_run_benchmark_mock_adapter(self):
         """Verify execution of all 4 comparative arms."""
         suite = SymbolonRetrievalBenchmarkSuite(top_k=3, level=4)

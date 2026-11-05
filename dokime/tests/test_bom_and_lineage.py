@@ -220,7 +220,7 @@ def test_evaluate_lineage_regressions(tmp_path: Path):
         "checksums": {"results_jsonl": "def", "dataset_t1": "hash_t1"},
     }))
 
-    with patch("dokime.compare.sha256_file", side_effect=lambda p: "abc" if "root" in str(p) else "def"):
+    with patch("dokime.compare.sha256_file", side_effect=lambda p: "abc" if "run_root" in str(p) else "def"):
         report = evaluate_lineage_regressions("run_regressed", runs_dir=runs_dir)
         assert report["status"] == "REGRESSION"
         assert report["regressions_detected"] == 1
