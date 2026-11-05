@@ -14,6 +14,8 @@ cache:
 core-control-plane-test:
   stage: test
   image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git
   script:
     - echo "=== Metis Core Stack Verification ==="
     - uv sync --python 3.12
@@ -42,6 +44,8 @@ core-control-plane-test:
 heavy-ml-test:
   stage: heavy-ml
   image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_TAG

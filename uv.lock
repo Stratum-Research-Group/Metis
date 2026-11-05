@@ -1614,8 +1614,13 @@ all = [
     { name = "pytest" },
     { name = "pytrec-eval-terrier" },
     { name = "rank-bm25" },
+    { name = "scann" },
     { name = "sentence-transformers" },
     { name = "transformers" },
+]
+ann = [
+    { name = "faiss-cpu" },
+    { name = "scann" },
 ]
 bench = [
     { name = "beir" },
@@ -1625,6 +1630,7 @@ bench = [
     { name = "pandas" },
     { name = "pytrec-eval-terrier" },
     { name = "rank-bm25" },
+    { name = "scann" },
     { name = "sentence-transformers" },
     { name = "transformers" },
 ]
@@ -1639,6 +1645,7 @@ requires-dist = [
     { name = "datasets", marker = "extra == 'all'", specifier = ">=2.14.0" },
     { name = "datasets", marker = "extra == 'bench'", specifier = ">=2.14.0" },
     { name = "faiss-cpu", marker = "extra == 'all'", specifier = ">=1.7.4" },
+    { name = "faiss-cpu", marker = "extra == 'ann'", specifier = ">=1.7.4" },
     { name = "faiss-cpu", marker = "extra == 'bench'", specifier = ">=1.7.4" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "nltk", marker = "extra == 'all'", specifier = ">=3.8.0" },
@@ -1652,6 +1659,9 @@ requires-dist = [
     { name = "pytrec-eval-terrier", marker = "extra == 'bench'", specifier = ">=0.5.10" },
     { name = "rank-bm25", marker = "extra == 'all'", specifier = ">=0.2.2" },
     { name = "rank-bm25", marker = "extra == 'bench'", specifier = ">=0.2.2" },
+    { name = "scann", marker = "extra == 'all'", specifier = ">=1.4.0" },
+    { name = "scann", marker = "extra == 'ann'", specifier = ">=1.4.0" },
+    { name = "scann", marker = "extra == 'bench'", specifier = ">=1.4.0" },
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=2.2.0" },
     { name = "sentence-transformers", marker = "extra == 'bench'", specifier = ">=2.2.0" },
@@ -1659,7 +1669,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'all'", specifier = ">=4.30.0" },
     { name = "transformers", marker = "extra == 'bench'", specifier = ">=4.30.0" },
 ]
-provides-extras = ["bench", "dev", "all"]
+provides-extras = ["bench", "ann", "dev", "all"]
 
 [[package]]
 name = "markdown-it-py"
@@ -1810,10 +1820,16 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "httpx" },
+    { name = "networkx" },
+    { name = "numpy" },
+    { name = "openai" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pyyaml" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "tabulate" },
 ]
 
 [package.metadata]
@@ -1828,10 +1844,16 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "networkx", specifier = ">=3.0" },
+    { name = "numpy", specifier = ">=1.24.0" },
+    { name = "openai", specifier = ">=1.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "scikit-learn", specifier = ">=1.3.0" },
+    { name = "scipy", specifier = ">=1.10.0" },
+    { name = "tabulate", specifier = ">=0.9.0" },
 ]
 
 [[package]]
@@ -2648,6 +2670,21 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
+name = "protobuf"
+version = "7.36.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d9/89/5b8517baa72f84a67b8a307ba953c91057af618bf40bf676f3c03551f8f0/protobuf-7.36.2.tar.gz", hash = "sha256:497d0463ff3316681da6c0b9e8d06cb465d61abce00b613ab42226175644d1bb", size = 512737, upload-time = "2026-09-17T20:07:59.326Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/72/98342feb672507c8f3a69e34b4fa8961f608edba5c1a48a6f47156d92cb5/protobuf-7.36.2-cp310-abi3-macosx_10_9_universal2.whl", hash = "sha256:cbc70b17ee27e28894c7fee8bb04be1abead49e936bc70eb60052531eee2079e", size = 456039, upload-time = "2026-09-17T20:07:51.542Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/ea/91fdf7c2b8bbd49cde056f00a9df6773532987e1c00fe2830b895af95c7e/protobuf-7.36.2-cp310-abi3-manylinux2014_aarch64.whl", hash = "sha256:e11e1f0180583a2af89db6a2ecd9e8dc40aa6d2988ca175bfd0e6d12ea72d74e", size = 344219, upload-time = "2026-09-17T20:07:52.914Z" },
+    { url = "https://files.pythonhosted.org/packages/17/ab/5fd5f8ece73fad885c5a09aa849b32d70472f954ba3a92d3bb5974ea953b/protobuf-7.36.2-cp310-abi3-manylinux2014_s390x.whl", hash = "sha256:f4fee11ec330d238b34a05c9b675f693c20415d1c5bd7d5320cc2f8a798eb9cf", size = 357223, upload-time = "2026-09-17T20:07:53.985Z" },
+    { url = "https://files.pythonhosted.org/packages/db/f3/3996583dd2906297a637af12114deddf7658af6e683fedb83be061983fb5/protobuf-7.36.2-cp310-abi3-manylinux2014_x86_64.whl", hash = "sha256:89f23aa53c24553a2416fd4fd1ec06f74fa42b14b546d8883128813f775bbfd2", size = 343223, upload-time = "2026-09-17T20:07:54.931Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/1b/dcc64f358fcb51811b58ae40b3d28f820725f116d86487cc20bd4b130701/protobuf-7.36.2-cp310-abi3-win32.whl", hash = "sha256:912c1221170e16c08d1f086762f563dd61ff83c18b5fa6652952dfaded66f728", size = 442998, upload-time = "2026-09-17T20:07:55.826Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl", hash = "sha256:a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353", size = 456514, upload-time = "2026-09-17T20:07:57.188Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/04/d52c7016b04b6c5108f26691f9d33ec82a9b65d041f1a9c771137693d618/protobuf-7.36.2-py3-none-any.whl", hash = "sha256:bdb3a345d48db958e6ce1f18e508beb0cc981d64f24088427549c866cd039f1e", size = 179806, upload-time = "2026-09-17T20:07:58.211Z" },
+]
+
+[[package]]
 name = "psutil"
 version = "7.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3379,6 +3416,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/3f/73ccf82579412b4a71c4ca673f10b5f1f888d7cf5af7fe24f27d30307be4/safetensors-0.8.0-cp310-abi3-win32.whl", hash = "sha256:2ddf52eac562eda224f99acfa7889d02968c1fd59a5b011ae7d8137c37e9c02d", size = 342401, upload-time = "2026-06-09T07:52:28.895Z" },
     { url = "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl", hash = "sha256:096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f", size = 355540, upload-time = "2026-06-09T07:52:27.832Z" },
     { url = "https://files.pythonhosted.org/packages/8d/fc/7eedc3510d97878876e32774eebbeb61c43f148a96e915c84229a3e967aa/safetensors-0.8.0-cp310-abi3-win_arm64.whl", hash = "sha256:f7838e5135a406ad3e02efdcb8cf2e5397d368b0154537c4fec682dbc544d452", size = 340500, upload-time = "2026-06-09T07:52:26.745Z" },
+]
+
+[[package]]
+name = "scann"
+version = "1.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "protobuf" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/49/8fd3392977d9aae2277b851190dfcdacb62528bfdd337ee7a24bd820bd0f/scann-1.4.2-cp312-cp312-manylinux_2_27_aarch64.whl", hash = "sha256:3042b599d1ada6c48650663d208359b5ccfcbcbfa4fa75bafb81402e6c87bfa4", size = 9296344, upload-time = "2025-08-29T14:32:33.749Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/f8/6ecec0c496a1f771c6874dbb00f619ab4ac1e434fa7661e4eedc4e959623/scann-1.4.2-cp312-cp312-manylinux_2_27_x86_64.whl", hash = "sha256:c0f45d810e629fdcdf8da546d1e25bde4664d27dcf5c3399aa335b4934a0734c", size = 11579291, upload-time = "2025-08-29T14:32:22.855Z" },
+    { url = "https://files.pythonhosted.org/packages/89/a1/b868924221e7ec8a8c2e7b74ad9fc730fe5554962dc0d56efc2615d03ea3/scann-1.4.2-cp313-cp313-manylinux_2_27_aarch64.whl", hash = "sha256:469a4a907ea09a15e4c25850330377bd9967c29177d836600051caf281e33612", size = 9296343, upload-time = "2025-08-29T14:32:35.436Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/b4/3decfd7039399b6bd9c9fbf0ccda39301bac01c39a09a5a791c8237f5d26/scann-1.4.2-cp313-cp313-manylinux_2_27_x86_64.whl", hash = "sha256:c87e97f91c98d7d1f0bf985b39634e07e1149ba79c20f7dbf9b7b465c94100f2", size = 11579811, upload-time = "2025-08-29T14:32:25.101Z" },
 ]
 
 [[package]]
