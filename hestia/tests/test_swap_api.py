@@ -32,6 +32,14 @@ def _make_dummy_safetensors(path: Path) -> None:
         f.write(b"\x00" * 512)
 
 
+@pytest.fixture(autouse=True)
+def mock_vram():
+    """Mock VRAM queries so tests pass on CPU-only or non-NVIDIA environments."""
+    with patch("hestia.server.get_total_vram_mb", return_value=16384), \
+         patch("hestia.server.get_free_vram_mb", return_value=16384):
+        yield
+
+
 @pytest.fixture
 def test_env(tmp_path: Path):
     """Setup isolated model files, configs, and registry."""
