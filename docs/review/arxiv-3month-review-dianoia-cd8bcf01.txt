@@ -1,0 +1,124 @@
+DIANOIA - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026
+Why these: Dianoia is a deliberative walk (EXPAND/BACKTRACK/ANSWER, contradiction re-check,
+re-walk on conflict) driven by a small local model. The window's latent-reasoning literature
+bears directly on two design questions Dianoia will face: whether iterative deliberation keeps
+helping as it goes deeper, and how you would know the intermediate computation is doing real
+work.
+
+====================================================================
+1. BDH-CQ: In-Context Learning with Recurrent Latent Reasoning
+arXiv:2608.09888 (10 Aug 2026), Engdahl, Kosowski, Chorowski et al. - Pathway (+ Bielik AI, NYU)
+Coverage: full HTML text read (method, evaluation, controlled-intervention sections).
+
+WHAT IT IS
+A 150M-parameter reasoning model that combines in-context learning with recurrent latent
+reasoning: demonstrations update a recurrent memory at inference time, then the query is
+solved by iterative computation in a high-dimensional latent space - no verbalized reasoning
+trace, no parameter updates at inference, no task identifiers.
+
+WHAT IT ACTUALLY SHOWED (their numbers)
+- 29.5% pass@2 on the public ARC-AGI-1 evaluation set (400 tasks) - an accuracy result -
+  at an author-computed $0.00070 per task (~0.85 H200 GPU-seconds at $3/H200-hour, their
+  hardware and pricing assumptions, not your real cost). Their cost-efficiency claim: no
+  plotted leaderboard system (as of 4 Aug 2026) matched that accuracy at equal or lower
+  reported cost. Their ~57x-cheaper-than-GPT-5.6-Luna comparison and the price-revision
+  adjustment are author-reported against ARC Prize's published figures, not independent
+  live pricing.
+- A black-box audit reproduced 29.5% pass@2 - but note the auditors are co-authors from
+  Bielik and NYU, so "independent" means independent of the deployment pipeline, not of the
+  author list.
+- The unusually honest part: controlled interventions separating execution capacity from
+  extrapolation. Propagation/copying stay perfect on held-out outputs; ordering collapses
+  from near-saturated at length 5 to 1/24 at length 8; nesting collapses at depth 5.
+  Matched support (one demonstration at test complexity) rescues nesting (19/24 -> 24/24),
+  showing that cliff is extrapolation failure, while ordering keeps an execution bottleneck.
+
+LIMITS
+- 29.5% pass@2 is well below frontier accuracy on ARC-AGI-1 - this is a cost-efficiency
+  frontier claim, not a state-of-the-art accuracy claim. ARC-AGI-1, not ARC-AGI-2.
+- Trained on a private-plus-public ARC-style mixture; the audit's ConceptARC profile shows
+  inconsistent rule application on some families (Copy: 19/30 test pairs but 2/10 strict
+  tasks).
+
+WHAT IT MEANS FOR DIANOIA (my judgment)
+- Existence proof that iterative latent computation at 150M parameters can do non-trivial
+  abstract reasoning at very low author-computed cost - relevant if Dianoia ever wants a
+  fast latent "intuition" pass before the verbalized walk. But Dianoia's contract depends on INSPECTABLE
+  steps (walk logs as training data, NLI contradiction checks); latent reasoning gives no
+  trace to check. Treat as a possible speed layer, not a replacement for the walk.
+- The methodological import is bigger than the model: their support-intervention design
+  (does a demonstration at the failing complexity rescue the failure?) is a clean way to
+  separate "can't execute" from "can't extrapolate" - reusable when Dianoia's walk failures
+  need classifying.
+
+====================================================================
+2. Port-Hamiltonian Latent Deliberation: Mitigating the Deliberation Drift Cliff in
+   Test-Time Compute Scaling
+arXiv:2609.37351 (29 Sep 2026), Zeyu Jia - Tianjin Medical University / Tianjin University
+Coverage: PDF downloaded and read (abstract, framework, results); claims NOT independently
+replicated - no code link seen and no independent replication, so treat the specific
+numbers as claim-level.
+
+WHAT IT CLAIMS
+Iterative deliberation in continuous latent space has a failure mode they call the
+Deliberation Drift Cliff: unconstrained recurrent latent models improve at short horizons
+(K<=4 steps) then collapse at deeper ones (K>=16), dropping 22-62% across standard logical
+benchmarks, degenerating toward chance. Their fix: constrain the latent dynamics to
+Port-Hamiltonian form (energy-conserving structure plus explicit dissipation), giving
+Lyapunov-stable long-range deliberation. Claimed result: 35.27% +/- 3.07% at K=32 with
+preserved representation rank, vs a 36.87% drift cliff unconstrained; a purely
+curl-free variant kills drift (3.40%) but bottlenecks expressivity.
+
+LIMITS
+- No peer review, no code link seen in what I read, and the headline percentages come from
+  their own setup and benchmark protocol - claim-level until independently replicated.
+
+WHAT IT MEANS FOR DIANOIA (my judgment)
+- Scope note: the drift cliff is a result about CONTINUOUS latent recurrence; it does not
+  transfer as a confirmed warning to Dianoia's symbolic walk (graph nodes, NLI checks).
+  Whether symbolic re-walking degrades with depth is a separate, open question - if it ever
+  matters, a walk-depth-vs-answer-quality curve in Dokime would answer it; that is a
+  possible experiment, not a required new track.
+- If Dianoia ever adds a latent deliberation component, this paper argues for
+  contractive/dissipative dynamics (or an explicit stability constraint) as the design
+  requirement - their claim, not a confirmed law.
+
+====================================================================
+3. Does Latent Chain-of-Thought Actually Reason? A Single, Unifying Taxonomy for Latent
+   Reasoning
+arXiv:2610.21182 (15 Oct 2026), Qiu et al. - UCSD / NYU / UVA / Adobe Research
+Coverage: PDF downloaded and read (abstract, method, taxonomy construction).
+
+WHAT IT IS / SHOWED
+High task accuracy and decodable intermediate answers do NOT establish that a latent chain
+did the reasoning. Across 21 model-task configurations (3 training recipes, 3 reasoning
+tasks, 2 backbones), they combine chain DELETION with content REPLACEMENT (noise, dataset
+mean, another problem's vectors) plus probes and trajectory analysis, and build a six-type
+taxonomy of latent chains. Key finding pattern: some chains are placeholders - deleting
+them hurts performance, but replacing their content leaves answers unchanged - i.e. the
+chain provides compute steps without carrying task content. They leave unresolved cases
+unclassified rather than forcing labels.
+
+WHAT IT MEANS FOR DIANOIA (my judgment)
+- Directly reusable test discipline: Dianoia's walk logs are meant to be training data and
+  an audit trail. This paper's deletion/replacement logic is the pattern for testing
+  whether a trace step actually mediates the answer - but read null results carefully:
+  content corruption leaving the answer unchanged does not by itself prove a step is
+  ritual; it can also be redundancy, robustness, or an irrelevant step in one case.
+  Evidence for a causal role needs controlled, task-relevant content interventions across
+  multiple cases, not a single null.
+- Also the honest-taxonomy posture is worth copying in Dokime reports: leave cases
+  unclassified when the tests do not discriminate.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- GradCuit (2608.02585): test-time optimization of latent states via credit-assigned
+  gradient flow with frozen parameters. A different mechanism from Dianoia's search walk;
+  the credit-assignment idea is noted for Paideia instead. Abstract-level screening.
+- CausalWM, SCOUT and other world-model reasoning papers: embodied/planning domains, not
+  Dianoia's graph-walk setting. Screening judgment at abstract level.
+- "From Chain-of-Thought to Loops" (2610.11472): looped-transformer latent reasoning;
+  overlapped by the taxonomy and drift-cliff papers above for Dianoia's purposes.
+
+Sources: https://arxiv.org/abs/2608.09888 , https://arxiv.org/abs/2609.37351 ,
+https://arxiv.org/abs/2610.21182

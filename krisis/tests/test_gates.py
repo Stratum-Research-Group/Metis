@@ -47,6 +47,52 @@ def test_unsupported_claim_rejection(grounded_profile):
     assert "unsupported claim cl2" in detail
 
 
+def test_contradicted_claim_gate_rejection(grounded_profile):
+    evaluator = GateEvaluator(grounded_profile)
+    cand = Candidate(
+        id="c1",
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
+        claims=[
+            Claim(claim_id="cl1", verdict="supported", calibrated_confidence="0.950000"),
+            Claim(claim_id="cl2", verdict="contradicted", calibrated_confidence="0.900000"),
+        ],
+    )
+    passed, gate, detail = evaluator.evaluate_candidate(cand)
+    assert passed is False
+    assert gate == "contradiction"
+    assert "contradicted claim cl2" in detail
+
+
+def test_insufficient_evidence_claim_rejection(grounded_profile):
+    evaluator = GateEvaluator(grounded_profile)
+    cand = Candidate(
+        id="c1",
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
+        claims=[
+            Claim(claim_id="cl1", verdict="insufficient_evidence", calibrated_confidence="0.900000"),
+        ],
+    )
+    passed, gate, detail = evaluator.evaluate_candidate(cand)
+    assert passed is False
+    assert gate == "per_claim_support"
+    assert "insufficient evidence for claim cl1" in detail
+
+
+def test_unfaithful_claim_rejection(grounded_profile):
+    evaluator = GateEvaluator(grounded_profile)
+    cand = Candidate(
+        id="c1",
+        gate_results=GateResults(access=True, provenance=True, contradiction=True, citation_resolution=True),
+        claims=[
+            Claim(claim_id="cl1", verdict="unfaithful", calibrated_confidence="0.900000"),
+        ],
+    )
+    passed, gate, detail = evaluator.evaluate_candidate(cand)
+    assert passed is False
+    assert gate == "per_claim_support"
+    assert "unfaithful to reference context" in detail
+
+
 def test_low_confidence_claim_rejection(grounded_profile):
     evaluator = GateEvaluator(grounded_profile)
     cand = Candidate(

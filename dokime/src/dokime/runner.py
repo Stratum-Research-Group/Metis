@@ -230,6 +230,7 @@ def run_evaluation(
         branch_point=config.branch_point,
         parameter_diff=parameter_diff,
         dataset_boms=dataset_boms,
+        labeling_criterion=config.labeling_criterion,
     )
 
     return {

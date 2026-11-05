@@ -58,4 +58,26 @@ def test_create_manifest(tmp_path: Path):
     assert "dataset_test-task" in manifest["checksums"]
     assert manifest["checksums"]["results_jsonl"] == sha256_file(results_file)
     assert manifest["checksums"]["dataset_test-task"] == sha256_file(dataset_file)
+
+
+def test_create_manifest_with_labeling_criterion(tmp_path: Path):
+    """Verify labeling_criterion is captured in manifest (arXiv:2610.08026)."""
+    results_file = tmp_path / "results.jsonl"
+    results_file.write_text('{"query_id": "1", "score": 1.0}\n', encoding="utf-8")
+    manifest_file = tmp_path / "manifest.json"
+
+    manifest = create_manifest(
+        run_id="run_criterion_test",
+        model_ids=["test-model"],
+        task_ids=["test-task"],
+        seed=42,
+        temperature=0.0,
+        max_tokens=256,
+        results_jsonl_path=results_file,
+        dataset_paths={"test-task": None},
+        labeling_criterion="reference_faithfulness",
+        output_path=manifest_file,
+    )
+
+    assert manifest["labeling_criterion"] == "reference_faithfulness"
     assert manifest_file.exists()

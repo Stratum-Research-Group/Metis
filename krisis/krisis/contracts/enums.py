@@ -28,6 +28,9 @@ class Reason(str, Enum):
     CANCELLED = "CANCELLED"
     AMBIGUOUS_PREDICTION_SET = "AMBIGUOUS_PREDICTION_SET"
     CONFORMAL_EMPTY_SET = "CONFORMAL_EMPTY_SET"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    UNFAITHFUL_TO_REFERENCE = "UNFAITHFUL_TO_REFERENCE"
+    FACTUAL_CONTRADICTION = "FACTUAL_CONTRADICTION"
 
 
 class GateType(str, Enum):
@@ -46,6 +49,8 @@ class ClaimVerdict(str, Enum):
     UNSUPPORTED = "unsupported"
     CONTRADICTED = "contradicted"
     UNVERIFIED = "unverified"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    UNFAITHFUL = "unfaithful"
 
 
 class ProfileId(str, Enum):

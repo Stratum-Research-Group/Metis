@@ -1,0 +1,48 @@
+DIOPTRA - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026
+One paper worth your time. Why: Dioptra is your model-inspection workbench (probing,
+lenses, interventions, evidence records; TransformerLens/nnsight-first per the 17 Oct build
+spec; repo state not re-checked for this review). This window's clearest worked example of
+that exact toolset applied end-to-end is about music models - which also makes it KraftBeat-
+adjacent.
+
+====================================================================
+1. MI-MIDI: Mechanistic Interpretability of Text-to-MIDI Generation Models via Probing,
+   Lenses and Steering
+arXiv:2608.06638 (6 Aug 2026), Pocwiardowski & Modrzejewski - Warsaw University of Technology
+Coverage: PDF downloaded and read (abstract, methods summary, headline findings).
+
+WHAT IT IS / SHOWED
+Mechanistic interpretability of SYMBOLIC music generation (the field has concentrated on
+audio models). Two public text-to-MIDI systems of contrasting design: the purpose-built
+encoder-decoder text2midi, and MIDI-LLM (Llama 3.2 1B extended with MIDI tokens). Methods:
+linear probing, logit and tuned lenses, activation patching, difference-in-means steering.
+Findings (author-reported): pitch, instrumentation, harmony and texture are linearly
+decodable in both models; the two architectures form that structure differently - text2midi
+refines predictions gradually across depth, while MIDI-LLM works largely in its inherited
+TEXTUAL basis before a sharp late rotation into the musical vocabulary, with patching
+showing a matching late attenuation of prompt-driven instrument transfer. Steering produces
+bidirectional changes in register and polyphony in both systems, and tempo/energy in
+MIDI-LLM; their two-orientation protocol separates directional control from noise.
+
+WHAT IT MEANS FOR DIOPTRA (my judgment)
+- A compact reference pipeline for Dioptra's evidence-record design: probe -> lens ->
+  patch -> steer on the SAME phenomenon, with each method's output logged so conclusions
+  cite which method saw what. Their contrast structure (two architectures, same analyses)
+  is also the right template for Dioptra comparison reports: the interesting output is not
+  "structure exists" but WHERE and HOW differently it forms per architecture.
+- Concrete caveat worth copying into Dioptra's method library: their two-orientation
+  steering protocol exists because steering vectors can look effective through
+  distributional side effects; any Dioptra steering feature needs an equivalent control.
+- KraftBeat cross-reference (flagged, not developed here): this is direct evidence about
+  what text-to-MIDI models expose for control - relevant if KraftBeat's MIDI path ever
+  wants steering-level control rather than prompt-level control.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- The broader mech-interp swarm this window (CoT activation patching 2608.22332, numerical-
+  reasoning structure in LLaMA 2608.18419, PhysSAE, AI-text-detection neurons): solid
+  single-phenomenon studies, but Dioptra's need is toolset and protocol references, and
+  MI-MIDI covers the widest method range in one paper. Screening judgment at abstract
+  level, not full-text reads.
+
+Sources: https://arxiv.org/abs/2608.06638

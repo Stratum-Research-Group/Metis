@@ -104,6 +104,49 @@ class TestRetrieverParity(unittest.TestCase):
         self.assertEqual(len(res_mined.ranked_doc_ids), 4)
         self.assertEqual(len(res_oracle.ranked_doc_ids), 4)
 
+    def test_type_conditioned_perishability_decay(self):
+        """Verify type-conditioned perishability attenuates ephemeral memories while preserving permanent facts."""
+        temporal_corpus = [
+            {
+                "id": "mem_permanent",
+                "title": "System Architecture",
+                "text": "Core security policy is fail-closed with zero loopback bypass.",
+                "perishability": 0.0,  # Permanent invariant
+                "utility_horizon": 86400.0,
+                "created_at": 1000.0,
+            },
+            {
+                "id": "mem_ephemeral",
+                "title": "Temporary Session State",
+                "text": "Current working directory is /tmp/session_cache.",
+                "perishability": 1.0,  # Ephemeral details
+                "utility_horizon": 60.0,  # 60s horizon
+                "created_at": 1000.0,
+            },
+        ]
+        embs = np.array([
+            [1.0, 0.0, 0.0, 0.0] + [0.0] * 12,
+            [1.0, 0.0, 0.0, 0.0] + [0.0] * 12,
+        ], dtype="float32")
+        q = np.array([1.0, 0.0, 0.0, 0.0] + [0.0] * 12, dtype="float32")
+
+        retriever = LTHCMRetriever(d_model=self.d_model)
+        retriever.index(temporal_corpus, embeddings=embs)
+
+        # 1. At t=1000 (creation time), both have equal relevance
+        cfg_t0 = RetrievalConfig(mode="flat", top_k=2, enable_perishability_decay=True, current_timestamp=1000.0)
+        res_t0 = retriever.search(q, config=cfg_t0)
+        self.assertAlmostEqual(res_t0.scores[0], res_t0.scores[1], places=4)
+
+        # 2. At t=1300 (300 seconds later = 5 half-lives for ephemeral), ephemeral has decayed drastically
+        cfg_t1 = RetrievalConfig(mode="flat", top_k=2, enable_perishability_decay=True, current_timestamp=1300.0)
+        res_t1 = retriever.search(q, config=cfg_t1)
+        # mem_permanent should rank #1
+        self.assertEqual(res_t1.ranked_doc_ids[0], "mem_permanent")
+        self.assertAlmostEqual(res_t1.scores[0], 1.0, places=4)
+        # mem_ephemeral should have decayed: exp(- 1.0 * 300 / 60) = exp(-5) ~ 0.0067
+        self.assertLess(res_t1.scores[1], 0.05)
+
 
 if __name__ == "__main__":
     unittest.main()

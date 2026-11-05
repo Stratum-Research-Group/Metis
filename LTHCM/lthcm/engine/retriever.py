@@ -51,6 +51,8 @@ class RetrievalConfig:
     ann_backend: str = "exact"  # "exact", "scann", "faiss"
     ann_leaves_to_search: Optional[int] = None
     ann_reorder_k: Optional[int] = None
+    enable_perishability_decay: bool = False
+    current_timestamp: Optional[float] = None
     seed: int = 42
 
 
@@ -126,7 +128,8 @@ class LTHCMRetriever:
             did = str(d.get("id", d.get("doc_id", f"doc_{idx}")))
             title = str(d.get("title", did)).strip()
             text = str(d.get("text", d.get("paragraph", d.get("content", "")))).strip()
-            item = {"id": did, "title": title, "text": text, "idx": idx}
+            item = dict(d)
+            item.update({"id": did, "title": title, "text": text, "idx": idx})
             self.docs.append(item)
             self.doc_map[did] = item
             self.doc_titles.append(title)
@@ -270,6 +273,22 @@ class LTHCMRetriever:
             traces["ann_backend"] = "exact"
 
         traces["stage1_latency_s"] = time.perf_counter() - t0
+
+        # Apply type-conditioned perishability decay if enabled (ScrubJay-MEM, arXiv:2608.04746)
+        if cfg.enable_perishability_decay:
+            now = cfg.current_timestamp if cfg.current_timestamp is not None else time.time()
+            decay_weights = np.ones(len(self.docs), dtype=np.float32)
+            for i, d in enumerate(self.docs):
+                pi = float(d.get("perishability", 0.0))
+                tau = float(d.get("utility_horizon", 3600.0))
+                created = float(d.get("created_at", now))
+                if pi > 0.0 and tau > 0.0:
+                    dt = max(0.0, now - created)
+                    decay_weights[i] = float(np.exp(-(pi * dt) / tau))
+            base_sims = base_sims * decay_weights
+            ranked_seed_indices = np.argsort(base_sims, kind="stable")[::-1]
+            traces["perishability_decay_applied"] = True
+
         traces["top_seed_id"] = self.docs[ranked_seed_indices[0]]["id"]
         traces["top_seed_sim"] = float(base_sims[ranked_seed_indices[0]])
 

@@ -143,6 +143,7 @@ def create_manifest(
     branch_point: str | None = None,
     parameter_diff: dict[str, Any] | None = None,
     dataset_boms: dict[str, Any] | None = None,
+    labeling_criterion: str | None = None,
 ) -> dict[str, Any]:
     """Build and write the run manifest JSON file."""
     checksums: dict[str, str] = {}
@@ -190,6 +191,7 @@ def create_manifest(
         "seed": seed,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "labeling_criterion": labeling_criterion,
         "prompt_template_path": prompt_template_path,
         "prompt_template_hash": prompt_hash,
         "checksums": checksums,

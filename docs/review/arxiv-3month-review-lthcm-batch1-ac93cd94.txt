@@ -1,0 +1,149 @@
+LTHCM - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026 (BATCH 1 OF THE THREE-MONTH REVIEW)
+Two papers worth your time for LTHCM out of the 42,755-paper pool. Why these two: both attack
+the exact question LTHCM answers (how an assistant remembers over long horizons), one from the
+weight side, one from the external-store side, and both have real numbers, not just claims.
+
+====================================================================
+1. Continual Learning Mechanisms Compose for Long-Horizon Memorization
+arXiv:2609.06986 (7 Sep 2026), Zhang, Zhang, Khashabi, Shu - Johns Hopkins
+Attention: #2 Hugging Face daily paper of 16 Sep (372 upvotes)
+Coverage: full HTML text read (method, protocol, main results).
+
+WHAT IT IS
+A study of whether a language model can memorize information that arrives over time by
+updating its weights, without keeping any raw earlier data and without a task label at test
+time. They call this long-horizon memorization: 100 small query-answer tasks learned one
+after another by continual fine-tuning. They built three 100-task datasets (arbitrary symbol
+associations, LLM-generated fictional facts, natural questions filtered from public QA) and
+systematically composed known continual-learning mechanisms: a data anchor (generative
+replay), a function anchor (self-distillation), a weight anchor (importance regularization,
+EWC/SI family), crossed with two LoRA allocation rules (shared vs merged LoRA).
+
+WHAT IT ACTUALLY SHOWED (their numbers)
+- Naive sequential fine-tuning: 1.2% average final retention after 100 tasks.
+- Best single mechanism alone: 8.1%.
+- Best composition (all three anchors + merged LoRA): 34.9% average final retention, top-3 on
+  all three datasets, 28x over naive.
+- The data anchor (replay) and merged LoRA are the two biggest gains and interact
+  super-additively on all three datasets (measured with a proper factorial experiment, not
+  vibes). Merged LoRA = fold each task's adapter into the dense weights, start a fresh one.
+- Method note: they searched the composition space with task-level successive halving before
+  the factorial run - a cheap screen then a careful confirm, same discipline as your
+  text-vs-graph protocol preference.
+
+LIMITS
+- This is memorization of associations, not reasoning or generalization.
+- Even the best composition answers only about a third of previously learned queries correctly
+  after 100 tasks (34.9% average final retention, measured as accuracy over all learned tasks
+  after the last update). Weight-space memory at a 100-task horizon is lossy, full stop.
+- 100 tasks is the longest horizon tested; nothing says the curve holds at 1,000.
+- 100 tasks here means 100 small query-answer task sets, not 100 individual facts.
+- Scale (PDF-verified): base model Qwen3-4B-Base. Symbol-QA: 10,000 random key-value
+  associations (100 per task). LLM-QA: 10,000 generated pairs across 100 fictional topics
+  (100 per task). Real-QA: 5,000 natural QA pairs filtered so the base model cannot already
+  answer them (50 per task). So this is a 4B model memorizing thousands of small associations,
+  not frontier-scale facts.
+
+WHAT IT MEANS FOR LTHCM (my judgment, not the paper's)
+- Consistent with LTHCM's core design choice (external, inspectable memory instead of baking
+  knowledge into weights): the strongest weight-side method in a careful study still recovers
+  only about a third of learned associations after 100 sequential updates. But note the paper
+  does not test retrieval or external memory stores - it says they exist and sets them aside -
+  so this is not comparative evidence that an external store wins. It only bounds what
+  weight-only memory can do.
+- The continual-update recipe (merged LoRA + generative replay + self-distillation +
+  importance regularization) and the 100-task retention datasets are Paideia and Dokime
+  material; they are carried in those project files, not here.
+
+====================================================================
+2. Caching for the Future: Scrub Jay Episodic Memory Principles for Agent Memory Systems
+arXiv:2608.04746 (5 Aug 2026), Bhandari, Wadhwani, Kumar, Narang - BITS Pilani
+Coverage: full HTML text read (architecture, mechanisms, headline results).
+
+WHAT IT IS
+An agent memory architecture (ScrubJay-MEM) copied from how scrub jays cache food: each
+memory is stored as a What-Where-When tuple plus a perishability coefficient pi and a utility
+horizon tau, auto-classified at write time (LLM prompt, keyword fallback). Retrieval scores
+combine content similarity, context similarity, temporal utility, and a graph bonus with
+query-adaptive weights; decay is exponential per memory with type-conditioned rates (stable
+facts decay slowly, ephemeral details fast). A prospective buffer preloads anticipated
+memories; a retroactive step revises decay parameters when new information arrives at O(1)
+LLM calls per update.
+
+WHAT IT ACTUALLY SHOWED (their numbers)
+- On their new Temporal Generalization Test (TGT: 20 instances, 96 memories each across four
+  perishability classes, 66 queries per instance at five retention intervals: I1 (0-1
+  sessions), I2 (3-5, seen), I3 (8-12, UNSEEN), I4 (20-25, seen), I5 (40-60, unseen);
+  1,320 queries total; single seed; qwen3:30b generation; llama3.2:3b judge, chosen
+  cross-family to avoid self-preference).
+- Their metric (Eq. 16, verified against the rendered PDF equation image, so the
+  transcription is certain): GenGap = Acc(I2) + Acc(I4) - 2*Acc(I3).
+- SIGN INCONSISTENCY IN THE PAPER - flagged, not resolved. With this formula, positive
+  GenGap means accuracy at the unseen interval I3 is BELOW the mean of the two seen-interval
+  accuracies (GenGap = 2 x (chord - Acc(I3))). The paper's prose disagrees with itself:
+  the definition paragraph says it "measures how far the system's accuracy at the unseen
+  interpolation interval falls below the linear interpolation" (consistent with the formula:
+  positive = falls below) but then says "Positive GenGap indicates robust generalization -
+  accuracy at the unseen interval at or above the seen-interval baseline" (contradicts the
+  formula), and Finding 1 says the baselines' "negative GenGap" means their I3 accuracy is
+  "below the linear interpolation" (backwards from the formula). The stated formula and the
+  quoted interpretation disagree in sign. With this formula, positive means unseen accuracy
+  below mean seen accuracy. I cannot treat its sign as evidence of good generalization
+  without resolving that inconsistency.
+- Author-reported scores (no sign interpretation attached): ScrubJay-MEM +0.108; flat-
+  retrieval baselines negative (hybrid RRF -0.054, no-temporal-model -0.022, flat-recency
+  -0.046); LLM-only control +0.181, which the paper itself discounts as an artifact of
+  near-random answering having no systematic per-interval bias. The decay ablation is
+  reported as collapsing GenGap from +0.108 to +0.019 (5.7x) while staleness accuracy stays
+  at 82.3% - reported here as the authors' numbers; under the contradictory sign definition
+  I do not infer a direction of improvement from it.
+- What survives independently of the GenGap question: on MemoryAgentBench EventQA-64k (a
+  separate, pre-existing benchmark, not theirs), ScrubJay-MEM improves F1 over the compared
+  baselines (their Table 1), and the portable design idea - type-conditioned perishability
+  decay over stored memories - does not depend on TGT's metric definition.
+- Benchmark scale caveats: 20 instances and 1,320 queries is small; TGT data was
+  LLM-generated (qwen3:30b) with a 3B judge; single seed. Real within this benchmark, not
+  independently validated.
+- On MemoryAgentBench EventQA-64k under a llama3.1:8b backbone: 61.58 F1, +2.66 over Mem0,
+  +3.09 over Qwen3-Embedding-4B, best of the systems compared.
+- Their own contextual caveats: the LLM-only control's +0.181 GenGap is discussed by them
+  as a low-accuracy artifact; a RAG-temporal variant beats their system on combined accuracy
+  at the cost of one LLM call per query; TGT data was LLM-generated (qwen3:30b) with a
+  llama3.2:3b cross-family judge.
+
+LIMITS (several are theirs, stated plainly in the paper)
+- Gains narrow under stronger backbones and reverse on fact-consolidation tasks. The win is
+  scoped to temporal reasoning over perishable facts, not general memory quality.
+- The evaluated v1 substitutes parameter-free surrogates at three points where the blueprint
+  describes trained components: fixed fusion weights, an LLM-prompt perishability classifier
+  with keyword fallback, and heuristic keyword-triggered query weights. The biology framing is
+  nice; the shipped mechanism is engineering heuristics.
+- TGT is their own benchmark, not independently replicated - and its headline metric has
+  the unresolved internal sign inconsistency flagged above. Treat the TGT/GenGap claims as
+  unestablished until the authors clarify which convention Eq. 16 intends.
+
+WHAT IT MEANS FOR LTHCM (my judgment)
+- The single most portable idea: per-memory, type-conditioned temporal decay as a first-class
+  field - "meeting room today" vs "Nick's profession". Grounding against current code: the
+  Metis repo review delivered today (HEAD 88d9166) found LTHCM ships a default-on causality
+  filter, but that is a "not from the future" timestamp check on candidates, not
+  perishability-aware scoring of stored items by content type. So the proposal gap is real
+  against that reviewed source; I did not re-read the retrieval code fresh for this file.
+- The TGT/GenGap eval construction is Dokime material and is carried in that file.
+- Do not import the architecture. The transferable parts are the perishability field and the
+  query-adaptive retrieval weighting; whether their hypergraph adds anything over LTHCM's
+  existing structure is untested and I am not claiming it.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- The many RAG-framework papers in the window (FashionKG-RAG, X-KGRank, CoAL-RAG, GEMS-RAG,
+  TCC-RAG etc.): domain-specific reranking pipelines passed over at abstract level in the
+  triage; they were not full-text read, so this is a screening judgment, not a verdict.
+- "Beyond the Timeline: Augmenting Long-Video Memory with Grounded Entity Biographies"
+  (30 Sep, 114 upvotes): promising (entity-centric memory consolidation) but video-specific;
+  kept as a lead for a later batch if a full read changes that.
+- VoxMem (benchmarking multimodal memory in audio LMs, 26 Sep): benchmark for audio models,
+  closer to KraftBeat/audio evaluation than to LTHCM; noted for the audio file instead.
+
+Sources: https://arxiv.org/abs/2609.06986 , https://arxiv.org/abs/2608.04746 ,
+attention ranks from https://paperpulse.ifsp.dev/month/2026-09

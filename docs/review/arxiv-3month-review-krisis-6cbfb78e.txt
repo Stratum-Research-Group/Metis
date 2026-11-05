@@ -1,0 +1,90 @@
+KRISIS - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026
+Two papers worth your time for Krisis. Why these: the Krisis spec (v4 line, 30 Sep) builds
+selection around a claim-level support verifier with abstention. Both papers stress-test
+that exact paradigm and say where it breaks. Note on currency: today's Metis repo review
+(HEAD 88d9166) shows Krisis wired as an input trust boundary rather than an active
+retrieval verifier, so these recommendations target the spec's direction, not current code.
+
+====================================================================
+1. Where Does Retrieval-Based Open-Ended Evaluation Fail? Automatic Taxonomy Induction from
+   Long-Form Medical Answer Factuality Verification
+arXiv:2609.30467 (24 Sep 2026), Huang et al. - Johns Hopkins CLSP
+Coverage: PDF downloaded and read (abstract, intro, protocol, error taxonomy, results tables).
+
+WHAT IT IS
+A stress test of decompose-then-verify (FActScore/MedScore-style: split a long answer into
+atomic claims, retrieve evidence, verify each claim) in open-ended medical QA (MedExpert,
+clinician-annotated), plus a model-agnostic error taxonomy: retrieval-stage failures
+(irrelevant evidence, scope mismatch, trustworthiness, polarity, chunking) vs
+verification-stage failures (wrong evidence selection, comprehension failure, insufficient
+reasoning, overconfidence, inconsistency, hallucination).
+
+WHAT IT ACTUALLY SHOWED (their numbers, PDF-verified)
+- Best verifier recall of clinician-flagged errors on their MedExpert-gold subset (gold
+  evidence guaranteed present in the corpus): 34.9% (Mistral-Small-24B); GPT-5.4 25.6%
+  recall / 35.2% F1; medically fine-tuned MedGemma-27B 16.3%. Retriever ablation recalls:
+  MedCPT 19.8, RRF-2 24.4, RRF-4 18.6.
+- The collapse persists across model scaling, reasoning effort, medical fine-tuning, and
+  corpus expansion - they argue it is structural to retrieve-then-verify in the open-ended
+  regime, not stale components.
+- They separate "comprehensiveness" (gold evidence may not exist in any corpus) from
+  "identifiability" (it exists but is buried); identifiability improves as retrievers
+  improve, comprehensiveness does not.
+
+LIMITS
+- Medical domain. The taxonomy is induced with a human-in-the-loop LLM-as-judge pipeline:
+  it needs no gold answers, but that does not mean truth from nothing - human review and
+  expert validation remain the ground for the induced categories, and the inducing judge is
+  itself the class of system under study (they disclose this).
+
+WHAT IT MEANS FOR KRISIS (my judgment)
+- If Krisis grows the spec's claim-level support verifier, this paper maps its failure
+  surface. One nuance to design for: under a binary supported/unsupported policy, "claim
+  false" and "evidence missing or buried" collapse into the same outcome. Krisis's
+  abstention helps only if the verifier can reliably RECOGNIZE insufficient evidence - and
+  this paper's verification-stage categories (wrong evidence selection, comprehension
+  failure, overconfidence) are exactly the ways that recognition fails. The taxonomy is a
+  ready-made fixture list for Krisis's abstain path.
+- The retrieval/verification split also bounds what any support-verifier accuracy claim can
+  mean: measure and report the two stages separately, or the number conflates them.
+
+====================================================================
+2. The Labeling Problem in Hallucination Detection Benchmarks: An Empirical Evaluation
+arXiv:2610.08026 (6 Oct 2026), Valjakka et al. - University of Helsinki
+Code: https://github.com/jova486/LPHB
+Coverage: PDF downloaded and read (abstract, design, main results table, prompt ablations).
+
+WHAT IT IS
+Hallucination labelers compare generated answers against reference answers, which conflates
+two different criteria: reference FAITHFULNESS (every claim supported by the reference) vs
+factual CORRECTNESS (no false claims). The gap between them is real claims the reference
+does not happen to contain: a factually correct, well-supported-in-the-world answer can be
+unfaithful to an incomplete reference, and faithfulness-strict labelers flag it anyway.
+They audit automated labelers against 900 human-labeled QA pairs (3 datasets x 3 generator
+models; human inter-annotator kappa 0.808, 95% CI [0.729, 0.879]).
+
+WHAT IT ACTUALLY SHOWED (their numbers, PDF-verified)
+- Judge-vs-human kappa ranges from 0.021-0.306 (GPT-5.4, faithfulness-oriented prompt) up to
+  0.693-0.740 (Claude Opus 4.7), against the 0.808 human ceiling.
+- Faithfulness-approximating labelers are FALSE-POSITIVE-DOMINANT against a
+  factual-correctness target - they over-flag correct answers whose true claims are absent
+  from the reference.
+- Switching the prompt's stated criterion from faithfulness to factual correctness improves
+  agreement with humans for most judge-generator pairs; bootstrap CIs for the kappa
+  difference exclude zero in all three primary comparisons. A factorial ablation isolates
+  the criterion choice, not prompt elaboration, as the driver.
+
+LIMITS
+- Open-domain short-answer QA; answer-level labels, not claim-level; one human reference set.
+
+WHAT IT MEANS FOR KRISIS (my judgment)
+- Krisis's spec already separates consistency from correctness; this paper is evidence the
+  separation is load-bearing. A support verifier asked "is this claim supported?" needs the
+  reference scope stated: supported BY THIS EVIDENCE SET (faithfulness) and NOT FALSE
+  (correctness) are different verdicts with different error shapes, and conflating them
+  manufactures false positives against correct answers. The eligibility filter's abstain
+  semantics should say which criterion triggers abstention.
+- Their prompt-criterion methodology (same items, paired McNemar test between prompt
+  variants) is the right way to A/B any Krisis policy wording change.
+
+Sources: https://arxiv.org/abs/2609.30467 , https://arxiv.org/abs/2610.08026

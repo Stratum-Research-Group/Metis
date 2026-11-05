@@ -72,6 +72,24 @@ class GateEvaluator:
                 verdict = getattr(cl, "verdict", None) or (cl.get("verdict") if isinstance(cl, dict) else None)
                 claim_id = getattr(cl, "claim_id", "unknown") or (cl.get("claim_id", "unknown") if isinstance(cl, dict) else "unknown")
                 if verdict != "supported":
+                    if verdict == "contradicted":
+                        return (
+                            False,
+                            "contradiction",
+                            f"contradicted claim {claim_id}, rejected pre-score",
+                        )
+                    if verdict in ("insufficient_evidence", "unverified"):
+                        return (
+                            False,
+                            "per_claim_support",
+                            f"insufficient evidence for claim {claim_id}, rejected pre-score",
+                        )
+                    if verdict == "unfaithful":
+                        return (
+                            False,
+                            "per_claim_support",
+                            f"claim {claim_id} unfaithful to reference context, rejected pre-score",
+                        )
                     return (
                         False,
                         "per_claim_support",

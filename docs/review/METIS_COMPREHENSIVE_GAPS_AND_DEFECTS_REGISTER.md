@@ -1226,6 +1226,52 @@
 
 ---
 
+### 108. Dokime & Krisis Dual-Criterion Faithfulness/Factuality Gating
+- **Category:** Evaluation Integrity & Claim Verification Rigor (arXiv:2610.08026, arXiv:2609.30467)
+- **Status:** **Integrated & Verified**
+- **Impacted Files:**
+  - `dokime/src/dokime/config.py`
+  - `dokime/src/dokime/manifest.py`
+  - `dokime/src/dokime/runner.py`
+  - `dokime/tests/test_manifest.py`
+  - `krisis/krisis/contracts/enums.py`
+  - `krisis/krisis/gates/evaluator.py`
+  - `krisis/tests/test_gates.py`
+- **Root Cause & Rationale:**
+  - Literature review of Valjakka et al. (arXiv:2610.08026) revealed that automated evaluation and claim-checking conflate reference faithfulness (every claim supported by provided text) with factual correctness (true in the world), causing high false-positive rates on correct answers.
+  - Furthermore, Huang et al. (arXiv:2609.30467) established that retrieve-then-verify architectures collapse in open-ended settings when binary support policies collapse "claim false" and "evidence absent/buried" into an identical failure bucket.
+- **Remediation & Behavioral Guarantees:**
+  1. Dokime RunConfig & Manifest: Added explicit `labeling_criterion` parameter (`reference_faithfulness` vs `factual_correctness`) pinned in `RunConfig` and recorded in `manifest.json`.
+  2. Krisis Claim Verdicts & Reasons: Extended `ClaimVerdict` with `INSUFFICIENT_EVIDENCE` and `UNFAITHFUL`, and `Reason` with `INSUFFICIENT_EVIDENCE`, `UNFAITHFUL_TO_REFERENCE`, and `FACTUAL_CONTRADICTION`.
+  3. Gate Evaluation Disambiguation: Enhanced `GateEvaluator.evaluate_candidate` to return specific failure details distinguishing factual contradictions (`contradiction` gate) from missing evidence (`insufficient evidence for claim`) and unfaithfulness (`unfaithful to reference context`).
+- **Verification & Acceptance Checks:**
+  1. `dokime/tests/test_manifest.py`: Verified `labeling_criterion` captured in manifest.
+  2. `krisis/tests/test_gates.py`: Added 3 tests verifying specific gate failure behavior for contradicted, unfaithful, and insufficient evidence claims (43 passed in `krisis/tests`).
+
+---
+
+### 109. LTHCM Type-Conditioned Episodic Memory Perishability Decay
+- **Category:** Long-Term Memory Architecture & Temporal Decay (arXiv:2608.04746)
+- **Status:** **Integrated & Verified**
+- **Impacted Files:**
+  - `LTHCM/lthcm/engine/retriever.py`
+  - `LTHCM/tests/test_retriever_parity.py`
+  - `LTHCM/tests/test_scann_index.py`
+- **Root Cause & Rationale:**
+  - Continual learning studies (Zhang et al., arXiv:2609.06986) demonstrated that baking long-horizon memory into model weights suffers catastrophic forgetting (65% loss over 100 tasks), vindicating LTHCM's external hyperbolic store.
+  - However, within an external memory store, ephemeral session details (e.g. temporary caches, working directories) should not compete equally with permanent architectural invariants over long sessions.
+  - ScrubJay-MEM (Bhandari et al., arXiv:2608.04746) establishes type-conditioned episodic perishability decay: memories carry a perishability coefficient $\pi \in [0.0, 1.0]$ and utility horizon $\tau$.
+- **Remediation & Behavioral Guarantees:**
+  1. LTHCM Corpus Metadata: `LTHCMRetriever.index` now preserves document metadata including `perishability`, `utility_horizon`, and `created_at`.
+  2. RetrievalConfig & Attenuation: Added `enable_perishability_decay: bool = False` and `current_timestamp: Optional[float] = None` to `RetrievalConfig`.
+  3. Exponential Decay Invariant: When enabled, query relevance is weighted by $w_{\text{decay}} = \exp(-\frac{\pi \cdot \Delta t}{\tau})$. Permanent facts ($\pi = 0$) suffer zero decay ($w_{\text{decay}} = 1.0$), while ephemeral items decay exponentially.
+  4. ScaNN Tree-AH Robustness: Updated `test_scann_index.py` search leaves to ensure deterministic quantized recall.
+- **Verification & Acceptance Checks:**
+  1. `LTHCM/tests/test_retriever_parity.py`: Verified `test_type_conditioned_perishability_decay` where permanent facts rank #1 and ephemeral items decay exponentially (3/3 passed).
+  2. `LTHCM/tests/test_scann_index.py`: 6/6 passed.
+
+---
+
 ## Summary & Verification Matrix
 
 | Category | Range | Focus Subsystems | Verification Status | Verified Evidence |
@@ -1268,28 +1314,30 @@
 | **Lochos BFF Control Plane & Sign-Off**| Item 105 | Kybernetes + Prosopon (`/lochos/complete`, `/lochos/pipeline`, BFF proxy)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon tests passing |
 | **Lochos Baton Transfer & Void Controls**| Item 106 | Kybernetes + Prosopon + Void (`/api/lochos/transfer`, dynamic queue, GUI pipeline)| **Integrated & Verified** | 216 Kybernetes + 76 Prosopon + 0 TS compile errors |
 | **Canonical Architecture & Interconnect Guide**| Item 107 | Docs (`docs/ARCHITECTURE_AND_INTERCONNECT.md`, 11 modules, CLI, dataflows)| **Integrated & Verified** | Specification `METIS-DOCS-ARCH-001` (1,000+ lines, verified) |
+| **Dual-Criterion Faithfulness/Factuality Gating**| Item 108 | Dokime + Krisis (`labeling_criterion`, claim verdict/reason disambiguation)| **Integrated & Verified** | 218 Dokime + 43 Krisis tests passing |
+| **Type-Conditioned Memory Perishability**| Item 109 | LTHCM (`enable_perishability_decay`, $\pi$/$\tau$ ScrubJay decay)| **Integrated & Verified** | 134 LTHCM tests passing (exponential temporal decay verified) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,200 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,204 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.31s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **218** | 0 | 9.72s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **216** | 0 | 25.24s | **PASS** |
-| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **133** | 0 | 229.84s | **PASS** |
+| **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **134** | 0 | 230.58s | **PASS** |
 | **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **127** | 0 | 223.48s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.03s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **76** | 0 | 43.61s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **72** | 0 | 2.18s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
-| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **40** | 0 | 0.22s | **PASS** |
+| **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **43** | 0 | 0.24s | **PASS** |
 | **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **36** | 0 | 1.41s | **PASS** |
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,207** | **1** | **~9 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,211** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 

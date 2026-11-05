@@ -1,0 +1,163 @@
+HESTIA - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026 (BATCH 2 OF THE THREE-MONTH REVIEW)
+Three papers worth your time for Hestia out of the 42,755-paper pool. Why these: Hestia's
+constraint is serving real models on a 16 GB card, and the window produced one frontier
+KV-cache architecture report, one finding that overturns how KV eviction is done, and one
+serving-speed approach that claims lossless acceleration without a draft model.
+
+====================================================================
+1. DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression
+arXiv:2609.19969 (17 Sep 2026), DeepSeek-AI
+Attention: #1 HF daily paper of 18 Sep (180 upvotes)
+Coverage: full HTML architecture sections read (CED, CSA2, hierarchical indexer, training and
+deployment notes); benchmark tables skimmed, not exhaustively verified.
+
+WHAT IT IS
+A 552B-parameter multimodal MoE model built around aggressive KV-cache compression for
+million-token agentic workloads. Key mechanisms:
+- Causal Encoder-Decoder (CED): the decoder's global KV cache is projected from the last
+  encoder layer's hidden state, so prefill computes only half the layers. 8B activated params
+  per token during prefill, 16B during decode.
+- Compressed Sparse Attention 2 (CSA2): three layer modes (Full / Reindex / Reuse) that share
+  main KV and indexer K across layers and reuse Top-K sparse indices; plus FP4 KV caches
+  during training with "marginal" degradation (their word).
+- SWA Bounded Replay: approximate reconstruction of sliding-window KV states by replaying
+  only the last n_win tokens instead of n_win x L/2 - a new storage-vs-compute tradeoff.
+
+WHAT IT ACTUALLY SHOWED (their numbers)
+- Global (HBM-resident) KV cache: 890 bytes per token, ~1/4 of DeepSeek-V4-Flash.
+- Persistent (SSD/host) KV cache: ~1/8 of DeepSeek-V4-Flash.
+- Decode FLOPs grow only ~1.25x when context extends 256x (4K to 1M).
+- Claims parity with closed frontier models on most agentic benchmarks (Terminal-Bench 2.1,
+  DeepSWE v1.1, AutomationBench), with a stated gap on science-heavy tasks and against giant
+  closed models overall. 45T-token pretrain. Checkpoints on Hugging Face.
+
+LIMITS
+- Not runnable on your hardware: 552B backbone + 196B Engram parameters is a datacenter model.
+  This is a design reference, not a deployment candidate.
+- "Marginal" and "negligible" degradation claims for FP4 KV and bounded replay are theirs;
+  the ablation detail exists in the paper but was not line-verified in this read.
+- Post-training is deliberately standard (SFT + RL + on-policy distillation); the novelty is
+  architectural and infrastructural.
+
+WHAT IT MEANS FOR HESTIA (my judgment)
+- The transferable idea is the decomposition, not the model: KV footprint = entry size x
+  sequence compression x cross-layer reuse, attacked on all three axes at once. Important
+  distinction: CSA2 and CED are TRAINED architectures - a model must be pretrained/finetuned
+  with them; they are not runtime knobs llama.cpp can switch on for an existing GGUF. The
+  runtime levers Hestia actually has (KV quantization, sliding window, prefix reuse) sit on
+  the same axes, and DeepSeek's multiplicative gains are evidence about the axes' value, not
+  a guarantee the same factors multiply for runtime-only composition.
+- Cross-layer KV/index reuse (Full/Reindex/Reuse) is a design to watch for in future
+  open-weight models and runtimes rather than adopt directly.
+- SWA Bounded Replay is relevant to Hestia session persistence ONLY IF the served model
+  actually uses sliding-window attention: replay reconstructs SWA KV state approximately
+  from the window tokens, so on a full-attention model there is nothing to replay. It is a
+  storage-vs-compute trick for SWA architectures (a trained model property), not a generic
+  llama.cpp feature you can enable on any GGUF.
+
+====================================================================
+2. Random Attention: Rethinking KV Cache Eviction for Efficient Reasoning
+arXiv:2609.03430 (3 Sep 2026), Wang, Qiu, Zhao, Qian, Yang, Han, Ji, Savarese, Heinecke,
+Wang - Salesforce AI Research / UIUC
+Attention: 177 upvotes, top-5 HF daily of 4 Sep
+Code: https://github.com/SalesforceAIResearch/Random-Attention
+Coverage: full HTML text read (abstract, introduction, main claims; the controlled-experiment
+sections were read at claim level, not every table).
+
+WHAT IT IS
+A negative result that matters. In the paper's framing, existing KV-cache eviction methods
+share one paradigm: score each token by predicted future importance, keep the top scorers.
+They keep the prompt intact and evict uniformly at random within each attention head - no
+scoring at all - and match the strongest scored evictor they compared against.
+
+WHAT IT ACTUALLY SHOWED (their numbers)
+- Across four models and six reasoning tasks at ~4x compression, random eviction matches the
+  strongest prior evictor on average accuracy.
+- With no scoring pass, it serves 32-43% higher throughput than the best scorer (TriAttention)
+  in vLLM at 32k-token generations.
+- The mechanism, from their controlled experiments: (1) the prompt is the fragile part of the
+  cache - most of the gap between selectors is whether they happened to keep it; (2) the
+  reasoning trace protects itself through redundancy - the model restates what it still needs
+  in the text, and each attention head keeps its own copy - so once the prompt is safe, a
+  random draw retains enough.
+
+LIMITS
+- Applies to long chain-of-thought reasoning workloads; small remaining gaps to the best
+  scorer on code reasoning with long prompts (budget consumed by the prompt).
+- "Matches on average across six tasks" is not "matches on every task"; per-task variance
+  exists in their tables.
+- This is an eviction result, not a compression-format result; it says nothing about
+  quantization or low-rank KV approaches.
+
+WHAT IT MEANS FOR HESTIA (my judgment)
+- Directly actionable as a baseline: if Hestia ever implements KV eviction for long
+  reasoning traces, "keep prompt, evict randomly per head" is simple in principle and, in
+  their vLLM deployment, serves 32-43% higher throughput than the best scorer. Any smarter
+  eviction you add must beat random - their results say that is harder than the literature
+  implies. Actually wiring eviction into llama.cpp/Hestia is untested engineering, not a
+  config flag.
+- Their mechanistic finding argues the prompt is the fragile part of the cache and the
+  reasoning trace protects itself through redundancy - so cache policy should protect the
+  prompt/system/context prefix first and can be much more relaxed about the generated trace.
+- Also a Dokime-relevant evaluation point: eviction quality claims need throughput and
+  per-task breakdowns, not just average accuracy.
+
+====================================================================
+3. Unlocking Lossless Speedups in LLMs via Discrete Diffusion ("Uno")
+arXiv:2609.04010 (3 Sep 2026), Sahoo et al.
+Attention: 150 upvotes, #1 HF daily paper of 8 Sep
+Coverage: PDF downloaded and read (method and contribution sections; experiment tables read
+at claim level).
+
+WHAT IT IS (PDF-verified)
+Diffusion-augmented autoregressive models ("Uno"): the frozen AR weights define the target
+distribution and verify candidates; a lightweight LoRA-parameterized diffusion pathway
+proposes multiple tokens in parallel. Because the frozen AR model is the verifier, the
+sampling distribution is preserved - hence "lossless", in the same sense as speculative
+decoding. Two variants: trained from scratch on proprietary data, and an augmentation of the
+open-weight Qwen3-8B.
+WHAT IT ACTUALLY SHOWED (their numbers, with the settings attached)
+- Throughput test setup (their Sec. 5): 1,024 random input tokens + fixed 8,192 output
+  tokens ("1K/8K throughput test"); measured at batch size 1 and at the largest batch size
+  that fits on ONE H200 GPU; tokens-per-forward-pass equalized across methods so all are
+  compared at the same input and effective output lengths.
+- Up to 3x speedup over the base AR model (abstract); their own contribution statement is
+  more careful: up to 2x at the LARGEST supported batch size - the regime where prior
+  diffusion-LLM speedups vanish. These are their measurements on their setup, not a
+  universal win claim.
+- The 8B Uno outperforms the 26B DiffusionGemma and the proprietary Mercury 2 across their
+  evaluated benchmarks (agentic tool use, coding, long-context reasoning).
+- Higher throughput than leading speculative-decoding methods at every evaluated batch size
+  in their 1K/8K test.
+- Code and checkpoints released.
+
+LIMITS
+- "Lossless" means distribution-preserving verification against the frozen AR model, as with
+  speculative decoding - not that quality claims are independently replicated.
+- Requires training diffusion weights on top of a base model - not a drop-in for an existing
+  GGUF in llama.cpp. The 8B augmentation recipe exists; whether it lands in llama.cpp-style
+  runtimes is an open engineering question.
+- Benchmark wins are against the d-LLM field (DiffusionGemma, Mercury 2), not against the
+  best AR models at equal size.
+
+WHAT IT MEANS FOR HESTIA (my judgment)
+- If the claims hold, this is a third serving-acceleration lane between speculative decoding
+  (which Hestia could already use with a draft model) and pure diffusion LLMs: speed without a
+  second model in memory - attractive on a 16 GB card where a draft model competes with the
+  main model for VRAM.
+Note: this entry is based on a full PDF read (method, experiments setup, throughput
+analysis); the per-benchmark quality tables were read at claim level, not line-verified.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- The many speculative-decoding variants in the window (H-Spec, SpecQuant, tree-structured
+  adaptation to DeepSeek-V4, long-context speculative with compressed KV): passed over at
+  abstract level as incremental combinations of known pieces; not full-text read, so this is
+  a screening judgment, not a verdict.
+- Edge/on-device papers (EdgeXpert, FreeToken, SlimWise, TASTE): engineering reports for
+  specific hardware that is not yours.
+- MatMoE (Matryoshka MoE with dynamic mixed precision, 1 Nov): interesting quantization
+  direction but arrived in the last indexed days; queued as a lead, not yet read.
+
+Sources: https://arxiv.org/abs/2609.19969 , https://arxiv.org/abs/2609.03430 ,
+https://arxiv.org/abs/2609.04010 , attention ranks https://paperpulse.ifsp.dev/month/2026-09

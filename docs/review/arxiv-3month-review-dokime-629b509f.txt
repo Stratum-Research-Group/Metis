@@ -1,0 +1,92 @@
+DOKIME - TOP-PAPER TAKEAWAYS, 3 AUG - 3 NOV 2026
+Why these: Dokime is the harness that has to measure whether anything works - matrix runs,
+real numbers, confidence intervals. The window's best evaluation-methodology papers are
+about exactly where automated evaluation breaks, which is what Dokime exists to catch.
+
+====================================================================
+1. The Labeling Problem in Hallucination Detection Benchmarks: An Empirical Evaluation
+arXiv:2610.08026 (6 Oct 2026), Valjakka et al. - University of Helsinki
+Code: https://github.com/jova486/LPHB
+Coverage: PDF downloaded and read (abstract, design, main results table, prompt ablations).
+
+WHAT IT SHOWED (PDF-verified): automated hallucination labelers conflate reference
+faithfulness with factual correctness - the gap being true claims the reference does not
+contain, which faithfulness-strict labelers flag as errors, producing false-positive-dominant
+labels. Judge-vs-human kappa spans 0.021-0.740 across judges/prompts (human ceiling 0.808);
+stating the factual-correctness criterion explicitly in the prompt improves agreement for
+most judge-generator pairs (bootstrap CIs exclude zero in all three primary comparisons;
+factorial ablation isolates criterion, not prompt elaboration).
+DOKIME TAKEAWAY: any LLM-labeled or LLM-judged track must record the labeling CRITERION in
+the run config alongside the prompt - "is this answer hallucinated?" is not a metric until
+the criterion is pinned. Their paired McNemar methodology on identical items is the right
+way to compare prompt versions inside Dokime, and the 900-pair human audit set is the
+pattern to copy: a small human-labeled reference slice per track, with labeler agreement
+measured against it before labels are trusted.
+
+====================================================================
+2. Where Does Retrieval-Based Open-Ended Evaluation Fail? Automatic Taxonomy Induction from
+   Long-Form Medical Answer Factuality Verification
+arXiv:2609.30467 (24 Sep 2026), Huang et al. - Johns Hopkins CLSP
+Coverage: PDF downloaded and read (abstract, intro, protocol, error taxonomy, results tables).
+
+WHAT IT SHOWED (PDF-verified): decompose-then-verify factuality pipelines collapse in the
+open-ended regime - on their MedExpert-gold subset (gold evidence guaranteed present), best
+verifier recall of clinician-flagged errors is 34.9% (Mistral-Small-24B), GPT-5.4 25.6%
+recall / 35.2% F1, MedGemma-27B 16.3%; retriever recalls 18.6-24.4. Persistence across
+scaling, reasoning effort, fine-tuning, and corpus expansion is their evidence this is
+structural. Their taxonomy splits retrieval-stage from verification-stage failures. Their
+taxonomy-induction pipeline needs no gold answers, but it is not truth from nothing: human
+review/expert validation grounds the induced categories, and the inducing judge is itself
+the class of system under study (they disclose this).
+DOKIME TAKEAWAY: for any retrieval-plus-verification pipeline Dokime measures, report the
+two stages separately - end-to-end F1 alone cannot say whether retrieval missed or the
+verifier failed (their identifiability vs comprehensiveness split is the vocabulary).
+Their human-in-the-loop taxonomy-induction protocol is reusable for auditing a Dokime track
+that lacks gold answers, provided the human validation step is kept, not automated away.
+Domain is medical; treat the numbers as their setting, the reporting shape as portable.
+
+====================================================================
+3. LLM-as-a-Judge for Voice-Agent Evaluation: Alignment, Stability, and Human Oversight
+arXiv:2608.24314 (v2, 16 Sep 2026), Singh & Purwar - Sprinklr AI
+Coverage: PDF downloaded and read (abstract, setup, agreement analysis); result tables read
+at claim level.
+
+WHAT IT SHOWED: human vs GPT-4.1 and GPT-5 judgments on telecom and retail voice-agent
+conversations under three evaluation configurations (p0 no user context, p1 static persona,
+p2 dynamically inferred context), 40 conversations per configuration. Their headline: LLM
+judgments are metric- and configuration-dependent, not uniform - some attributes are judged
+reliably, others stay sensitive to context; they recommend hybrid pipelines where humans
+keep the context-sensitive metrics. They disclose that their agreement analysis runs on
+aggregate score cells (9 metrics x 2 domains x 3 configurations), not conversation-level
+inter-annotator agreement.
+DOKIME TAKEAWAY: never report a single global "judge agrees with humans" number - measure
+the judge's agreement profile per metric and per configuration before trusting it per
+metric. Voice-agent domain; the rule is portable, the specific numbers are not.
+
+====================================================================
+CARRIED FROM THE MEMORY/CONTINUAL-LEARNING REVIEWS (eval-construction patterns)
+- ScrubJay's TGT construction contributes two reusable patterns - held-out retention
+  INTERVALS as a generalization split, and a deliberately cross-family judge (qwen3:30b
+  benchmark construction, llama3.2:3b judging) against self-preference - plus one caution:
+  its headline metric's formula (GenGap, Eq. 16) and the paper's prose interpretation
+  disagree in sign (verified against the rendered equation image; flagged, not resolved).
+  Rule for Dokime: re-derive any adopted metric's sign/direction from its formula before
+  trusting the paper's gloss.
+- The continual-learning design-space paper (2609.06986) contributes protocol: task-level
+  successive halving (screen methods at short task horizons before paying for 100-task
+  runs), a 2^4 factorial over mechanisms with 3 seeds, and a per-model contamination filter
+  (candidate facts the base model already answers are excluded - PDF-verified: base model
+  Qwen3-4B-Base; Symbol-QA 10,000 associations, LLM-QA 10,000 pairs, Real-QA 5,000 filtered
+  pairs). All three are cheap to adopt in matrix runs whenever a retention/learning track
+  appears.
+
+====================================================================
+NOT SELECTED (checked and passed over, with reasons)
+- KnowHal, Hallucinations-on-the-Board, and similar benchmark-of-the-month papers: new
+  datasets in narrow domains, no reusable method beyond the reviews above. Screening
+  judgment at abstract level, not full-text reads.
+- "Who Verifies the Benchmark?": benchmark governance/provenance, not a runnable method.
+
+Sources: https://arxiv.org/abs/2610.08026 , https://arxiv.org/abs/2609.30467 ,
+https://arxiv.org/abs/2608.24314 , carried: https://arxiv.org/abs/2608.04746 ,
+https://arxiv.org/abs/2609.06986
