@@ -58,6 +58,9 @@ def test_sandboxed_bash_home_isolation(tmp_path: Path):
 def test_sandboxed_bash_tmp_ephemeral_isolation(tmp_path: Path):
     """Verify /tmp operations run in isolated tmpfs and do not persist to host /tmp."""
     runner = SafeSandboxedBash(allowed_roots=[tmp_path])
+    if runner.backend.name != "bubblewrap" or not runner.backend.is_available():
+        pytest.skip("Ephemeral /tmp isolation requires BubblewrapBackend")
+
     res = runner.execute("touch /tmp/metis_sandbox_isolated.flag && ls /tmp/metis_sandbox_isolated.flag", cwd=str(tmp_path))
     assert res["exit_code"] == 0
     assert "metis_sandbox_isolated.flag" in res["stdout"]

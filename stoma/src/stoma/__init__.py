@@ -37,12 +37,18 @@ from stoma.redaction import (
     ContentAssessment,
     PrivacyRedactor,
 )
-from stoma.safe_extract import (
-    ArchiveBombError,
-    ArchiveSafetyError,
-    ArchiveSafetyGuard,
-    SafeExtractor,
-)
+try:
+    from stoma.safe_extract import (
+        ArchiveBombError,
+        ArchiveSafetyError,
+        ArchiveSafetyGuard,
+        SafeExtractor,
+    )
+except (ImportError, ModuleNotFoundError):
+    ArchiveBombError = None  # type: ignore
+    ArchiveSafetyError = None  # type: ignore
+    ArchiveSafetyGuard = None  # type: ignore
+    SafeExtractor = None  # type: ignore
 
 from stoma.filters import DeterministicSpanFilter
 from stoma.alias_reconciler import (

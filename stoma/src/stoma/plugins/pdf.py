@@ -13,7 +13,10 @@ import logging
 from pathlib import Path
 from typing import Iterator, List, Set
 
-import pypdf
+try:
+    import pypdf
+except ImportError:
+    pypdf = None  # type: ignore
 
 from stoma.plugins.base import (
     CorruptedDocumentError,
@@ -39,6 +42,8 @@ class PDFPlugin(SourcePlugin):
         Stream passages from PDF page by page.
         Propagates corrupt PDF and read errors loudly; detects image-only PDFs.
         """
+        if pypdf is None:
+            raise CorruptedDocumentError(f"Cannot parse PDF '{path}': pypdf package is not installed.")
         try:
             reader = pypdf.PdfReader(str(path))
             total_pages = len(reader.pages)
