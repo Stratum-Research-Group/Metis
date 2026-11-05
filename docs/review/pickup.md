@@ -1,10 +1,10 @@
 # Metis Development Resume Guide (`pickup.md`)
 
-**Last Updated:** 2026-11-01  
+**Last Updated:** 2026-11-05  
 **Current Branch:** `main`  
-**Current HEAD Commit:** `671cce3` (with `vscode` @ `823d109`)  
-**Working Tree Status:** Clean; all services active under systemd (including `metis-paideia-retrainer`); 1,207 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 1 skipped).  
-**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95), Pyle WebRTC Device Hub & Remote Control Plane Integration (Item 96), Native KrisisSelector Formal Gating & Grounding Adapter (Item 97), Paideia Adapter Export & Hestia ModelSwapManager Generational Serving Integration (Item 98), Kleroterion Adaptive Entropy Feedback & Epistemic Shadow Branching Integration (Item 99), Heuresis Autonomous Scientific Discovery Coordinator & CLI (Item 100), Distributed Shampoo Second-Order Optimizer & Active Boundary QLoRA Training Pipeline (Item 101), Lochos Autonomous Pipeline Orchestrator & Zero-Trust Verification Rollback (Item 102), Krisis Policy Calibration, Admin TOML Serialization & Voice Binary Path Resolution (Item 103), Autonomous Closed-Loop Policy Retraining Pipeline (Item 104), Lochos Multi-Agent Pipeline & Task Completion Control Plane (Item 105), Lochos Baton Transfer, Dynamic Queue Monitoring & Void IDE Pipeline Controls (Item 106), and Canonical Architecture, Module Catalog & Interconnect Specification (Item 107 in `docs/ARCHITECTURE_AND_INTERCONNECT.md`) fully implemented and verified.
+**Current HEAD Commit:** `e9c2a3d` (with `vscode` @ `823d109`)  
+**Working Tree Status:** Clean; all services active under systemd (including `metis-paideia-retrainer`); 1,211 passing tests verified across all 11 monorepo packages + root + experiments + VS Code Void IDE client (100% green, 1 skipped).  
+**Active In-Flight Experiment:** `experiments/text_vs_graph/` — Confirmatory Phase 1 Run (300/300 stories, 15,600 LLM calls) and Confirmatory Phase 2 Run (300/300 stories, 5,100 LLM calls under real LLM extractor noise) fully completed and audited in `CONFIRMATORY_PHASE1_REPORT.md` and `CONFIRMATORY_PHASE2_REPORT.md`. Option 1 (Zero-Hallucination Graph Filtering, Dynamic Consistency Fallback & Constructive Grounding, Item 91), Option 2 (Heuresis Discovery Engine, OpenReview Boundary Crawler & Sheaf OOV Synthesizer, Item 92), Arm F two-pass constructive chronological planning in Kybernetes deliberation/routing (Item 94), VS Code Void IDE Zero-Loopback Service Token Alignment & Auto-Discovery (Item 95), Pyle WebRTC Device Hub & Remote Control Plane Integration (Item 96), Native KrisisSelector Formal Gating & Grounding Adapter (Item 97), Paideia Adapter Export & Hestia ModelSwapManager Generational Serving Integration (Item 98), Kleroterion Adaptive Entropy Feedback & Epistemic Shadow Branching Integration (Item 99), Heuresis Autonomous Scientific Discovery Coordinator & CLI (Item 100), Distributed Shampoo Second-Order Optimizer & Active Boundary QLoRA Training Pipeline (Item 101), Lochos Autonomous Pipeline Orchestrator & Zero-Trust Verification Rollback (Item 102), Krisis Policy Calibration, Admin TOML Serialization & Voice Binary Path Resolution (Item 103), Autonomous Closed-Loop Policy Retraining Pipeline (Item 104), Lochos Multi-Agent Pipeline & Task Completion Control Plane (Item 105), Lochos Baton Transfer, Dynamic Queue Monitoring & Void IDE Pipeline Controls (Item 106), Canonical Architecture, Module Catalog & Interconnect Specification (Item 107 in `docs/ARCHITECTURE_AND_INTERCONNECT.md`), Dokime & Krisis Dual-Criterion Faithfulness/Factuality Gating (Item 108), and LTHCM Type-Conditioned Memory Perishability Decay (Item 109) fully implemented and verified.
 
 ---
 
@@ -22,7 +22,7 @@ systemctl --user status metis-hestia metis-kybernetes metis-prosopon metis-stoma
 # 3. Run Kybernetes orchestrator & tools test suite (216 tests)
 ./.venv/bin/pytest kybernetes/tests -q
 
-# 4. Run LTHCM Poincaré memory engine test suite (133 tests)
+# 4. Run LTHCM Poincaré memory engine test suite (134 tests)
 ./LTHCM/.venv/bin/pytest LTHCM/tests -q
 
 # 5. Run Stoma ingestion & structured OCR test suite (127 tests)
@@ -43,7 +43,7 @@ CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q
 # 10. Run Kleroterion stochastic policy test suite (43 tests)
 ./kleroterion/.venv/bin/pytest kleroterion/tests -q
 
-# 11. Run Krisis claim grounding & conformal gates test suite (40 tests)
+# 11. Run Krisis claim grounding & conformal gates test suite (43 tests)
 ./.venv/bin/pytest krisis/tests -q
 
 # 12. Run Phylax capability security gateway test suite (36 tests)
