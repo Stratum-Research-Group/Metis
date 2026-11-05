@@ -1,0 +1,63 @@
+PAIDEIA - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[21] PIVOT: Progressive Intervention via Online Teacher Correction
+https://arxiv.org/abs/2610.40576
+Fit: STRONG - RLVR recipe for small models.
+Take: teacher corrections during the student's rollout, rather than only supplying a worked answer beforehand. A training recipe to compare against ordinary SFT+RL, not an automatic upgrade - check their per-game tables before crediting the headline.
+
+[22] Every Token Needs Its Own Teacher: Multi-Teacher Adaptive On-Policy Self-Distillation (MTA-OPSD)
+https://arxiv.org/abs/2610.40574
+Fit: STRONG if a distillation pipeline is built.
+Take: adaptive teacher choice at token level for on-policy distillation. The headline gain (+5.9) is the best case, not a universal expectation.
+
+[23] Training Foundation Models with a Single Algorithm
+https://arxiv.org/abs/2610.40564
+Fit: CONDITIONAL - training-infrastructure idea.
+Take: one shared trainer where stages (pretraining, SFT, RL) become changes in data mixing. The attraction is simpler infrastructure; the retention/accuracy tradeoffs are still open. Evidence is modest.
+
+[35] Scaling Mathematical Proof Supervision from Structured Textbooks (TOME-Math)
+https://arxiv.org/abs/2610.40394
+Fit: STRONG for dataset design; the ingestion side extends Stoma (see the Stoma txt).
+Take: preserve chapter order, proposition/proof dependency links and provenance when building training material - structure plus provenance beats volume. The paper supplies the dataset idea and results, not an ingestion implementation.
+
+[15] ShallowDefend: Harnessing Shallow Safety Alignment for Multi-Turn Defender
+https://arxiv.org/abs/2610.40627
+Fit: the training half lives here; the policy meaning is in the Phylax txt.
+Take: train an explicit, parseable safety decision span with RL on a verifiable reward. Decision first, answer second, with labels you can check.
+Evidence: their numbers are in-distribution to their replayed attack set.
+
+[5] Don't Lose the Thread: Empowering Long-Horizon LLM Agents with Cognitive Resource Self-Allocation (CORAL)
+https://arxiv.org/abs/2610.40350
+Fit: the training arm lives here; the agent-control meaning is in the Kybernetes txt.
+Take: if the checkpoint/reset memory procedure is adopted, note that the headline gains come mostly from the distilled SFT training. Keep the two contributions separate in any evaluation - that distillation arm is Paideia work.
+
+[4] Retrieving from Your Own Mistakes (on-policy retriever training)
+https://arxiv.org/abs/2610.40409
+Fit: recipe home, conditional.
+Take: if Nick ever trains the chain-retriever baseline proposed for LTHCM (see the LTHCM txt), this on-policy training recipe is the leading candidate, and the training run itself would live in Paideia.
+
+[34] SCARL: Sequence Confidence-Aligned Reinforcement Learning
+https://arxiv.org/abs/2610.40407
+Fit: LOWER PRIORITY.
+Take: confidence-aware adjustment of RLVR advantages. Worth considering only if training objectives become an active investigation - the gains are small and sometimes negative.
+
+[31] Preserving Utility in Continual LLM Unlearning via Orthogonal Projections
+https://arxiv.org/abs/2610.40483
+Fit: CONDITIONAL - only if sequential weight-level unlearning is ever needed (e.g. private data ends up in a fine-tune).
+Constraint: this is a different problem from deleting a document or node in LTHCM. Weight-level unlearning is approximate, and no deletion guarantee extends across derived copies or caches - do not conflate the two.
+
+[30] The Precision Wall: An Optimizer-Dependent Boundary for Optimization under Power-Law Measurement Spectra
+https://arxiv.org/abs/2610.40485
+Fit: BACKGROUND.
+Take: optimizer epsilon interacting with spectral structure as a possible source of training stalls. A diagnostic hypothesis from a toy setting, not a proven explanation for your training runs.
+
+[38] Your LR Schedule May Not Be Principled: Effective Learning Rate Scheduling in Weight-Normalized Training (AIR)
+https://arxiv.org/abs/2610.40362
+Fit: BACKGROUND - training hygiene, shared with SandyRust.
+Take: effective learning-rate trajectories in weight-normalized training. A controlled scheduling comparison; the measured effect is small (~0.01 loss), so treat it as hygiene, not a gain.

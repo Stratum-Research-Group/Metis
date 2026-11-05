@@ -45,6 +45,10 @@ from stoma.safe_extract import (
 )
 
 from stoma.filters import DeterministicSpanFilter
+from stoma.alias_reconciler import (
+    CanonicalEntity,
+    EntityAliasReconciler,
+)
 from stoma.table_normalizer import (
     ParsedTable,
     TableProseNormalizer,
@@ -107,6 +111,8 @@ __all__ = [
     "IncompatibleSpaceError",
     "InvalidVectorPayloadError",
     "DeterministicSpanFilter",
+    "CanonicalEntity",
+    "EntityAliasReconciler",
     "ParsedTable",
     "TableProseNormalizer",
     "normalize_markdown_tables",

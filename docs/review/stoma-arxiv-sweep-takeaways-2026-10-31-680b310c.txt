@@ -1,0 +1,34 @@
+STOMA - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[35] Scaling Mathematical Proof Supervision from Structured Textbooks (TOME-Math)
+https://arxiv.org/abs/2610.40394
+Fit: STRONG - the structured-ingestion side of the idea is Stoma's.
+Take: preserve chapter order, proposition/proof dependency links and provenance when ingesting structured material. Carrying that structure through the pipeline is an extension of the dataset idea - the paper does not implement it. The dataset/training side is in the Paideia txt.
+
+[9] Decompose, Estimate, Select: Coverage-Aware Context Construction for Long-Form RAG
+https://arxiv.org/abs/2610.40314
+Fit: STRONG - ingestion-time angle.
+Take: chunking and context construction at ingest should make coverage of distinct question parts possible downstream, not just per-chunk relevance scoring. The retrieval-side entry is in the LTHCM txt.
+Evidence: no universal end-to-end improvement established; adopt the selection idea and the coverage-vs-used measurement split, not the headline.
+
+[32] FIRME: Registry-Anchored Memory Graphs for Evolving, Heterogeneous Investor Knowledge
+https://arxiv.org/abs/2610.40482
+Fit: STRONG - ingestion angle.
+Take: source/time/context tracking and alias reconciliation are cheapest to capture at ingest, before names fragment across the graph. The graph-side entry is in the LTHCM txt.
+Evidence: limited and proprietary domain; a design pattern, not a validated result.
+
+[6] Understanding and Mitigating Role Spoofing in LLMs
+https://arxiv.org/abs/2610.40396
+Fit: BOUNDARY - ingestion is an enforcement point.
+Take: content Stoma ingests can impersonate a higher-authority message downstream. Provenance tagging at ingest (who actually said what, from which source) is where the defence starts. The threat model and policy home are in the Phylax txt.
+
+[1] Elucidating the Design Space of Language Model Data Attribution
+https://arxiv.org/abs/2610.40655
+Fit: SECONDARY.
+Take: the provenance records Stoma keeps at ingest determine which provenance claims can be tested later - capture source, time and content hash per span. The evaluation-methodology entry is in the Dokime txt.

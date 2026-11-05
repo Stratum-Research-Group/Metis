@@ -1,0 +1,41 @@
+DIOPTRA - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+Dioptra stays a standalone workbench with a versioned Metis integration; nothing here changes that. The reasoning-geometry side project rides along in this file, labelled per entry.
+
+----------------------------------------------------------------
+[12] One Vector or Many? Clustered Optimal-Transport Steering under Quantization  [reasoning-geometry side project]
+https://arxiv.org/abs/2610.40055
+Fit: CLOSE - direct test bed for the "sectors within the vectors" idea.
+Take: the comparison between one mean steering vector and a selectively routed clustered map is the right baseline structure for the sectors experiments - test the routed map against the simpler single vector before crediting the sectors.
+Constraint: their quantization tests were INT8/NF4, not your GGUF setup - that transfer remains untested. If a steered model is ever served, the serving side is noted in the Hestia txt.
+
+[37] Factorized Representations of Concurrent Temporal Variables in Pretrained Language Models  [reasoning-geometry side project]
+https://arxiv.org/abs/2610.40328
+Fit: CLOSE - methodology template.
+Take: steer and ablate subspaces to test whether independently changing variables have separable representations. Directly useful methodology for the sectors idea - without assuming those sectors already exist as you envisage them.
+
+[18] Pre-Crime for Agents, at the Last Second: Probing When a Recruited Agent Gives In  [Dioptra workbench]
+https://arxiv.org/abs/2610.40588
+Fit: STRONG - linear probes on activations are Dioptra's toolkit.
+Take: activation probes that flag an impending secret-leaking tool call before it fires. Dioptra is where such a probe gets built and tested; Phylax is where it would run as a monitor (see the Phylax txt).
+Constraint: the paper does not establish superiority over a properly trained text-only monitor.
+
+[13] world2vec: Mechanistic World Models through Latent Dynamics Learning  [research direction]
+https://arxiv.org/abs/2610.40637
+Fit: EXPLORATORY.
+Take: "latent faithfulness as a measurable property" - check learned latents against known true dynamics. A probe design pattern.
+Constraint: the experiments are 263k-parameter world models. They do not establish anything about LLM-scale representations.
+
+[14] Probing Spatial State Representations in Visual Foundation Models  [research direction]
+https://arxiv.org/abs/2610.40636
+Fit: CONDITIONAL - methodology only.
+Take: a four-level probing battery (structure, persistence, prediction, actionability). Worth borrowing if the workbench ever extends to visual or spatial models. Their finding that no single representation covers everything is a useful caution for probe design generally.
+
+[2] Rethinking Neural Thickets Without Weight Perturbations  [reasoning-geometry side project]
+https://arxiv.org/abs/2610.40649
+Fit: MODERATION for the geometry work.
+Take: before crediting weight-space geometry or sophisticated selection, test whether ordinary diversity plus voting explains the improvement. The selection-layer entry is in the Krisis txt.

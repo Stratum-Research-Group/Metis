@@ -1,0 +1,49 @@
+LTHCM - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[4] Retrieving from Your Own Mistakes: On-Policy Training of Embedding Models for Multi-Hop RAG
+https://arxiv.org/abs/2610.40409
+Fit: STRONG - the most direct retrieval fit in the sweep.
+Take: a trained chain-retriever as the strongest baseline arm for LTHCM's multi-hop benchmarks (SciFact, HotpotQA, 2Wiki, MuSiQue are already wired). It tests whether LTHCM's advantages survive comparison with a retriever trained on the imperfect histories it actually encounters, instead of a frozen off-the-shelf embedder.
+Evidence: the on-policy training recipe is theirs; the improvement claim holds within their setup. If a retriever is ever trained, the training run itself belongs to Paideia, not LTHCM.
+
+[9] Decompose, Estimate, Select: Coverage-Aware Context Construction for Long-Form RAG
+https://arxiv.org/abs/2610.40314
+Fit: STRONG - coverage and evidence use are LTHCM's core questions.
+Take: coverage-aware context selection - choose evidence that covers distinct parts of the question, not just individually high-scoring chunks. Also measure the difference between retrieved coverage and evidence actually used in the answer.
+Evidence: the paper does not establish a universal end-to-end improvement and does not prove the generator is the bottleneck. Adopt the selection idea and the measurement split, not the headline.
+
+[32] FIRME: Registry-Anchored Memory Graphs for Evolving, Heterogeneous Investor Knowledge
+https://arxiv.org/abs/2610.40482
+Fit: STRONG - direct design-pattern fit.
+Take: canonical entity identities, persistent aliases, and source/time/context tracking. The reconciliation pattern keeps different names for the same entity from fragmenting the graph - directly relevant to the edges wormhole_builder mines from text.
+Evidence: limited and proprietary (investor-knowledge domain). Treat it as a design pattern to adapt, not a validated result to cite.
+
+[25] Retrieval as Traversal: Value-Indexed Memory for Stateful Long-Context Agents
+https://arxiv.org/abs/2610.40545
+Fit: CONCEPTUAL - very close to LTHCM's memory-topology interests.
+Take: separate memory content from its address, and learn an address geometry from retrieval utility rather than from similarity alone.
+Evidence: a position paper with a toy experiment. Useful design ideas, not a validated replacement for anything in the stack.
+
+[33] Glance: The Generator Is Its Own Reranker
+https://arxiv.org/abs/2610.40454
+Fit: CONDITIONAL - shared with Hestia (serving-side entry in the Hestia txt).
+Take: use the generator as its own reranker through a shared prefill with lightweight additions (~0.1 GiB per skill claimed). Could remove a separately resident reranker, which matters on a 16GB card.
+Evidence: small-sample evidence. Memory footprint and speed on the RTX 5060 Ti are untested - the paper does not establish hardware fit.
+
+[1] Elucidating the Design Space of Language Model Data Attribution
+https://arxiv.org/abs/2610.40655
+Fit: SECONDARY - evaluation methodology for provenance claims.
+Take: the design-space breakdown of attribution methods is a checklist for how LTHCM provenance claims should be tested: can you show which evidence actually influenced an answer, not just which documents were retrieved?
+Constraint: training-data attribution and retrieval provenance are different questions. This paper informs the test design; it is not a RAG-citation proof method.
+
+[16] Testimony from Timelines (STRATA)
+https://arxiv.org/abs/2610.40619
+Fit: SUPPORTING EVIDENCE.
+Take: their finding that evidence selection is the dominant failure mode is external support for LTHCM's premise. The evaluation-structure entry is in the Dokime txt.
+Constraint: clinical domain - don't generalize their numbers.

@@ -1,0 +1,36 @@
+HESTIA - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[8] Only Accepted Tokens Count: An Energy Accounting of Speculative Decoding Under Latency Targets
+https://arxiv.org/abs/2610.40287
+Fit: STRONG - measurement discipline for serving.
+Take: measure energy per accepted output token, alongside latency, batch size and workload. Drafter acceptance rates drive whether speculative decoding helps or hurts, and the answer is batch-specific - relevant to the speculative-decoding experiment already proposed for Hestia.
+Constraint: the paper's numbers come from data-centre GPUs (H100). They are not forecasts for the RTX 5060 Ti or the V100.
+
+[26] On the Fundamental Limits of Prefill-Based Decoding Length Prediction
+https://arxiv.org/abs/2610.40541
+Fit: CAUTIONARY - read before any length-aware scheduling work.
+Take: distinguish predictor error from genuinely unpredictable output length; there is an irreducible floor. Not an immediate serving feature by itself.
+
+[33] Glance: The Generator Is Its Own Reranker
+https://arxiv.org/abs/2610.40454
+Fit: CONDITIONAL - shared with LTHCM (retrieval-side entry in the LTHCM txt).
+Take: the generator doubles as its own reranker through a shared prefill with lightweight additions (~0.1 GiB per skill claimed). Interesting because it could remove a separately resident reranker from the 16GB card.
+Constraint: memory footprint and speed on your hardware were not assessed in the paper. Small-sample evidence.
+
+[39] A Unified Hessian-Guided Framework for Post-Training Quantization (HZ-PTQ)
+https://arxiv.org/abs/2610.40345
+Fit: CONDITIONAL - relevant if you produce or compare quantized models; less direct if Hestia only serves existing GGUFs.
+Take: a unified curvature-guided way to make quantization choices.
+Constraint: the reviewed sections showed perplexity and commonsense-reasoning evaluation on models up to 8B; GGUF support, latency and kernel-level results were not established there, so performance on your cards is unknown.
+
+[12] One Vector or Many? Clustered Optimal-Transport Steering under Quantization
+https://arxiv.org/abs/2610.40055
+Fit: LATER - only if Hestia ever serves steered models.
+Take: serving a steered model means serving its steering map; the clustered-map option changes what has to be loaded.
+Constraint: their quantization tests were INT8/NF4, not GGUF - the transfer is untested. Full entry in the Dioptra txt.

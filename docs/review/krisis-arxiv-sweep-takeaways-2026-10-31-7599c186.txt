@@ -1,0 +1,18 @@
+KRISIS - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[2] Rethinking Neural Thickets Without Weight Perturbations
+https://arxiv.org/abs/2610.40649
+Fit: STRONG, with a boundary.
+Take: ensemble/voting behaviour without weight perturbation is a selection-layer question - candidate diversity plus a simple vote is the baseline Krisis should beat before anything fancier gets credit.
+Constraint: the paper's voting scheme is not a drop-in for Krisis. Krisis is deterministic selection with abstention and a claim-level support verifier; any voting idea has to respect that contract and fail closed.
+
+[11] Judged in Company: In-Context Batching Makes LLM Verdicts Depend on Other Items
+https://arxiv.org/abs/2610.40241
+Fit: CONDITIONAL - relevant if Krisis ever uses LLM judging in its verifier path.
+Take: batching several claims into one judge prompt lets neighbours change verdicts. Keep single-item judging as the baseline and measure batching stability separately. The harness-level entry is in the Dokime txt.

@@ -1319,28 +1319,32 @@
 | **Syntactic Sensitivity Mood Fuzzer** | Item 110 | Phylax (`SyntacticMoodFuzzer`, 5-mood variance audit, arXiv:2608.05409)| **Integrated & Verified** | 40 Phylax tests passing (4 new invariance/vulnerability tests) |
 | **Table-to-Prose Retrieval Normalization**| Item 111 | Stoma (`TableProseNormalizer`, `normalize_markdown_tables`, arXiv:2609.24220)| **Integrated & Verified** | 131 Stoma tests passing (4 new extraction/chunker tests) |
 | **Causal Deliberation Step Audit** | Item 112 | Dokime (`CausalDeliberationAuditor`, step counterfactuals, arXiv:2610.21182)| **Integrated & Verified** | 223 Dokime tests passing (4 new causal/ritual tests) |
+| **Untrusted Role-Spoofing & Boundary Demarcation Guard**| Item 113 | Phylax (`RoleSpoofingGuard`, control token sanitization, arXiv:2610.40396)| **Integrated & Verified** | 44 Phylax tests passing (4 new security tests) |
+| **Prefix Executability Trace Metric** | Item 114 | Dokime (`PrefixExecutabilityAuditor`, arXiv:2610.40444)| **Integrated & Verified** | 227 Dokime tests passing (4 new trace metric tests) |
+| **In-Context Batch Isolation & Permutation Guard**| Item 115 | Dokime + Krisis (`BatchIsolationAuditor`, arXiv:2610.40241)| **Integrated & Verified** | 230 Dokime tests passing (3 new batch stability tests) |
+| **Ingest-Time Entity Alias Reconciler**| Item 116 | Stoma + LTHCM (`EntityAliasReconciler`, FIRME alias graphs, arXiv:2610.40482)| **Integrated & Verified** | 133 Stoma tests passing (2 new entity reconciliation tests) |
 
 ---
 
-### Monorepo Subsystem Test Verification Breakdown (1,223 Total Passed)
+### Monorepo Subsystem Test Verification Breakdown (1,236 Total Passed)
 
 | Subsystem | Test Command | Tests Passed | Skipped | Runtime | Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **223** | 0 | 9.56s | **PASS** |
+| **Dokime** (Evaluation & Release Gates) | `./.venv/bin/pytest dokime/tests -q` | **230** | 0 | 10.28s | **PASS** |
 | **Kybernetes** (Orchestrator & Tools) | `./.venv/bin/pytest kybernetes/tests -q` | **216** | 0 | 25.24s | **PASS** |
 | **LTHCM** (Poincaré Memory Engine) | `./LTHCM/.venv/bin/pytest LTHCM/tests -q` | **134** | 0 | 230.58s | **PASS** |
-| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **131** | 0 | 225.10s | **PASS** |
+| **Stoma** (Ingestion & Chunking) | `CUDA_VISIBLE_DEVICES="" ./stoma/.venv/bin/pytest stoma/tests -q` | **133** | 0 | 225.10s | **PASS** |
 | **Dianoia** (MCTS Deliberation Engine) | `./.venv/bin/pytest dianoia/tests -q` | **97** | 0 | 4.26s | **PASS** |
 | **Hestia** (GGUF Inference Serving) | `./hestia/.venv/bin/pytest hestia/tests -q` | **83** | 1 | 2.03s | **PASS** |
 | **Prosopon** (WebRTC & Access Store) | `./prosopon/.venv/bin/pytest prosopon/tests -q` | **76** | 0 | 43.61s | **PASS** |
 | **Paideia** (Training Pipeline) | `./paideia/.venv/bin/pytest paideia/tests -q` | **72** | 0 | 2.18s | **PASS** |
 | **Kleroterion** (Stochastic Policy) | `./kleroterion/.venv/bin/pytest kleroterion/tests -q` | **43** | 0 | 1.66s | **PASS** |
 | **Krisis** (Claim Grounding & Conformal Gates)| `./.venv/bin/pytest krisis/tests -q` | **43** | 0 | 0.24s | **PASS** |
-| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **40** | 0 | 1.43s | **PASS** |
+| **Phylax** (Capability Security Gateway) | `./.venv/bin/pytest phylax/tests -q` | **44** | 0 | 1.44s | **PASS** |
 | **Experiments** (Text vs Graph Empirical Suite) | `./.venv/bin/pytest experiments/text_vs_graph/test_*.py -q` | **27** | 0 | 0.04s | **PASS** |
 | **Root Integration** | `./.venv/bin/pytest tests -q` | **39** | 0 | 17.33s | **PASS** |
 | **VS Code Void IDE Client** | `npm run compile` (in `vscode/`) | **0 errors** | 0 | 76.47s | **PASS** |
-| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,223** | **1** | **~9 min** | **ALL GATES PASS** |
+| **Total Monorepo Suite** | **All 11 Subsystems + Experiments + IDE Client** | **1,236** | **1** | **~9 min** | **ALL GATES PASS** |
 
 
 

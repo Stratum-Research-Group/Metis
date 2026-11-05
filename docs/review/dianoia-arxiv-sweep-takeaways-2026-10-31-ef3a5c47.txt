@@ -1,0 +1,23 @@
+DIANOIA - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[5] Don't Lose the Thread: Empowering Long-Horizon LLM Agents with Cognitive Resource Self-Allocation (CORAL)
+https://arxiv.org/abs/2610.40350
+Fit: MODERATE - no established direct improvement to the graph walk.
+Take: if anything transfers, it is checkpoint/reset discipline for very long walks. The stronger agent-control fit is Kybernetes' (see the Kybernetes txt), and the headline gains come mostly from distilled SFT (the training arm would live in Paideia).
+
+[28] Algebraic World Model: From Exploration to Proofs
+https://arxiv.org/abs/2610.40503
+Fit: EXPLORATORY - a formal-verification direction.
+Take: turn learned rules into executable hypotheses and kernel-checked proofs (Lean 4), including impossibility results. Interesting for checking consequences and contradictions of a learned model - adjacent to Dianoia's contradiction-checking ambitions.
+Constraint: a proof is only as applicable as the learned model's correspondence to the real problem. This is a research direction, not a component.
+
+[7] Prefix Executability: Evaluating Tool-Using Agents Beyond Final Success
+https://arxiv.org/abs/2610.40444
+Fit: CROSS-REFERENCE.
+Take: walk traces benefit from step-level executability grading - valid EXPAND/BACKTRACK/ANSWER steps, not just a correct final answer. Dokime owns the metric; full entry in the Dokime txt.

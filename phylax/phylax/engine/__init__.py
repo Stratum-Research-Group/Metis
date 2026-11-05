@@ -15,6 +15,11 @@ from phylax.engine.mood_fuzzer import (
     SyntacticMood,
     SyntacticMoodFuzzer,
 )
+from phylax.engine.role_guard import (
+    RoleSpoofingGuard,
+    RoleSpoofingMatch,
+    RoleSpoofingViolationError,
+)
 
 __all__ = [
     "canonicalize_path",
@@ -31,4 +36,7 @@ __all__ = [
     "MoodVariant",
     "MoodAuditReport",
     "SyntacticMoodFuzzer",
+    "RoleSpoofingGuard",
+    "RoleSpoofingMatch",
+    "RoleSpoofingViolationError",
 ]

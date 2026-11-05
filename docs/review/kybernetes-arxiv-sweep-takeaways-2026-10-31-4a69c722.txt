@@ -1,0 +1,28 @@
+KYBERNETES - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[5] Don't Lose the Thread: Empowering Long-Horizon LLM Agents with Cognitive Resource Self-Allocation (CORAL)
+https://arxiv.org/abs/2610.40350
+Fit: STRONG - agent control is Kybernetes' orchestration territory.
+Take: checkpointed working memory and deliberate context resets for long-running tasks. The fit here is stronger than any claim that it directly improves Dianoia's graph walk (see the Dianoia txt).
+Constraint: keep two contributions separate - the memory procedure and the distilled SFT. The headline gains come mostly from the distillation; that training arm would live in Paideia.
+
+[19] VeriCUA: Verification as Agentic Exploration for Computer-Using Agents
+https://arxiv.org/abs/2610.40578
+Fit: STRONG - Kybernetes traces are the natural subject.
+Take: a verifier that actively checks unresolved requirements using GUI or code tools, for when checking an outcome needs more than reading the agent's answer. The evaluation harness itself is Dokime's - the metric entry is in the Dokime txt.
+
+[7] Prefix Executability: Evaluating Tool-Using Agents Beyond Final Success
+https://arxiv.org/abs/2610.40444
+Fit: CROSS-REFERENCE.
+Take: Kybernetes traces benefit from step-level executability grading - valid intermediate actions, not just final success. Dokime owns the metric; full entry in the Dokime txt.
+
+[6] Understanding and Mitigating Role Spoofing in LLMs
+https://arxiv.org/abs/2610.40396
+Fit: BOUNDARY - the execution path is an enforcement point.
+Take: Kybernetes handles external content when executing; the authority boundary has to be enforced outside the model. Threat model and policy home are in the Phylax txt.

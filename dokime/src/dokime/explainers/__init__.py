@@ -17,6 +17,18 @@ from dokime.explainers.step_causality import (
     StepCausalRole,
     StepInterventionAudit,
 )
+from dokime.explainers.prefix_executability import (
+    ActionStep,
+    PrefixExecutabilityAuditor,
+    PrefixExecutabilityReport,
+    StepExecutabilityAudit,
+)
+from dokime.explainers.batch_isolation import (
+    BatchIsolationAuditor,
+    BatchIsolationReport,
+    BatchItem,
+    ItemPermutationResult,
+)
 
 __all__ = [
     "SISResult",
@@ -28,4 +40,12 @@ __all__ = [
     "StepInterventionAudit",
     "DeliberationAuditReport",
     "CausalDeliberationAuditor",
+    "ActionStep",
+    "StepExecutabilityAudit",
+    "PrefixExecutabilityReport",
+    "PrefixExecutabilityAuditor",
+    "BatchItem",
+    "ItemPermutationResult",
+    "BatchIsolationReport",
+    "BatchIsolationAuditor",
 ]

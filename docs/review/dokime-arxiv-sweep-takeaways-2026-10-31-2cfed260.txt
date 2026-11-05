@@ -1,0 +1,57 @@
+DOKIME - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[7] Prefix Executability: Evaluating Tool-Using Agents Beyond Final Success
+https://arxiv.org/abs/2610.40444
+Fit: STRONG - Dokime owns this metric; its natural subject is Kybernetes/Dianoia traces.
+Take: step-by-step executability checks on agent traces - valid arguments, available information, satisfied preconditions, valid transitions. An agent reaching the right final answer should not erase invalid intermediate actions. Deterministic, no judge model needed.
+
+[11] Judged in Company: In-Context Batching Makes LLM Verdicts Depend on Other Items
+https://arxiv.org/abs/2610.40241
+Fit: STRONG.
+Take: judging multiple items in one prompt lets neighbours change verdicts. Single-item judging is the sensible baseline; batching needs its own stability measurement before you trust it. (The Krisis-specific angle is in the Krisis txt.)
+Constraint: the paper does not show every form of batching is invalid - it shows batching is a variable you must measure.
+
+[16] Testimony from Timelines: Evidence-Grounded Significance Testing of Temporal Clinical Hypotheses (STRATA)
+https://arxiv.org/abs/2610.40619
+Fit: STRONG - evaluation structure, not the clinical application.
+Take: grade every intermediate decision (evidence selection, test choice) against a deterministic oracle, not just the final verdict. That decision-level grading is the transferable part.
+Evidence: clinical domain - don't generalize their numbers.
+
+[24] Ramanujan Challenge Results: AI-Assisted Evaluation Pipeline for Multi-Format Proofs
+https://arxiv.org/abs/2610.40551
+Fit: STRONG methodology for judge pipelines.
+Take: keep numerical checks, executable/formal evidence, and prose judging as separate stages with separate failure rates.
+Constraint: stricter judging is not necessarily more accurate judging - some of their apparent gains were stringency, not correctness.
+
+[36] Beyond Selected Breakthroughs: Evaluating Language Models on Randomly Sampled Mathematical Conjectures (OpenConjecture)
+https://arxiv.org/abs/2610.40382
+Fit: METHODOLOGY.
+Take: randomly sampled hard problems instead of selected success stories - a discipline worth adopting for any capability claim.
+Constraint: their model-judged candidate results are not a set of independently verified mathematical discoveries.
+
+[19] VeriCUA: Verification as Agentic Exploration for Computer-Using Agents
+https://arxiv.org/abs/2610.40578
+Fit: STRONG for agent evaluation.
+Take: a verifier that actively checks unresolved requirements using GUI or code tools, for when checking an outcome needs more than reading the agent's answer. Kybernetes traces are the natural subject (see the Kybernetes txt).
+Evidence: work in progress; compare verifiers on the same decided subset or the numbers are not comparable.
+
+[29] rTaste: Do Research Agents Have Taste? Evaluating Early Stage Research Judgment
+https://arxiv.org/abs/2610.40488
+Fit: METHODOLOGY - also applies to my own recommendations.
+Take: compare an agent's proposed experiments and stated confidence with what happens when those experiments actually run. A calibration harness for research judgment, including the recommendations in these txt files.
+
+[1] Elucidating the Design Space of Language Model Data Attribution
+https://arxiv.org/abs/2610.40655
+Fit: STRONG - the "measure every change with real numbers" discipline applied to attribution.
+Take: the paper's design-space breakdown (which attribution method suits which claim) is a checklist for evaluating provenance-style claims. Training-data attribution is not retrieval-citation proof - keep the claim types separate.
+
+[2] Rethinking Neural Thickets Without Weight Perturbations
+https://arxiv.org/abs/2610.40649
+Fit: CONTROLS.
+Take: simple perturb/select/vote baselines belong in the harness - before crediting sophisticated selection or weight-space geometry, test whether ordinary diversity plus voting explains the improvement. The Krisis-specific angle is in the Krisis txt.

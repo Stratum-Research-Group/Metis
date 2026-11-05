@@ -1,0 +1,26 @@
+PHYLAX - takeaways from the October 2026 arXiv sweep
+2026-10-31
+
+Source: screen of the newest ~200 arXiv papers (AI/ML plus project-relevant). 12 papers got deeper section-level reads; 27 got standard reviews with varying coverage - entries reflect that coverage, not full-paper claims. Read depth is not a priority ranking.
+Numbering: [n] is the paper's number in the sweep list sent in chat on 2026-10-31.
+Status: research takeaways for review. Not implementation specs, not commitments. Papers that fit other projects have their own txt files.
+
+----------------------------------------------------------------
+[6] Understanding and Mitigating Role Spoofing in LLMs
+https://arxiv.org/abs/2610.40396
+Fit: STRONG - the threat model belongs to Phylax.
+Take: document or tool content impersonating a higher-authority message is a distinct attack surface for any agent that reads external content. Phylax is the natural policy home; the enforcement points are the ingestion path (Stoma) and the execution path (Kybernetes).
+Constraint: a model's own claim that it knows who said what is not sufficient protection - the boundary has to be enforced outside the model.
+
+[15] ShallowDefend: Harnessing Shallow Safety Alignment for Multi-Turn Defender
+https://arxiv.org/abs/2610.40627
+Fit: STRONG - a concrete policy pattern.
+Take: make the safety decision an explicit, parseable token span (Assess, Decide, Respond), trained with RL on a verifiable reward. Decision first, answer second, with labels you can check - a candidate pattern for Phylax's policy layer. Not a replacement for external enforcement.
+Evidence: their numbers are in-distribution to their replayed attack set.
+Note: the training arm of this pattern would live in Paideia.
+
+[18] Pre-Crime for Agents, at the Last Second
+https://arxiv.org/abs/2610.40588
+Fit: POSSIBLE MONITORING HOME.
+Take: activation probes that flag an impending secret-leaking tool call before it fires. Building and testing such a probe is Dioptra work (see the Dioptra txt); if it proves out, running it as a monitor is Phylax's.
+Constraint: not established as better than a properly trained text-only monitor.
