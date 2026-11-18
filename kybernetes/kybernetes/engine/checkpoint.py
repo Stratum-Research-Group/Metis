@@ -17,6 +17,7 @@ class MilestoneCheckpoint:
     stash_ref: Optional[str] = None
     commit_sha: Optional[str] = None
     untracked_files: List[str] = None
+    untracked_contents: Optional[dict] = None
 
 
 class GitMilestoneCheckpointer:
@@ -63,8 +64,16 @@ class GitMilestoneCheckpointer:
         # Check if there are uncommitted changes to stash as clean baseline
         stash_ref = None
         untracked_files = []
+        untracked_contents = {}
         if self.is_git_repo():
             untracked_files = self._get_untracked_files()
+            for rel_path in untracked_files:
+                fpath = (self.workspace_root / rel_path).resolve()
+                if fpath.is_file():
+                    try:
+                        untracked_contents[rel_path] = fpath.read_bytes()
+                    except Exception:
+                        pass
             stash_msg = f"metis-checkpoint-{checkpoint_id}"
             stash_res = self._run_git(["stash", "create", stash_msg])
             if stash_res.returncode == 0 and stash_res.stdout.strip():
@@ -77,6 +86,7 @@ class GitMilestoneCheckpointer:
             stash_ref=stash_ref,
             commit_sha=head_sha,
             untracked_files=untracked_files,
+            untracked_contents=untracked_contents,
         )
         self._checkpoints.append(checkpoint)
         return checkpoint
@@ -108,6 +118,16 @@ class GitMilestoneCheckpointer:
             except Exception:
                 pass
 
+        # Restore any pre-existing untracked files to their checkpoint snapshot (Finding 5)
+        if checkpoint.untracked_contents:
+            for rel_path, content in checkpoint.untracked_contents.items():
+                fpath = (self.workspace_root / rel_path).resolve()
+                try:
+                    fpath.parent.mkdir(parents=True, exist_ok=True)
+                    fpath.write_bytes(content)
+                except Exception:
+                    pass
+
         # If we had a specific stash reference, restore it
         if checkpoint.stash_ref:
             res = self._run_git(["stash", "apply", checkpoint.stash_ref])
@@ -118,18 +138,40 @@ class GitMilestoneCheckpointer:
 
         return True
 
-    def commit_milestone(self, message: str, files: Optional[List[str]] = None) -> bool:
-        """Stage and commit verified changes after test gates pass, including new files (Finding A7)."""
+    def commit_milestone(
+        self,
+        message: str,
+        files: Optional[List[str]] = None,
+        checkpoint: Optional[MilestoneCheckpoint] = None,
+    ) -> bool:
+        """Stage and commit verified changes after test gates pass, excluding baseline untracked files and .metis."""
         if not self.is_git_repo():
             return False
 
         if files:
             for f in files:
+                rel = str(f).lstrip("./")
+                if rel.startswith(".metis") or rel.startswith(".git"):
+                    continue
                 self._run_git(["add", f])
         else:
-            add_res = self._run_git(["add", "."])
-            if add_res.returncode != 0:
-                self._run_git(["add", "-A"])
+            # Stage tracked modifications
+            self._run_git(["add", "-u"])
+
+            # If a checkpoint baseline is provided, stage newly created files that were NOT in baseline
+            # If no checkpoint is provided, stage all current untracked non-.metis files
+            baseline_untracked = set(checkpoint.untracked_files or []) if checkpoint else set()
+            current_untracked = self._get_untracked_files()
+            for path_str in current_untracked:
+                if checkpoint is None or path_str not in baseline_untracked:
+                    if not (path_str.startswith(".metis") or path_str.startswith(".git")):
+                        self._run_git(["add", path_str])
+
+        # Check if there is anything staged to commit
+        diff_res = self._run_git(["diff", "--cached", "--quiet"])
+        if diff_res.returncode == 0:
+            # Clean index, nothing to commit
+            return True
 
         commit_res = self._run_git(["commit", "-m", f"[Metis Milestone] {message}"])
         return commit_res.returncode == 0

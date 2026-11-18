@@ -154,3 +154,69 @@ def test_commit_milestone_stages_newly_created_files(tmp_path: Path):
     assert "new_module.py" in result.stdout
 
 
+def test_rollback_reverts_preexisting_untracked_modifications(tmp_path: Path):
+    """Regression test for Finding 5: Rollback must restore baseline untracked files modified by agent."""
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Metis Test"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@metis.local"], cwd=str(tmp_path), check=True)
+
+    dummy = tmp_path / "init.txt"
+    dummy.write_text("initial\n", encoding="utf-8")
+    subprocess.run(["git", "add", "init.txt"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=str(tmp_path), check=True)
+
+    # Pre-existing untracked file (e.g. user notes or .env)
+    untracked = tmp_path / "user_notes.txt"
+    untracked.write_text("user original note\n", encoding="utf-8")
+
+    checkpointer = GitMilestoneCheckpointer(workspace_root=tmp_path)
+    cp = checkpointer.create_checkpoint("Pre-agent edit")
+
+    # Agent mutates the untracked file
+    untracked.write_text("agent modified this note!\n", encoding="utf-8")
+
+    # Agent verification fails -> rollback
+    rolled_back = checkpointer.rollback(cp)
+    assert rolled_back is True
+    assert untracked.read_text(encoding="utf-8") == "user original note\n"
+
+
+def test_commit_milestone_excludes_baseline_untracked_user_files(tmp_path: Path):
+    """Regression test for Finding 4: commit_milestone must not stage baseline untracked user files."""
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Metis Test"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@metis.local"], cwd=str(tmp_path), check=True)
+
+    tracked = tmp_path / "tracked.py"
+    tracked.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.py"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "Initial"], cwd=str(tmp_path), check=True)
+
+    # Baseline untracked secret/note
+    secret = tmp_path / ".env.local"
+    secret.write_text("SECRET=12345\n", encoding="utf-8")
+
+    checkpointer = GitMilestoneCheckpointer(workspace_root=tmp_path)
+    cp = checkpointer.create_checkpoint("Baseline")
+
+    # Agent updates tracked file and adds a new file
+    tracked.write_text("v2\n", encoding="utf-8")
+    agent_file = tmp_path / "feature.py"
+    agent_file.write_text("print('feature')\n", encoding="utf-8")
+
+    committed = checkpointer.commit_milestone("Verified feature", checkpoint=cp)
+    assert committed is True
+
+    result = subprocess.run(
+        ["git", "show", "--name-only", "--oneline", "HEAD"],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "tracked.py" in result.stdout
+    assert "feature.py" in result.stdout
+    assert ".env.local" not in result.stdout
+
+
+

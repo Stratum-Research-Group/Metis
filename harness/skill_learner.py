@@ -43,14 +43,20 @@ class DynamicSkillLearner:
         target_dir.mkdir(parents=True, exist_ok=True)
         file_path = target_dir / "SKILL.md"
 
+        # Safely escape YAML frontmatter fields (Finding 3)
+        safe_name = name.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+        safe_domain = domain.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+        safe_desc = description.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+        safe_verif = (verification_command or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
         timestamp = time.time()
         content = (
             f"---\n"
-            f"name: \"{name}\"\n"
-            f"domain: \"{domain}\"\n"
-            f"description: \"{description}\"\n"
+            f"name: \"{safe_name}\"\n"
+            f"domain: \"{safe_domain}\"\n"
+            f"description: \"{safe_desc}\"\n"
             f"created_at: {timestamp}\n"
-            f"verification_command: \"{verification_command or ''}\"\n"
+            f"verification_command: \"{safe_verif}\"\n"
             f"---\n\n"
             f"# {name}\n\n"
             f"## Description\n{description}\n\n"

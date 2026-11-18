@@ -1,0 +1,344 @@
+METIS-VSCODE (MSS VOID) REPOSITORY REVIEW
+==========================================
+Repo:    https://github.com/Stratum-Research-Group/metis-vscode
+Commit:  823d109d0751de88af44f0772603c63e25c684ea (remote HEAD, main,
+         "feat(lochos): add pipeline launch and task completion
+         controls to Void dashboard", dated 2026-11-01 15:39 +0200)
+Reviewed: 2026-11-18, from a fresh depth-1 clone. HEAD re-verified by
+         ls-remote at closeout. Nick confirmed this GitHub
+         organisation mirrors the GitLab projects; commit equality
+         with the private GitLab metis-vscode submodule was NOT
+         verified (no access).
+Rev 2:   runtime-exploitability and deployment claims qualified after
+         second-pass review; file/line references unchanged.
+
+WHAT THIS REPO IS
+-----------------
+A fork of Void (the VS Code AI editor fork), voidVersion 1.4.9,
+rebranded "Metis Sovereign Studio" (product.json). The custom layer
+identified by scanning for 'metis' references is ~9,700 lines in 6
+files (repo-root-relative paths):
+
+  src/vs/workbench/contrib/void/browser/metisViews.ts       3,495
+  src/vs/workbench/contrib/void/browser/react/src/
+    void-settings-tsx/MetisDashboard.tsx                    3,630
+    void-settings-tsx/MetisSovereignSettings.tsx            2,235
+  src/vs/workbench/contrib/void/browser/metisDashboardPane.ts 605
+  src/vs/workbench/contrib/void/browser/metisTokenHelper.ts   245
+  extensions/theme-defaults/themes/metis_antigravity.json     133
+
+Plus 18 existing files carrying 'metis' references (registration,
+provider plumbing, branding): void.contribution.ts, voidSettingsPane.ts,
+sidebarActions.ts, voidOnboardingService.ts, sidebar-tsx/SidebarChat.tsx,
+void-settings-tsx/index.tsx + Settings.tsx + styles.css,
+electron-main/llmMessage/sendLLMMessage.ts + .impl.ts,
+common/voidSettingsTypes.ts + modelCapabilities.ts +
+refreshModelService.ts, product.json, both workbench.html files,
+theme-defaults/package.json, scripts/code.sh.
+
+COVERAGE (be honest)
+--------------------
+- 5 of the 6 custom files read in full. In MetisDashboard.tsx every
+  fetch, handler and reducer was read; the ~2,200 lines of
+  presentational JSX markup were skimmed for hardcoded claims only.
+- The delta vs upstream Void was identified by scanning for 'metis'
+  references. Upstream-side changes that carry no metis reference are
+  NOT caught by that scan, and the Void/VS Code baseline was NOT
+  re-reviewed (upstream code, out of scope).
+- No build, no test run (see OPEN GATES).
+- Evidence tags: READ = from source reading; REPRO = reproduced in
+  isolation.
+
+VERDICT
+-------
+The wiring is real: the Lochos dashboard handlers, Hestia model list,
+token discovery chain and provider registration genuinely talk to the
+local stack, and the dashboard's dispatch/transfer/resolve/complete
+handlers check res.ok properly. But the repo ships two blocking
+problems: (1) hardcoded fallback service tokens committed to a PUBLIC
+repo and silently used when discovery fails, and (2) the Start /
+Restart Kybernetes buttons can never work (bash syntax error, REPRO).
+On top of that, a large share of the UI presents fabricated telemetry
+and fake verification results as if live (Phylax "VERIFIED 368
+RECORDS", Dokime "Run All" that runs nothing, audit "100% valid"
+fallback).
+
+FINDINGS (19 numbered groups, ordered by severity; some numbers group
+several related defects)
+----------------------------------------------------------------------
+
+1. HIGH (READ): Hardcoded fallback service tokens in a public repo.
+   metisTokenHelper.ts:122-124, 177, 196, 228. When storage, settings
+   and deploy/metis.env discovery all fail, the client silently falls
+   back to committed values for the Kybernetes/Hestia service token
+   (one shared 48-hex value) and the Prosopon host-owner token.
+   Source confirms the client will send these publicly known values;
+   whether any live deployment or server actually accepts them was
+   NOT verified (no running stack, no backend access). If these
+   values were ever accepted live, rotate them. Fix: no silent
+   fallback - fail closed and prompt for configuration instead.
+
+2. HIGH (REPRO): Start/Restart Kybernetes buttons always fail.
+   MetisSovereignSettings.tsx:287 (start) and :304 (restart) build:
+     KYBERNETES_ADMIN_TOKEN=x KYBERNETES_SERVICE_TOKEN=y ( ... subshell )
+   Variable assignments cannot prefix a subshell compound command;
+   bash exits 2 with "syntax error near unexpected token `('".
+   Reproduced verbatim in bash. The Hestia/Prosopon variants (no env
+   prefix) parse fine. Move the env vars inside the subshell or into
+   run_stack.sh / an env file.
+
+3. HIGH (READ): Pass-through Trusted Types policy + unescaped HTML
+   interpolation = unsafe innerHTML sinks. Exploitability NOT
+   demonstrated.
+   metisViews.ts:39 defines _ttPolicy with createHTML: (v) => v (no
+   sanitization, defeating the mechanism's purpose), and
+   safeSetInnerHTML (:41-53) then renders strings that interpolate
+   server-controlled JSON: tok.seat_id / task_title / details.target
+   / details.tool (:226-234), seat fields (:1052-1060), model.name
+   (:577), attention reason (:979), chat history incl. local-LLM
+   replies (:2900-2906) and the user's own search query into an
+   attribute (:2714). This is a source-confirmed unsafe-sink pattern.
+   Actual script execution / stored XSS was not demonstrated: it
+   depends on the payload path, CSP and Trusted Types runtime
+   enforcement, none verified (no running build). Fix: build DOM with
+   textContent for data values, or put a real sanitizer in the policy.
+
+4. HIGH (READ): Secrets typed into the integrated terminal in
+   plaintext. startKybernetes/restartKybernetes sendText commands
+   that embed --admin-token and --service-token values
+   (MetisSovereignSettings.tsx:287, :304); executePanicLockdown sends
+   a curl with "Authorization: Bearer <token>" inline (:406). The
+   token values are visibly exposed in the sent text itself (on
+   screen, in scrollback). Whether they additionally persist to shell
+   history or appear in process argv listings depends on the shell
+   and how the command executes - not verified. Separately, tokens
+   are persisted to application storage in plaintext
+   (metisTokenHelper.ts:132-136, source-confirmed). Prefer:
+   run_stack.sh reads deploy/metis.env itself (0600 perms), no
+   secrets in typed commands.
+
+5. HIGH (READ): Approval UX can authorize blind and reports success
+   without checking. (a) The startup attention prompt's "Approve &
+   Run" (metisDashboardPane.ts:538-586) shows reason/title but never
+   the actual command or payload being approved, and does not check
+   res.ok before toasting "approved". (b) The sidebar resolve paths
+   (metisViews.ts:1716-1733 and :3062-3088) toast "Authorized and
+   cryptographically signed token" on any completed fetch, including
+   HTTP 4xx/5xx. (c) The generated project template defaults
+   governance.require_tool_approval: false (MetisDashboard.tsx:223) -
+   new agents scaffolded from the dashboard start ungated.
+
+6. HIGH (READ): Fabricated verification results presented as real.
+   - Dokime "Run All 12 Suites" is a 1.2s setTimeout that then
+     reports all tests green (metisViews.ts:3279-3291); the "10k
+     Resample" button only shows a toast (:3294-3300), as does the
+     toolbar verify action (:3485-3493).
+   - Phylax sidebar shows a hardcoded "VERIFIED (368 RECORDS)" badge
+     and a hardcoded head hash (metisViews.ts:186-198); the policy
+     matrix and "ENFORCING" badge are static text (:154, :162-182).
+   - The dashboard's audit section hardcodes the same 368 records,
+     head hash and three table rows dated 2026-10-20
+     (MetisDashboard.tsx:3326-3420), and when Prosopon is offline the
+     Verify button falls back to a fabricated "368 records ... 100%
+     valid" toast (:1142).
+   - executePanicLockdown prints "PANIC LOCKDOWN COMPLETE ... <500ms"
+     unconditionally - both steps have || true
+     (MetisSovereignSettings.tsx:406).
+   - rebuildMemoryIndex runs python3 -c "print(...)" and echoes
+     "Stoma index synchronized" without touching any index (:362-364).
+   - Stoma "Flush" and "Export .stoma/" and the chat "Flush" claim
+     disk commits ("Full continuity maintained") but only mutate
+     in-memory arrays (metisViews.ts:2745-2764, :2440-2447,
+     :2990-3000 and :3076-3087); history is actually discarded on
+     flush.
+
+7. HIGH (READ): Launchpad model switcher reports success on failure.
+   _switchModel (metisViews.ts:1411-1435) toasts "Successfully
+   activated" without checking res.ok, and even when fetch throws it
+   still sets the model active and re-renders (catch branch
+   :1426-30). Separately, it calls /v1/models/load while
+   HestiaViewPane uses /manage/load (:1414 vs :441). The two paths
+   are inconsistent; which endpoint Hestia actually serves was not
+   verified against a running backend - confirm before consolidating.
+
+8. MED (READ): Fabricated "live" telemetry across views.
+   Research view: the Dianoia DAG nodes/posteriors/LRs/citations are
+   hardcoded demo data (metisViews.ts:1803-1935), as are the
+   Kleroterion entropy/mode-collapse numbers (:2264-2302) and Krisis
+   "14/14 claims, 0.884" (:2304-2342); "Deliberate Step" just
+   increments a local counter (:2436-2448). Stoma view: indexed files
+   10,480, symbols 48,290, commit #142, LTHCM manifold metrics all
+   hardcoded (:2470-2484). Dokime suite table hardcoded (:3134-3148).
+   Hestia view shows a hardcoded 4-model list when offline
+   (:524-530). Lochos/AgentHub seed two fake tasks #101/#102
+   (:1520-1524). Either label these DEMO/SAMPLE visibly or wire them
+   to the backends; as-is a viewer cannot tell real from staged.
+
+9. MED (READ): Test count contradicts itself. UI claims "1,003 tests"
+   (metisDashboardPane.ts:246, metisViews.ts:3270 and :3492) but the
+   hardcoded suite list sums to 1,002 (186+152+127+113+93+72+71+43+41
+   +36+29+39, metisViews.ts:3134-3148). Fix the source of truth; when
+   wired to real Dokime output this resolves itself.
+
+10. MED (READ): Several views call getMetisAuthHeaders() /
+    getMetisHestiaToken() with no services (metisViews.ts:116, :137,
+    :880-892, :1716, :1741-1748, :3012, :3062), so on a cold cache
+    they silently send the hardcoded fallback token from finding 1.
+    Thread the injected services through (the panes have
+    instantiationService) or require explicit configuration.
+
+11. MED (READ): Fake pairing ticket when Prosopon is offline.
+    handleMintPairingTicket (MetisDashboard.tsx:1050-1087) falls back
+    to Math.random() id/secret and presents it as a real "single-use
+    ticket valid for 300 seconds" that was never minted server-side.
+    Fix: fail closed - show that Prosopon is unreachable and mint
+    nothing. A locally generated id (UUID or otherwise) cannot stand
+    in for a server-issued pairing ticket, so the fallback must be
+    removed, not upgraded.
+
+12. MED (READ): Hestia management calls skip auth while chat uses it.
+    /models, /manage/load, /manage/unload, /health are fetched without
+    Authorization (metisViews.ts:410, :441, :466, :1430;
+    metisDashboardPane.ts:331, :449), while /v1/chat/completions sends
+    the bearer token (metisViews.ts:3094-3098). If Hestia enforces
+    the service token on /v1/* but not /manage/*, anyone on loopback
+    can load/unload models. Verify Hestia's policy and make the
+    client consistent.
+
+13. MED (READ): Write-only settings. Phylax policy path, audit log
+    path, token TTL, default-deny and the Dianoia settings are stored
+    to application storage (MetisSovereignSettings.tsx:1396-1460,
+    :1572-1610) but nothing in this repo ever reads them - changing
+    them changes nothing. Wire to the backend or remove until real.
+
+14. MED (READ): Chat context gauge is a character estimate presented
+    as tokens: chars/3.8 with a floor of 380 (metisViews.ts:2796-2799)
+    drives the "tokens (x%)" gauge and the 24k auto-flush
+    (:2881, :3076-3087). The chat also hardcodes model
+    'qwen2.5-14b-instruct' (metisViews.ts:3094), ignoring the chat
+    model the user selected elsewhere.
+
+15. MED (READ): Broad pkill patterns. Stop/restart actions use
+    pkill -f "hestia.yaml", pkill -f "kybernetes.*serve", pkill -f
+    "prosopon.*serve", pkill -f "run_stack.sh"
+    (MetisSovereignSettings.tsx:224, :246, :267, :279, :291, :312,
+    :334, :346). These regexes match any process cmdline containing
+    the pattern - an editor opened on hestia.yaml qualifies. Use
+    PID files from run_stack.sh or exact unit names.
+
+16. MED (READ): Hardcoded absolute paths. /home/akarta/Projects and
+    /home/akarta/Projects/Metis throughout (MetisSovereignSettings.tsx
+    :165, :213, :246, :287, ...; MetisDashboard.tsx:1149, :1219-1223,
+    :1674). Fine on Nick's machine, breaks for any other user of the
+    build; make it a setting with this as default.
+
+17. LOW (READ): Settings help text says "Kybernetes on port 8000"
+    (voidSettingsTypes.ts:118); everything else uses 8081 for
+    Kybernetes and 8000 for Prosopon. One-line doc fix.
+
+18. LOW (READ): Misc. (a) Attention dedupe set grows unbounded for
+    the app's lifetime (metisDashboardPane.ts:375, :519-522). (b) VRAM
+    bar divides by 24,000 and labels "Target: ~24 GB" on a 16 GB card
+    (metisViews.ts:546-551). (c) Duplicated section comment banners in
+    metisViews.ts (:1500/:1503 and :2451/:2454) - copy-paste residue.
+    (d) Status probes mark a service ONLINE for any HTTP response
+    including 4xx/5xx (MetisSovereignSettings.tsx:85-148). (e) Polling
+    is chatty: ~7 independent setIntervals across views/dashboard
+    hitting 127.0.0.1 every 3-5s (metisViews.ts:107, :401, :869,
+    :1288, :2844; metisDashboardPane.ts:436; MetisDashboard.tsx:815,
+    :1046; MetisSovereignSettings.tsx:147) - consolidate into one
+    shared polling service with backoff.
+
+19. LOW (READ): No targeted tests found for the ~9,700 lines of
+    custom code: no metis-named test files exist anywhere in the
+    repo. That establishes only that none were found, not proof that
+    no generic/upstream test exercises these paths. Minimum useful
+    set: unit tests for parseEnvFile and the token-resolution
+    precedence (storage > settings > env file > fail closed), the
+    poll diffing logic, and one smoke test per view pane rendered
+    with a mocked fetch.
+
+IMPROVEMENTS (not defects)
+--------------------------
+A. Centralize endpoint config: ~20 hardcoded fetch('http://127.0.0.1:
+   8080/8081/8000/...') call sites; one metisEndpoints module keyed off
+   the same host/port settings the C&C page already edits.
+B. Replace the string-template innerHTML rendering in metisViews.ts
+   with DOM construction (or keep templates but escape every data
+   value); put a real sanitizer in the Trusted Types policy or drop it.
+C. Mark all demo/placeholder data with a visible SAMPLE badge until
+   wired, and label actions that only simulate (some already do:
+   "Test Intercept", "MODE: SIMULATED" - extend the pattern).
+D. Uniform res.ok handling and surface the backend's error body in
+   notifications (the MetisDashboard.tsx Lochos handlers already do
+   this - use them as the house pattern).
+E. Add a CI gate that runs typecheck + buildreact + the finding-19
+   unit set, plus: (a) tests with a mocked fetch that assert BOTH the
+   failure and success paths - e.g. a 4xx/5xx response must not
+   produce the "Successfully activated" / "Authorized" / "100% valid"
+   toasts (findings 5-7) - since typecheck and token/poll unit tests
+   alone will not catch fabricated verification; and (b) a shell
+   syntax check (bash -n) over every generated command string, since
+   nothing else catches the finding-2 class of error before commit.
+
+DO-NOT-TOUCH LIST (when fixing, leave these alone)
+--------------------------------------------------
+- The upstream Void/VS Code baseline: everything outside the metis*
+  files and the 18 metis-referencing touch-points identified by the
+  reference scan above. Fork-drift makes upstream fixes expensive;
+  keep changes inside the custom files.
+- MetisDashboard.tsx Lochos handlers (dispatch/transfer/resolve/
+  complete/pipeline, ~lines 753-1000): already correct res.ok + error
+  body pattern.
+- The metis provider plumbing (sendLLMMessage.impl.ts:862-868,
+  modelCapabilities.ts:80-88/:1268+, voidSettingsTypes.ts provider
+  registration): working OpenAI-compatible path to Hestia.
+- Storage key names ('metis.*'): renaming orphans existing installs.
+- product.json rebrand fields, except reportIssueUrl and licenseUrl
+  which still point at github.com/voideditor/void (product.json:38-41)
+  - consider repointing; not a runtime defect.
+- metis_antigravity.json + its theme-defaults registration: correct.
+
+OPEN GATES (what was NOT verified)
+----------------------------------
+- No build: npm install / compile / npm run buildreact not run. The
+  react/out bundle is gitignored and generated at launch
+  (scripts/code.sh:33-37), so the import in metisDashboardPane.ts:39
+  resolves only after a build.
+- No tests run: none exist for the custom code; the full VS Code
+  suite was not attempted (heavy).
+- Upstream Void baseline not diffed (no upstream clone); only the
+  metis-referencing delta was reviewed, which can miss non-'metis'
+  changes.
+- Not compared with the private GitLab metis-vscode submodule; this
+  GitHub HEAD may or may not match it.
+- Depth-1 clone: git history, branches and tags beyond main
+  unreviewed (ls-remote showed only main).
+- Backend behavior not exercised: no live Hestia/Kybernetes/Prosopon,
+  so endpoint paths (finding 7), auth requirements (finding 12),
+  server acceptance of the fallback tokens (finding 1) and the
+  attention/queue payload shapes are verified only against the
+  client code, not a running stack.
+- XSS runtime behavior not verified: no running build, so CSP,
+  Trusted Types enforcement and any payload path behind finding 3
+  are unverified; finding 3 is a source-confirmed unsafe sink, not a
+  demonstrated exploit.
+- Terminal persistence of typed secrets (finding 4) beyond the sent
+  text itself not verified; depends on shell and execution.
+- Whether the fallback tokens in finding 1 were ever live credentials
+  is unknown from this repo; rotation advice is conditional on that.
+- MetisDashboard.tsx presentational JSX (~2,200 lines) skimmed for
+  hardcoded claims; every event handler and fetch was read in full.
+
+WHAT IS GENUINELY GOOD
+----------------------
+- Token discovery chain (storage -> settings -> deploy/metis.env ->
+  data/.host_owner_token) is a sensible order, just needs a fail-
+  closed end instead of committed defaults (finding 1).
+- The dashboard Lochos handlers are the correct pattern: res.ok
+  checked, server error detail surfaced, list refetched after
+  mutation.
+- scripts/code.sh is written to rebuild the React bundle when the
+  sources are newer (not build-verified here), which should prevent a
+  silently stale bundle if the check works as written.
+- Attention dedupe and voice-defaults-off are thoughtful touches.

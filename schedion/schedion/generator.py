@@ -103,7 +103,7 @@ class SchedionGenerator:
             gen_ckpt = torch.load(
                 str(artifacts_dir / cfg.checkpoints.generator),
                 map_location="cpu",
-                weights_only=False,
+                weights_only=True,
             )
             self._ncm_generator.load_state_dict(gen_ckpt["model"], strict=True)
             self._ncm_generator.eval()

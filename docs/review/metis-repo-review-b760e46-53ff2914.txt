@@ -1,0 +1,257 @@
+METIS REPO REVIEW + ENVOPT FIT @ b760e4615ccd (GitHub HEAD)
+Repo: https://github.com/Stratum-Research-Group/Metis
+HEAD commit 2026-11-18 11:02 +0200. Remote re-fetched at closeout:
+still b760e4615ccd. Clone is depth 1, so no history diff.
+This supersedes metis-envopt-fit-review-b760e46.txt (its old F4 was
+wrong; corrected in item 7). No comparison with earlier review rounds
+is made here; those were not reconciled.
+
+HOW TO READ THIS
+[REPRO] = I ran it in an isolated copy with a fake model; output seen.
+[READ]  = from reading code only, not run.
+Nothing was changed in the repo. Heavy tests/benchmarks were not run.
+
+COVERAGE STATEMENT (non-exhaustive)
+This is a sampled review. Absence of a finding in a module means "not
+found in what I read or scanned", not "clean". Only the kybernetes
+coding path was read in depth; reproductions cover items 1, 2, 4, 5, 6
+only. A full sweep is still open (gate G6).
+
+COVERAGE (exact)
+Modules in repo: LTHCM, dianoia, dokime, experiments, harness, hestia,
+kleroterion, krisis, kybernetes, paideia, phylax, prosopon, schedion,
+scripts, stoma, symbolon, tests/, docs/, deploy/, vscode (submodule).
+~90k lines of Python. This was NOT line-by-line. Depth by module:
+- kybernetes: DEEP on the coding path (engine/terminal_agent.py,
+  coding_agent.py, checkpoint.py; tools/file_search, read_file_range,
+  sandboxed_bash, code_mode, registry approval gate; execution/backend).
+  Server auth read. pinax, lochos, admin, budget, routing, adapters:
+  pattern scan only.
+- phylax: evaluator network/tool matching read; rest pattern scan.
+- prosopon: server auth + pairing token check read; rest pattern scan.
+- hestia: service-auth function only.
+- stoma, dianoia: pickle loading paths only.
+- LTHCM: import chain, checkpoint loading, pyproject only.
+- paideia: training/runner.py only.
+- dokime: grep only (stats/lineage/runner mentions).
+- schedion: generator.py checkpoint load only.
+- harness: skill_learner.py read in full.
+- krisis, kleroterion, symbolon, experiments, scripts, tests/,
+  docs/: pattern scans only (counts of bare except, TODO, shell=True,
+  eval/exec, pickle). krisis/kleroterion/schedion/symbolon had zero
+  bare-except-pass and zero TODO. They were not read.
+- vscode: git submodule to private gitlab.com/akarta-315h/metis-vscode.
+  Empty in this clone. NOT REVIEWED.
+Tests actually run (my env, pydantic/click/pytest only):
+  kybernetes tests/test_coding_tools, test_tools, test_coding_agent,
+  test_checkpoint, test_code_mode: 41 passed. test_terminal_agent
+  did not collect here (no uvicorn); not run. Other modules' tests not
+  run (need torch, sentence-transformers, etc.).
+I found no existing test for items 1, 2, 4, 5 below (grep of
+tests/test_terminal_agent.py).
+
+PLAIN VERDICT
+The MSS terminal coding agent has real correctness and safety bugs
+(items 1-8), the worst being a lost goal, a false VERIFIED status, an
+accidental broad git commit and an incomplete rollback. Items 10-14 are
+dependency/hardening issues in other modules, found by sampling. Some
+checked areas look sound (see CHECKED section). ENVOPT fit directly
+substantiated for the MSS coding agent only; applicability to other
+modules was not assessed. No model change is needed for any item.
+
+FINDINGS (numbered, highest first)
+
+1 HIGH [REPRO] Goal is dropped after step 5.
+  kybernetes/kybernetes/engine/terminal_agent.py:254 (user turn),
+  :277 (assistant turn), :256-260 (history[-10:] window), :42-71
+  (system prompt has no goal), :440 (later prompts only "What is
+  your next step?"). Fake-model run, fresh workspace: goal present in
+  the prompt on steps 1-5, absent on steps 6, 7, 8.
+  Fix: put the goal in system_prompt, or pin it as the first window
+  item every step.
+
+2 HIGH [REPRO] "done" is VERIFIED without any check.
+  terminal_agent.py:280-307. With test_command="false", a first-turn
+  ```done block returned success=True, status VERIFIED. The same
+  happened when the only tool call had failed (approval denied, item
+  6). checkpoints_taken is hard-coded to 1 (:303).
+  Fix: on done, run test_command; if none, return an unverified status.
+
+3 MED [REPRO: persistence+injection; rest READ] Unverified claims
+  become persistent "skills".
+  terminal_agent.py:283-293 saves a skill from the agent's own done
+  text; harness/skill_learner.py:32-58 writes it with
+  verification_command "false" in the file. :219-232 injects matching
+  skills into the next system prompt (seen: second run's system prompt
+  contained text from the first run's skill). [READ, not tested]
+  name/description are written into YAML frontmatter without escaping
+  (:44-49), so a quote in the goal would likely produce invalid YAML;
+  the same name overwrites the same file (slug at :39). Injection angle
+  [READ, not tested]: text from files the agent read can reach the done
+  message, then persist.
+  Fix: save only after a passing verification; escape the YAML.
+
+4 HIGH [REPRO] commit_milestone commits things the agent did not make.
+  engine/checkpoint.py:121-135 runs "git add ." then commits; called at
+  terminal_agent.py:438 after any passing test. Repro: workspace with
+  an untracked .env.local, an uncommitted edit to a tracked file, and
+  an untracked note. One agent write + passing test -> one commit
+  "[Metis Milestone]" containing .env.local, the user's tracked edit,
+  the note, and .metis/skills/... (.metis is excluded from the
+  untracked LIST at :53 but not from "git add .").
+  Fix: stage only paths the tools wrote; ignore .metis; never add
+  files that were dirty/untracked at the checkpoint.
+
+5 HIGH [REPRO] Rollback does not undo edits to files that were already
+  untracked. checkpoint.py:46-56 and :92-109 only delete files that are
+  NEW since the checkpoint; "git checkout -- ." (:90) and stash apply
+  (:112-117) do not touch untracked files. Repro: agent overwrote a
+  pre-existing untracked file, test failed ("Rolling back..." printed),
+  file still held the agent's text. Tracked uncommitted user edits
+  were preserved correctly (good).
+  Fix: snapshot contents of baseline-untracked files, or refuse to
+  mutate them.
+
+6 MED [REPRO] Two different definitions of "mutating".
+  terminal_agent.py:318 and coding_agent.py:140 hard-code
+  (edit_file_block, write_file, sandboxed_bash). tools/registry.py:287
+  treats everything not READ_ONLY as mutating (needs approval token
+  when enforced). run_code_mode is SYSTEM_EXECUTION
+  (tools/code_mode.py:120) but its helpers are read-only. Repro with
+  default approvals: run_code_mode always fails "requires verified
+  Phylax approval token", because the agent never asks for one. With
+  --auto-approve it skips checkpoint/verify, which is harmless today
+  but breaks if a write helper is added. Also every sandboxed_bash call
+  (even git status) takes a checkpoint and a full test run (:318-424).
+  Fix: derive is_mutating from side_effect_class; classify bash by
+  command or run tests on diff change.
+
+7 MED Rollback semantics (correction to my first note).
+  [READ] A checkpoint is taken before EACH mutating call (:372), so
+  rollback undoes only the failing call, not earlier verified steps.
+  [READ, inferred, not reproduced] Because the full test_command runs
+  after each mutating call (:419-435), a legitimate multi-file change
+  whose first edit breaks the suite would be reverted at that edit. My
+  repro only covered one write plus a failing test.
+  [READ] The harness path (coding_agent.py:216) runs the verifier after
+  read-only steps too. rollback() return value is ignored at :428 and
+  coding_agent.py:225, so a failed "stash apply" still reports a
+  rolled-back tree.
+
+8 MED [READ] Output limits are inconsistent.
+  Test-failure text injected untruncated (terminal_agent.py:430-434,
+  up to 100 KB per stream) while normal results are cut to 1000 chars
+  (:386-398). sandboxed_bash.py:21 MAX_OUTPUT_CHARS is never used.
+  execution/backend.py:103-106 and :234-237 buffer all output before
+  truncating. :394 says "bytes" but counts characters.
+
+9 LOW [READ] file_search quirks: tools/file_search.py:160 and :173
+  report truncated=True when exactly max_results matches exist;
+  :111 and :114 skip dot-dirs/files and several extensions silently;
+  walk order is arbitrary; prompt calls it filename search (:51) but it
+  also scans contents (:162-173). Prompt says "4-Tool" (:46), lists 5.
+
+10 MED [READ] LTHCM hard-imports sentence-transformers but declares it
+  only as an optional extra. LTHCM/lthcm/core/__init__.py:22-23 imports
+  query_expansion.py:27 and contrastive_sheaf.py:24, both top-level
+  "from sentence_transformers import SentenceTransformer".
+  LTHCM/pyproject.toml:15-20 lists torch/numpy/scipy/networkx only;
+  sentence-transformers is under [project.optional-dependencies] bench
+  (:22-24). A clean install of the core package should fail on import.
+  Not run (needs torch).
+
+11 MED [READ] Unsafe checkpoint loading.
+  LTHCM/lthcm/core/contrastive_sheaf.py:234-236 retries
+  torch.load without weights_only on TypeError (old torch) - an
+  attacker-controlled .pt then runs code. schedion/schedion/
+  generator.py:103-107 uses weights_only=False on a checkpoint from
+  the artifacts dir.
+
+12 LOW/MED [READ] Pickle index loading is an opt-in gate, not
+  authentication. dianoia/dianoia/cli.py:178-185,
+  stoma/src/stoma/adapter.py:380-402 and
+  stoma/src/stoma/interchange.py:30-58 gate on one flag/env var (stoma
+  also honours the dianoia env var). Unpickling a hostile file runs
+  code, so the gate only protects against accidents. The optional hash
+  check in adapter.py:388-396 compares against a caller-supplied
+  digest: a hash supplied by the same source as the file proves
+  nothing. Hardening needs a digest or signature from a trusted origin
+  (pinned in config or signed), or a non-executable format.
+
+13 MED [READ] Hestia skips the token check for loopback clients.
+  hestia/src/hestia/api/app.py:98-101: client host 127.0.0.1/::1
+  returns before any token check (comment: MSS Void needs no
+  friction). Any process on the same machine is authorised. Token
+  logic below it is sound (compare_digest; dev bypass needs
+  METIS_INSECURE_DEV=1). Not tested: which endpoints this guards, and
+  whether a reverse proxy would make remote clients look like loopback.
+
+14 LOW [READ] prosopon/data/paired_tokens.json is tracked (contents
+  currently {}); the app writes tokens to a file of that name
+  (prosopon/prosopon/auth/pairing.py, tests/test_auth_pairing.py:83).
+  Not in .gitignore; combined with item 4 it can end up in a commit.
+
+15 LOW [READ] paideia/paideia/training/runner.py:187-193 error text
+  says real training is unimplemented, but :199-207 runs a real
+  _train_adapter path. Simulated runs are correctly labelled SIMULATED
+  (:226-227), an improvement. Whether _train_adapter really trains was
+  not checked.
+
+CHECKED, NO FINDING
+- deploy/metis.env.example:14-15 service tokens are "<GE...>"
+  placeholders. Not checked: git history, other env files,
+  deploy/systemd.
+- Simulated runs are labelled: kybernetes/kybernetes/engine/
+  pipeline.py:110-123; paideia runner.py:226-227 sets SIMULATED.
+- phylax/phylax/engine/evaluator.py:155-165: network destination is
+  exact or fnmatch match, not substring.
+- kybernetes server auth (server/app.py:151-166) and prosopon host-owner
+  token (auth/pairing.py:81-86) use compare_digest.
+- coding_agent.py:167-195 denies autonomous self-approval when
+  approvals are enforced. Note terminal_agent.py:357,367 resolves the
+  approval itself after a click.confirm, or silently under
+  --auto-approve.
+
+PRIORITY ORDER FOR FIXES
+First: items 1 (goal), 2 (false VERIFIED), 4 (accidental commit),
+5 (rollback gap), 8 (output caps). Then 6, 7, 3, 9. Items 10-15 are
+separate hardening/dependency work in other modules.
+
+ENVOPT IDEAS vs THIS CODE (substantiated for the MSS coding agent
+only; wider applicability not assessed)
+Already there: tool-output shortening (terminal_agent.py:386-398,
+backend truncation), scrubbed process env, per-call checkpoints, a
+skill store. Gaps: repo map; ranked file lookup (item 9); relevant-test
+selection (items 6, 7); command cheatsheet; compact start-of-task data
+block (first prompt is just the goal, :248). Stoma has table/code
+ingestion (table_normalizer.py, plugins/code.py) and pinax is a SQLite
+catalogue of host tools; neither feeds the coding agent.
+Before measuring any ENVOPT idea, fix items 1, 2, 4, 5 and 8 (they
+distort token/pass-rate numbers). Then add ONE idea at a time on a
+held-out task set.
+
+DO-NOT-TOUCH LIST FOR PROPOSED FIXES
+- Do not weaken approval enforcement (registry.py:287-300, coding_agent
+  .py:167-195) to fix item 6; derive is_mutating, keep tokens required.
+- Do not remove the sanitized env or root checks in sandboxed_bash.py
+  (:71-112, :130-131) or the output cap in backend.py.
+- Do not change Phylax evaluator matching (evaluator.py:155-165).
+- Do not make rollback delete or reset anything beyond what the
+  checkpoint recorded; keep user's tracked uncommitted edits preserved
+  (item 5 repro showed this works today).
+- Do not auto-commit user files; item 4 fix narrows staging only.
+- Do not touch pickle/torch gates except to tighten them (items 11-12).
+- Leave public APIs of CodingSessionResult and tool schemas unchanged.
+
+OPEN TEST GATES
+G1 Add tests for items 1, 2, 4, 5, 6 (my fake-model scripts in
+   /tmp/repro were isolated; not saved to the repo).
+G2 Run test_terminal_agent.py (needs uvicorn) and the full kybernetes
+   suite on the PC at b760e46.
+G3 Clean-install LTHCM core with only declared deps and import it
+   (item 10).
+G4 Review the vscode submodule (needs GitLab access).
+G5 Not run: LTHCM, stoma, dianoia, dokime, paideia, prosopon, hestia,
+   phylax, krisis, kleroterion tests and all benchmarks.
+G6 Line-by-line review of modules marked "pattern scan only" is still
+   open; this is not a clean sweep.

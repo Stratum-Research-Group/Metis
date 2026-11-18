@@ -156,8 +156,8 @@ class SafeFileSearch:
                                 "snippet": f"[Path match: {file_rel_str}]",
                             }
                         )
-                        if len(matches) >= max_results:
-                            return {"matches": matches, "total_matches": len(matches), "truncated": True}
+                        if len(matches) > max_results:
+                            return {"matches": matches[:max_results], "total_matches": len(matches), "truncated": True}
 
                     with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                         for l_idx, line in enumerate(f, 1):
@@ -169,8 +169,8 @@ class SafeFileSearch:
                                         "snippet": line.strip()[:200],
                                     }
                                 )
-                                if len(matches) >= max_results:
-                                    return {"matches": matches, "total_matches": len(matches), "truncated": True}
+                                if len(matches) > max_results:
+                                    return {"matches": matches[:max_results], "total_matches": len(matches), "truncated": True}
                 except (OSError, PermissionError):
                     continue
 

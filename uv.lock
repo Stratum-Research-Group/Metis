@@ -1601,6 +1601,7 @@ dependencies = [
     { name = "networkx" },
     { name = "numpy" },
     { name = "scipy" },
+    { name = "sentence-transformers" },
     { name = "torch" },
 ]
 
@@ -1631,7 +1632,6 @@ bench = [
     { name = "pytrec-eval-terrier" },
     { name = "rank-bm25" },
     { name = "scann" },
-    { name = "sentence-transformers" },
     { name = "transformers" },
 ]
 dev = [
@@ -1663,8 +1663,8 @@ requires-dist = [
     { name = "scann", marker = "extra == 'ann'", specifier = ">=1.4.0" },
     { name = "scann", marker = "extra == 'bench'", specifier = ">=1.4.0" },
     { name = "scipy", specifier = ">=1.10.0" },
+    { name = "sentence-transformers", specifier = ">=2.2.0" },
     { name = "sentence-transformers", marker = "extra == 'all'", specifier = ">=2.2.0" },
-    { name = "sentence-transformers", marker = "extra == 'bench'", specifier = ">=2.2.0" },
     { name = "torch", specifier = ">=2.0.0" },
     { name = "transformers", marker = "extra == 'all'", specifier = ">=4.30.0" },
     { name = "transformers", marker = "extra == 'bench'", specifier = ">=4.30.0" },

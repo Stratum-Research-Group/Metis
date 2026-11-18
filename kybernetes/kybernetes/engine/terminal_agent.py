@@ -43,6 +43,9 @@ SYSTEM_PROMPT_TEMPLATE = """You are the Metis Sovereign Coding Agent (MSS), a pr
 Your workspace is at: {workspace_root}
 Current Git branch: {git_branch}
 
+Active Task Goal:
+{task_goal}
+
 You operate strictly within the Pi 4-Tool Core Contract:
 1. `read_file_range(path, start_line, end_line)`: Read 1-indexed lines with line counts and hashline anchors.
 2. `edit_file_block(path, search_block, replace_block)`: Replace exact code blocks. Match search_block exactly.
@@ -228,6 +231,7 @@ class TerminalCodingAgent:
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             workspace_root=self.workspace_root,
             git_branch=self._get_git_branch(),
+            task_goal=goal,
             learned_skills=skills_text,
         )
 
@@ -279,9 +283,24 @@ class TerminalCodingAgent:
             action, is_done, done_message = self._extract_action(full_response)
             if is_done:
                 click.echo(click.style(f"\n[✓] {done_message or 'Task completed by agent.'}", fg="green", bold=True))
-                # Synthesize Hermes Skill on successful resolution
+                # Run verification before declaring task verified (Finding 2)
+                verification_passed = True
+                verification_output = ""
+                if self.test_command:
+                    click.echo(click.style(f"-> Verifying task completion: `{self.test_command}`...", fg="cyan"))
+                    from kybernetes.tools.sandboxed_bash import SafeSandboxedBash
+                    runner = SafeSandboxedBash(allowed_roots=[self.workspace_root])
+                    v_res = runner.execute(self.test_command, cwd=str(self.workspace_root), timeout_seconds=60)
+                    verification_output = v_res.get("stderr") or v_res.get("stdout") or ""
+                    if v_res["exit_code"] != 0:
+                        verification_passed = False
+                        click.echo(click.style(f"[✗] Done verification failed (exit code {v_res['exit_code']})!", fg="red", bold=True))
+
+                outcome_status = TurnOutcomeStatus.VERIFIED if verification_passed else TurnOutcomeStatus.FAILED
+                final_state = AgentSemanticState.COMPLETED if verification_passed else AgentSemanticState.BLOCKED
+
                 synth_id = None
-                if self.skill_learner:
+                if verification_passed and self.skill_learner:
                     skill_id = self.skill_learner.synthesize_skill(
                         name=goal[:40],
                         domain="coding",
@@ -291,18 +310,19 @@ class TerminalCodingAgent:
                     )
                     synth_id = skill_id.id
                     click.echo(click.style(f"[Hermes Skill Learned] Saved to .metis/skills/{skill_id.id}/SKILL.md", fg="magenta"))
-                self.state_machine.transition(AgentSemanticState.COMPLETED, reason="Task completed successfully")
+
+                self.state_machine.transition(final_state, reason="Agent signaled task completion")
                 return CodingSessionResult(
                     session_id=f"mss-term-{int(time.time())}",
-                    success=True,
-                    status=TurnOutcomeStatus.VERIFIED,
+                    success=verification_passed,
+                    status=outcome_status,
                     total_steps=step,
                     history=turn_history,
-                    final_message=done_message or "Task complete",
+                    final_message=done_message or ("Task complete" if verification_passed else f"Verification failed: {verification_output[:200]}"),
                     skill_synthesized=synth_id,
-                    checkpoints_taken=1,
+                    checkpoints_taken=len(self.checkpointer.list_checkpoints()),
                     backtracks_executed=backtracks,
-                    final_state=AgentSemanticState.COMPLETED,
+                    final_state=final_state,
                     state_transitions=len(self.state_machine.history),
                 )
 
@@ -391,11 +411,11 @@ class TerminalCodingAgent:
                         (artifacts_dir / f"tool_out_{h}.txt").write_text(out_str, encoding="utf-8")
                         out_str = (
                             out_str[:500]
-                            + f"\n... [truncated {len(out_str) - 1000} bytes; full output preserved in .metis/artifacts/tool_out_{h}.txt] ...\n"
+                            + f"\n... [truncated {len(out_str) - 1000} characters; full output preserved in .metis/artifacts/tool_out_{h}.txt] ...\n"
                             + out_str[-500:]
                         )
                     except Exception:
-                        out_str = out_str[:500] + f"\n... [truncated {len(out_str) - 1000} bytes] ...\n" + out_str[-500:]
+                        out_str = out_str[:500] + f"\n... [truncated {len(out_str) - 1000} characters] ...\n" + out_str[-500:]
                 click.echo(out_str)
                 output_summary = out_str
             if result.error:
@@ -427,15 +447,21 @@ class TerminalCodingAgent:
                     click.echo(click.style(f"[✗] Verification failed (exit code {v_res['exit_code']})! Rolling back checkpoint...", fg="red", bold=True))
                     self.checkpointer.rollback(active_checkpoint)
                     backtracks += 1
+                    err_msg = v_res['stderr'] or v_res['stdout'] or ""
+                    if len(err_msg) > 1000:
+                        err_msg = err_msg[:500] + f"\n... [truncated {len(err_msg) - 1000} characters] ...\n" + err_msg[-500:]
                     current_prompt = (
                         f"Step {step} resulted in test failure with command `{self.test_command}`:\n"
-                        f"{v_res['stderr'] or v_res['stdout']}\n"
+                        f"{err_msg}\n"
                         "Working tree has been rolled back. Please analyze the error and try a different approach."
                     )
                     continue
                 else:
                     click.echo(click.style("[✓] Verification passed cleanly!", fg="green"))
-                    self.checkpointer.commit_milestone(f"Verified milestone: {goal[:40]} (step {step})")
+                    self.checkpointer.commit_milestone(
+                        f"Verified milestone: {goal[:40]} (step {step})",
+                        checkpoint=active_checkpoint,
+                    )
 
             current_prompt = f"Tool '{tool_name}' executed with result:\n{output_summary}\n\nWhat is your next step?"
 
