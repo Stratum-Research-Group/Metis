@@ -81,3 +81,7 @@ lthcm-sigreg-diagnostic-*.txt
 deploy/metis.env
 *.env
 !*.env.example
+prosopon/data/
+*.db-shm
+*.db-wal
+

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/metis_logo.jpg" alt="Metis — Stratum Research Group" width="700" />
+</p>
+
 # Metis: Sovereign Local AI Cognitive & Multi-Agent Stack
 
 **Metis** (Greek: *Μῆτις*, wisdom, counsel, craft) is a modular, single-owner, sovereign local AI ecosystem. It unites hierarchical non-Euclidean memory, deliberative graph-based thought traversal, local model serving, action-bound capability guardrails, policy-governed factual answer selection, reproducible statistical evaluation, and authenticated text and voice interfaces—**completely offline, with zero paid APIs, telemetry, or cloud lock-in.**
